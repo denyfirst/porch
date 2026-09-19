@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 )
 
@@ -94,6 +95,11 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 	out.txt = found.txt
 	out.mx = found.mx
 	out.tlsa = found.tlsa
+	out.addresses = found.addresses
+	out.ns = found.ns
+	out.soa = found.soa
+	out.ds = found.ds
+	out.keys = found.keys
 	return out, nil
 }
 
@@ -204,6 +210,40 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 				return answerSet{}, err
 			}
 			out.tlsa = append(out.tlsa, record)
+		case TypeA, TypeAAAA:
+			size := 4
+			if qtype == TypeAAAA {
+				size = 16
+			}
+			addr, err := parseAddress(rdata, size)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.addresses = append(out.addresses, addr)
+		case TypeNS:
+			host, err := parseName(raw, rdataAt)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.ns = append(out.ns, host)
+		case TypeSOA:
+			record, err := parseSOA(raw, rdata, rdataAt)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.soa = append(out.soa, record)
+		case TypeDS:
+			record, err := parseDS(rdata)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.ds = append(out.ds, record)
+		case TypeDNSKEY:
+			record, err := parseDNSKEY(rdata)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.keys = append(out.keys, record)
 		}
 	}
 
@@ -221,6 +261,15 @@ type answerSet struct {
 	txt  []string
 	mx   []MX
 	tlsa []TLSA
+
+	// What a zone publishes about itself: the addresses a name resolves to,
+	// the servers it is delegated to, the record at the top of it, and the two
+	// halves of the DNSSEC link.
+	addresses []netip.Addr
+	ns        []string
+	soa       []SOA
+	ds        []DS
+	keys      []DNSKEY
 }
 
 // parseCAA reads one property: a flags octet, a length-prefixed tag, and the
@@ -550,4 +599,92 @@ type answerRecord struct {
 	rrType  uint16
 	rdata   []byte
 	rdataAt int
+}
+
+// parseAddress reads an A or AAAA record, which is the address and nothing
+// else.
+func parseAddress(rdata []byte, want int) (netip.Addr, error) {
+	if len(rdata) != want {
+		return netip.Addr{}, fmt.Errorf("dnsclient: an address record carries %d bytes, not %d", len(rdata), want)
+	}
+	addr, ok := netip.AddrFromSlice(rdata)
+	if !ok {
+		return netip.Addr{}, errors.New("dnsclient: an address record does not hold an address")
+	}
+	return addr.Unmap(), nil
+}
+
+// parseName reads a record whose whole content is one domain name: NS, and
+// nothing else here today.
+//
+// Read through readName from the position in the message, for the reason
+// parseMX gives: the name may be a pointer back into the message, and most
+// real answers compress it.
+func parseName(raw []byte, rdataAt int) (string, error) {
+	name, _, err := readName(raw, rdataAt)
+	if err != nil {
+		return "", err
+	}
+	return nameText(name), nil
+}
+
+// parseSOA reads the record at the top of a zone: two names, then five
+// thirty-two bit numbers.
+func parseSOA(raw, rdata []byte, rdataAt int) (SOA, error) {
+	primary, next, err := readName(raw, rdataAt)
+	if err != nil {
+		return SOA{}, err
+	}
+	mailbox, next, err := readName(raw, next)
+	if err != nil {
+		return SOA{}, err
+	}
+	// The numbers follow the two names, and where the names were compressed
+	// they take fewer bytes in the message than they do expanded — so the
+	// end of the record is the only reliable place to read them from.
+	end := rdataAt + len(rdata)
+	if next+20 > end || end > len(raw) {
+		return SOA{}, errors.New("dnsclient: a start of authority record ends before its timers do")
+	}
+	numbers := raw[next : next+20]
+
+	return SOA{
+		Primary: nameText(primary),
+		Mailbox: nameText(mailbox),
+		Serial:  binary.BigEndian.Uint32(numbers[0:4]),
+		Refresh: binary.BigEndian.Uint32(numbers[4:8]),
+		Retry:   binary.BigEndian.Uint32(numbers[8:12]),
+		Expire:  binary.BigEndian.Uint32(numbers[12:16]),
+		Minimum: binary.BigEndian.Uint32(numbers[16:20]),
+	}, nil
+}
+
+// parseDS reads what a parent holds about its child's key.
+//
+// The digest is copied rather than sliced, for the reason parseTLSA gives:
+// rdata is a window onto the whole reply, and a record holding on to it would
+// keep every other byte of the message alive with it.
+func parseDS(rdata []byte) (DS, error) {
+	if len(rdata) <= 4 {
+		return DS{}, errors.New("dnsclient: a delegation signer record carries no digest")
+	}
+	return DS{
+		KeyTag:     binary.BigEndian.Uint16(rdata[0:2]),
+		Algorithm:  rdata[2],
+		DigestType: rdata[3],
+		Digest:     bytes.Clone(rdata[4:]),
+	}, nil
+}
+
+// parseDNSKEY reads a key a zone signs with.
+func parseDNSKEY(rdata []byte) (DNSKEY, error) {
+	if len(rdata) <= 4 {
+		return DNSKEY{}, errors.New("dnsclient: a key record carries no key")
+	}
+	return DNSKEY{
+		Flags:     binary.BigEndian.Uint16(rdata[0:2]),
+		Protocol:  rdata[2],
+		Algorithm: rdata[3],
+		Key:       bytes.Clone(rdata[4:]),
+	}, nil
 }

@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -57,6 +58,23 @@ const (
 	// TypeTLSA is the record type from RFC 6698, which is how DANE binds a
 	// certificate to a name.
 	TypeTLSA = 52
+
+	// TypeA and TypeAAAA are the addresses a name resolves to, from RFC 1035
+	// and RFC 3596.
+	TypeA    = 1
+	TypeAAAA = 28
+
+	// TypeNS names the servers a zone is delegated to, and TypeSOA is the
+	// record that says a zone begins here and carries its timers. Both from
+	// RFC 1035.
+	TypeNS  = 2
+	TypeSOA = 6
+
+	// TypeDS is the digest of a zone's key held by its parent, and TypeDNSKEY
+	// is the key itself. The two together are the link in the DNSSEC chain
+	// that a parent and a child each hold one end of (RFC 4034).
+	TypeDS     = 43
+	TypeDNSKEY = 48
 
 	classIN = 1
 	typeOPT = 41
@@ -149,6 +167,53 @@ type MX struct {
 	// because a domain that says it sends and receives nothing is making a
 	// statement and an empty field would read as a record nobody could parse.
 	Host string `json:"host"`
+}
+
+// SOA is the record at the top of a zone: which server is named as primary,
+// the address responsible for the zone, and the timers a secondary reads
+// (RFC 1035 §3.3.13).
+//
+// The timers are carried as they were published and are not judged here. RFC
+// 1912 §2.2 gives ranges it calls recommendations, and a value outside them is
+// a choice somebody made rather than a fault — which is exactly the kind of
+// threshold this project reports instead of grading (R21).
+type SOA struct {
+	// Primary is the server the zone names as its primary, lowercased and
+	// without its trailing dot, and Mailbox is the responsible address in the
+	// form DNS carries it.
+	Primary string `json:"primary"`
+	Mailbox string `json:"mailbox"`
+
+	Serial  uint32 `json:"serial"`
+	Refresh uint32 `json:"refresh"`
+	Retry   uint32 `json:"retry"`
+	Expire  uint32 `json:"expire"`
+	Minimum uint32 `json:"minimum"`
+}
+
+// DS is what a parent zone holds about its child's key: enough to recognise
+// the key, and a digest of it, but not the key itself (RFC 4034 §5).
+type DS struct {
+	KeyTag     uint16 `json:"keyTag"`
+	Algorithm  uint8  `json:"algorithm"`
+	DigestType uint8  `json:"digestType"`
+
+	// Digest is the hash the parent published, as bytes. What it is a hash of
+	// depends on DigestType, and checking it against a key is internal/dnsscan's
+	// job rather than this package's: reading records and judging them are
+	// different jobs, and this package does the first.
+	Digest []byte `json:"-"`
+}
+
+// DNSKEY is a key a zone signs with (RFC 4034 §2).
+type DNSKEY struct {
+	Flags     uint16 `json:"flags"`
+	Protocol  uint8  `json:"protocol"`
+	Algorithm uint8  `json:"algorithm"`
+
+	// Key is the public key as published. Kept as bytes for the same reason a
+	// DS digest is.
+	Key []byte `json:"-"`
 }
 
 // TLSA is one DANE record.
@@ -395,6 +460,15 @@ type reply struct {
 	// would be reading the query type back out of the answer.
 	mx   []MX
 	tlsa []TLSA
+
+	// What a zone says about itself, filled by the lookups below for the same
+	// reason the fields above are separate: a caller switching on which one is
+	// filled would be reading the query type back out of the answer.
+	addresses []netip.Addr
+	ns        []string
+	soa       []SOA
+	ds        []DS
+	keys      []DNSKEY
 
 	validated bool
 	existed   bool
@@ -806,4 +880,76 @@ func (c *Client) LookupTLSA(ctx context.Context, name string) (TLSAAnswer, error
 		return TLSAAnswer{Existed: reply.existed, Validated: reply.validated}, err
 	}
 	return TLSAAnswer{Records: reply.tlsa, Existed: reply.existed, Validated: reply.validated}, nil
+}
+
+// ZoneAnswer is what one lookup about a zone found: the records, whether the
+// name exists at all, and what the resolver said about DNSSEC.
+//
+// One type for six lookups, because they differ in which field is filled and
+// in nothing else. Existed and Validated mean here exactly what they mean on
+// Answer and TXTAnswer.
+type ZoneAnswer struct {
+	Addresses []netip.Addr
+	NS        []string
+	SOA       []SOA
+	DS        []DS
+	Keys      []DNSKEY
+
+	Existed   bool
+	Validated bool
+}
+
+// LookupAddresses reads the addresses a name resolves to, one type at a time.
+//
+// A and AAAA are separate questions and are asked as such: a name with an A
+// and no AAAA is ordinary, and a single answer could not tell that apart from
+// a name with neither. The two results are merged by the caller, which is also
+// the caller that has to say which it found.
+func (c *Client) LookupAddresses(ctx context.Context, name string, qtype uint16) (ZoneAnswer, error) {
+	return c.zone(ctx, name, qtype)
+}
+
+// LookupNS reads the servers a zone is delegated to, as the resolver sees
+// them. That is the child's own list: what the parent publishes is a separate
+// question, and asking it means asking the parent's servers directly.
+func (c *Client) LookupNS(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeNS)
+}
+
+// LookupSOA reads the record at the top of a zone.
+func (c *Client) LookupSOA(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeSOA)
+}
+
+// LookupDS reads what the parent holds about this zone's key. It is published
+// in the parent zone, so a resolver answers it for the child's name and the
+// answer says whether the chain is anchored at all.
+func (c *Client) LookupDS(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeDS)
+}
+
+// LookupDNSKEY reads the keys the zone signs with.
+func (c *Client) LookupDNSKEY(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeDNSKEY)
+}
+
+// zone asks one question about one name and sorts the answer into ZoneAnswer.
+func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswer, error) {
+	servers, err := c.servers()
+	if err != nil {
+		return ZoneAnswer{}, err
+	}
+
+	reply, err := c.ask(ctx, &resolverSet{servers: servers}, name, qtype)
+	out := ZoneAnswer{Existed: reply.existed, Validated: reply.validated}
+	if err != nil {
+		return out, err
+	}
+
+	out.Addresses = reply.addresses
+	out.NS = reply.ns
+	out.SOA = reply.soa
+	out.DS = reply.ds
+	out.Keys = reply.keys
+	return out, nil
 }

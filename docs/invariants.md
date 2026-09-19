@@ -4436,6 +4436,8 @@ broken DNSSEC chain into a clean result.
 `TestMalformedRecordsAreRefused`, `TestQuestionCaseIsRandomised`,
 `TestRecordsForAnotherOwnerAreIgnored`, `TestOnlyTheAskedForOwnerIsKept`,
 `TestOwnerMatchingIsCaseInsensitive`, `TestCompressedOwnerNamesMatch`,
+`TestWhatAZonePublishesAboutItselfIsRead`, `TestAMalformedZoneRecordIsRefused`,
+`TestAZoneThatDoesNotExistSaysSo`, `TestARecordDoesNotHoldOnToTheReply`,
 `FuzzParseReply`, `FuzzSkipName`
 
 ## Supply chain
