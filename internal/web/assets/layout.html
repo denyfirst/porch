@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
 <meta name="description" content="{{.Description}}">
+{{if .Canonical}}
+<!--
+  Which address this page is, said once. A search engine that has an older
+  shape of this project indexed reads the canonical address and the title
+  together; an installation somebody runs sends neither, because its pages
+  are its own and not copies of ours.
+-->
+<link rel="canonical" href="{{.Canonical}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="denyfirst">
+<meta property="og:title" content="{{.Title}}">
+<meta property="og:description" content="{{.Description}}">
+<meta property="og:url" content="{{.Canonical}}">
+<meta name="twitter:card" content="summary">
+{{end}}
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">

@@ -30,7 +30,7 @@ func privacyAs(t *testing.T, verified, keeps bool) string {
 // somebody else runs, and the last untrue of every one of them.
 func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
 	for _, page := range []string{privacyAs(t, false, false), privacyAs(t, true, true)} {
-		for _, never := range []string{"denyfirst.dev", "rented server", "Frankfurt", "no certificate authority is asked"} {
+		for _, never := range []string{"denyfirst.dev", "Hetzner", "Frankfurt", "no certificate authority is asked"} {
 			if strings.Contains(page, never) {
 				t.Errorf("the self-hosted page says %q", never)
 			}

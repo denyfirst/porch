@@ -67,7 +67,7 @@ func TestADocumentIsNamedInTheTopBarWithoutTheMaker(t *testing.T) {
 	for path, want := range map[string]string{
 		"/privacy": "Privacy, and what a scan does",
 		"/docs":    "Documentation",
-		"/tls":     "check what a server actually negotiates",
+		"/tls":     "Transport check",
 	} {
 		body := get(t, path).Body.String()
 		rail, _, _ := strings.Cut(body, "<main>")
