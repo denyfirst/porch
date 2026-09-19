@@ -1,0 +1,334 @@
+package policy
+
+import (
+	"strconv"
+	"strings"
+)
+
+// The rules for what a domain's own DNS says about itself.
+//
+// The line is the one the mail rules draw, and it matters more here than
+// anywhere else in this project, because DNS is the part of the internet with
+// the most advice and the fewest requirements. A serial number in a particular
+// format, a refresh timer inside a particular range, a primary named at the
+// parent: scanners report these as faults and none of them is one. RFC 1912
+// calls its ranges recommendations, and a zone outside them is a choice its
+// operator made — often a correct one, since a zone whose records are written
+// by an API needs no serial a human can read.
+//
+// So what is graded here is what breaks resolution, or what a standard
+// requires: fewer name servers than a zone is required to have, a delegation
+// nobody can follow, and a DNSSEC chain that does not check out — which takes
+// a domain off the internet for everybody behind a validating resolver, and
+// leaves it working for whoever set it up. Everything else is reported.
+
+// DNSVersion identifies this rule set, which moves independently of the
+// others.
+const DNSVersion = "porch-dns-v1"
+
+var (
+	rfc1034 = Reference{
+		"RFC 1034 — Domain Names: Concepts and Facilities",
+		"https://www.rfc-editor.org/rfc/rfc1034",
+	}
+	rfc1912 = Reference{
+		"RFC 1912 — Common DNS Operational and Configuration Errors",
+		"https://www.rfc-editor.org/rfc/rfc1912",
+	}
+	rfc2182 = Reference{
+		"RFC 2182 — Selection and Operation of Secondary DNS Servers (BCP 16)",
+		"https://www.rfc-editor.org/rfc/rfc2182",
+	}
+	rfc4035 = Reference{
+		"RFC 4035 — Protocol Modifications for the DNS Security Extensions",
+		"https://www.rfc-editor.org/rfc/rfc4035",
+	}
+	rfc8624 = Reference{
+		"RFC 8624 — Algorithm Implementation Requirements and Usage Guidance for DNSSEC",
+		"https://www.rfc-editor.org/rfc/rfc8624",
+	}
+)
+
+// NameServer is one server a zone is delegated to, and what resolving its name
+// found.
+type NameServer struct {
+	Name string `json:"name"`
+
+	// Addresses are what the name resolves to, as text. Empty with no reason
+	// means the name resolves to nothing at all, which is a delegation to a
+	// server no resolver can reach.
+	Addresses []string `json:"addresses,omitempty"`
+
+	// Reason says why the addresses could not be read, where that is what
+	// happened. A lookup that failed is not a server without an address (R4).
+	Reason string `json:"reason,omitempty"`
+}
+
+// KeyDigest is one key a zone publishes.
+type KeyDigest struct {
+	KeyTag    uint16 `json:"keyTag"`
+	Algorithm uint8  `json:"algorithm"`
+
+	// KeySigning is true for a key with the secure entry point bit set, which
+	// is the key a delegation signer is normally a digest of.
+	KeySigning bool `json:"keySigning"`
+}
+
+// DelegationSigner is one digest the parent holds, and whether a key here
+// matched it.
+type DelegationSigner struct {
+	KeyTag     uint16 `json:"keyTag"`
+	Algorithm  uint8  `json:"algorithm"`
+	DigestType uint8  `json:"digestType"`
+
+	// Matched is true when a key this zone publishes hashes to this digest.
+	Matched bool `json:"matched"`
+
+	// Unsupported is true for a digest type this does not compute, which is
+	// not the same as one that did not match and must never be read as it.
+	Unsupported bool `json:"unsupported,omitempty"`
+}
+
+// DNSFacts is what asking a domain's own DNS established.
+type DNSFacts struct {
+	// Apex is false when no zone begins at the name asked about — a name
+	// inside a zone rather than the top of one. Nothing below is graded then:
+	// the answers belong to whichever zone contains it.
+	Apex bool `json:"apex"`
+
+	// Addresses are what the name itself resolves to.
+	Addresses []string `json:"addresses,omitempty"`
+
+	// AddressReason says why they could not be read.
+	AddressReason string `json:"addressReason,omitempty"`
+
+	// NameServers are the servers the zone names, with what each resolves to.
+	NameServers []NameServer `json:"nameServers,omitempty"`
+
+	// NSReason says why the delegation could not be read at all.
+	NSReason string `json:"nsReason,omitempty"`
+
+	// Networks is how many distinct networks the name servers' addresses fall
+	// in, counting an IPv4 /24 and an IPv6 /48 as one each.
+	Networks int `json:"networks"`
+
+	// The record at the top of the zone, as published.
+	SOAFound   bool   `json:"soaFound"`
+	SOAPrimary string `json:"soaPrimary,omitempty"`
+	SOAMailbox string `json:"soaMailbox,omitempty"`
+	SOASerial  uint32 `json:"soaSerial,omitempty"`
+	SOARefresh uint32 `json:"soaRefresh,omitempty"`
+	SOARetry   uint32 `json:"soaRetry,omitempty"`
+	SOAExpire  uint32 `json:"soaExpire,omitempty"`
+	SOAMinimum uint32 `json:"soaMinimum,omitempty"`
+
+	// Text is what the name publishes as TXT, which is where a domain's sender
+	// policy and most of its proofs of ownership live. Reported and never
+	// graded: the mail check grades the sender policy, and the rest belongs to
+	// whoever put it there.
+	Text []string `json:"text,omitempty"`
+
+	// Signed is whether the parent holds a delegation signer for this zone,
+	// which is what anchors the chain. A zone without one is unsigned, and that
+	// is a choice rather than a fault.
+	Signed bool `json:"signed"`
+
+	// Signers and Keys are the two ends of the link.
+	Signers []DelegationSigner `json:"signers,omitempty"`
+	Keys    []KeyDigest        `json:"keys,omitempty"`
+
+	// ChainMatched is true when at least one digest the parent holds covers a
+	// key this zone publishes.
+	ChainMatched bool `json:"chainMatched"`
+
+	// ChainReason says why the two ends could not be compared.
+	ChainReason string `json:"chainReason,omitempty"`
+
+	// ResolverValidated is the AD bit on the answers: the resolver's claim that
+	// it checked the signatures, and not this program's work.
+	ResolverValidated bool `json:"resolverValidated"`
+
+	// Policy names the rule set, carried beside the facts for the reason every
+	// other check carries it.
+	Policy string `json:"policy"`
+}
+
+// DNSFinding is the graded result.
+type DNSFinding struct {
+	Verdict  Verdict   `json:"verdict"`
+	Findings []Finding `json:"findings,omitempty"`
+	Notes    []Note    `json:"notes,omitempty"`
+}
+
+// GradeDNS applies the rules above.
+func GradeDNS(f DNSFacts) DNSFinding {
+	out := DNSFinding{Verdict: Strong}
+
+	add := func(id string, v Verdict, title, rationale string, refs ...Reference) {
+		out.Findings = append(out.Findings, Finding{
+			RuleID:     id,
+			Verdict:    v,
+			Title:      title,
+			Rationale:  rationale,
+			References: refs,
+			Policy:     DNSVersion,
+		})
+		out.Verdict = Worst(out.Verdict, v)
+	}
+	note := func(text string) { out.Notes = append(out.Notes, Note{Text: text}) }
+
+	// A name inside a zone is not a zone. Nothing here describes it, and
+	// grading the containing zone's delegation as though it were this name's
+	// would report a fact about example.com under the name www.example.com.
+	if !f.Apex {
+		out.Verdict = ""
+		note("No zone begins at this name: it is a name inside one. Ask about the domain itself to read its delegation.")
+		return out
+	}
+
+	// ── Graded: the delegation ───────────────────────────────────────
+
+	var unreachable []string
+	for _, ns := range f.NameServers {
+		if len(ns.Addresses) == 0 && ns.Reason == "" {
+			unreachable = append(unreachable, ns.Name)
+		}
+	}
+
+	switch {
+	case f.NSReason != "":
+		note("The delegation could not be read: " + f.NSReason)
+	case len(f.NameServers) < 2:
+		add("dns.one-name-server", Weak,
+			"The zone is served by fewer than two name servers",
+			"RFC 1034 requires a zone to be served by at least two, and RFC 2182 — a best current "+
+				"practice — says why: one server is one power supply, one network and one maintenance "+
+				"window between a domain and everybody trying to reach it. This zone names "+
+				strconv.Itoa(len(f.NameServers))+".",
+			rfc1034, rfc2182)
+	case f.Networks == 1:
+		add("dns.name-servers-one-network", Weak,
+			"Every name server answers from the same network",
+			"RFC 2182 asks for servers that do not fail together: separate networks, and ideally "+
+				"separate places. These "+strconv.Itoa(len(f.NameServers))+" answer from one, so whatever "+
+				"takes that network out takes the domain with it — and a domain nobody can resolve is "+
+				"one nobody can reach by any other route either.",
+			rfc2182)
+	}
+
+	if len(unreachable) > 0 {
+		add("dns.name-server-without-address", Weak,
+			"A name server this zone names resolves to nothing",
+			"RFC 1912 calls this a lame delegation: "+strings.Join(unreachable, ", ")+" is named as "+
+				"serving this zone and has no address, so a resolver that tries it waits and then tries "+
+				"another. What it costs is time on every lookup that lands there, and what it usually "+
+				"means is a server decommissioned without the delegation being changed.",
+			rfc1912)
+	}
+
+	// ── Graded: the chain ────────────────────────────────────────────
+
+	switch {
+	case !f.Signed:
+		note("The zone is not signed: the parent holds no delegation signer for it, so DNSSEC is not in " +
+			"use here. That is a choice rather than a fault, and where it is in use this check says " +
+			"whether the chain holds.")
+	case f.ChainReason != "":
+		note("The DNSSEC chain could not be checked: " + f.ChainReason)
+	case len(f.Keys) == 0:
+		add("dns.dnssec-no-keys", Insecure,
+			"The parent anchors DNSSEC for this zone and the zone publishes no key",
+			"A delegation signer at the parent tells every validating resolver that answers from this "+
+				"zone are signed. With no key here nothing can be verified against it, and a validating "+
+				"resolver — which is what the large public resolvers are — answers with a failure rather "+
+				"than with the records. The domain is then unreachable for a large share of the internet "+
+				"and fine for whoever set it up, which is why this goes unnoticed.",
+			rfc4035)
+	case !f.ChainMatched && !computable(f.Signers):
+		// Every digest the parent holds is of a type this does not compute, so
+		// the chain was not checked rather than found wanting. Reported below,
+		// with the sentence R4 exists for.
+	case !f.ChainMatched:
+		add("dns.dnssec-chain-broken", Insecure,
+			"No key this zone publishes matches the digest its parent holds",
+			"The parent's delegation signer is a hash of the key this zone is supposed to sign with. "+
+				"None of the keys published here hashes to it, which is what a key rotation that never "+
+				"reached the registrar looks like. Every validating resolver treats the whole zone as "+
+				"bogus and returns nothing at all.",
+			rfc4035)
+	}
+
+	for _, ds := range f.Signers {
+		if ds.DigestType == 1 && ds.Matched {
+			add("dns.dnssec-sha1-digest", Weak,
+				"The digest the parent holds for this zone is SHA-1",
+				"RFC 8624 says SHA-1 is not to be used for new delegation signers. The chain works "+
+					"today; what it costs is that its weakest link is a hash nobody would choose now, "+
+					"and replacing it is a change at the registrar rather than in the zone.",
+				rfc8624)
+			break
+		}
+	}
+
+	for _, ds := range f.Signers {
+		if ds.Unsupported {
+			note("The parent holds a digest of a type this check does not compute (type " +
+				strconv.Itoa(int(ds.DigestType)) + "), so that one was neither matched nor ruled out. " +
+				"Nothing measured is not the same as nothing wrong.")
+			break
+		}
+	}
+
+	// ── Reported ─────────────────────────────────────────────────────
+
+	switch {
+	case f.AddressReason != "":
+		note("The addresses could not be read: " + f.AddressReason)
+	case len(f.Addresses) == 0:
+		note("The name itself resolves to no address. A domain used only for mail, or only for names " +
+			"beneath it, is ordinary; what this says is that nothing answers at the domain on its own.")
+	}
+
+	if f.SOAFound {
+		note("The zone's serial is " + strconv.FormatUint(uint64(f.SOASerial), 10) + ", it names " +
+			f.SOAPrimary + " as primary, and its timers are refresh " + duration(f.SOARefresh) +
+			", retry " + duration(f.SOARetry) + ", expire " + duration(f.SOAExpire) +
+			", minimum " + duration(f.SOAMinimum) + ". RFC 1912 gives ranges for these and calls them " +
+			"recommendations, so they are reported here and not graded.")
+	}
+
+	if f.ResolverValidated {
+		note("The resolver reported these answers DNSSEC-validated. That is its word for work it did, " +
+			"not a check this program made.")
+	}
+
+	return out
+}
+
+// duration says a number of seconds the way an operator reads one.
+func duration(seconds uint32) string {
+	switch {
+	case seconds == 0:
+		return "0"
+	case seconds%86400 == 0:
+		return strconv.FormatUint(uint64(seconds/86400), 10) + "d"
+	case seconds%3600 == 0:
+		return strconv.FormatUint(uint64(seconds/3600), 10) + "h"
+	case seconds%60 == 0:
+		return strconv.FormatUint(uint64(seconds/60), 10) + "m"
+	default:
+		return strconv.FormatUint(uint64(seconds), 10) + "s"
+	}
+}
+
+// computable is whether any digest the parent holds is of a type this check
+// computes. Where none is, a chain that did not match was never checked, and
+// saying otherwise would report an unread record as a fault (R4).
+func computable(signers []DelegationSigner) bool {
+	for _, ds := range signers {
+		if !ds.Unsupported {
+			return true
+		}
+	}
+	return false
+}

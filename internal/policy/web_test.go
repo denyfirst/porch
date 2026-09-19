@@ -384,6 +384,7 @@ func TestEveryRuleSetNamesTheToolAndTheCheck(t *testing.T) {
 		{TLSVersion, "tls"},
 		{WebVersion, "web"},
 		{MailVersion, "mail"},
+		{DNSVersion, "dns"},
 	} {
 		want := "porch-" + tc.check + "-v"
 		if !strings.HasPrefix(tc.name, want) {
@@ -398,7 +399,7 @@ func TestEveryRuleSetNamesTheToolAndTheCheck(t *testing.T) {
 
 	// And no two share a name, which is the whole reason each carries a check.
 	seen := map[string]bool{}
-	for _, name := range []string{TLSVersion, WebVersion, MailVersion} {
+	for _, name := range []string{TLSVersion, WebVersion, MailVersion, DNSVersion} {
 		if seen[name] {
 			t.Errorf("two rule sets share the name %q", name)
 		}
