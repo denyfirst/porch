@@ -23,6 +23,8 @@ type zone struct {
 	ds        []dnsclient.DS
 	keys      []dnsclient.DNSKEY
 	text      []string
+	alias     map[string][]string
+	missing   map[string]bool
 
 	validated bool
 
@@ -42,7 +44,7 @@ func (z *zone) LookupAddresses(_ context.Context, name string, qtype uint16) (dn
 			out = append(out, addr)
 		}
 	}
-	return dnsclient.ZoneAnswer{Addresses: out, Existed: true, Validated: z.validated}, nil
+	return dnsclient.ZoneAnswer{Addresses: out, Existed: z.exists(name), Validated: z.validated}, nil
 }
 
 func (z *zone) LookupNS(_ context.Context, _ string) (dnsclient.ZoneAnswer, error) {
@@ -77,6 +79,17 @@ func (z *zone) LookupDNSKEY(_ context.Context, _ string) (dnsclient.ZoneAnswer, 
 	return dnsclient.ZoneAnswer{Keys: z.keys, Existed: true, Validated: z.validated}, nil
 }
 
+func (z *zone) LookupCNAME(_ context.Context, name string) (dnsclient.ZoneAnswer, error) {
+	if err := z.fail["cname:"+name]; err != nil {
+		return dnsclient.ZoneAnswer{}, err
+	}
+	return dnsclient.ZoneAnswer{Alias: z.alias[name], Existed: z.exists(name)}, nil
+}
+
+// exists is what the resolver says about a name: a name with no records of the
+// type asked for still exists, and one that was deleted does not.
+func (z *zone) exists(name string) bool { return !z.missing[name] }
+
 func (z *zone) LookupTXT(_ context.Context, _ string) (dnsclient.TXTAnswer, error) {
 	return dnsclient.TXTAnswer{Values: z.text, Existed: true}, nil
 }
@@ -93,12 +106,14 @@ func served(t *testing.T) *zone {
 			"ns1.example.net": {"192.0.2.53"},
 			"ns2.example.org": {"198.51.100.53"},
 		},
-		ns:   []string{"ns1.example.net", "ns2.example.org"},
-		soa:  &dnsclient.SOA{Primary: "ns1.example.net", Mailbox: "noc.example.com", Serial: 7, Refresh: 7200, Retry: 3600, Expire: 1209600, Minimum: 3600},
-		keys: []dnsclient.DNSKEY{key},
-		ds:   []dnsclient.DS{signerFor(t, "example.com", key)},
-		text: []string{"v=spf1 -all"},
-		fail: map[string]error{},
+		ns:      []string{"ns1.example.net", "ns2.example.org"},
+		soa:     &dnsclient.SOA{Primary: "ns1.example.net", Mailbox: "noc.example.com", Serial: 7, Refresh: 7200, Retry: 3600, Expire: 1209600, Minimum: 3600},
+		keys:    []dnsclient.DNSKEY{key},
+		ds:      []dnsclient.DS{signerFor(t, "example.com", key)},
+		text:    []string{"v=spf1 -all"},
+		alias:   map[string][]string{},
+		missing: map[string]bool{},
+		fail:    map[string]error{},
 	}
 }
 
@@ -397,5 +412,81 @@ func TestTheDigestAndTheTagBothHaveToAgree(t *testing.T) {
 	got = read(t, wrongTag)
 	if got.Observed.ChainMatched || !has(got, "dns.dnssec-chain-broken") {
 		t.Errorf("a digest under another tag: matched %v, %v", got.Observed.ChainMatched, ruleIDs(got))
+	}
+}
+
+// An alias is read wherever the name is one, and what it points at is asked
+// about: a target that is gone leaves the name resolving to nothing, and where
+// the target is a name anybody can claim, whoever claims it answers for this
+// one.
+func TestAnAliasIsReadAndItsTargetIsAskedAbout(t *testing.T) {
+	ctx := context.Background()
+
+	living := served(t)
+	living.soa = nil
+	living.alias["www.example.com"] = []string{"pages.example.net"}
+	got, err := (&Scanner{Resolver: living}).Scan(ctx, "www.example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if got.Observed.Alias != "pages.example.net" || !got.Observed.AliasTargetExists {
+		t.Errorf("an alias to a name that exists reads %+v", got.Observed)
+	}
+	if !noteSaying(got, "alias for pages.example.net, so everything it answers comes from there") {
+		t.Errorf("the notes are %v", noteTexts(got))
+	}
+
+	gone := served(t)
+	gone.soa = nil
+	gone.alias["www.example.com"] = []string{"deleted.example.net"}
+	gone.missing["deleted.example.net"] = true
+	got, err = (&Scanner{Resolver: gone}).Scan(ctx, "www.example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if got.Observed.AliasTargetExists {
+		t.Error("a target that does not exist was read as existing")
+	}
+	if !noteSaying(got, "does not exist") || !noteSaying(got, "whoever claims it next") {
+		t.Errorf("a dangling alias is not explained: %v", noteTexts(got))
+	}
+
+	// A lookup that failed is not an alias, and not a target that is gone.
+	unread := served(t)
+	unread.soa = nil
+	unread.fail["cname:www.example.com"] = dnsclient.ErrServerFail
+	got, err = (&Scanner{Resolver: unread}).Scan(ctx, "www.example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if got.Observed.Alias != "" || got.Observed.AliasReason == "" {
+		t.Errorf("a failed lookup reads %+v", got.Observed)
+	}
+	if !noteSaying(got, "The alias could not be read") {
+		t.Errorf("the notes are %v", noteTexts(got))
+	}
+}
+
+// An alias at the top of a zone contradicts the records that make it a zone,
+// and is the one alias that is graded.
+func TestAnAliasAtTheTopOfAZoneIsGraded(t *testing.T) {
+	both := served(t)
+	both.alias["example.com"] = []string{"anywhere.example.net"}
+
+	got := read(t, both)
+	if !has(got, "dns.alias-at-zone-apex") || got.Verdict != policy.Insecure {
+		t.Errorf("an alias beside a start of authority: %q %v", got.Verdict, ruleIDs(got))
+	}
+
+	// And a name inside a zone that is an alias is not graded for it.
+	inside := served(t)
+	inside.soa = nil
+	inside.alias["www.example.com"] = []string{"pages.example.net"}
+	other, err := (&Scanner{Resolver: inside}).Scan(context.Background(), "www.example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if has(other, "dns.alias-at-zone-apex") {
+		t.Errorf("an ordinary alias was graded: %v", ruleIDs(other))
 	}
 }

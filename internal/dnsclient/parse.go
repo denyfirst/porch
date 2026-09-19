@@ -100,6 +100,7 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 	out.soa = found.soa
 	out.ds = found.ds
 	out.keys = found.keys
+	out.cname = found.cname
 	return out, nil
 }
 
@@ -226,6 +227,12 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 				return answerSet{}, err
 			}
 			out.ns = append(out.ns, host)
+		case TypeCNAME:
+			target, err := parseName(raw, rdataAt)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.cname = append(out.cname, target)
 		case TypeSOA:
 			record, err := parseSOA(raw, rdata, rdataAt)
 			if err != nil {
@@ -270,6 +277,7 @@ type answerSet struct {
 	soa       []SOA
 	ds        []DS
 	keys      []DNSKEY
+	cname     []string
 }
 
 // parseCAA reads one property: a flags octet, a length-prefixed tag, and the

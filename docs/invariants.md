@@ -3848,6 +3848,15 @@ SOA and its timers, a digest type this does not compute, and an unsigned zone â€
 which is a choice rather than a fault. A digest this cannot compute is never
 read as a chain that failed, for the reason R4 exists.
 
+An alias is read wherever a name is one, and only one of them is graded: a
+CNAME at the top of a zone, which RFC 1034 and RFC 2181 both forbid outright
+and which costs the zone its mail and its name servers on every resolver that
+follows it. An alias whose target does not exist is reported rather than
+graded, because no document sets a rule about one â€” and the sentence says what
+it leads to, which is the half worth having: the name resolves to nothing, and
+where the target is a name at a provider that hands out unclaimed ones,
+whoever claims it next answers for this name.
+
 *Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`
 *Guarded by:* `TestAZoneThatIsServedAndSignedReadsStrong`,
 `TestTheDelegationIsGradedAgainstWhatIsRequired`,
@@ -3855,6 +3864,8 @@ read as a chain that failed, for the reason R4 exists.
 `TestASHA1DigestIsSaidWhereTheChainWorks`,
 `TestANameInsideAZoneIsNotGradedAsOne`,
 `TestTheBoundariesAreAskedBeforeAnythingIsLookedUp`,
+`TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
+`TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,
 `TestEveryRuleSetNamesTheToolAndTheCheck`
 
 ---

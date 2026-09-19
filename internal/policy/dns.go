@@ -35,6 +35,10 @@ var (
 		"RFC 1912 — Common DNS Operational and Configuration Errors",
 		"https://www.rfc-editor.org/rfc/rfc1912",
 	}
+	rfc2181 = Reference{
+		"RFC 2181 — Clarifications to the DNS Specification",
+		"https://www.rfc-editor.org/rfc/rfc2181",
+	}
 	rfc2182 = Reference{
 		"RFC 2182 — Selection and Operation of Secondary DNS Servers (BCP 16)",
 		"https://www.rfc-editor.org/rfc/rfc2182",
@@ -122,6 +126,14 @@ type DNSFacts struct {
 	SOAExpire  uint32 `json:"soaExpire,omitempty"`
 	SOAMinimum uint32 `json:"soaMinimum,omitempty"`
 
+	// Alias is what a CNAME at this name points to, empty where the name is not
+	// an alias. AliasTargetExists says whether that target exists at all, which
+	// is the difference between an alias that works and a name that resolves to
+	// nothing.
+	Alias             string `json:"alias,omitempty"`
+	AliasTargetExists bool   `json:"aliasTargetExists,omitempty"`
+	AliasReason       string `json:"aliasReason,omitempty"`
+
 	// Text is what the name publishes as TXT, which is where a domain's sender
 	// policy and most of its proofs of ownership live. Reported and never
 	// graded: the mail check grades the sender policy, and the rest belongs to
@@ -175,7 +187,40 @@ func GradeDNS(f DNSFacts) DNSFinding {
 		})
 		out.Verdict = Worst(out.Verdict, v)
 	}
-	note := func(text string) { out.Notes = append(out.Notes, Note{Text: text}) }
+	// Two kinds, and the difference is R18: a fact this scan established, and a
+	// question it could not settle. A note without a kind is neither, and the
+	// renderers sort by kind.
+	note := func(text string) { out.Notes = append(out.Notes, Observed(text)) }
+	unsettled := func(text string) { out.Notes = append(out.Notes, Unsettled(text)) }
+
+	// ── The alias, which is read wherever the name is one ────────────
+
+	switch {
+	case f.AliasReason != "":
+		unsettled("The alias could not be read: " + f.AliasReason)
+	case f.Alias == "":
+	case f.AliasTargetExists:
+		note("This name is an alias for " + f.Alias + ", so everything it answers comes from there.")
+	default:
+		// Not graded, and the reason is R21: no document sets a rule about an
+		// alias whose target is gone. What can be said is what was measured,
+		// and what it leads to — which is the more useful half anyway.
+		note("This name is an alias for " + f.Alias + ", and " + f.Alias + " does not exist. " +
+			"The name resolves to nothing at all. Where the target is a name at a provider that " +
+			"hands out unclaimed names — a bucket, an app, a page host — whoever claims it next " +
+			"answers for this name, with a certificate they can obtain for it.")
+	}
+
+	if f.Apex && f.Alias != "" {
+		add("dns.alias-at-zone-apex", Insecure,
+			"The top of the zone is an alias",
+			"RFC 1034 lets a name be an alias or carry records, never both, and RFC 2181 says the "+
+				"same in one line. The top of a zone carries its start of authority and its "+
+				"delegation, so an alias here contradicts them: resolvers disagree about which "+
+				"answer wins, and the ones that follow the alias lose the zone's mail and its "+
+				"name servers with it.",
+			rfc1034, rfc2181)
+	}
 
 	// A name inside a zone is not a zone. Nothing here describes it, and
 	// grading the containing zone's delegation as though it were this name's
@@ -197,7 +242,7 @@ func GradeDNS(f DNSFacts) DNSFinding {
 
 	switch {
 	case f.NSReason != "":
-		note("The delegation could not be read: " + f.NSReason)
+		unsettled("The delegation could not be read: " + f.NSReason)
 	case len(f.NameServers) < 2:
 		add("dns.one-name-server", Weak,
 			"The zone is served by fewer than two name servers",
@@ -234,7 +279,7 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			"use here. That is a choice rather than a fault, and where it is in use this check says " +
 			"whether the chain holds.")
 	case f.ChainReason != "":
-		note("The DNSSEC chain could not be checked: " + f.ChainReason)
+		unsettled("The DNSSEC chain could not be checked: " + f.ChainReason)
 	case len(f.Keys) == 0:
 		add("dns.dnssec-no-keys", Insecure,
 			"The parent anchors DNSSEC for this zone and the zone publishes no key",
@@ -272,7 +317,7 @@ func GradeDNS(f DNSFacts) DNSFinding {
 
 	for _, ds := range f.Signers {
 		if ds.Unsupported {
-			note("The parent holds a digest of a type this check does not compute (type " +
+			unsettled("The parent holds a digest of a type this check does not compute (type " +
 				strconv.Itoa(int(ds.DigestType)) + "), so that one was neither matched nor ruled out. " +
 				"Nothing measured is not the same as nothing wrong.")
 			break
@@ -283,7 +328,7 @@ func GradeDNS(f DNSFacts) DNSFinding {
 
 	switch {
 	case f.AddressReason != "":
-		note("The addresses could not be read: " + f.AddressReason)
+		unsettled("The addresses could not be read: " + f.AddressReason)
 	case len(f.Addresses) == 0:
 		note("The name itself resolves to no address. A domain used only for mail, or only for names " +
 			"beneath it, is ordinary; what this says is that nothing answers at the domain on its own.")
