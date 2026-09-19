@@ -3814,6 +3814,51 @@ clock is free for an integer and is not free for a map.
 
 ---
 
+### R24 — The DNS check grades what breaks resolution, and reports the zone's own choices
+
+DNS is the part of the internet with the most advice and the fewest
+requirements, and every scanner that reports on it grades the advice. A serial
+number not in `YYYYMMDDnn`, a refresh timer outside somebody's preferred range,
+a primary server not listed at the parent: these are the "errors" a domain
+health report opens with, and none of them is one. RFC 1912 calls its ranges
+recommendations. A zone whose records are written by an API has no reason to
+carry a serial a human can read, and telling its operator otherwise is R21's
+failure with a different record type.
+
+So `porch-dns-v1` grades three things, each of which stops a resolver:
+
+- **Fewer than two name servers**, which RFC 1034 requires and RFC 2182 — a
+  best current practice — explains: one server is one power supply and one
+  maintenance window between a domain and everybody trying to reach it. Every
+  server on one network is the same finding one step out, and is graded against
+  the prefix rather than the owner, because which organisation an address
+  belongs to cannot be read from the address and asking a third party on every
+  scan is not something this project does.
+- **A name server that resolves to nothing** — RFC 1912's lame delegation.
+- **A DNSSEC chain that does not check out.** This is the finding the check
+  exists for. A key rotated without the registrar being told leaves every
+  validating resolver — which is what the large public resolvers are — answering
+  with a failure, while the operator's own browser, behind whatever resolver is
+  in the office, is fine. The digest is computed here rather than taken from
+  the AD bit: the bit is the resolver's word (A06), and the arithmetic is a
+  hash over a name and a key.
+
+Everything else is reported: the addresses, the servers, the text records, the
+SOA and its timers, a digest type this does not compute, and an unsigned zone —
+which is a choice rather than a fault. A digest this cannot compute is never
+read as a chain that failed, for the reason R4 exists.
+
+*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`
+*Guarded by:* `TestAZoneThatIsServedAndSignedReadsStrong`,
+`TestTheDelegationIsGradedAgainstWhatIsRequired`,
+`TestABrokenChainIsTheFindingThisExistsFor`,
+`TestASHA1DigestIsSaidWhereTheChainWorks`,
+`TestANameInsideAZoneIsNotGradedAsOne`,
+`TestTheBoundariesAreAskedBeforeAnythingIsLookedUp`,
+`TestEveryRuleSetNamesTheToolAndTheCheck`
+
+---
+
 ### R23 — The policy read is the one a browser would hold
 
 A browser applies `Strict-Transport-Security` from **every** response that
