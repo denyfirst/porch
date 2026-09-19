@@ -200,3 +200,29 @@ func TestARecordDoesNotHoldOnToTheReply(t *testing.T) {
 		}
 	}
 }
+
+// The alias at a name is read, and a name that is not an alias has none.
+//
+// Sabotaging the parser escaped every test in internal/dnsscan, which answers
+// from a table rather than from bytes: the check reads what a resolver says,
+// and this is where what a resolver says becomes records.
+func TestTheAliasAtANameIsRead(t *testing.T) {
+	ctx := context.Background()
+	q := name(t, "www.example.com")
+
+	c := answering(t, TypeCNAME, "www.example.com",
+		record{q, TypeCNAME, nsRecord(t, "Pages.Example.NET")},
+	)
+	got, err := c.LookupCNAME(ctx, "www.example.com")
+	if err != nil || len(got.Alias) != 1 {
+		t.Fatalf("CNAME: %+v, %v", got, err)
+	}
+	if got.Alias[0] != "pages.example.net" {
+		t.Errorf("the alias reads %q, and a name is compared folded (I7)", got.Alias[0])
+	}
+
+	plain := answering(t, TypeCNAME, "www.example.com")
+	if got, err := plain.LookupCNAME(ctx, "www.example.com"); err != nil || len(got.Alias) != 0 {
+		t.Errorf("a name that is not an alias: %+v, %v", got, err)
+	}
+}

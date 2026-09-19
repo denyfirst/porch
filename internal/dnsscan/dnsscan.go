@@ -66,6 +66,7 @@ type Resolver interface {
 	LookupSOA(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupDS(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupDNSKEY(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
+	LookupCNAME(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupTXT(ctx context.Context, name string) (dnsclient.TXTAnswer, error)
 }
 
@@ -145,6 +146,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	facts := policy.DNSFacts{Policy: policy.DNSVersion}
 	s.readZone(ctx, resolver, domain, &facts)
 	s.readAddresses(ctx, resolver, domain, &facts)
+	s.readAlias(ctx, resolver, domain, &facts)
 	s.readNameServers(ctx, resolver, domain, &facts)
 	s.readChain(ctx, resolver, domain, &facts)
 
@@ -481,4 +483,39 @@ func CheckDomain(domain string) error {
 func isNilClient(r Resolver) bool {
 	c, ok := r.(*dnsclient.Client)
 	return ok && c == nil
+}
+
+// readAlias reads the alias at the name, and whether what it points at exists.
+//
+// Both halves are needed and the second is the one worth having. A name
+// pointing at something that was deleted resolves to nothing, and where the
+// target is at a provider that hands out unclaimed names, whoever claims it
+// next answers for this name — with a certificate they can obtain for it,
+// because obtaining one only takes answering for the name.
+func (s *Scanner) readAlias(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
+	answer, err := r.LookupCNAME(ctx, domain)
+	if err != nil {
+		facts.AliasReason = shape(err)
+		return
+	}
+	if len(answer.Alias) == 0 {
+		return
+	}
+	facts.Alias = answer.Alias[0]
+
+	// Whether the target exists at all, which is a question about the target
+	// and is asked of it. An address is not required — a name with only MX
+	// records exists — so existence is what the resolver says about the name
+	// rather than what it resolves to.
+	for _, qtype := range []uint16{dnsclient.TypeA, dnsclient.TypeAAAA} {
+		target, err := r.LookupAddresses(ctx, facts.Alias, qtype)
+		if err != nil {
+			facts.AliasReason = shape(err)
+			return
+		}
+		if target.Existed {
+			facts.AliasTargetExists = true
+			return
+		}
+	}
 }

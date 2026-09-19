@@ -469,6 +469,7 @@ type reply struct {
 	soa       []SOA
 	ds        []DS
 	keys      []DNSKEY
+	cname     []string
 
 	validated bool
 	existed   bool
@@ -895,6 +896,11 @@ type ZoneAnswer struct {
 	DS        []DS
 	Keys      []DNSKEY
 
+	// Alias is what a CNAME at the name points to, where the name is one. A
+	// name that is an alias has that record and no others, which is the whole
+	// of RFC 1034 §3.6.2.
+	Alias []string
+
 	Existed   bool
 	Validated bool
 }
@@ -951,5 +957,16 @@ func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswe
 	out.SOA = reply.soa
 	out.DS = reply.ds
 	out.Keys = reply.keys
+	out.Alias = reply.cname
 	return out, nil
+}
+
+// LookupCNAME reads the alias at a name, where there is one.
+//
+// A name that is an alias carries a CNAME and nothing else, so this answers
+// two questions at once: what the name points at, and whether it is an alias
+// at all. The chain is not followed — one step is what the record says, and
+// where the target leads is the target's question.
+func (c *Client) LookupCNAME(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeCNAME)
 }
