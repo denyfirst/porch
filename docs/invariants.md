@@ -3929,6 +3929,36 @@ the first time the promise on the privacy page would stop being true.
 *Guarded by:* `TestNothingFromAnyoneElseIsEnforcedByAHeader`,
 `TestContentSecurityPolicyAllowsOnlySelf`
 
+### W2a — Only the demonstration says where it is, and it says what it is
+
+A search for this project returned what it was months ago: a TLS checker
+called denyfirst. The pages had changed and nothing on them said so — no
+canonical address, no page title naming the tool, nothing pointing a crawler
+at what exists now. So each page on the demonstration carries its own address
+on `denyfirst.dev`, repeats its title and description in the tags a link
+preview reads, and names both the tool and the maker: Porch is what it is,
+denyfirst is who publishes it. `/sitemap.xml` is the page table itself rather
+than a list kept in step by hand, and a test fails when the two differ.
+
+An installation somebody runs carries none of it. Its pages are on its own
+address, and a canonical address pointing here would tell a search engine that
+one company's instrument is a copy of our site. Its `robots.txt` asks not to
+be indexed at all — a request rather than a guard, because the password is the
+guard, but one every crawler anybody is likely to meet honours.
+
+Where the demonstration runs is named on its privacy page: a server rented
+from Hetzner Online GmbH, in Germany. Anybody could read that from the address
+it answers on, so saying it costs nothing and leaves the page describing the
+arrangement as it is. An installation somebody runs says nothing of the sort,
+because it is not where they are.
+
+*Enforced in:* `internal/web.render`, `internal/web.buildPlain`,
+`internal/web/assets/layout.html`
+*Guarded by:* `TestACrawlerIsToldWhatThisDeploymentIs`,
+`TestEveryPageSaysWhichAddressItIs`,
+`TestTheDemonstrationTitlesNameTheToolAndTheMaker`,
+`TestPrivacyPageAnswersEveryUrgentQuestion`, `TestASelfHostedCopySaysWhatItDoes`
+
 ### W3 — A table with the same columns is drawn with the same columns
 
 The cipher suites are printed one table per protocol version, one under

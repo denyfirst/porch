@@ -20,8 +20,10 @@ package web
 import (
 	"bytes"
 	"embed"
+	"encoding/xml"
 	"html/template"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -65,6 +67,20 @@ const contentSecurityPolicy = "default-src 'none'; " +
 	"base-uri 'none'; " +
 	"require-trusted-types-for 'script'; " +
 	"trusted-types 'none'"
+
+// SiteURL is where the demonstration is served from, and it is written down
+// for one job: the address a page gives as its own.
+//
+// Search engines had the old shape of this project — a TLS checker called
+// denyfirst — because that is what the pages said for months, and the pages
+// now say something else. A canonical address and the same title in the
+// social tags is how a page states which address it is, so that the one being
+// read is the one indexed.
+//
+// Only the demonstration says it. An installation somebody runs is on their
+// address, not ours, and pointing it here would tell a search engine their
+// pages are copies of ours.
+const SiteURL = "https://denyfirst.dev"
 
 // SecurityTxtPath is where RFC 9116 requires the file to be served.
 //
@@ -130,6 +146,13 @@ type page struct {
 	// denyfirst, and says so in the footer. Set by render from the build.
 	Brand bool
 
+	// Path is the address this page is served at, set at startup from the
+	// table, and Canonical is that address on the demonstration's own host.
+	// Empty on an installation somebody runs, where the layout then sends no
+	// canonical address and no social tags at all.
+	Path      string
+	Canonical string
+
 	// Body is filled in at startup. It is template.HTML because the fragment
 	// is a file in this repository rather than anything a user supplied.
 	Body template.HTML
@@ -157,8 +180,8 @@ var pages = map[string]*page{
 	// temporary redirect here, and when the project has a front page to put
 	// there the redirect goes and this address does not move.
 	"/tls": {
-		Title:       "denyfirst — check what a server actually negotiates",
-		Description: "Check a server's TLS configuration and certificate against cited standards. Nothing about the scan is recorded.",
+		Title:       "Transport check — Porch by denyfirst",
+		Description: "Porch checks what a server's TLS handshake and certificate actually are, graded against cited standards. Nothing about the scan is recorded.",
 		Fragment:    "assets/index.html",
 		Script:      true,
 
@@ -183,8 +206,8 @@ var pages = map[string]*page{
 	// privacy page three more; they are grouped here by the question they
 	// answer instead.
 	"/docs": {
-		Title:       "Documentation — denyfirst",
-		Description: "How to read a report, what a check sends, how to run your own copy, and how to reach us.",
+		Title:       "Documentation — Porch by denyfirst",
+		Description: "How to read a Porch report, what a check sends, how to run your own copy, and how to reach us.",
 		Fragment:    "assets/docs.html",
 		Data: docsPage{
 			TLS:  policy.TLSVersion,
@@ -209,7 +232,7 @@ var pages = map[string]*page{
 	// check will not establish, and a page that tried to be both would be
 	// true of neither.
 	"/tls/method": {
-		Title:       "What this can see, and what it cannot — denyfirst",
+		Title:       "What the transport check can see, and what it cannot — Porch by denyfirst",
 		Description: "How to read a report, and the limits of the method: what every scan here cannot establish, whatever server it looks at.",
 		Fragment:    "assets/method.html",
 		Data:        methodPage{Limits: policy.StandingLimits(), Demo: demo.Enabled},
@@ -224,8 +247,8 @@ var pages = map[string]*page{
 	// addresses, two rule sets, and a front page at "/" later that runs both
 	// against one name.
 	"/web": {
-		Title:       "denyfirst — check how a site is actually reached",
-		Description: "Check how a website is reached over HTTP and HTTPS: redirects, transport, and the policy a browser would end up holding. Nothing about the scan is recorded.",
+		Title:       "Reach check — Porch by denyfirst",
+		Description: "Porch checks how a website is reached over HTTP and HTTPS: redirects, transport, and the policy a browser would end up holding. Nothing about the scan is recorded.",
 		Fragment:    "assets/web.html",
 		Script:      true,
 		Data:        scanPage{Demo: demo.Enabled, Hosts: demo.Hosts()},
@@ -246,7 +269,7 @@ var pages = map[string]*page{
 	// wants one thing: what reached their server, exactly, and that there is
 	// nothing else to look for.
 	"/web/method": {
-		Title:       "What the web check sends, and what it cannot see — denyfirst",
+		Title:       "What the reach check sends, and what it cannot see — Porch by denyfirst",
 		Description: "Exactly what a web check sends to a server, how to read the report it produces, and the limits of the method.",
 		Fragment:    "assets/web-method.html",
 		Data:        methodPage{Limits: policy.WebStandingLimits(), Demo: demo.Enabled, UserAgent: webprobe.DefaultUserAgent},
@@ -259,7 +282,7 @@ var pages = map[string]*page{
 	// the Transport page's limits. It also answers the question its reports
 	// raise most: why an exchanger's offer was not established.
 	"/mail/method": {
-		Title:       "What the mail check reads, and what it cannot see — denyfirst",
+		Title:       "What the mail check reads, and what it cannot see — Porch by denyfirst",
 		Description: "What the mail check reads and connects to, how to read the report it produces, and the limits of the method.",
 		Fragment:    "assets/mail-method.html",
 		Data:        methodPage{Limits: policy.MailStandingLimits(), Demo: demo.Enabled},
@@ -456,8 +479,8 @@ func init() {
 			Fragment:    "assets/home.html",
 		}
 		pages["/porch"] = &page{
-			Title:       "Porch — denyfirst",
-			Description: "Porch checks the TLS handshake and certificate, how a site is reached, and what a domain's DNS says about its mail. See it run on our own domain.",
+			Title:       "Porch — TLS, web and mail checks that cite their sources — denyfirst",
+			Description: "Porch is a self-hosted scanner: the TLS handshake and certificate, how a site is reached, and what a domain's DNS says about its mail. Every verdict cites the document behind it, and nothing about a scan is recorded. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
 			Script:      true,
 			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks()},
@@ -465,6 +488,7 @@ func init() {
 	}
 
 	for path, p := range pages {
+		p.Path = path
 		body, err := render(p)
 		if err != nil {
 			// At startup, so a broken page stops the process instead of
@@ -473,6 +497,8 @@ func init() {
 		}
 		rendered[path] = body
 	}
+
+	buildPlain()
 
 	// The console, with nothing configured yet. Configure replaces it once the
 	// program knows what this installation is; until then it describes the
@@ -499,6 +525,9 @@ func render(p *page) ([]byte, error) {
 	}
 
 	p.Brand = demo.Enabled
+	if p.Brand && p.Path != "" {
+		p.Canonical = SiteURL + p.Path
+	}
 	p.SignedIn = signedIn && p.Section != "login"
 	if p.Section == "" {
 		p.Section = "reference"
@@ -716,6 +745,11 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if text, found := plain[r.URL.Path]; found {
+		write(w, r, text.contentType, text.body)
+		return
+	}
+
 	if file, found := files[r.URL.Path]; found {
 		body, err := assets.ReadFile(file.name)
 		if err != nil {
@@ -821,4 +855,54 @@ type porchPage struct {
 type docsPage struct {
 	TLS, Web, Mail string
 	Demo           bool
+}
+
+// plain holds the two files a crawler reads, built at startup beside the
+// pages.
+var plain = map[string]struct {
+	contentType string
+	body        []byte
+}{}
+
+// buildPlain writes robots.txt and, on the demonstration, a sitemap.
+//
+// The demonstration wants to be found, and the pages it wants found are the
+// ones in the table, so the sitemap is that table rather than a list somebody
+// keeps in step by hand.
+//
+// An installation somebody runs wants the opposite. It is one company's
+// instrument on one company's address, often behind a password, and the
+// addresses it serves are not for a search index: robots.txt there refuses
+// everything. That is a request a crawler honours rather than a guard — the
+// password is the guard — but the crawlers anybody is likely to meet honour
+// it, and asking costs nothing.
+func buildPlain() {
+	robots := "User-agent: *\nDisallow: /\n"
+	if demo.Enabled {
+		paths := make([]string, 0, len(rendered))
+		for path := range rendered {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+
+		var sitemap strings.Builder
+		sitemap.WriteString(xml.Header)
+		sitemap.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+		for _, path := range paths {
+			sitemap.WriteString("  <url><loc>" + SiteURL + path + "</loc></url>\n")
+		}
+		sitemap.WriteString("</urlset>\n")
+
+		plain["/sitemap.xml"] = struct {
+			contentType string
+			body        []byte
+		}{"application/xml; charset=utf-8", []byte(sitemap.String())}
+
+		robots = "User-agent: *\nAllow: /\n\nSitemap: " + SiteURL + "/sitemap.xml\n"
+	}
+
+	plain["/robots.txt"] = struct {
+		contentType string
+		body        []byte
+	}{"text/plain; charset=utf-8", []byte(robots)}
 }

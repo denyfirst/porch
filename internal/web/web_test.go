@@ -364,7 +364,7 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		"three minutes",
 		"no cookies",
 		"network provider",
-		"rented server",
+		"hetzner online gmbh",
 
 		// The limits of what the tool claims.
 		//
