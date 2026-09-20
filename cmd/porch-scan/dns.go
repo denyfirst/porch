@@ -96,21 +96,25 @@ func printDNS(w io.Writer, r dnsResult) {
 	if f := r.Observed; f != nil {
 		fmt.Fprintf(w, "\n  What the name publishes\n")
 
-		switch {
-		case f.AddressReason != "":
+		// Two kinds, two lines, and "none" on the line that found nothing:
+		// merged, a reader cannot tell a name with no IPv6 from one nobody
+		// asked about.
+		if f.AddressReason != "" {
 			fmt.Fprintf(w, "    Addresses  not read: %s\n", f.AddressReason)
-		case len(f.Addresses) == 0:
-			fmt.Fprintf(w, "    Addresses  none\n")
-		default:
-			fmt.Fprintf(w, "    Addresses  %s\n", strings.Join(f.Addresses, ", "))
+		} else {
+			fmt.Fprintf(w, "    IPv4       %s\n", listOrNone(f.IPv4))
+			fmt.Fprintf(w, "    IPv6       %s\n", listOrNone(f.IPv6))
 		}
 
-		if f.Alias != "" {
-			gone := ""
-			if !f.AliasTargetExists {
-				gone = ", which does not exist"
-			}
-			fmt.Fprintf(w, "    Alias      %s%s\n", f.Alias, gone)
+		switch {
+		case f.AliasReason != "":
+			fmt.Fprintf(w, "    Alias      not read: %s\n", f.AliasReason)
+		case f.Alias == "":
+			fmt.Fprintf(w, "    Alias      none\n")
+		case f.AliasTargetExists:
+			fmt.Fprintf(w, "    Alias      %s\n", f.Alias)
+		default:
+			fmt.Fprintf(w, "    Alias      %s, which does not exist\n", f.Alias)
 		}
 
 		if f.SOAFound {
@@ -119,7 +123,7 @@ func printDNS(w io.Writer, r dnsResult) {
 			fmt.Fprintf(w, "    Zone       begins above this name\n")
 		}
 
-		fmt.Fprintf(w, "    Text       %d records\n", len(f.Text))
+		printText(w, f.Text)
 		fmt.Fprintf(w, "    DNSSEC     %s\n", dnssecLine(*f))
 
 		printDelegation(w, *f)
@@ -190,3 +194,53 @@ func dnsOutcomes(reports []dnsResult) []outcome {
 	}
 	return out
 }
+
+// listOrNone writes a list, or says there was none. Empty is a fact here: the
+// lookup happened and found nothing.
+func listOrNone(values []string) string {
+	if len(values) == 0 {
+		return "none"
+	}
+	return strings.Join(values, ", ")
+}
+
+// printText writes the text records as published.
+//
+// As published, and marked as that. Everything else in a report is written by
+// this program; these are the only lines in it chosen by whoever is being
+// measured, and a reader has to be able to tell the two apart — the difference
+// matters most where a record has been made to read like advice.
+//
+// Bounded twice, because a TXT record is whatever somebody put there: at most
+// eight records, and each cut to a length that still shows what it is.
+func printText(w io.Writer, records []string) {
+	if len(records) == 0 {
+		fmt.Fprintf(w, "    Text       none\n")
+		return
+	}
+
+	shown := records
+	if len(shown) > maxTextShown {
+		shown = shown[:maxTextShown]
+	}
+	fmt.Fprintf(w, "    Text       %d records, as published:\n", len(records))
+	for _, record := range shown {
+		fmt.Fprintf(w, "                 %s\n", cut(record, maxTextLength))
+	}
+	if len(records) > len(shown) {
+		fmt.Fprintf(w, "                 and %d more\n", len(records)-len(shown))
+	}
+}
+
+// cut shortens a value read out of somebody else's zone, and says it did.
+func cut(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit] + "…"
+}
+
+const (
+	maxTextShown  = 8
+	maxTextLength = 120
+)

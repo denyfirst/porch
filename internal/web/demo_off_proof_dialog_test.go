@@ -118,3 +118,46 @@ func TestDomainsSaysWhetherTheProofWasSigned(t *testing.T) {
 		}
 	}
 }
+
+// The DNS report says which address kind found nothing, keeps the records the
+// domain publishes apart from the sentences this program writes, and the
+// console heading no longer repeats a verdict the report carries.
+func TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten(t *testing.T) {
+	src := script(t)
+
+	for _, want := range []string{
+		`row("IPv4", listOrNone(facts.ipv4));`,
+		`row("IPv6", listOrNone(facts.ipv6));`,
+		`row("Alias", "none");`,
+		`sectionTitle("Text records, as published")`,
+		"function textRecords(records) {",
+		"records.slice(0, 8)",
+		"record.slice(0, 120)",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("app.js no longer carries %s", want)
+		}
+	}
+
+	// The published records are written as text and never as markup, which is
+	// the rule the whole script is built on.
+	block := src[strings.Index(src, "function textRecords(records) {"):]
+	block = block[:strings.Index(block, "\n}\n")]
+	if !strings.Contains(block, "list.textContent =") || strings.Contains(block, "innerHTML") {
+		t.Errorf("the published records are not written as text:\n%s", block)
+	}
+
+	// And one result is said once: the heading carries the states a report
+	// cannot show, not a copy of its verdict.
+	run := src[strings.Index(src, "async function runCheck(name, target) {"):]
+	run = run[:strings.Index(run, "\n}\n")]
+	if strings.Contains(run, `state.textContent = data.verdict ? verdict : "not graded"`) {
+		t.Error("the console heading still repeats the verdict the report carries")
+	}
+	if !strings.Contains(run, `state.textContent = "";`) {
+		t.Error("the console heading is not cleared once the report is drawn")
+	}
+	if !strings.Contains(asset(t, "assets/style.css"), ".run-state:empty { display: none; }") {
+		t.Error("an empty heading state is not hidden, so it leaves a gap")
+	}
+}

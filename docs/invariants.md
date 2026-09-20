@@ -3905,6 +3905,8 @@ whoever claims it next answers for this name.
 `TestTheDNSEndpointTakesADomain`, `TestEveryCheckOfferedCanBeRunAndIsExplained`,
 `TestEveryCheckNamedCanBeRunAndReachesItsOwnCode`,
 `TestTheDNSReportSaysWhatWasReadAndWhatItMeans`, `TestEveryCheckPointsAtItsOwnPage`,
+`TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten`,
+`TestThePublishedRecordsAreBounded`, `TestNoStringLiteralInAScriptIsLeftOpen`,
 `TestEveryRuleSetNamesTheToolAndTheCheck`
 
 ---
