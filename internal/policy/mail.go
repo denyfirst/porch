@@ -31,7 +31,7 @@ import (
 // the TLS name carries its check: "denyfirst-v1" over a mail report and over a
 // TLS report would be one name for two rule sets, which is exactly the
 // confusion the naming exists to prevent.
-const MailVersion = "porch-mail-v1"
+const MailVersion = "porch-mail-v2"
 
 var (
 	rfc7208 = Reference{
@@ -53,6 +53,14 @@ var (
 	rfc7672 = Reference{
 		"RFC 7672 — SMTP Security via Opportunistic DANE TLS",
 		"https://www.rfc-editor.org/rfc/rfc7672",
+	}
+	rfc2505 = Reference{
+		"RFC 2505 — Anti-Spam Recommendations for SMTP MTAs (BCP 30)",
+		"https://www.rfc-editor.org/rfc/rfc2505",
+	}
+	rfc5321 = Reference{
+		"RFC 5321 — Simple Mail Transfer Protocol",
+		"https://www.rfc-editor.org/rfc/rfc5321",
 	}
 	nist800177 = Reference{
 		"NIST SP 800-177 Rev. 1 — Trustworthy Email",
@@ -313,6 +321,15 @@ type ExchangerTLS struct {
 
 	Reason          string `json:"reason,omitempty"`
 	ConnectTimedOut bool   `json:"connectTimedOut,omitempty"`
+
+	// RelayAsked is whether this exchanger was asked to forward mail for a
+	// domain it does not serve, and RelayAccepted whether it agreed. The
+	// question is put to an exchanger inside the domain being checked and to
+	// no other, so both false usually means it was never asked — which
+	// RelayReason says, and which is not an exchanger that refused (R4).
+	RelayAsked    bool   `json:"relayAsked,omitempty"`
+	RelayAccepted bool   `json:"relayAccepted,omitempty"`
+	RelayReason   string `json:"relayReason,omitempty"`
 }
 
 // MailFinding is the graded result.
@@ -576,6 +593,29 @@ func GradeMail(f MailFacts) MailFinding {
 			rfc8301)
 	}
 
+	// An exchanger that forwards mail for a domain it does not serve.
+	//
+	// The oldest misconfiguration in mail and still the most expensive one to
+	// have. RFC 2505 — a best current practice — says an MTA must not relay
+	// for domains it is not responsible for, and the reason is what happens
+	// next: a relay is found within hours, used to send in somebody else's
+	// name, and listed everywhere that matters, after which the domain's own
+	// mail stops arriving. Graded from what the server said, which is the one
+	// way to know: a configuration file can look right and a server can still
+	// accept.
+	for _, x := range f.Exchangers {
+		if x.RelayAccepted {
+			add("mail.open-relay", Insecure,
+				"An exchanger forwards mail for a domain it does not serve",
+				x.Host+" accepted a recipient at a domain that is not one of its own, from a sender "+
+					"it knows nothing about. That is an open relay: whoever finds it can send in "+
+					"anybody's name through this server, and the address it sends from is this "+
+					"server's. Nothing was sent here — the conversation was abandoned before any "+
+					"message existed — so what is graded is what the server agreed to do.",
+				rfc2505, rfc5321)
+		}
+	}
+
 	// A domain whose principal records could not be read is not strong.
 	//
 	// Strong is the verdict that claims nothing above fell short, and the
@@ -757,8 +797,11 @@ var LimitMailSendsNothing = StandingLimit{
 	// scan read about the policy is said by the report that read it. describeSTS
 	// names the reason where there is one.
 	Text: "No message was composed or sent, and nothing that would change state at the other end " +
-		"was attempted. Where a mail exchanger was contacted, the conversation ended once encryption " +
-		"had been negotiated or declined: no sender, recipient or message was ever named. Where DANE " +
+		"was attempted: there is no DATA in any of this, so nothing can be delivered or queued. " +
+		"Where a mail exchanger inside the domain was contacted, it was also asked whether it " +
+		"forwards mail for a domain it does not serve — an empty sender, a recipient at a name RFC " +
+		"2606 reserves so that it cannot exist, and a reset before any message. An exchanger run by " +
+		"somebody else is never asked that. Where DANE " +
 		"is published, a binding is checked only against a certificate an exchanger presented to this " +
 		"scan, and DNSSEC is not validated here: whether the records validated is the resolver's word. " +
 		"And a DKIM signing key is read " +

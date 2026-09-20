@@ -8,11 +8,27 @@
 // send STARTTLS if it offers it, negotiate TLS, send QUIT. That is the whole of
 // it.
 //
-// No sender, recipient or message is ever named. There is no MAIL FROM, no RCPT
-// TO and no DATA, so nothing is delivered, nothing is queued and nothing at the
-// other end changes. What an exchanger's log records is a client that said hello,
-// asked for encryption, and left — which is what every sending server that finds
-// nothing to deliver looks like.
+// No message is ever composed or sent. There is no DATA, so nothing is
+// delivered, nothing is queued and nothing at the other end changes. What an
+// exchanger's log records is a client that said hello, asked for encryption,
+// and left — which is what every sending server that finds nothing to deliver
+// looks like.
+//
+// # The one question that names anybody
+//
+// A caller may ask whether the exchanger forwards mail for a domain it does not
+// serve: the question that finds an open relay, which is a server spammers use
+// as their own until it is listed everywhere. Asking it takes an empty reverse
+// path — the one every bounce carries, naming nobody — and a recipient under
+// .invalid, which RFC 2606 reserves so that it cannot exist. Then RSET, before
+// DATA, so the transaction is abandoned and a server that said yes was never
+// given anything to forward.
+//
+// That question is off unless a caller turns it on, and internal/mailscan turns
+// it on for an exchanger inside the domain being checked and for no other. An
+// exchanger belonging to a provider is somebody else's server: in their logs the
+// conversation reads as a spam probe, and the address it came from is the one
+// that gets listed for it.
 //
 // # The name it gives
 //
@@ -116,6 +132,18 @@ type Result struct {
 	// like, and is therefore not established as a fact about the exchanger
 	// (R3d).
 	ConnectTimedOut bool
+
+	// RelayAsked is true when the server was asked whether it forwards mail
+	// for a domain it does not serve, and RelayAccepted whether it said yes.
+	// Both false where the question was not put, which is not the same as a
+	// server that refused (R4).
+	RelayAsked    bool
+	RelayAccepted bool
+
+	// RelayReason says why the answer was not established, or what the server
+	// said when it refused — its reply code and nothing it wrote, because the
+	// text is the server's and a report's sentences are this program's.
+	RelayReason string
 }
 
 // Prober asks exchangers. The zero value is usable.
@@ -138,7 +166,33 @@ type Prober struct {
 
 	// Now supplies the time a certificate is judged at. Nil means time.Now.
 	Now func() time.Time
+
+	// CheckRelay asks the exchanger whether it forwards mail for a domain it
+	// does not serve — the question that finds an open relay.
+	//
+	// False by default, and a caller sets it only for an exchanger inside the
+	// domain being checked. An exchanger belonging to somebody else — a
+	// provider named by an MX record — is not this scan's to put through a
+	// relay test: the conversation reads as a spam probe in their logs, and
+	// the address it comes from is the one that gets listed for it.
+	//
+	// What is asked is bounded so that nothing can be delivered by it. The
+	// sender is the empty reverse path every bounce uses, which names nobody;
+	// the recipient is a name under .invalid, which RFC 2606 reserves so that
+	// it can never exist; and the conversation is reset and closed before
+	// DATA, so no message is ever composed. A server that says yes has said
+	// it would forward for a domain that is not its own, which is what an
+	// open relay is.
+	CheckRelay bool
 }
+
+// relayRecipient is the address the relay question names.
+//
+// Under .invalid, which RFC 2606 reserves for names that are guaranteed not
+// to exist, so that the question cannot deliver anything even to a server
+// determined to try. The local part names the tool, so that an operator
+// reading their own log sees what it was.
+const relayRecipient = "relay-probe@porch-relay-test.invalid"
 
 var (
 	errLineTooLong  = errors.New("smtptls: a reply line is longer than rfc 5321 allows")
@@ -211,6 +265,9 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 	out.Measured = true
 	out.Offered = offersSTARTTLS(lines)
 	if !out.Offered {
+		if p.CheckRelay {
+			askRelay(conn, r, &out)
+		}
 		quit(conn)
 		return out
 	}
@@ -259,6 +316,14 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 	out.Suite = tls.CipherSuiteName(state.CipherSuite)
 	out.Chain = state.PeerCertificates
 	out.Trusted, out.NameMatches, out.CertificateReason = p.judge(state.PeerCertificates, host)
+
+	// Over the encrypted connection, which is the one the server is having
+	// with this client by now. The reader is rebound to it for the same
+	// reason: anything read from the old one would be bytes from before
+	// encryption began.
+	if p.CheckRelay {
+		askRelay(tlsConn, bufio.NewReaderSize(tlsConn, maxLine), &out)
+	}
 
 	quit(tlsConn)
 	return out
@@ -555,4 +620,76 @@ func (p *Prober) now() time.Time {
 		return p.Now()
 	}
 	return time.Now()
+}
+
+// askRelay asks whether the server forwards mail for a domain it does not
+// serve, and fills in the answer.
+//
+// Three lines and then a reset: an empty reverse path, a recipient at a name
+// that cannot exist, and RSET, which abandons the transaction. DATA is never
+// sent, so no message is composed and nothing can be queued — a relay that
+// said yes has said it *would* forward, which is the finding, and has not
+// been given anything to forward.
+//
+// Over the encrypted connection where there is one, because that is the
+// conversation the server is having with this client by then.
+func askRelay(w io.Writer, r *bufio.Reader, out *Result) {
+	out.RelayAsked = true
+
+	if err := writeLine(w, "MAIL FROM:<>"); err != nil {
+		out.RelayAsked = false
+		out.RelayReason = "the connection closed before the question could be asked"
+		return
+	}
+	code, _, err := readReply(r)
+	switch {
+	case err != nil:
+		out.RelayAsked = false
+		out.RelayReason = "the reply to the empty sender could not be read"
+		return
+	case code != 250:
+		// A server that refuses the empty reverse path refuses every bounce,
+		// which is a fact about the server and not about relaying. Said as
+		// what it is rather than read as a refusal to relay (R4).
+		out.RelayAsked = false
+		out.RelayReason = "the server did not accept an empty sender (" + strconv.Itoa(code) +
+			"), so whether it forwards for other domains was not established"
+		return
+	}
+
+	if err := writeLine(w, "RCPT TO:<"+relayRecipient+">"); err != nil {
+		out.RelayAsked = false
+		out.RelayReason = "the connection closed before the recipient could be named"
+		return
+	}
+	code, _, err = readReply(r)
+	if err != nil {
+		out.RelayAsked = false
+		out.RelayReason = "the reply naming the recipient could not be read"
+		return
+	}
+
+	// 250 and 251 both accept the recipient; 251 says it would be forwarded
+	// elsewhere, which is relaying stated outright.
+	out.RelayAccepted = code == 250 || code == 251
+	if !out.RelayAccepted {
+		out.RelayReason = "the server refused it (" + strconv.Itoa(code) + ")"
+	}
+
+	// The transaction is abandoned either way, so a server that accepted the
+	// recipient is left holding nothing.
+	_ = writeLine(w, "RSET")
+	_, _, _ = readReply(r)
+}
+
+// ProbeRelay is Probe with the relay question asked as well.
+//
+// A method rather than a field the caller flips, so that one prober serves
+// both kinds of exchanger in one scan: the question is for an exchanger inside
+// the domain being checked, and the same prober measures the others without
+// it.
+func (p *Prober) ProbeRelay(ctx context.Context, host string) Result {
+	asking := *p
+	asking.CheckRelay = true
+	return asking.Probe(ctx, host)
 }

@@ -26,6 +26,15 @@ func printExchangers(w io.Writer, f *policy.MailFacts) {
 	for _, x := range f.Exchangers {
 		fmt.Fprintf(w, "    STARTTLS   %s: %s\n", x.Host, exchangerLine(x))
 	}
+	for _, x := range f.Exchangers {
+		// Only where the question was put, or where putting it established
+		// nothing. An exchanger that was never asked says nothing here,
+		// because a blank row reads as an answer.
+		if !x.RelayAsked && x.RelayReason == "" {
+			continue
+		}
+		fmt.Fprintf(w, "    RELAY      %s: %s\n", x.Host, relayLine(x))
+	}
 	for _, b := range f.DANEBindings {
 		fmt.Fprintf(w, "    DANE       %s: %s\n", b.Host, daneLine(b))
 	}
@@ -75,5 +84,22 @@ func exchangerLine(x policy.ExchangerTLS) string {
 		return x.Version + " " + x.Suite + ", certificate does not name this exchanger"
 	default:
 		return x.Version + " " + x.Suite + ", certificate verifies"
+	}
+}
+
+// relayLine says what the relay question found, in the words the page uses
+// (R16).
+//
+// Three states and never two: a server that agreed to forward for a domain it
+// does not serve, one that refused, and one where the answer was not
+// established — which is not a refusal (R4).
+func relayLine(x policy.ExchangerTLS) string {
+	switch {
+	case x.RelayAccepted:
+		return "forwards mail for a domain it does not serve"
+	case x.RelayAsked:
+		return "refuses to forward for other domains"
+	default:
+		return "not established: " + x.RelayReason
 	}
 }
