@@ -61,6 +61,7 @@ import (
 
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dkim"
+	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
@@ -183,6 +184,7 @@ type Server struct {
 	// test can hand it a prober that reaches a server it started.
 	web    *webscan.Scanner
 	mail   *mailscan.Scanner
+	dns    *dnsscan.Scanner
 	limits Limits
 	rate   *limiter
 
@@ -289,6 +291,7 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 
 			DKIMSelectors: dkim.DocumentedSelectors(),
 		},
+		dns:      &dnsscan.Scanner{Verify: scanner.Verify},
 		limits:   limits,
 		rate:     newLimiter(limits.Burst, limits.Refill, limits.MaxTrackedIPs, now),
 		reads:    newLimiter(readBurst, readRefill, limits.MaxTrackedIPs, now),
@@ -327,6 +330,7 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 	// written by somebody who has not read this comment.
 	if scanner.Resolver != nil {
 		s.mail.Resolver = scanner.Resolver
+		s.dns.Resolver = scanner.Resolver
 	}
 
 	tls, web := s.tlsCheck(), s.webCheck()
@@ -343,6 +347,10 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// same chain of guards anyway: a lookup a stranger caused this service
 		// to make is still a lookup this service made.
 		{http.MethodPost, "/api/v1/mail/scan", s.scanHandler(s.mailCheck()), false},
+
+		// The DNS check's address. It opens nothing at all: every question goes
+		// to the resolver, and the domain being read is never connected to.
+		{http.MethodPost, "/api/v1/dns/scan", s.scanHandler(s.dnsCheck()), false},
 
 		// What a domain must publish for this deployment to scan it, and
 		// whether it has. The same guards as a scan; see verification.go.

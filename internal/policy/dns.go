@@ -228,7 +228,7 @@ func GradeDNS(f DNSFacts) DNSFinding {
 	if !f.Apex {
 		out.Verdict = ""
 		note("No zone begins at this name: it is a name inside one. Ask about the domain itself to read its delegation.")
-		return out
+		return withLimits(out)
 	}
 
 	// ── Graded: the delegation ───────────────────────────────────────
@@ -347,6 +347,16 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			"not a check this program made.")
 	}
 
+	return withLimits(out)
+}
+
+// withLimits adds the limits of the method, from the one place that declares
+// them. A report that wrote its own would drift from the page explaining them,
+// and the sentence a reader is asked to trust would exist in two versions.
+func withLimits(out DNSFinding) DNSFinding {
+	for _, l := range DNSStandingLimits() {
+		out.Notes = append(out.Notes, l.Note())
+	}
 	return out
 }
 
@@ -376,4 +386,30 @@ func computable(signers []DelegationSigner) bool {
 		}
 	}
 	return false
+}
+
+// LimitDNSAsksTheResolver is what every DNS check here cannot see, and it is
+// true of all of them.
+//
+// Stated as a limit rather than left out, for the reason R4 gives about every
+// other silence: a report listing what a zone publishes and saying nothing
+// about the rest reads as a complete picture of its DNS.
+var LimitDNSAsksTheResolver = StandingLimit{
+	ID:    "dns-asks-the-resolver",
+	Title: "Everything here came from one resolver",
+
+	Text: "Every answer here came from the resolver this installation uses, and no name server was " +
+		"contacted directly. So what is reported is what that resolver returns today, which may be " +
+		"an answer it still holds from earlier, and three questions stay out of reach: whether the " +
+		"registrar's delegation still names the same servers as the zone does, whether each of those " +
+		"servers answers for the zone itself, and whether any of them answers questions about other " +
+		"people's domains. The DNSSEC chain is checked here by taking the digest of the keys this " +
+		"zone publishes and comparing it with what the parent holds; whether the signatures over " +
+		"every record verify is the resolver's work, and where it says it did that, the report says " +
+		"so as its word rather than as this program's.",
+}
+
+// DNSStandingLimits are true of every DNS check this program runs.
+func DNSStandingLimits() []StandingLimit {
+	return []StandingLimit{LimitDNSAsksTheResolver}
 }

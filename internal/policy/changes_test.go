@@ -190,7 +190,7 @@ func TestEveryRuleSetThatShippedNamesItsRelease(t *testing.T) {
 		}
 	}
 
-	inForce := map[string]bool{TLSVersion: true, WebVersion: true, MailVersion: true}
+	inForce := map[string]bool{TLSVersion: true, WebVersion: true, MailVersion: true, DNSVersion: true}
 
 	// Every rule set in force has a section this test can see.
 	//

@@ -13,10 +13,11 @@ session identifier, and nothing about who is working on it.
 
 ## What this is
 
-A scanner that measures how a host is reached and grades what it finds. Three
+A scanner that measures how a host is reached and grades what it finds. Four
 checks so far: the TLS handshake and the certificate behind it
 (`porch-tls-v7`), how a website is reached over HTTP (`porch-web-v3`),
-and what a domain's DNS says about its mail (`porch-mail-v1`).
+what a domain's DNS says about its mail (`porch-mail-v1`), and how the domain
+itself is served, down to its DNSSEC chain (`porch-dns-v1`).
 
 Each carries its own rule-set name and its own version, and they move
 independently. A report says which one graded it, because a verdict from one
@@ -203,7 +204,7 @@ in it is there because it has already gone wrong once.
 | `internal/webprobe` | the HTTP measurement: one `GET` of `/`, and its page (N7) |
 | `internal/markup` | reads a page; keeps hosts and booleans, never markup (N7) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
-| `internal/scan`, `internal/webscan`, `internal/mailscan` | a check: measure, then grade |
+| `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
 | `internal/spf` | walks a sender policy and counts what evaluating it costs |
 | `internal/dkim` | reads signing keys under selectors somebody named |
 | `internal/mtasts` | fetches the MTA-STS policy a zone announces, behind proof (N13) |

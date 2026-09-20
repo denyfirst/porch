@@ -44,7 +44,7 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 	//
 	// Mail has a method page and no page of its own: it is run from the console
 	// and the Porch page, which run every check.
-	checks := []string{"/tls", "/web", "/mail"}
+	checks := []string{"/tls", "/web", "/mail", "/dns"}
 
 	underACheck := func(path string) bool {
 		for _, prefix := range checks {

@@ -69,71 +69,52 @@ func TestTheMailReportNamesTheMailRuleSet(t *testing.T) {
 	}
 }
 
-// The footer of a check with no page of its own prints its limits rather than
-// pointing at somebody else's.
+// Every check points its reader at its own page, and never at another's.
 //
 // The defect this was written for shipped and was caught by hand: the mail
 // report ended with "porch-scan -limits, or https://denyfirst.dev/tls/method",
 // which is a page about cipher suites and certificates under a report that
-// looked at neither. A URL for a page nobody has written is worse than no URL,
-// because a reader follows it.
-func TestTheMailReportPointsAtNoPageItDoesNotHave(t *testing.T) {
+// looked at neither. The mail check had no page of its own then, and the rule
+// was to print its limits in full rather than point anywhere. It has one now,
+// and the rule that survives is the one that mattered: the page a report names
+// describes the check that produced it.
+func TestEveryCheckPointsAtItsOwnPage(t *testing.T) {
 	text := mailReport(t, mailSample())
 
-	for _, wrong := range []string{tlsMethodPage, webMethodPage} {
+	if !strings.Contains(text, mailMethodPage) {
+		t.Errorf("the mail report does not point at %s:\n%s", mailMethodPage, text)
+	}
+	for _, wrong := range []string{tlsMethodPage, webMethodPage, dnsMethodPage} {
 		if strings.Contains(text, wrong) {
 			t.Errorf("the mail report sends its reader to %s, which describes a different "+
 				"check:\n%s", wrong, text)
 		}
 	}
-	if strings.Contains(text, "porch-scan -limits, or") {
-		t.Errorf("the report offers a page after \"or\" and there is none:\n%s", text)
-	}
 
-	// And having printed no pointer, it prints the limit itself. Silence here
-	// would be the worst of the three: a report that read only DNS, said so
-	// nowhere, and mentioned no page where it might have been explained.
-	if !strings.Contains(text, "Limits of this method") {
-		t.Errorf("the report has no limits section at all:\n%s", text)
-	}
-	for _, l := range policy.MailStandingLimits() {
-		if !strings.Contains(text, strings.Fields(l.Text)[0]) {
-			t.Errorf("the limit %q is neither printed nor pointed at:\n%s", l.ID, text)
+	// And each check's -limits names its own page beside its own limits.
+	for check, page := range map[string]string{
+		checkTLS:  tlsMethodPage,
+		checkWeb:  webMethodPage,
+		checkMail: mailMethodPage,
+		checkDNS:  dnsMethodPage,
+	} {
+		var buf bytes.Buffer
+		limits, named := limitsFor(check)
+		if named != page {
+			t.Errorf("-check %s names the page %q, want %q", check, named, page)
 		}
-	}
-}
-
-// -limits under -check mail prints the mail limits and offers no page.
-func TestTheMailLimitsStandAlone(t *testing.T) {
-	limits, page := limitsFor(checkMail)
-	if page != "" {
-		t.Fatalf("the mail check names the page %q, and no such page exists", page)
-	}
-	if len(limits) == 0 {
-		t.Fatal("the mail check declares no limits")
-	}
-
-	var buf bytes.Buffer
-	printLimits(&buf, limits, page)
-	text := buf.String()
-
-	if strings.Contains(text, "Read alongside") {
-		t.Errorf("-check mail -limits offers a page to read alongside:\n%s", text)
-	}
-	for _, l := range limits {
-		if !strings.Contains(text, l.Title) {
-			t.Errorf("-check mail -limits omits %q", l.ID)
+		if len(limits) == 0 {
+			t.Errorf("-check %s declares no limits", check)
+			continue
 		}
-	}
-
-	// The other two still name theirs, so this is the empty page being
-	// handled rather than the line being deleted.
-	for _, check := range []string{checkTLS, checkWeb} {
-		var other bytes.Buffer
-		l, p := limitsFor(check)
-		printLimits(&other, l, p)
-		if !strings.Contains(other.String(), "Read alongside") {
-			t.Errorf("-check %s -limits no longer points at %s", check, p)
+		printLimits(&buf, limits, named)
+		if !strings.Contains(buf.String(), "Read alongside") {
+			t.Errorf("-check %s -limits no longer points at %s", check, page)
+		}
+		for _, l := range limits {
+			if !strings.Contains(buf.String(), l.Title) {
+				t.Errorf("-check %s -limits omits %q", check, l.ID)
+			}
 		}
 	}
 }

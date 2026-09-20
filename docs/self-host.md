@@ -165,7 +165,7 @@ The exit status is the worst verdict found — `0` strong, `1` weak, `2`
 insecure, `3` the scan could not be completed — so it gates a pipeline without
 anything having to parse the output.
 
-### Two checks
+### Four checks
 
 `-check` selects which one runs, and the default is the one that has always
 run. A default that quietly started running a second check would change the
@@ -174,7 +174,17 @@ exit status of a pipeline nobody touched.
 ```sh
 ./porch-scan example.com                 # the transport and its certificates
 ./porch-scan -check web example.com      # how the site is reached over HTTP
+./porch-scan -check mail example.com     # what its DNS says about its mail
+./porch-scan -check dns example.com      # how the domain itself is served
 ```
+
+The DNS check connects to nothing at all: it asks the resolver for what the
+domain publishes about itself — its addresses, its name servers and their
+addresses, the record at the top of its zone, and the two ends of its DNSSEC
+chain — and grades the few things a standard requires. Its own digest of the
+zone's keys is compared with the one the parent holds, so a key rotated
+without the registrar being told is found before a validating resolver finds
+it for you.
 
 ### If the Issuance line says "not checked"
 
@@ -206,10 +216,12 @@ body unread, and follows only the addresses a `Location` header names. It
 never requests a path of its own choosing. `docs/invariants.md` N7 has the
 whole discipline.
 
-The three rule sets are separate and never comparable with each other:
-`porch-tls-v7` grades a handshake, `porch-web-v3` grades an HTTP response, and
-`porch-mail-v1` grades what a domain's DNS says about its mail. `-version`
-prints all three, and every report names the one that produced it.
+The four rule sets are separate and never comparable with each other:
+`porch-tls-v7` grades a handshake, `porch-web-v3` grades an HTTP response,
+`porch-mail-v1` grades what a domain's DNS says about its mail, and
+`porch-dns-v1` grades how the domain itself is served — its name servers and
+its DNSSEC chain. `-version` prints them all, and every report names the one
+that produced it.
 
 ```sh
 ./porch-scan -check web -limits          # what a header check cannot establish

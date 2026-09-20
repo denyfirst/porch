@@ -98,7 +98,7 @@ func TestTheConsoleSaysWhetherPagesAreRead(t *testing.T) {
 func TestTheConsoleOffersEveryCheckThisBinaryHas(t *testing.T) {
 	page := consoleAs(t, false)
 
-	inForce := []string{policy.TLSVersion, policy.WebVersion, policy.MailVersion}
+	inForce := []string{policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion}
 	offered := consoleChecks()
 
 	if len(offered) != len(inForce) {
@@ -248,5 +248,56 @@ func TestASelfHostedBuildServesNoMarketing(t *testing.T) {
 	}
 	if strings.Contains(get(t, "/").Body.String(), `id="products"`) {
 		t.Error("the self-hosted root carries the front page")
+	}
+}
+
+// Every check the console offers is one the script can run and draw, and every
+// check has a page explaining it that the documents link to.
+//
+// Three sabotages escaped the test above, which counts rows: dropping the
+// fourth check from the script's order, dropping its card from the documents,
+// and pointing that card somewhere else. A row nothing runs is worse than a
+// missing row, because the page offers it.
+func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
+	src := script(t)
+	docs := asset(t, "assets/docs.html")
+
+	for _, c := range consoleChecks() {
+		for _, want := range []string{
+			`  ` + c.ID + `: {`,
+			`endpoint: "/api/v1/` + c.ID + `/scan"`,
+			`methodPage: "/` + c.ID + `/method"`,
+		} {
+			if !strings.Contains(src, want) {
+				t.Errorf("the script has no %q for the %s check", want, c.ID)
+			}
+		}
+		if !strings.Contains(src, `"`+c.ID+`"`) {
+			t.Errorf("the script never names the %s check", c.ID)
+		}
+		if _, served := pages["/"+c.ID+"/method"]; !served {
+			t.Errorf("the %s check has no method page", c.ID)
+		}
+		if !strings.Contains(docs, `href="/`+c.ID+`/method"`) {
+			t.Errorf("the documents do not link the %s check's method page", c.ID)
+		}
+		if !strings.Contains(docs, c.Policy) && !strings.Contains(docs, "{{.") {
+			t.Errorf("the documents do not name %s", c.Policy)
+		}
+	}
+
+	// The order the console runs them in covers every check and invents none.
+	order := strings.Index(src, "const CHECK_ORDER = [")
+	if order < 0 {
+		t.Fatal("the script no longer declares the order it runs checks in")
+	}
+	line := src[order : strings.Index(src[order:], "]")+order]
+	for _, c := range consoleChecks() {
+		if !strings.Contains(line, `"`+c.ID+`"`) {
+			t.Errorf("CHECK_ORDER leaves out %s, so the console offers a check it never runs", c.ID)
+		}
+	}
+	if strings.Count(line, `"`) != 2*len(consoleChecks()) {
+		t.Errorf("CHECK_ORDER names something the console does not offer: %s", line)
 	}
 }

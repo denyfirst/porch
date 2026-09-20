@@ -53,6 +53,15 @@ const CHECKS = {
     working: "Reading how the site answers, over HTTPS and over plaintext.",
     build: (data) => buildWeb(data),
   },
+  dns: {
+    label: "DNS",
+    says: "how the domain itself is served, and whether its DNSSEC chain holds",
+
+    endpoint: "/api/v1/dns/scan",
+    methodPage: "/dns/method",
+    working: "Reading the delegation, the records at the name and the DNSSEC chain.",
+    build: (data) => buildDNS(data),
+  },
   mail: {
     label: "Mail",
     says: "what the domain's DNS says about its mail",
@@ -69,7 +78,7 @@ const CHECKS = {
 // Fixed rather than taken from the object, because a report whose sections
 // move between two scans of an unchanged estate is a diff a reader has to work
 // out is not a change.
-const CHECK_ORDER = ["tls", "web", "mail"];
+const CHECK_ORDER = ["tls", "web", "mail", "dns"];
 
 // The demonstration says so on its body. A few things an installation offers
 // its operator mean nothing there: a download of a report about our own
@@ -1041,6 +1050,147 @@ function buildWeb(data) {
   nine of ten is one provider away from switching its own policy off, and no
   other tool an operator runs will tell them.
 */
+
+// buildDNS draws what a domain's own DNS publishes, and what the rules made of
+// it.
+//
+// Every sentence here is written by this program from values it read, never
+// pasted from the zone: a record is text chosen by whoever is being measured.
+// The two places a published value appears as it stands are a server's address
+// and the name an alias points at, both of which a reader needs exactly.
+function buildDNS(data) {
+  const verdict = verdictOf(data);
+
+  const frag = document.createDocumentFragment();
+  frag.appendChild(summary(data));
+  frag.appendChild(findings(data.findings, verdict));
+  frag.appendChild(published(data.observed));
+  frag.appendChild(delegation(data.observed));
+  frag.appendChild(notes(data.notes, verdict, CHECKS.dns.methodPage));
+  return frag;
+}
+
+// published is the table a person opens this check for: what the name answers
+// with today.
+function published(facts) {
+  const frag = document.createDocumentFragment();
+  if (!facts) return frag;
+
+  frag.appendChild(sectionTitle("What the name publishes"));
+
+  const table = el("table", "grid");
+  const body = el("tbody");
+  const row = (name, value, mark) => {
+    const tr = el("tr");
+    tr.appendChild(el("th", null, name));
+    tr.appendChild(el("td", mark ? markClass(mark) : null, value));
+    body.appendChild(tr);
+  };
+
+  const addresses = facts.addresses || [];
+  if (facts.addressReason) {
+    row("Addresses", "not read: " + facts.addressReason);
+  } else if (addresses.length === 0) {
+    row("Addresses", "none");
+  } else {
+    row("Addresses", addresses.join(", "));
+  }
+
+  if (facts.alias) {
+    row(
+      "Alias",
+      facts.alias + (facts.aliasTargetExists ? "" : ", which does not exist"),
+      facts.aliasTargetExists ? null : "weak",
+    );
+  }
+
+  if (facts.soaFound) {
+    row("Zone", "begins here, serial " + facts.soaSerial);
+    row("Primary", facts.soaPrimary);
+  } else {
+    row("Zone", "begins above this name");
+  }
+
+  const text = facts.text || [];
+  row("Text records", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
+
+  row("DNSSEC", dnssecLine(facts), dnssecMark(facts));
+
+  table.appendChild(body);
+  frag.appendChild(table);
+  return frag;
+}
+
+// dnssecLine says what the chain is, in the order a reader asks it: whether it
+// is signed at all, and then whether it holds.
+function dnssecLine(facts) {
+  if (!facts.signed) return "not signed";
+  if (facts.chainReason) return "not checked: " + facts.chainReason;
+  if (facts.chainMatched) return "signed, and the parent's digest matches a key here";
+  if ((facts.keys || []).length === 0) return "anchored at the parent, and no key is published here";
+  return "anchored at the parent, and no key here matches its digest";
+}
+
+function dnssecMark(facts) {
+  if (!facts.signed || facts.chainReason) return null;
+  return facts.chainMatched ? "strong" : "insecure";
+}
+
+// delegation draws the servers the zone is answered by, one row each, so that a
+// name with no address is visible beside the ones that have them.
+function delegation(facts) {
+  const frag = document.createDocumentFragment();
+  if (!facts || !facts.apex) return frag;
+
+  frag.appendChild(sectionTitle("Where the zone is answered"));
+
+  if (facts.nsReason) {
+    frag.appendChild(el("p", "section-note", "The delegation was not read: " + facts.nsReason));
+    return frag;
+  }
+
+  const servers = facts.nameServers || [];
+  if (servers.length === 0) {
+    frag.appendChild(el("p", "section-note", "The zone names no server."));
+    return frag;
+  }
+
+  const table = el("table", "grid");
+  const head = el("thead");
+  const headRow = el("tr");
+  for (const name of ["Server", "Addresses"]) headRow.appendChild(el("th", null, name));
+  head.appendChild(headRow);
+  table.appendChild(head);
+
+  const body = el("tbody");
+  for (const server of servers) {
+    const tr = el("tr");
+    tr.appendChild(el("td", null, server.name));
+
+    const addresses = server.addresses || [];
+    let text = addresses.join(", ");
+    let mark = null;
+    if (server.reason) {
+      text = "not read: " + server.reason;
+    } else if (addresses.length === 0) {
+      text = "resolves to nothing";
+      mark = "weak";
+    }
+    tr.appendChild(el("td", mark ? markClass(mark) : null, text));
+    body.appendChild(tr);
+  }
+  table.appendChild(body);
+  frag.appendChild(table);
+
+  const networks = facts.networks || 0;
+  if (servers.length > 1 && networks > 0) {
+    frag.appendChild(el("p", "section-note",
+      networks === 1
+        ? "Every address above is in one network, so they fail together."
+        : "Their addresses are in " + networks + " networks."));
+  }
+  return frag;
+}
 function buildMail(data) {
   const verdict = verdictOf(data);
 

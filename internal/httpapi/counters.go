@@ -69,7 +69,7 @@ var refusalCodes = []string{
 // The names are the ones that already exist in three places: the two paths on
 // this service, and the -check flag on the command line. A fourth spelling
 // would be a fourth thing to keep in step.
-var checkNames = []string{checkTLS, checkWeb, checkMail}
+var checkNames = []string{checkTLS, checkWeb, checkMail, checkDNS}
 
 // CheckCounts is one check's figures.
 //
@@ -257,11 +257,12 @@ func (c *counters) record(check string, verdict policy.Verdict) {
 	c.data.Checks[check] = counts
 }
 
-// checkTLS, checkWeb and checkMail are the keys in Snapshot.Checks. Spelled once.
+// The keys in Snapshot.Checks, spelled once.
 const (
 	checkTLS  = "tls"
 	checkWeb  = "web"
 	checkMail = "mail"
+	checkDNS  = "dns"
 )
 
 // project copies the TLS check's figures into the fields at the top of a
@@ -338,6 +339,8 @@ func (c *counters) snapshotLocked() Snapshot {
 			counts.Policy = policy.WebVersion
 		case checkMail:
 			counts.Policy = policy.MailVersion
+		case checkDNS:
+			counts.Policy = policy.DNSVersion
 		}
 		out.Checks[name] = counts
 	}
