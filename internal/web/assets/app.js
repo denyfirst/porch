@@ -1313,6 +1313,10 @@ function zone(facts) {
         for (const x of facts.exchangers || []) {
           row("STARTTLS", x.host + ": " + exchangerSays(x));
         }
+        for (const x of facts.exchangers || []) {
+          if (!x.relayAsked && !x.relayReason) continue;
+          row("RELAY", x.host + ": " + relaySays(x), x.relayAccepted ? "insecure" : null);
+        }
         for (const b of facts.daneBindings || []) {
           row("DANE", b.host + ": " + daneSays(b));
         }
@@ -1340,6 +1344,17 @@ function exchangerSays(x) {
   if (!x.trusted) return x.version + " " + x.suite + ", certificate does not verify: " + x.certificateReason;
   if (!x.nameMatches) return x.version + " " + x.suite + ", certificate does not name this exchanger";
   return x.version + " " + x.suite + ", certificate verifies";
+}
+
+// What the relay question found, in the words the terminal uses (R16).
+//
+// Three states and never two: a server that agreed to forward for a domain it
+// does not serve, one that refused, and one where the answer was not
+// established — which is not a refusal (R4).
+function relaySays(x) {
+  if (x.relayAccepted) return "forwards mail for a domain it does not serve";
+  if (x.relayAsked) return "refuses to forward for other domains";
+  return "not established: " + x.relayReason;
 }
 
 // What one exchanger's DANE records made of its certificate.

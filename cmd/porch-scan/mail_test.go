@@ -265,3 +265,55 @@ func TestALowerBoundLookupCountIsSaidAsOne(t *testing.T) {
 		t.Errorf("the SPF line does not say the count is a lower bound:\n%s", buf.String())
 	}
 }
+
+// The relay answer reaches both faces of the report, in the same words (R16).
+//
+// Three states, and a row only where the question was put: an exchanger that
+// was never asked says nothing here, because a blank row reads as an answer.
+func TestTheRelayAnswerReachesBothFacesOfTheReport(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`"forwards mail for a domain it does not serve"`,
+		`"refuses to forward for other domains"`,
+		`"not established: " + x.relayReason`,
+		`row("RELAY", x.host + ": " + relaySays(x)`,
+		// And the function the row calls exists under that name: a page whose
+		// call and definition disagree is a page that throws where the row
+		// should be, and no text test sees a name that is merely absent.
+		"function relaySays(x) {",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	r := mailSample()
+	r.Observed.Exchangers = []policy.ExchangerTLS{
+		{Host: "mail.example.com", Measured: true, RelayAsked: true, RelayAccepted: true},
+		{Host: "mx2.example.com", Measured: true, RelayAsked: true, RelayReason: "the server refused it (554)"},
+		{Host: "aspmx.provider.net", Measured: true},
+	}
+	r.Observed.MXRead = true
+	r.Observed.MXHosts = []string{"mail.example.com", "mx2.example.com", "aspmx.provider.net"}
+	r.Observed.ExchangersContacted = true
+
+	var buf bytes.Buffer
+	printMail(&buf, r)
+	text := buf.String()
+
+	for _, want := range []string{
+		"RELAY      mail.example.com: forwards mail for a domain it does not serve",
+		"RELAY      mx2.example.com: refuses to forward for other domains",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the report does not say %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "RELAY      aspmx.provider.net") {
+		t.Errorf("an exchanger that was never asked has a relay row:\n%s", text)
+	}
+}

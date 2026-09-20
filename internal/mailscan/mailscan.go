@@ -153,6 +153,18 @@ type ExchangerProber interface {
 	Probe(ctx context.Context, host string) smtptls.Result
 }
 
+// RelayProber also asks whether an exchanger forwards mail for a domain it
+// does not serve. internal/smtptls is one.
+//
+// Optional, and asked for by type assertion, so that a prober which cannot ask
+// leaves the question unasked rather than being refused — and so that the
+// question is put to one kind of exchanger only, which is the whole of the
+// rule: an exchanger inside the domain being checked is the operator's own
+// server, and one belonging to a provider is not.
+type RelayProber interface {
+	ProbeRelay(ctx context.Context, host string) smtptls.Result
+}
+
 // Scanner measures one domain's mail policy. The zero value is usable.
 type Scanner struct {
 	// Resolver asks the questions. Nil means one reading this machine's own
@@ -306,7 +318,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readTLSReporting(ctx, resolver, domain, &facts)
 	s.readExchangers(ctx, resolver, domain, &facts)
 	dane := s.readTransportSecurity(ctx, resolver, domain, &facts)
-	s.readExchangerTLS(ctx, &facts, dane)
+	s.readExchangerTLS(ctx, domain, &facts, dane)
 	s.readDKIM(ctx, resolver, domain, &facts)
 
 	graded := policy.GradeMail(facts)
@@ -783,7 +795,7 @@ func (s *Scanner) readDKIM(ctx context.Context, r Resolver, domain string, facts
 //
 // Where an exchanger publishes DANE records, what they make of the certificate
 // it presented is worked out here too, because this is where both halves meet.
-func (s *Scanner) readExchangerTLS(ctx context.Context, facts *policy.MailFacts, tlsa map[string]dnsclient.TLSAAnswer) {
+func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *policy.MailFacts, tlsa map[string]dnsclient.TLSAAnswer) {
 	// NullMX is checked by name although, today, a null MX already leaves
 	// MXHosts empty: readExchangers skips the "." record rather than keeping
 	// it. A sabotage removing the NullMX test escaped every test on 2026-09-13
@@ -808,6 +820,7 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, facts *policy.MailFacts,
 	}
 
 	prober := s.exchangerProber()
+	relay, canAskRelay := prober.(RelayProber)
 	results := make([]smtptls.Result, len(hosts))
 
 	var wg sync.WaitGroup
@@ -815,6 +828,16 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, facts *policy.MailFacts,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			// The relay question goes to an exchanger inside the domain
+			// being checked and to no other. Inside the domain it is the
+			// operator's own server; outside it belongs to a provider, and
+			// a relay probe in somebody else's log is what gets the address
+			// it came from listed.
+			if canAskRelay && within(host, domain) {
+				results[i] = relay.ProbeRelay(ctx, host)
+				return
+			}
 			results[i] = prober.Probe(ctx, host)
 		}()
 	}
@@ -840,6 +863,9 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, facts *policy.MailFacts,
 			CertificateReason: r.CertificateReason,
 			Reason:            r.Reason,
 			ConnectTimedOut:   r.ConnectTimedOut,
+			RelayAsked:        r.RelayAsked,
+			RelayAccepted:     r.RelayAccepted,
+			RelayReason:       r.RelayReason,
 		})
 	}
 }
@@ -884,4 +910,15 @@ func (s *Scanner) exchangerProber() ExchangerProber {
 		return s.Exchangers
 	}
 	return &smtptls.Prober{Roots: s.Roots, HeloName: s.HeloName}
+}
+
+// within says whether a host is the domain itself or a name beneath it.
+//
+// The test that decides whose server an exchanger is. A domain proves control
+// of its own zone, so mail.example.com is the operator's; aspmx.provider.net
+// named by the same MX record is not, whatever the operator's relationship
+// with the provider is.
+func within(host, domain string) bool {
+	host, domain = fold(host), fold(domain)
+	return host == domain || strings.HasSuffix(host, "."+domain)
 }

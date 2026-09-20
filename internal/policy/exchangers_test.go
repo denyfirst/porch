@@ -238,13 +238,23 @@ func TestExchangersNotContactedAreSaidNotToHaveBeen(t *testing.T) {
 //
 // It said "No mail server was contacted" until the exchangers could be asked,
 // and a limit still saying so beside a row reading "STARTTLS mx1: TLS 1.3" would
-// be one report contradicting itself.
+// be one report contradicting itself. It then said no sender or recipient is
+// ever named, until the relay question named one — and the same rule applies:
+// a limit is a sentence every report it appears on has to survive.
 func TestTheMailLimitIsTrueWhenExchangersWereContacted(t *testing.T) {
 	text := LimitMailSendsNothing.Text
-	if strings.Contains(text, "No mail server was contacted") || strings.Contains(text, "was not measured") {
-		t.Errorf("the limit claims something a contacted exchanger falsifies: %q", text)
+	for _, falsified := range []string{
+		"No mail server was contacted",
+		"was not measured",
+		"no sender, recipient or message",
+	} {
+		if strings.Contains(text, falsified) {
+			t.Errorf("the limit claims something a contacted exchanger falsifies: %q", text)
+		}
 	}
-	if !strings.Contains(text, "no sender, recipient or message") {
-		t.Errorf("the limit does not say what a conversation with an exchanger never contains: %q", text)
+	for _, want := range []string{"no DATA", "cannot exist", "somebody else is never asked"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the limit does not say %q: %q", want, text)
+		}
 	}
 }

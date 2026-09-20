@@ -45,6 +45,51 @@ is entitled to find it still answering.
 ---
 
 
+## `porch-mail-v1` → `porch-mail-v2`
+
+Unreleased.
+
+One finding is added, and nothing that was graded before is graded
+differently. A domain whose report was strong under `porch-mail-v1` is strong
+under this one unless one of its own exchangers is an open relay.
+
+### An exchanger that forwards mail for a domain it does not serve
+
+`mail.open-relay`, graded `insecure`.
+
+This is the oldest misconfiguration in mail and still the most expensive one
+to have. A server that accepts mail from anybody, for anybody, is found within
+hours of being reachable, used to send in other people's names, and listed
+everywhere that matters — after which the domain's own mail stops arriving.
+RFC 2505, a best current practice, says an MTA must not relay for domains it
+is not responsible for; RFC 5321 is the protocol it is said in.
+
+**Which exchangers are asked, and no others.** The question goes to an
+exchanger inside the domain being checked — `mail.example.com` when
+`example.com` is the domain — and never to one belonging to somebody else. An
+exchanger named by an MX record but run by a provider is that provider's
+server: a relay probe in their logs reads as a spam probe, and the address it
+came from is the one that gets listed for it. There is no flag to widen this.
+
+**What is said, and what cannot happen.** An empty reverse path, which is what
+every bounce carries and names nobody; a recipient under `.invalid`, which RFC
+2606 reserves so that the name cannot exist; then `RSET`, which abandons the
+transaction. `DATA` is never sent, so no message is ever composed, nothing is
+queued, and a server that agreed was never handed anything to forward. What is
+graded is what the server said it would do.
+
+**Not asked is not refused.** An exchanger that was never asked, one that
+refused the empty sender — which is a fact about bounces rather than about
+relaying — and one whose conversation ended early are each reported as
+themselves. Only a server that accepted the recipient is graded (R4).
+
+This also changes what `internal/smtptls` may say, and `docs/invariants.md` N3
+changes with it: the rule was that no sender or recipient is ever named, and it
+is now that no message is ever composed, with the one question that names a
+recipient bounded as above.
+
+---
+
 ## `porch-dns-v1` — a new rule set
 
 Unreleased.

@@ -14,6 +14,7 @@
       <a href="#read">What is read</a>
       <a href="#reading">How to read a report</a>
       <a href="#exchangers">When an exchanger does not answer</a>
+      <a href="#relay">The one question that names a recipient</a>
       {{range .Limits}}<a href="#{{.ID}}">{{.Title}}</a>
       {{end}}
       <a href="#elsewhere">What else is written down</a>
@@ -45,6 +46,36 @@
       by the command line.{{else}}This installation makes them for the
       domains it has been shown control of; one started without proof of
       control makes neither.{{end}}
+    </p>
+
+    <h2 id="relay">The one question that names a recipient</h2>
+
+    <p>
+      An exchanger <strong>inside the domain being checked</strong> — say
+      <code>mail.example.com</code> under <code>example.com</code> — is also
+      asked whether it forwards mail for a domain it does not serve. That is an
+      open relay: a server anybody can send through, in anybody's name. It is
+      the oldest misconfiguration in mail and still the most expensive one to
+      have, because a relay is found within hours and listed everywhere soon
+      after, and then the domain's own mail stops arriving.
+    </p>
+
+    <p>
+      It cannot be answered from DNS: a configuration can look right and a
+      server can still accept. So the question is put, in three lines that
+      cannot deliver anything — an empty sender, which is what every bounce
+      carries and names nobody; a recipient under <code>.invalid</code>, which
+      RFC 2606 reserves so that the name cannot exist; and then a reset, before
+      any message. <code>DATA</code> is never sent, so a server that agreed was
+      never handed anything to forward, and what is graded is what it said it
+      would do.
+    </p>
+
+    <p>
+      <strong>An exchanger run by somebody else is never asked.</strong> A
+      provider named by an MX record is not the operator's server: there the
+      conversation reads as a spam probe, and the address it came from is what
+      gets listed for it. There is no setting that widens this.
     </p>
 
     <h2 id="reading">How to read a report</h2>

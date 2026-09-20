@@ -98,9 +98,37 @@ is not the TLS check reaching a port somebody typed: the hosts are the ones the
 domain's own MX records name, the port is the one mail is delivered on, the
 dialler is `safedial` with port 25 as its whole allow list, and it runs only
 where the command line runs it or a service has proof of control of the
-domain. The conversation is a greeting, EHLO, STARTTLS and QUIT — no sender,
-recipient or message. Nothing about the TLS check's list changes: `scan.Scan`
-still refuses 25 for every target a caller gives it.
+domain. The conversation is a greeting, EHLO, STARTTLS and QUIT. Nothing about
+the TLS check's list changes: `scan.Scan` still refuses 25 for every target a
+caller gives it.
+
+**No message is ever composed, and one question names a recipient.** This rule
+read "no sender, recipient or message" until `porch-mail-v2`, and the sentence
+that survives is the one that mattered: `DATA` is never sent, so nothing is
+delivered, nothing is queued and nothing at the other end changes.
+
+The question that changed it is whether an exchanger forwards mail for a
+domain it does not serve — an open relay, which is the oldest misconfiguration
+in mail and the one that ends with the domain's own mail being refused
+everywhere. It cannot be answered from DNS: a configuration can look right and
+a server can still accept. So it is asked, in three lines that cannot deliver
+anything. The sender is the empty reverse path every bounce carries, which
+names nobody. The recipient is under `.invalid`, which RFC 2606 reserves so
+that the name cannot exist. Then `RSET`, before `DATA`, so a server that
+agreed was never handed anything to forward.
+
+**It is asked of the domain's own exchangers and of no others.** An exchanger
+inside the domain being checked — `mail.example.com` under `example.com` — is
+the operator's own server, and `internal/mailscan` asks it. One named by the
+same MX record but run by a provider is somebody else's: there the conversation
+reads as a spam probe, and the address it came from is what gets listed for it.
+There is no flag that widens this, because the question a flag would answer —
+*may I probe somebody else's mail server?* — is not one this project asks.
+
+A server that refused, one that refused the empty sender, and one that was
+never asked are each reported as themselves. Only a server that accepted the
+recipient is graded (R4), and the report never repeats what the server wrote:
+its reply code is a fact, its wording is its own.
 
 **Two locks, on different doors.** `Scanner.Scan` refuses the port for every
 caller, which is why the check is there and not in the HTTP handler; and the
@@ -123,7 +151,14 @@ project is worth what the code says, and the code is here.
 `TestTheAllowListReachesTheDialer`,
 `TestTheDefaultDiallerReachesOnlyPort25OnPublicAddresses`,
 `TestOnlyTheExchangersTheDomainNamesAreAsked`,
-`TestTheServiceAsksExchangersOnlyWhereItRequiredProof`
+`TestTheServiceAsksExchangersOnlyWhereItRequiredProof`,
+`TestTheRelayQuestionIsBoundedAndOnlyAskedWhenWanted`,
+`TestAnExchangerThatAcceptsTheRecipientIsReported`,
+`TestWhatTheRelayQuestionCouldNotEstablishIsSaidAsThat`,
+`TestTheRelayQuestionGoesOnlyToTheDomainsOwnExchangers`,
+`TestAnOpenRelayIsGradedAndSilenceIsNot`,
+`TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne`,
+`TestTheRelayAnswerReachesBothFacesOfTheReport`
 
 ### N4 — Every network operation is bounded
 

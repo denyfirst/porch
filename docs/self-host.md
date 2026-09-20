@@ -260,6 +260,17 @@ rather than being quietly replaced by the machine's own:
 Some providers refuse an EHLO that names no real host. A name that resolves to
 the address the scan leaves from is the one least likely to be turned away.
 
+**Your own exchangers are also asked whether they relay.** An exchanger inside
+the domain being checked — `mail.example.com` under `example.com` — is asked
+whether it forwards mail for a domain it does not serve, which is what an open
+relay does and what gets a domain's mail refused everywhere once somebody
+finds it. It is three lines that cannot deliver anything: an empty sender, a
+recipient at a name RFC 2606 reserves so that it cannot exist, and a reset
+before any message. An exchanger run by a provider — `aspmx` anything — is
+never asked, because a relay probe in somebody else's logs reads as a spam
+probe and the address it came from is the one that gets listed. There is no
+flag that widens this.
+
 ---
 
 ## In a container

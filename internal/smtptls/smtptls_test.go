@@ -33,6 +33,12 @@ type script struct {
 	afterStarttls string
 	cert          *tls.Certificate
 
+	// mail and rcpt are what the server answers the two lines of the relay
+	// question with. Empty means the answers a correctly configured server
+	// gives: bounces accepted, relaying refused.
+	mail string
+	rcpt string
+
 	mu    sync.Mutex
 	heard []string
 
@@ -86,10 +92,19 @@ func (s *script) serve(conn net.Conn) {
 			if err := server.Handshake(); err != nil {
 				return
 			}
-			if after, err := bufio.NewReader(server).ReadString('\n'); err == nil {
-				s.record(strings.TrimRight(after, "\r\n"))
-			}
+			// The conversation carries on over the encrypted connection,
+			// because that is where a client asks whatever it asks next.
+			// Reading one line and stopping was enough while QUIT was the
+			// only thing that followed, and a sabotage dropping the relay
+			// question from this path escaped every test because of it.
+			s.converse(server)
 			return
+		case "MAIL":
+			_, _ = io.WriteString(conn, or(s.mail, "250 sender ok\r\n"))
+		case "RCPT":
+			_, _ = io.WriteString(conn, or(s.rcpt, "554 relay access denied\r\n"))
+		case "RSET":
+			_, _ = io.WriteString(conn, "250 flushed\r\n")
 		case "QUIT":
 			_, _ = io.WriteString(conn, "221 bye\r\n")
 			return
@@ -519,5 +534,165 @@ func TestASilentExchangerIsBounded(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 3*time.Second {
 		t.Errorf("Probe waited %s on a silent exchanger with a 200ms budget", elapsed)
+	}
+}
+
+// or is the first non-empty of two, for a script whose fields default to what
+// a correctly configured server says.
+func or(chosen, fallback string) string {
+	if chosen != "" {
+		return chosen
+	}
+	return fallback
+}
+
+// plainly is an exchanger that offers no encryption, which is where the relay
+// question is asked without a handshake in the way.
+func plainly() *script {
+	return &script{
+		greeting: "220 mx.example.test ESMTP\r\n",
+		ehlo:     "250-mx.example.test greets you\r\n250 8BITMIME\r\n",
+	}
+}
+
+// The relay question is asked only when a caller asks for it, and what it says
+// is three lines that cannot deliver anything: an empty sender, a recipient at
+// a name RFC 2606 guarantees cannot exist, and a reset before any message.
+func TestTheRelayQuestionIsBoundedAndOnlyAskedWhenWanted(t *testing.T) {
+	ctx := context.Background()
+
+	quiet := plainly()
+	if got := pipeProber(quiet, nil).Probe(ctx, exchanger); got.RelayAsked || got.RelayAccepted {
+		t.Errorf("a probe that was not asked to: %+v", got)
+	}
+	for _, said := range quiet.commands() {
+		if strings.HasPrefix(strings.ToUpper(said), "MAIL") || strings.HasPrefix(strings.ToUpper(said), "RCPT") {
+			t.Errorf("an ordinary probe said %q", said)
+		}
+	}
+
+	asked := plainly()
+	got := pipeProber(asked, nil).ProbeRelay(ctx, exchanger)
+	if !got.RelayAsked || got.RelayAccepted {
+		t.Errorf("a server that refuses to relay: %+v", got)
+	}
+	if !strings.Contains(got.RelayReason, "554") {
+		t.Errorf("the refusal does not carry the code: %q", got.RelayReason)
+	}
+
+	said := asked.commands()
+	for _, want := range []string{"MAIL FROM:<>", "RCPT TO:<" + relayRecipient + ">", "RSET", "QUIT"} {
+		if !contains(said, want) {
+			t.Errorf("the conversation does not include %q: %v", want, said)
+		}
+	}
+	for _, never := range said {
+		if strings.HasPrefix(strings.ToUpper(never), "DATA") {
+			t.Fatalf("the conversation sent DATA: %v", said)
+		}
+	}
+	if !strings.HasSuffix(relayRecipient, ".invalid") {
+		t.Errorf("the recipient %q is not under a name that cannot exist", relayRecipient)
+	}
+}
+
+// A server that accepts the recipient has said it would forward for a domain
+// that is not its own, and that is what is reported.
+func TestAnExchangerThatAcceptsTheRecipientIsReported(t *testing.T) {
+	open := plainly()
+	open.rcpt = "250 recipient ok\r\n"
+
+	got := pipeProber(open, nil).ProbeRelay(context.Background(), exchanger)
+	if !got.RelayAsked || !got.RelayAccepted {
+		t.Errorf("an open relay: %+v", got)
+	}
+	if got.RelayReason != "" {
+		t.Errorf("an accepted recipient carries a reason: %q", got.RelayReason)
+	}
+	if !contains(open.commands(), "RSET") {
+		t.Errorf("the transaction was not abandoned: %v", open.commands())
+	}
+}
+
+// Not asked, and asked without an answer, are each themselves rather than a
+// server that refused (R4).
+func TestWhatTheRelayQuestionCouldNotEstablishIsSaidAsThat(t *testing.T) {
+	ctx := context.Background()
+
+	bounces := plainly()
+	bounces.mail = "550 no null sender here\r\n"
+	got := pipeProber(bounces, nil).ProbeRelay(ctx, exchanger)
+	if got.RelayAsked || got.RelayAccepted {
+		t.Errorf("a server that refuses an empty sender: %+v", got)
+	}
+	if !strings.Contains(got.RelayReason, "not established") {
+		t.Errorf("the reason does not say what was not established: %q", got.RelayReason)
+	}
+	if contains(bounces.commands(), "RCPT TO:<"+relayRecipient+">") {
+		t.Error("the recipient was named after the sender was refused")
+	}
+
+	// And nothing the server wrote reaches the reason: the text is theirs and
+	// a report's sentences are this program's.
+	rude := plainly()
+	rude.rcpt = "554 go away, you are listed at spamhaus\r\n"
+	got = pipeProber(rude, nil).ProbeRelay(ctx, exchanger)
+	if strings.Contains(strings.ToLower(got.RelayReason), "spamhaus") {
+		t.Errorf("the server's own words reached the report: %q", got.RelayReason)
+	}
+}
+
+func contains(lines []string, want string) bool {
+	for _, l := range lines {
+		if l == want {
+			return true
+		}
+	}
+	return false
+}
+
+// converse serves whatever follows on the encrypted connection, recording it.
+func (s *script) converse(conn net.Conn) {
+	r := bufio.NewReader(conn)
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			return
+		}
+		command := strings.TrimRight(line, "\r\n")
+		s.record(command)
+
+		switch strings.ToUpper(strings.SplitN(command, " ", 2)[0]) {
+		case "MAIL":
+			_, _ = io.WriteString(conn, or(s.mail, "250 sender ok\r\n"))
+		case "RCPT":
+			_, _ = io.WriteString(conn, or(s.rcpt, "554 relay access denied\r\n"))
+		case "RSET":
+			_, _ = io.WriteString(conn, "250 flushed\r\n")
+		case "QUIT":
+			_, _ = io.WriteString(conn, "221 bye\r\n")
+			return
+		default:
+			_, _ = io.WriteString(conn, "502 not implemented\r\n")
+		}
+	}
+}
+
+// The question is asked over the encrypted connection where there is one,
+// which is the conversation the server is having with this client by then.
+func TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne(t *testing.T) {
+	cert, roots := certificateFor(t, exchanger)
+	open := offering(cert)
+	open.rcpt = "250 recipient ok\r\n"
+
+	got := pipeProber(open, roots).ProbeRelay(context.Background(), exchanger)
+	if !got.Upgraded {
+		t.Fatalf("the handshake did not happen: %+v", got)
+	}
+	if !got.RelayAsked || !got.RelayAccepted {
+		t.Errorf("the question was not asked over the encrypted connection: %+v", got)
+	}
+	if !contains(open.commands(), "RCPT TO:<"+relayRecipient+">") {
+		t.Errorf("the conversation was %v", open.commands())
 	}
 }
