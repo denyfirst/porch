@@ -1087,16 +1087,20 @@ function published(facts) {
     body.appendChild(tr);
   };
 
-  const addresses = facts.addresses || [];
+  // Two kinds, two rows, and "none" on the row that found nothing: merged,
+  // a reader cannot tell a name with no IPv6 from one nobody asked about.
   if (facts.addressReason) {
     row("Addresses", "not read: " + facts.addressReason);
-  } else if (addresses.length === 0) {
-    row("Addresses", "none");
   } else {
-    row("Addresses", addresses.join(", "));
+    row("IPv4", listOrNone(facts.ipv4));
+    row("IPv6", listOrNone(facts.ipv6));
   }
 
-  if (facts.alias) {
+  if (facts.aliasReason) {
+    row("Alias", "not read: " + facts.aliasReason);
+  } else if (!facts.alias) {
+    row("Alias", "none");
+  } else {
     row(
       "Alias",
       facts.alias + (facts.aliasTargetExists ? "" : ", which does not exist"),
@@ -1118,6 +1122,43 @@ function published(facts) {
 
   table.appendChild(body);
   frag.appendChild(table);
+  frag.appendChild(textRecords(text));
+  return frag;
+}
+
+// listOrNone writes a list, or says there was none. Empty is a fact here: the
+// lookup happened and found nothing.
+function listOrNone(values) {
+  return (values || []).length === 0 ? "none" : values.join(", ");
+}
+
+// textRecords draws what the name publishes as text, as published.
+//
+// Every other line of a report is written by this program. These are the only
+// ones chosen by whoever is being measured, so they are set apart and labelled
+// as theirs: a record made to read like advice should never be mistaken for a
+// sentence this program wrote.
+//
+// Bounded twice, because a TXT record is whatever somebody put there: at most
+// eight records, and each cut to a length that still shows what it is.
+function textRecords(records) {
+  const frag = document.createDocumentFragment();
+  if (records.length === 0) return frag;
+
+  frag.appendChild(sectionTitle("Text records, as published"));
+  frag.appendChild(el("p", "section-note",
+    "Written by whoever runs this domain, not by this report. Shown as they are, shortened where long."));
+
+  const list = el("pre", "work-code");
+  const shown = records.slice(0, 8);
+  list.textContent = shown
+    .map(record => (record.length > 120 ? record.slice(0, 120) + "…" : record))
+    .join("\n");
+  frag.appendChild(list);
+
+  if (records.length > shown.length) {
+    frag.appendChild(el("p", "section-note", "and " + (records.length - shown.length) + " more"));
+  }
   return frag;
 }
 
@@ -1613,9 +1654,13 @@ async function runCheck(name, target) {
     clear(body);
     body.appendChild(spec.build(data));
 
+    // The report drawn above carries the verdict, so the heading stops
+    // repeating it: one result said twice is a reader checking whether the
+    // two agree. What the heading is for is the states a report cannot
+    // show — running, and a check that never produced one.
     const verdict = verdictOf(data);
-    state.textContent = data.verdict ? verdict : "not graded";
-    state.className = "run-state " + verdictClass("stamp", verdict);
+    state.textContent = "";
+    state.className = "run-state";
     return verdict;
   } catch (err) {
     clear(body);

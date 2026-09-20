@@ -189,8 +189,8 @@ func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts
 // readAddresses asks for both address types, because they are two questions
 // and a name with one and not the other is ordinary.
 func (s *Scanner) readAddresses(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
-	addresses, reason := addressesOf(ctx, r, domain)
-	facts.Addresses = addresses
+	v4, v6, reason := addressesOf(ctx, r, domain)
+	facts.IPv4, facts.IPv6 = v4, v6
 	facts.AddressReason = reason
 }
 
@@ -222,8 +222,8 @@ func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			addresses, reason := addressesOf(ctx, r, host)
-			servers[i] = policy.NameServer{Name: host, Addresses: addresses, Reason: reason}
+			v4, v6, reason := addressesOf(ctx, r, host)
+			servers[i] = policy.NameServer{Name: host, Addresses: append(v4, v6...), Reason: reason}
 		}()
 	}
 	wg.Wait()
@@ -302,7 +302,7 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, fact
 
 // addressesOf asks for A and AAAA, and says which of the two failed rather
 // than turning a failure into an absence.
-func addressesOf(ctx context.Context, r Resolver, name string) (addresses []string, reason string) {
+func addressesOf(ctx context.Context, r Resolver, name string) (v4, v6 []string, reason string) {
 	var reasons []string
 	for _, qtype := range []uint16{dnsclient.TypeA, dnsclient.TypeAAAA} {
 		answer, err := r.LookupAddresses(ctx, name, qtype)
@@ -311,10 +311,14 @@ func addressesOf(ctx context.Context, r Resolver, name string) (addresses []stri
 			continue
 		}
 		for _, addr := range answer.Addresses {
-			addresses = append(addresses, addr.String())
+			if addr.Is4() {
+				v4 = append(v4, addr.String())
+				continue
+			}
+			v6 = append(v6, addr.String())
 		}
 	}
-	return addresses, strings.Join(reasons, "; ")
+	return v4, v6, strings.Join(reasons, "; ")
 }
 
 // networksOf counts how many networks the servers answer from, an IPv4 /24 and

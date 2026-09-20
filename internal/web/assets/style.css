@@ -1081,6 +1081,9 @@ h1 {
   color: var(--ink-soft);
 }
 
+/* Empty once the report below carries the verdict: one result, said once. */
+.run-state:empty { display: none; }
+
 .run-state {
   grid-column: 2;
   grid-row: 1 / span 2;

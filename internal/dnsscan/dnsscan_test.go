@@ -170,8 +170,11 @@ func TestAZoneThatIsServedAndSignedReadsStrong(t *testing.T) {
 	if got.Policy != policy.DNSVersion || got.Observed.Policy != policy.DNSVersion {
 		t.Errorf("the rule set is %q / %q", got.Policy, got.Observed.Policy)
 	}
-	if len(got.Observed.Addresses) != 2 || got.Observed.Addresses[0] != "192.0.2.10" {
-		t.Errorf("the addresses read %v, and both types are asked for", got.Observed.Addresses)
+	if len(got.Observed.IPv4) != 1 || got.Observed.IPv4[0] != "192.0.2.10" {
+		t.Errorf("the IPv4 addresses read %v", got.Observed.IPv4)
+	}
+	if len(got.Observed.IPv6) != 1 || got.Observed.IPv6[0] != "2001:db8:1::10" {
+		t.Errorf("the IPv6 addresses read %v, and both types are asked for separately", got.Observed.IPv6)
 	}
 	if len(got.Observed.NameServers) != 2 || got.Observed.NameServers[0].Name != "ns1.example.net" {
 		t.Errorf("the servers read %+v", got.Observed.NameServers)

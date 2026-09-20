@@ -72,8 +72,9 @@ func TestTheDNSReportSaysWhatWasReadAndWhatItMeans(t *testing.T) {
 				policy.LimitDNSAsksTheResolver.Note(),
 			},
 			Observed: &policy.DNSFacts{
-				Apex:      true,
-				Addresses: []string{"192.0.2.10"},
+				Apex: true,
+				IPv4: []string{"192.0.2.10"},
+				Text: []string{"v=spf1 -all", "google-site-verification=abc"},
 				NameServers: []policy.NameServer{
 					{Name: "ns1.example.net", Addresses: []string{"192.0.2.53"}},
 					{Name: "ns2.example.net"},
@@ -92,6 +93,11 @@ func TestTheDNSReportSaysWhatWasReadAndWhatItMeans(t *testing.T) {
 	for _, want := range []string{
 		"porch-dns-v1",
 		"192.0.2.10",
+		"IPv6       none",
+		"Alias      none",
+		"as published",
+		"v=spf1 -all",
+		"google-site-verification=abc",
 		"ns1.example.net",
 		"ns2.example.net",
 		"resolves to nothing",
@@ -103,5 +109,36 @@ func TestTheDNSReportSaysWhatWasReadAndWhatItMeans(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("the report does not say %q:\n%s", want, text)
 		}
+	}
+}
+
+// The records a domain publishes are bounded twice before they are printed: a
+// TXT record is whatever somebody put there, and a report that printed all of
+// it would be a report written by whoever is being measured.
+func TestThePublishedRecordsAreBounded(t *testing.T) {
+	long := strings.Repeat("x", 400)
+	var records []string
+	for range 11 {
+		records = append(records, long)
+	}
+
+	var buf bytes.Buffer
+	printText(&buf, records)
+	text := buf.String()
+
+	if strings.Contains(text, strings.Repeat("x", maxTextLength+1)) {
+		t.Errorf("a record was printed in full:\n%s", text)
+	}
+	if !strings.Contains(text, "…") {
+		t.Errorf("a record was cut without saying so:\n%s", text)
+	}
+	if lines := strings.Count(text, "…"); lines != maxTextShown {
+		t.Errorf("%d records were printed, want the bound of %d", lines, maxTextShown)
+	}
+	if !strings.Contains(text, "and 3 more") {
+		t.Errorf("the records left out are not counted:\n%s", text)
+	}
+	if !strings.Contains(text, "11 records, as published") {
+		t.Errorf("the report does not say how many there are:\n%s", text)
 	}
 }

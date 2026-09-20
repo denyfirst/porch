@@ -100,8 +100,12 @@ type DNSFacts struct {
 	// the answers belong to whichever zone contains it.
 	Apex bool `json:"apex"`
 
-	// Addresses are what the name itself resolves to.
-	Addresses []string `json:"addresses,omitempty"`
+	// IPv4 and IPv6 are what the name itself resolves to, kept apart because
+	// they are two questions: a name with an address of one kind and none of
+	// the other is ordinary, and a report that merged them could not say which
+	// of the two was asked and found nothing.
+	IPv4 []string `json:"ipv4,omitempty"`
+	IPv6 []string `json:"ipv6,omitempty"`
 
 	// AddressReason says why they could not be read.
 	AddressReason string `json:"addressReason,omitempty"`
@@ -329,7 +333,7 @@ func GradeDNS(f DNSFacts) DNSFinding {
 	switch {
 	case f.AddressReason != "":
 		unsettled("The addresses could not be read: " + f.AddressReason)
-	case len(f.Addresses) == 0:
+	case len(f.IPv4)+len(f.IPv6) == 0:
 		note("The name itself resolves to no address. A domain used only for mail, or only for names " +
 			"beneath it, is ordinary; what this says is that nothing answers at the domain on its own.")
 	}
