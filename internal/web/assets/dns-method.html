@@ -1,0 +1,153 @@
+<article class="prose">
+
+    <h1>What the DNS check<br>reads, and what it cannot see.</h1>
+
+    <p class="lede">
+      The DNS check reads how a domain itself is served: the addresses it
+      answers with, the servers its zone is delegated to, the record at the
+      top of that zone, and whether the DNSSEC chain its parent anchors still
+      holds. This page says what is read, what is graded and what is only
+      reported, and the limits that apply to every check it runs.
+    </p>
+
+    <nav class="jump">
+      <a href="#read">What is read</a>
+      <a href="#graded">What is graded, and what is not</a>
+      <a href="#chain">The DNSSEC chain</a>
+      <a href="#alias">An alias, and a target that is gone</a>
+      {{range .Limits}}<a href="#{{.ID}}">{{.Title}}</a>
+      {{end}}
+      <a href="#elsewhere">What else is written down</a>
+    </nav>
+
+    <h2 id="read">What is read</h2>
+
+    <p>
+      <strong>Records the domain published for anyone to read.</strong> The
+      addresses at the name (<code>A</code> and <code>AAAA</code>), the alias
+      at it (<code>CNAME</code>) where there is one, the servers the zone is
+      delegated to (<code>NS</code>) and the addresses of each of those, the
+      record at the top of the zone (<code>SOA</code>), the text records
+      (<code>TXT</code>), the digest the parent holds (<code>DS</code>) and
+      the keys the zone publishes (<code>DNSKEY</code>).
+    </p>
+
+    <p>
+      <strong>Nothing is connected to.</strong> Every question goes to the
+      resolver the scanning machine already uses. No name server is contacted
+      directly, no port is opened at the domain, and nothing is sent to it at
+      all. A DNS check leaves no trace in the logs of the domain being read,
+      because it never reaches them.
+    </p>
+
+    <p>
+      DNS cannot list what a domain publishes. There is no question that
+      means "give me everything": a name and a type are asked for, and the
+      answer covers that. Names beneath the one asked about — a subdomain
+      nobody linked to — cannot be discovered by asking, and this check does
+      not guess at them.
+    </p>
+
+    <h2 id="graded">What is graded, and what is not</h2>
+
+    <p>
+      DNS carries more advice than any other part of the internet and fewer
+      requirements. A serial number in a particular shape, a refresh timer
+      inside somebody's preferred range: these are the "errors" other reports
+      open with, and no document calls them errors. RFC 1912 calls its ranges
+      recommendations, and a zone whose records are written by an interface
+      has no reason to carry a serial a person can read.
+    </p>
+
+    <p><strong>Graded, because each one stops a resolver:</strong></p>
+
+    <ul class="plain">
+      <li><strong>Fewer than two name servers.</strong> RFC 1034 requires two,
+        and RFC 2182 — a best current practice — says why: one server is one
+        power supply and one maintenance window between a domain and everybody
+        trying to reach it.</li>
+      <li><strong>Every server on one network.</strong> The same rule one step
+        out. Judged by address prefix, because which company an address belongs
+        to cannot be read from the address, and asking somebody else on every
+        scan is not something this does.</li>
+      <li><strong>A server that resolves to nothing.</strong> RFC 1912 calls it
+        a lame delegation: a resolver that tries it waits, then tries another.</li>
+      <li><strong>A DNSSEC chain that does not check out</strong>, and an alias
+        at the top of a zone, which RFC 1034 and RFC 2181 both forbid.</li>
+    </ul>
+
+    <p>
+      <strong>Reported and not graded:</strong> the addresses, the servers and
+      their addresses, the text records, the record at the top of the zone with
+      its serial and its four timers, whether the zone is signed at all, and a
+      digest of a type this does not compute — which is said as that, never as
+      a chain that failed.
+    </p>
+
+    <h2 id="chain">The DNSSEC chain</h2>
+
+    <p>
+      A signed zone publishes keys, and its parent — the registry above it —
+      publishes a digest of one of them. A validating resolver follows that
+      link down from the root, and if any step does not match it returns
+      nothing at all: not the wrong answer, no answer. The domain stops
+      existing for everybody behind such a resolver, which is most of the
+      internet, while it keeps working perfectly for whoever runs it.
+    </p>
+
+    <p>
+      This check takes the keys the zone publishes, computes the digest of
+      each the way RFC 4034 defines it, and compares that with what the parent
+      holds. So the finding rests on arithmetic done here rather than on
+      somebody else's opinion. What it does not do is verify the signature
+      over every record: that is what a validating resolver does, and where
+      the resolver says it did, the report says so as the resolver's word.
+    </p>
+
+    <h2 id="alias">An alias, and a target that is gone</h2>
+
+    <p>
+      Where the name is an alias, the report says what it points at and
+      whether that target exists. A target that has been deleted is worth a
+      second look: the name resolves to nothing, and where the target is a
+      name at a provider that hands out unclaimed ones — a bucket, an
+      application, a page host — whoever claims it next answers for this name,
+      and can obtain a certificate for it, because obtaining one takes
+      answering for the name.
+    </p>
+
+    <p>
+      That is reported rather than graded. No document sets a rule about an
+      alias whose target is gone, and a rule this project invented would be
+      one nobody could argue with.
+    </p>
+
+    {{range .Limits}}
+    <h2 id="{{.ID}}">{{.Title}}</h2>
+
+    <p>{{.Text}}</p>
+    {{end}}
+
+    <h2 id="elsewhere">What else is written down</h2>
+
+    <p>
+      This check has its own rule set, separate from the ones that grade a TLS
+      handshake, a website and a domain's mail. What those can and cannot see
+      is on <a href="/tls/method">the Transport page</a>,
+      <a href="/web/method">the Reach page</a> and
+      <a href="/mail/method">the Mail page</a>.
+    </p>
+
+    <p>
+      Every property this project holds itself to is in
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/invariants.md">docs/invariants.md</a>,
+      and this check's is R24. What changed between rule sets is in
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/policy-changes.md">docs/policy-changes.md</a>.
+    </p>
+
+    <p>
+      What is recorded about a check here, and how to have a domain excluded,
+      are on the <a href="/privacy">privacy page</a>.
+    </p>
+
+</article>

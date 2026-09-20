@@ -45,6 +45,58 @@ is entitled to find it still answering.
 ---
 
 
+## `porch-dns-v1` — a new rule set
+
+Unreleased.
+
+A fourth rule set, for a fourth check: how a domain itself is served. **No TLS,
+web or mail verdict changed.** Those three grade a handshake, an HTTP response
+and a domain's mail policy; this one grades the delegation the domain is
+answered through and the DNSSEC chain its parent anchors. A report carries the
+rule set that graded it, and these four are never the same one.
+
+Nothing is connected to. Every fact comes from the resolver the scanning
+machine already uses, so a DNS check leaves no trace at the domain being read.
+
+What it grades is deliberately short, and the reason is that DNS carries more
+advice than any other part of the internet and fewer requirements. A serial
+number in a particular shape and a refresh timer inside a particular range are
+what other reports open with; RFC 1912 calls its ranges recommendations, and a
+zone whose records are written through an interface has no reason to carry a
+serial a person can read. Those are reported here, never graded (R21).
+
+Five findings, each of which stops a resolver or contradicts a standard:
+
+- `dns.one-name-server` — fewer than two name servers, which RFC 1034 requires
+  and RFC 2182 (BCP 16) explains.
+- `dns.name-servers-one-network` — every server answering from one network,
+  judged by address prefix rather than by owner, because which organisation an
+  address belongs to cannot be read from the address.
+- `dns.name-server-without-address` — a server the zone names that resolves to
+  nothing, which RFC 1912 calls a lame delegation.
+- `dns.dnssec-no-keys` and `dns.dnssec-chain-broken` — the parent anchors
+  DNSSEC and no key published here matches what it holds. This is the finding
+  the check was built around: a key rotated without the registrar being told
+  leaves every validating resolver answering with a failure while the
+  operator's own browser is fine, so nobody finds out from their own machine.
+- `dns.dnssec-sha1-digest` — a chain that works over a digest RFC 8624 says is
+  not to be used for new delegations.
+- `dns.alias-at-zone-apex` — a CNAME at the top of a zone, which RFC 1034 and
+  RFC 2181 both forbid: resolvers that follow it lose the zone's mail and its
+  name servers.
+
+The digest is computed here, from the keys the zone publishes, rather than
+taken from the resolver's AD bit — that bit is the resolver's claim about work
+it did, and where the report repeats it, it says whose word it is. A digest of
+a type this does not compute is reported as neither matched nor ruled out.
+
+An alias whose target does not exist is reported and not graded: no document
+sets a rule about one. What the note says is what it leads to — the name
+resolves to nothing, and where the target is a name at a provider that hands
+out unclaimed ones, whoever claims it next answers for this name.
+
+---
+
 ## `porch-mail-v1` — a new rule set
 
 Released in v0.16.0, 2026-09.

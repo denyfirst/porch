@@ -174,6 +174,7 @@ func TestEveryCountedCheckCanOccur(t *testing.T) {
 	post(t, s, `{"target":"one.test"}`)
 	postWeb(t, s, `{"target":"two.test"}`)
 	postMail(t, s, `{"target":"three.test"}`)
+	postDNS(t, s, `{"target":"four.test"}`)
 
 	produced := s.Stats().Checks
 	for _, name := range checkNames {

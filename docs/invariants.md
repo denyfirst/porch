@@ -3857,7 +3857,8 @@ it leads to, which is the half worth having: the name resolves to nothing, and
 where the target is a name at a provider that hands out unclaimed ones,
 whoever claims it next answers for this name.
 
-*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`
+*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`,
+`internal/httpapi.Server.dnsCheck`, `cmd/porch-scan.runDNS`, `internal/web.consoleChecks`
 *Guarded by:* `TestAZoneThatIsServedAndSignedReadsStrong`,
 `TestTheDelegationIsGradedAgainstWhatIsRequired`,
 `TestABrokenChainIsTheFindingThisExistsFor`,
@@ -3866,6 +3867,9 @@ whoever claims it next answers for this name.
 `TestTheBoundariesAreAskedBeforeAnythingIsLookedUp`,
 `TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
 `TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,
+`TestTheDNSEndpointTakesADomain`, `TestEveryCheckOfferedCanBeRunAndIsExplained`,
+`TestEveryCheckNamedCanBeRunAndReachesItsOwnCode`,
+`TestTheDNSReportSaysWhatWasReadAndWhatItMeans`, `TestEveryCheckPointsAtItsOwnPage`,
 `TestEveryRuleSetNamesTheToolAndTheCheck`
 
 ---

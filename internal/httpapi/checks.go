@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/scan"
@@ -363,4 +364,46 @@ func (t target) displayName() string {
 		return t.host
 	}
 	return net.JoinHostPort(t.host, t.port)
+}
+
+// dnsCheck reads what a domain's own DNS publishes about itself.
+//
+// It opens no connection at all — every question goes to the resolver this
+// service already uses — and it walks the same chain of guards as the rest,
+// for the reason the mail check does: a lookup a stranger caused this service
+// to make is still a lookup this service made.
+func (s *Server) dnsCheck() check {
+	return check{
+		name:  checkDNS,
+		parse: parseDNSTarget,
+		run: func(ctx context.Context, t target) (outcome, error) {
+			result, err := s.dns.Scan(ctx, t.host)
+			if err != nil {
+				return outcome{}, err
+			}
+			return outcome{
+				verdict:  result.Verdict,
+				policy:   result.Policy,
+				findings: ruleIDs(result.Findings),
+				body:     result,
+			}, nil
+		},
+	}
+}
+
+// parseDNSTarget takes a domain, and an address as the domain it names, the
+// way the mail check does: somebody reading a report about their mail and
+// asking about their DNS types the same thing into both.
+func parseDNSTarget(raw string) (target, *refusal) {
+	raw, _ = mailscan.DropLocalPart(raw)
+
+	domain := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+	if err := dnsscan.CheckDomain(domain); err != nil {
+		return target{}, &refusal{http.StatusBadRequest, "invalid_target",
+			"The target must be a domain name, such as example.com: no port, no path, and no scheme."}
+	}
+	if refused := refuseAnAddress(domain); refused != nil {
+		return target{}, refused
+	}
+	return target{host: domain, scope: scan.DefaultPort}, nil
 }

@@ -325,6 +325,8 @@ func run() int {
 	case checkMail:
 		return runMail(ctx, targets, *timeout, *resolver, *asJSON, store,
 			selectorsFrom(*dkimSelectors, *dkimCommon), *heloName)
+	case checkDNS:
+		return runDNS(ctx, targets, *timeout, *resolver, *asJSON, store)
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)
@@ -734,12 +736,8 @@ const (
 	tlsMethodPage = "https://denyfirst.dev/tls/method"
 	webMethodPage = "https://denyfirst.dev/web/method"
 
-	// The mail check has no page yet, and empty is the whole instruction: the
-	// report prints its limits in full instead of pointing at one. A named
-	// constant rather than a bare "" at the call site, so the day somebody
-	// writes the page there is one line to change and no second copy of the
-	// URL to find.
-	mailMethodPage = ""
+	mailMethodPage = "https://denyfirst.dev/mail/method"
+	dnsMethodPage  = "https://denyfirst.dev/dns/method"
 )
 
 func printNotes(w io.Writer, notes []policy.Note, page string) {

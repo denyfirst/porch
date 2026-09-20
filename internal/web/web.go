@@ -213,6 +213,7 @@ var pages = map[string]*page{
 			TLS:  policy.TLSVersion,
 			Web:  policy.WebVersion,
 			Mail: policy.MailVersion,
+			DNS:  policy.DNSVersion,
 			Demo: demo.Enabled,
 		},
 	},
@@ -287,6 +288,16 @@ var pages = map[string]*page{
 		Fragment:    "assets/mail-method.html",
 		Data:        methodPage{Limits: policy.MailStandingLimits(), Demo: demo.Enabled},
 	},
+
+	// The DNS check's, the fourth. It connects to nothing at all, which is
+	// the first thing somebody reading about a scan of their domain wants to
+	// know, so the page says it near the top rather than among the limits.
+	"/dns/method": {
+		Title:       "What the DNS check reads, and what it cannot see — Porch by denyfirst",
+		Description: "What the DNS check reads about a domain's own name servers and its DNSSEC chain, what it grades, and the limits of the method.",
+		Fragment:    "assets/dns-method.html",
+		Data:        methodPage{Limits: policy.DNSStandingLimits(), Demo: demo.Enabled},
+	},
 }
 
 // scanPage is what assets/index.html branches on.
@@ -360,6 +371,7 @@ func consoleChecks() []consoleCheck {
 		{"tls", "Transport", "the handshake and the certificate behind it", policy.TLSVersion},
 		{"web", "Reach", "how the site is reached over HTTP and HTTPS", policy.WebVersion},
 		{"mail", "Mail", "what the domain's DNS says about its mail", policy.MailVersion},
+		{"dns", "DNS", "how the domain itself is served, and whether its DNSSEC chain holds", policy.DNSVersion},
 	}
 }
 
@@ -853,8 +865,8 @@ type porchPage struct {
 
 // docsPage is what assets/docs.html reads.
 type docsPage struct {
-	TLS, Web, Mail string
-	Demo           bool
+	TLS, Web, Mail, DNS string
+	Demo                bool
 }
 
 // plain holds the two files a crawler reads, built at startup beside the
