@@ -174,6 +174,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readChain(ctx, resolver, domain, &facts)
 	s.readAbsence(ctx, resolver, domain, &facts)
 	s.askServers(ctx, domain, &facts)
+	s.askParent(ctx, resolver, domain, &facts)
 
 	graded := policy.GradeDNS(facts)
 
@@ -668,4 +669,102 @@ func (s *Scanner) askServers(ctx context.Context, domain string, facts *policy.D
 func within(host, domain string) bool {
 	host, domain = fold(host), fold(domain)
 	return host == domain || strings.HasSuffix(host, "."+domain)
+}
+
+// maxParentServers bounds how many of the parent zone's servers are tried
+// before the question is reported as unasked. One that answers ends the walk;
+// the rest are there because a registry server may be unreachable from here.
+const maxParentServers = 3
+
+// askParent asks the zone above this one which servers it delegates to.
+//
+// # Why a resolver cannot be asked this
+//
+// A resolver answers an NS query from the zone itself, because the zone's own
+// answer is authoritative and the parent's is not. That is the right answer to
+// the question "who serves this zone" and the wrong one here: what a resolver
+// starting at the root actually follows is the parent's list, so a name the
+// parent still hands out reaches whatever is at that address today — a server
+// that no longer holds the zone, or somebody else's entirely. The two lists are
+// two claims and only one of them is visible through a resolver.
+//
+// # What is sent
+//
+// One question, to one server of the parent zone, with recursion off: it asks
+// about this zone by name and the answer arrives as a referral, which is the
+// authority section this package now reads. Nothing about the parent zone is
+// reported, and no zone transfer is attempted here or anywhere else.
+func (s *Scanner) askParent(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
+	if !s.AskServers || !facts.Apex {
+		return
+	}
+
+	asker := s.Servers
+	if asker == nil {
+		asker = &dnsclient.Client{}
+	}
+
+	parent := parentOf(domain)
+	facts.Parent = parent
+
+	answer, err := r.LookupNS(ctx, parent)
+	if err != nil {
+		facts.ParentReason = shape(err)
+		return
+	}
+	hosts := answer.NS
+	if len(hosts) > maxParentServers {
+		hosts = hosts[:maxParentServers]
+	}
+	if len(hosts) == 0 {
+		facts.ParentReason = "the zone above this one names no server"
+		return
+	}
+
+	facts.ParentReason = "no server of the zone above this one answered"
+	for _, host := range hosts {
+		v4, v6, reason := addressesOf(ctx, r, host)
+		addresses := append(v4, v6...)
+		if len(addresses) == 0 {
+			if reason != "" {
+				facts.ParentReason = reason
+			}
+			continue
+		}
+
+		said, err := asker.AskServer(ctx, addresses[0], domain, dnsclient.TypeNS, false)
+		if err != nil {
+			facts.ParentReason = shape(err)
+			continue
+		}
+
+		// A referral is the shape this expects; a server that holds both zones
+		// answers from the answer section instead, and that is the same claim
+		// about the same delegation.
+		named := said.Referral
+		if len(named) == 0 {
+			named = said.NS
+		}
+		if len(named) == 0 {
+			// Either the name is not delegated at all or the server answered
+			// about something else. Neither is a disagreement, and reporting
+			// it as one would say the parent named nothing when nothing was
+			// established (R4).
+			facts.ParentReason = "the zone above this one delegates no server here"
+			continue
+		}
+
+		facts.ParentAsked = true
+		facts.ParentReason = ""
+		facts.ParentServer = host
+		facts.ParentNameServers = named
+		facts.OnlyAtParent, facts.OnlyAtZone = policy.DelegationDiff(facts.NameServers, named)
+		return
+	}
+}
+
+// parentOf is the zone above this one: everything after the first label.
+func parentOf(domain string) string {
+	_, parent, _ := strings.Cut(fold(domain), ".")
+	return parent
 }

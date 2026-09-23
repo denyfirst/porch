@@ -204,6 +204,33 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 	if len(f.NameServers) > 1 && f.Networks == 1 {
 		fmt.Fprintf(w, "    every address above is in one network, so they fail together\n")
 	}
+
+	fmt.Fprintf(w, "    %-28s %s\n", "the zone above", parentLine(f))
+}
+
+// parentLine says what the zone above this one hands out, which is the list a
+// resolver starting at the root follows rather than the one above.
+func parentLine(f policy.DNSFacts) string {
+	switch {
+	case f.ParentReason != "":
+		return "not read: " + f.ParentReason
+	case !f.ParentAsked:
+		return "not asked"
+	}
+
+	atParent, atZone := f.OnlyAtParent, f.OnlyAtZone
+	if len(atParent) == 0 && len(atZone) == 0 {
+		return f.Parent + " hands out the same servers"
+	}
+
+	var parts []string
+	if len(atParent) > 0 {
+		parts = append(parts, "hands out "+strings.Join(atParent, ", ")+" as well")
+	}
+	if len(atZone) > 0 {
+		parts = append(parts, "does not hand out "+strings.Join(atZone, ", "))
+	}
+	return f.Parent + " " + strings.Join(parts, ", and ")
 }
 
 // dnsOutcomes collects what each domain was graded, for the exit status.

@@ -494,6 +494,14 @@ type reply struct {
 	cname     []string
 	nsec3     []NSEC3PARAM
 
+	// referral holds the NS records the authority section named for the
+	// question, and is filled only where a caller asked for that section. It
+	// is separate from ns for the reason above and for one more: these are
+	// what somebody else says serves the name, while ns is what the name
+	// itself says, and the whole point of reading them is that the two can
+	// disagree.
+	referral []string
+
 	validated bool
 	existed   bool
 

@@ -21,6 +21,28 @@ import (
 // A reply that fails them was written by something that did not see the query,
 // and reading its contents at all would be reading an attacker's answer.
 func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, error) {
+	return parseReplyWith(raw, id, question, qtype, false)
+}
+
+// parseReferral reads a reply and, beyond the answer section, the NS records
+// the authority section holds for the name that was asked about.
+//
+// That section is where a delegation lives. A server holding the parent zone
+// answers a question about a child by pointing at the child's servers rather
+// than by answering it, and the pointer arrives in the authority section with
+// the authoritative bit clear — so a reply that looks empty by every measure
+// this package took until now is the one carrying the answer.
+//
+// Separate from parseReply rather than always on, because it is one more
+// section of somebody else's bytes to walk. A malformed authority section ends
+// this parse, which is right where the section is what was asked for and wrong
+// everywhere else: a stray record there would otherwise cost a caller the
+// answer it did get.
+func parseReferral(raw []byte, id uint16, question []byte, qtype uint16) (reply, error) {
+	return parseReplyWith(raw, id, question, qtype, true)
+}
+
+func parseReplyWith(raw []byte, id uint16, question []byte, qtype uint16, authority bool) (reply, error) {
 	if len(raw) < headerLen {
 		return reply{}, errors.New("dnsclient: the reply is shorter than a header")
 	}
@@ -94,7 +116,7 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 	}
 
 	answers := int(binary.BigEndian.Uint16(raw[6:8]))
-	found, err := parseAnswers(raw, end, answers, qtype, foldName(question))
+	found, after, err := parseAnswers(raw, end, answers, qtype, foldName(question))
 	if err != nil {
 		return out, err
 	}
@@ -109,6 +131,19 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 	out.keys = found.keys
 	out.cname = found.cname
 	out.nsec3 = found.nsec3
+
+	if authority {
+		// The same reader over the next section, with the same owner check: a
+		// server pointing at a delegation writes the child's name there, and a
+		// record for any other name answers a question nobody asked.
+		delegated, _, err := parseAnswers(raw, after,
+			int(binary.BigEndian.Uint16(raw[8:10])), TypeNS, foldName(question))
+		if err != nil {
+			return out, err
+		}
+		out.referral = delegated.ns
+	}
+
 	return out, nil
 }
 
@@ -128,7 +163,10 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 // is how RRSIG and every other type in the section are already handled. The
 // walk then reports no CAA at this name and carries on to the parent, which is
 // the honest answer: nothing was found for the name that was asked about.
-func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) (answerSet, error) {
+// The offset returned is where the section ended, so that a caller wanting the
+// section after it does not have to walk the records a second time to find out
+// where they stopped.
+func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) (answerSet, int, error) {
 	var out answerSet
 
 	// Read the section once, then decide what answers the question.
@@ -150,21 +188,21 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 	for i := 0; i < count; i++ {
 		owner, next, err := readName(raw, offset)
 		if err != nil {
-			return answerSet{}, err
+			return answerSet{}, 0, err
 		}
 		offset = next
 
 		// Type, class, TTL, and the length of what follows: ten bytes before
 		// anything variable.
 		if offset+10 > len(raw) {
-			return answerSet{}, errors.New("dnsclient: a record ends before its header does")
+			return answerSet{}, 0, errors.New("dnsclient: a record ends before its header does")
 		}
 		rrType := binary.BigEndian.Uint16(raw[offset : offset+2])
 		rdLength := int(binary.BigEndian.Uint16(raw[offset+8 : offset+10]))
 		offset += 10
 
 		if rdLength < 0 || offset+rdLength > len(raw) {
-			return answerSet{}, errors.New("dnsclient: a record announces more data than the reply holds")
+			return answerSet{}, 0, errors.New("dnsclient: a record announces more data than the reply holds")
 		}
 		rdata := raw[offset : offset+rdLength]
 
@@ -198,25 +236,25 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 		case TypeCAA:
 			record, err := parseCAA(rdata)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.caa = append(out.caa, record)
 		case TypeTXT:
 			value, err := parseTXT(rdata)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.txt = append(out.txt, value)
 		case TypeMX:
 			record, err := parseMX(raw, rdata, rdataAt)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.mx = append(out.mx, record)
 		case TypeTLSA:
 			record, err := parseTLSA(rdata)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.tlsa = append(out.tlsa, record)
 		case TypeA, TypeAAAA:
@@ -226,49 +264,49 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 			}
 			addr, err := parseAddress(rdata, size)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.addresses = append(out.addresses, addr)
 		case TypeNS:
 			host, err := parseName(raw, rdataAt)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.ns = append(out.ns, host)
 		case TypeNSEC3PARAM:
 			record, err := parseNSEC3PARAM(rdata)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.nsec3 = append(out.nsec3, record)
 		case TypeCNAME:
 			target, err := parseName(raw, rdataAt)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.cname = append(out.cname, target)
 		case TypeSOA:
 			record, err := parseSOA(raw, rdata, rdataAt)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.soa = append(out.soa, record)
 		case TypeDS:
 			record, err := parseDS(rdata)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.ds = append(out.ds, record)
 		case TypeDNSKEY:
 			record, err := parseDNSKEY(rdata)
 			if err != nil {
-				return answerSet{}, err
+				return answerSet{}, 0, err
 			}
 			out.keys = append(out.keys, record)
 		}
 	}
 
-	return out, nil
+	return out, offset, nil
 }
 
 // answerSet is what one answer section held, sorted by type.
