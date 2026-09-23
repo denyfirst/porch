@@ -212,3 +212,66 @@ func TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence(t *testing.T) {
 		t.Errorf("an unsigned zone was described as signed:\n%s", buf.String())
 	}
 }
+
+// The two states only asking a server directly can produce are drawn in both
+// faces: a server that does not answer for the zone, and one that answers for
+// other domains as well.
+func TestWhatAskingAServerFoundIsDrawnInBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`text = "does not answer for this zone";`,
+		`text = text + " — answers for other domains too";`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion, Verdict: policy.Weak,
+			Observed: &policy.DNSFacts{
+				Apex: true,
+				NameServers: []policy.NameServer{
+					{Name: "ns1.example.com", Addresses: []string{"192.0.2.53"}, Asked: true, Authoritative: true, Recursion: true},
+					{Name: "ns2.example.com", Addresses: []string{"198.51.100.53"}, Asked: true},
+					{Name: "ns3.example.com", Addresses: []string{"203.0.113.53"}, AskedReason: "the lookup did not complete"},
+				},
+			},
+		},
+	})
+	text := buf.String()
+
+	for _, want := range []string{
+		"ns1.example.com              192.0.2.53 — answers for other domains too",
+		"ns2.example.com              does not answer for this zone",
+		"ns3.example.com              203.0.113.53",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the report does not say %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "ns3.example.com              does not answer") {
+		t.Errorf("a server that could not be asked was drawn as one that answered:\n%s", text)
+	}
+}
+
+// The command line asks the zone's own servers, because it runs on the
+// operator's machine from their address — the argument -allow-private rests on
+// for the other checks. Read from the source, because runDNS takes flags and
+// prints, so nothing here can drive the branch itself.
+func TestTheCommandLineAsksTheZonesOwnServers(t *testing.T) {
+	body, err := os.ReadFile("dns.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "dnsscan.Scanner{AskServers: true}") {
+		t.Error("the command line no longer asks the servers the zone names")
+	}
+}

@@ -1228,7 +1228,13 @@ function delegation(facts) {
     const addresses = server.addresses || [];
     let text = addresses.join(", ");
     let mark = null;
-    if (server.alias) {
+    if (server.asked && !server.authoritative) {
+      text = "does not answer for this zone";
+      mark = "weak";
+    } else if (server.recursion) {
+      text = text + " — answers for other domains too";
+      mark = "weak";
+    } else if (server.alias) {
       text = "an alias for " + server.alias;
       mark = "weak";
     } else if (server.reason) {

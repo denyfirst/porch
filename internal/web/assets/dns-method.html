@@ -33,11 +33,27 @@
     </p>
 
     <p>
-      <strong>Nothing is connected to.</strong> Every question goes to the
-      resolver the scanning machine already uses. No name server is contacted
-      directly, no port is opened at the domain, and nothing is sent to it at
-      all. A DNS check leaves no trace in the logs of the domain being read,
-      because it never reaches them.
+      <strong>Almost nothing is connected to.</strong> Every question above goes
+      to the resolver the scanning machine already uses, so the domain being read
+      sees none of it.
+    </p>
+
+    <p>
+      <strong>Two questions are put to the servers themselves</strong>, because
+      a resolver cannot answer them: whether each server the delegation names
+      answers for the zone as its own, and whether a server inside the domain
+      also answers questions about domains it has nothing to do with. Those go
+      over TCP on port 53, to the addresses the zone published, through the
+      guard that refuses private, loopback and reserved destinations. Nothing
+      else is sent, and no zone transfer is ever attempted. A server belonging
+      to a provider is asked the first question and never the second: its
+      behaviour is its operator's business, not this zone's.
+    </p>
+
+    <p>
+      An installation asks those two only where control of the domain has been
+      proven; the command line asks them always, because it runs on the
+      operator's own machine from their own address.
     </p>
 
     <p>

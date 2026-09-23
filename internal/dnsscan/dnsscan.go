@@ -12,12 +12,18 @@
 //
 // # What it asks, and of whom
 //
-// Six questions about the name, and two per name server: the addresses, the
-// delegation, the record at the top of the zone, the text records, the digest
-// the parent holds and the keys the zone publishes. All of them go to the same
-// recursive resolver every other check uses. Nothing here connects to a name
-// server directly, so a scan is DNS traffic and nothing else — no port, no
-// handshake, no request to anybody's machine.
+// Seven questions about the name, and three per name server: the addresses,
+// the delegation, the record at the top of the zone, the text records, the
+// alias, the digest the parent holds and the keys the zone publishes. All of
+// those go to the same recursive resolver every other check uses.
+//
+// Two more are put to the servers the zone names, where the caller allows it,
+// because a resolver cannot answer them: whether each server answers for the
+// zone as its own, and — for a server inside the domain being checked only —
+// whether it answers questions about domains it has nothing to do with. Those
+// go over TCP on port 53, through the guard that refuses private, loopback and
+// reserved destinations, because the addresses come out of the zone being
+// measured. Nothing else is sent to them, and no zone transfer is attempted.
 //
 // # What it grades
 //
@@ -81,6 +87,22 @@ type Scanner struct {
 	// scan a name. Nil means none is required, which is what the command line
 	// wants and what a service must not have.
 	Verify *verify.Scope
+
+	// AskServers asks the servers the zone names directly, which is the only
+	// way to learn whether each of them answers for the zone and whether any
+	// answers for domains it has nothing to do with.
+	//
+	// False by default, and the default is the one that connects to nothing:
+	// every other question here goes to a resolver, and this opens a connection
+	// to an address the measured zone chose. A caller sets it where control of
+	// the domain has been proven, or on the command line, where the scan runs
+	// on the operator's own machine from their own address — the same condition
+	// the mail check's two connections have.
+	AskServers bool
+
+	// Servers is what puts those questions. Nil means a client of this
+	// package's own.
+	Servers ServerAsker
 
 	// Now is the clock, for a test that needs a fixed duration.
 	Now func() time.Time
@@ -151,6 +173,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readNameServers(ctx, resolver, domain, &facts)
 	s.readChain(ctx, resolver, domain, &facts)
 	s.readAbsence(ctx, resolver, domain, &facts)
+	s.askServers(ctx, domain, &facts)
 
 	graded := policy.GradeDNS(facts)
 
@@ -558,4 +581,91 @@ func (s *Scanner) readAbsence(ctx context.Context, r Resolver, domain string, fa
 	facts.NSEC3 = true
 	facts.NSEC3Iterations = answer.NSEC3[0].Iterations
 	facts.NSEC3SaltLength = answer.NSEC3[0].SaltLength
+}
+
+// ServerAsker puts a question to one name server directly.
+//
+// An interface, and optional: a scan that cannot ask servers asks none rather
+// than failing, and the report says the questions were not put. internal/dnsclient
+// is the one implementation.
+type ServerAsker interface {
+	AskServer(ctx context.Context, address, name string, qtype uint16, recursion bool) (dnsclient.ServerAnswer, error)
+}
+
+// recursionProbe is the name a server is asked about to see whether it answers
+// for domains it has nothing to do with.
+//
+// Under .invalid, which RFC 2606 reserves so that the name cannot exist. A
+// server that goes looking for it asks the root and is told nothing is there,
+// which is the whole of the traffic this causes; a server that refuses it, or
+// answers without recursion, has said what it is.
+const recursionProbe = "recursion-probe.porch.invalid"
+
+// askServers puts two questions to the servers the zone names, where the
+// caller allows it.
+//
+// The first is asked of every one of them: does this server answer for this
+// zone as its own? That is the question a resolver cannot answer, because a
+// resolver that reached one working server reports a working zone and says
+// nothing about the rest.
+//
+// The second is asked only of a server inside the domain being checked: will
+// it answer a question about a domain it has nothing to do with? That one is
+// about the server's behaviour rather than about this zone, and a server run
+// by a provider is somebody else's to ask about — the same rule the mail
+// check's relay question follows.
+func (s *Scanner) askServers(ctx context.Context, domain string, facts *policy.DNSFacts) {
+	if !s.AskServers {
+		return
+	}
+
+	asker := s.Servers
+	if asker == nil {
+		asker = &dnsclient.Client{}
+	}
+
+	for i := range facts.NameServers {
+		server := &facts.NameServers[i]
+		if len(server.Addresses) == 0 {
+			continue
+		}
+		address := server.Addresses[0]
+
+		server.Asked = true
+		answer, err := asker.AskServer(ctx, address, domain, dnsclient.TypeSOA, false)
+		switch {
+		case err != nil:
+			server.Asked = false
+			server.AskedReason = shape(err)
+		case !answer.Answered:
+			server.Asked = false
+			server.AskedReason = "the server did not answer the question"
+		default:
+			// Authority is the flag and the record together: a server may set
+			// the bit and answer with nothing, which is not an answer for the
+			// zone either.
+			server.Authoritative = answer.Authoritative && len(answer.SOA) > 0
+		}
+
+		if !within(server.Name, domain) {
+			continue
+		}
+		server.RecursionAsked = true
+		probe, err := asker.AskServer(ctx, address, recursionProbe, dnsclient.TypeA, true)
+		if err != nil {
+			server.RecursionAsked = false
+			continue
+		}
+		// Recursion offered and the question actually answered: a server that
+		// refused said no, and one that offers the service but refused this
+		// name is not answering for strangers either.
+		server.Recursion = probe.RecursionOffered && probe.Answered
+	}
+}
+
+// within says whether a host is the domain itself or a name beneath it, which
+// is the test for whose server it is.
+func within(host, domain string) bool {
+	host, domain = fold(host), fold(domain)
+	return host == domain || strings.HasSuffix(host, "."+domain)
 }

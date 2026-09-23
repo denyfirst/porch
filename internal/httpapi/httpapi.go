@@ -291,7 +291,11 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 
 			DKIMSelectors: dkim.DocumentedSelectors(),
 		},
-		dns:      &dnsscan.Scanner{Verify: scanner.Verify},
+		// The delegation is asked about directly only where control of the
+		// domain has been proven, which is the condition the mail check's two
+		// connections have and for the same reason: it opens a connection to
+		// an address the measured zone chose.
+		dns:      &dnsscan.Scanner{Verify: scanner.Verify, AskServers: scanner.Verify != nil},
 		limits:   limits,
 		rate:     newLimiter(limits.Burst, limits.Refill, limits.MaxTrackedIPs, now),
 		reads:    newLimiter(readBurst, readRefill, limits.MaxTrackedIPs, now),

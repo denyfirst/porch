@@ -35,7 +35,11 @@ type dnsResult struct {
 // asks a resolver, and a resolver answers about a private name the same way it
 // answers about anything else.
 func runDNS(ctx context.Context, domains []string, timeout time.Duration, resolver string, asJSON bool, store *results.Store) int {
-	scanner := &dnsscan.Scanner{}
+	// The command line asks the delegation directly: the scan runs on the
+	// operator's own machine, from their own address, under their
+	// responsibility — the argument -allow-private rests on for the other
+	// checks.
+	scanner := &dnsscan.Scanner{AskServers: true}
 	if resolver != "" {
 		scanner.Resolver = &dnsclient.Client{Server: resolver, Timeout: timeout}
 	}
@@ -184,6 +188,11 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 		switch {
 		case ns.Reason != "":
 			fmt.Fprintf(w, "    %-28s not read: %s\n", ns.Name, ns.Reason)
+		case ns.Asked && !ns.Authoritative:
+			fmt.Fprintf(w, "    %-28s does not answer for this zone\n", ns.Name)
+		case ns.Recursion:
+			fmt.Fprintf(w, "    %-28s %s — answers for other domains too\n",
+				ns.Name, strings.Join(ns.Addresses, ", "))
 		case ns.Alias != "":
 			fmt.Fprintf(w, "    %-28s an alias for %s\n", ns.Name, ns.Alias)
 		case len(ns.Addresses) == 0:

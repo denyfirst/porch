@@ -623,3 +623,226 @@ func TestANameServerThatIsAnAliasIsGraded(t *testing.T) {
 		t.Errorf("a delegation of plain names was graded: %v", ruleIDs(got))
 	}
 }
+
+// servers answers the questions put to name servers directly, from a table.
+type servers struct {
+	// authoritative names the addresses that answer for the zone, and
+	// recursing the ones that answer for anything.
+	authoritative map[string]bool
+	recursing     map[string]bool
+
+	// claiming names the addresses that set the authority bit and answer with
+	// no record, and refusing the ones that offer recursion and then refuse the
+	// question.
+	claiming map[string]bool
+	refusing map[string]bool
+
+	// fail names the addresses that answer with an error.
+	fail map[string]error
+
+	// asked records what was put to whom, so a test can say which servers
+	// were asked the second question and which were not.
+	asked []string
+}
+
+func (s *servers) AskServer(_ context.Context, address, name string, _ uint16, recursion bool) (dnsclient.ServerAnswer, error) {
+	s.asked = append(s.asked, address+" "+name)
+	if err := s.fail[address]; err != nil {
+		return dnsclient.ServerAnswer{}, err
+	}
+	if recursion {
+		switch {
+		case s.refusing[address]:
+			// Offers the service and refuses this question, which is a server
+			// that did not answer for a stranger.
+			return dnsclient.ServerAnswer{RecursionOffered: true}, nil
+		case !s.recursing[address]:
+			return dnsclient.ServerAnswer{Answered: true, Existed: false}, nil
+		}
+		return dnsclient.ServerAnswer{Answered: true, RecursionOffered: true, Existed: true}, nil
+	}
+	if s.claiming[address] {
+		// The flag without a record, which is not an answer for the zone.
+		return dnsclient.ServerAnswer{Answered: true, Authoritative: true, Existed: true}, nil
+	}
+	if !s.authoritative[address] {
+		return dnsclient.ServerAnswer{Answered: true, Existed: true}, nil
+	}
+	return dnsclient.ServerAnswer{
+		Answered: true, Authoritative: true, Existed: true,
+		SOA: []dnsclient.SOA{{Primary: "ns1.example.net"}},
+	}, nil
+}
+
+func asking(t *testing.T, z *zone, s *servers) *Result {
+	t.Helper()
+
+	got, err := (&Scanner{Resolver: z, Servers: s, AskServers: true}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	return got
+}
+
+// A server that does not answer for the zone is found by asking it, which is
+// the question a resolver cannot answer: one that reached a working server
+// reports a working zone and says nothing about the rest.
+func TestAServerThatDoesNotAnswerForTheZoneIsFoundByAskingIt(t *testing.T) {
+	z := served(t)
+	s := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+	}
+
+	got := asking(t, z, s)
+	if !has(got, "dns.name-server-not-authoritative") || got.Verdict != policy.Weak {
+		t.Errorf("a lame delegation: %q %v", got.Verdict, ruleIDs(got))
+	}
+	for _, f := range got.Findings {
+		if f.RuleID == "dns.name-server-not-authoritative" {
+			if !strings.Contains(f.Rationale, "ns2.example.org") || strings.Contains(f.Rationale, "ns1.example.net") {
+				t.Errorf("the finding names the wrong servers: %s", f.Rationale)
+			}
+		}
+	}
+	if !got.Observed.NameServers[0].Asked || !got.Observed.NameServers[0].Authoritative {
+		t.Errorf("the working server reads %+v", got.Observed.NameServers[0])
+	}
+
+	// Every server answering for the zone is not a finding.
+	both := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+	}
+	if got := asking(t, z, both); len(got.Findings) != 0 {
+		t.Errorf("a zone whose servers all answer: %v", ruleIDs(got))
+	}
+
+	// A server that could not be asked is not a server that failed to answer
+	// for the zone (R4).
+	unreachable := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{"198.51.100.53": errors.New("no route")},
+	}
+	got = asking(t, z, unreachable)
+	if has(got, "dns.name-server-not-authoritative") {
+		t.Errorf("a server that could not be asked was graded: %v", ruleIDs(got))
+	}
+	if got.Observed.NameServers[1].AskedReason == "" {
+		t.Errorf("the reason is not carried: %+v", got.Observed.NameServers[1])
+	}
+
+	// And nothing is asked at all unless the caller allows it.
+	quiet := &servers{authoritative: map[string]bool{}, claiming: map[string]bool{}, recursing: map[string]bool{}, refusing: map[string]bool{}, fail: map[string]error{}}
+	if _, err := (&Scanner{Resolver: z, Servers: quiet}).Scan(context.Background(), "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if len(quiet.asked) != 0 {
+		t.Errorf("a scan that was not allowed to ask servers asked %v", quiet.asked)
+	}
+}
+
+// A server that answers questions about other people's domains is asked about
+// only where it is the domain's own, which is the rule the relay question
+// follows: a provider's server is somebody else's to ask about.
+func TestOnlyTheDomainsOwnServersAreAskedAboutOtherDomains(t *testing.T) {
+	z := served(t)
+	z.ns = []string{"ns1.example.com", "ns2.provider.net"}
+	z.addresses["ns1.example.com"] = []string{"192.0.2.53"}
+	z.addresses["ns2.provider.net"] = []string{"198.51.100.53"}
+
+	s := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+	}
+
+	got := asking(t, z, s)
+	if !has(got, "dns.name-server-offers-recursion") || got.Verdict != policy.Weak {
+		t.Errorf("an open recursive server: %q %v", got.Verdict, ruleIDs(got))
+	}
+	for _, f := range got.Findings {
+		if f.RuleID == "dns.name-server-offers-recursion" && strings.Contains(f.Rationale, "provider") {
+			t.Errorf("the finding names a server that was never asked: %s", f.Rationale)
+		}
+	}
+
+	var probes []string
+	for _, q := range s.asked {
+		if strings.Contains(q, recursionProbe) {
+			probes = append(probes, q)
+		}
+	}
+	if len(probes) != 1 || !strings.HasPrefix(probes[0], "192.0.2.53 ") {
+		t.Errorf("the recursion question went to %v", probes)
+	}
+	if !strings.HasSuffix(recursionProbe, ".invalid") {
+		t.Errorf("the probe %q is not a name that cannot exist", recursionProbe)
+	}
+}
+
+// The three states a server can be in that look like answers and are not: the
+// authority flag with no record behind it, a server that could not be asked,
+// and one that offers recursion and then refuses the question.
+func TestWhatLooksLikeAnAnswerFromAServerAndIsNot(t *testing.T) {
+	z := served(t)
+	z.ns = []string{"ns1.example.com"}
+	z.addresses["ns1.example.com"] = []string{"192.0.2.53"}
+
+	// The flag without a record.
+	claiming := &servers{
+		authoritative: map[string]bool{},
+		claiming:      map[string]bool{"192.0.2.53": true},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+	}
+	got := asking(t, z, claiming)
+	if got.Observed.NameServers[0].Authoritative {
+		t.Error("the authority flag alone was read as an answer for the zone")
+	}
+	if !has(got, "dns.name-server-not-authoritative") {
+		t.Errorf("a server claiming the zone with no record: %v", ruleIDs(got))
+	}
+
+	// A server that could not be asked carries the reason and is not recorded
+	// as asked, because a server that was asked and said nothing is a
+	// different fact (R4).
+	unreachable := &servers{
+		authoritative: map[string]bool{},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{"192.0.2.53": errors.New("no route")},
+	}
+	got = asking(t, z, unreachable)
+	server := got.Observed.NameServers[0]
+	if server.Asked || server.AskedReason == "" {
+		t.Errorf("a server that could not be asked reads %+v", server)
+	}
+
+	// A server that offers recursion and refuses the question has not
+	// answered for a stranger.
+	refusing := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{"192.0.2.53": true},
+		fail:          map[string]error{},
+	}
+	got = asking(t, z, refusing)
+	if got.Observed.NameServers[0].Recursion || has(got, "dns.name-server-offers-recursion") {
+		t.Errorf("a refused question was read as recursion: %+v / %v", got.Observed.NameServers[0], ruleIDs(got))
+	}
+}

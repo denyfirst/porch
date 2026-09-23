@@ -47,6 +47,10 @@ var (
 		"RFC 4035 — Protocol Modifications for the DNS Security Extensions",
 		"https://www.rfc-editor.org/rfc/rfc4035",
 	}
+	rfc5358 = Reference{
+		"RFC 5358 — Preventing Use of Recursive Nameservers in Reflector Attacks (BCP 140)",
+		"https://www.rfc-editor.org/rfc/rfc5358",
+	}
 	rfc9276 = Reference{
 		"RFC 9276 — Guidance for NSEC3 Parameter Settings (BCP 236)",
 		"https://www.rfc-editor.org/rfc/rfc9276",
@@ -75,6 +79,25 @@ type NameServer struct {
 	// RFC 2181 forbids that: a resolver following a delegation expects an
 	// address at the name it was given.
 	Alias string `json:"alias,omitempty"`
+
+	// Asked is whether this server was put the question directly, and
+	// Authoritative whether it answered for the zone as its own. Without Asked,
+	// Authoritative false is silence rather than a server that does not answer
+	// for the zone (R4).
+	Asked         bool `json:"asked,omitempty"`
+	Authoritative bool `json:"authoritative,omitempty"`
+
+	// AskedReason says why asking established nothing: the server refused, or
+	// nothing answered on port 53 from here.
+	AskedReason string `json:"askedReason,omitempty"`
+
+	// RecursionAsked is whether this server was asked about a domain it has
+	// nothing to do with, and Recursion whether it went and found the answer.
+	// Only a server inside the domain being checked is asked that: a provider's
+	// server is somebody else's, and the question is about its behaviour rather
+	// than about this zone.
+	RecursionAsked bool `json:"recursionAsked,omitempty"`
+	Recursion      bool `json:"recursion,omitempty"`
 }
 
 // KeyDigest is one key a zone publishes.
@@ -292,6 +315,37 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			aliased = append(aliased, ns.Name)
 		}
 	}
+	var lame, recursing []string
+	for _, ns := range f.NameServers {
+		if ns.Asked && !ns.Authoritative && ns.AskedReason == "" {
+			lame = append(lame, ns.Name)
+		}
+		if ns.Recursion {
+			recursing = append(recursing, ns.Name)
+		}
+	}
+	if len(lame) > 0 {
+		add("dns.name-server-not-authoritative", Weak,
+			"A name server this zone names does not answer for it",
+			"Asked for this zone directly, "+strings.Join(lame, ", ")+" answered without claiming the "+
+				"zone as its own. RFC 1912 calls that a lame delegation: a resolver that tries it waits "+
+				"and then tries another, so every lookup that lands there is slower, and if enough of "+
+				"them are like this the zone stops resolving. A resolver reaching one working server "+
+				"hides this, which is why it is asked of each server rather than of a resolver.",
+			rfc1912)
+	}
+	if len(recursing) > 0 {
+		add("dns.name-server-offers-recursion", Weak,
+			"A name server this zone names answers questions about other domains",
+			"Asked about a domain it has nothing to do with, "+strings.Join(recursing, ", ")+" went and "+
+				"found the answer. RFC 5358 — a best current practice — says an authoritative server "+
+				"should not do that: a server anybody can ask anything is one anybody can use to point "+
+				"traffic at somebody else, because a small question produces a large answer sent to "+
+				"whichever address asked. What it costs the operator is their own bandwidth and, once "+
+				"it has been used that way, their address's reputation.",
+			rfc5358)
+	}
+
 	if len(aliased) > 0 {
 		add("dns.name-server-is-an-alias", Weak,
 			"A name server this zone names is an alias",
@@ -498,15 +552,18 @@ var LimitDNSAsksTheResolver = StandingLimit{
 	ID:    "dns-asks-the-resolver",
 	Title: "Everything here came from one resolver",
 
-	Text: "Every answer here came from the resolver this installation uses, and no name server was " +
-		"contacted directly. So what is reported is what that resolver returns today, which may be " +
-		"an answer it still holds from earlier, and three questions stay out of reach: whether the " +
-		"registrar's delegation still names the same servers as the zone does, whether each of those " +
-		"servers answers for the zone itself, and whether any of them answers questions about other " +
-		"people's domains. The DNSSEC chain is checked here by taking the digest of the keys this " +
-		"zone publishes and comparing it with what the parent holds; whether the signatures over " +
-		"every record verify is the resolver's work, and where it says it did that, the report says " +
-		"so as its word rather than as this program's.",
+	Text: "Almost every answer here came from the resolver this installation uses, so what is " +
+		"reported is what that resolver returns today, which may be an answer it still holds from " +
+		"earlier. Two questions cannot be answered that way and are put to the servers the zone " +
+		"names, over TCP on port 53, where this installation is allowed to ask them: whether each " +
+		"server answers for the zone as its own, and — for a server inside the domain being " +
+		"checked, never one belonging to a provider — whether it also answers questions about " +
+		"domains it has nothing to do with. Nothing else is sent to them, and no zone transfer is " +
+		"attempted. One question stays out of reach: whether the registrar's delegation still names " +
+		"the same servers as the zone does. The DNSSEC chain is checked here by taking the digest " +
+		"of the keys this zone publishes and comparing it with what the parent holds; whether the " +
+		"signatures over every record verify is the resolver's work, and where it says it did " +
+		"that, the report says so as its word rather than as this program's.",
 }
 
 // DNSStandingLimits are true of every DNS check this program runs.
