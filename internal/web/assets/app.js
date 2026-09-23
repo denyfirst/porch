@@ -1120,6 +1120,15 @@ function published(facts) {
 
   row("DNSSEC", dnssecLine(facts), dnssecMark(facts));
 
+  // The algorithm by the name an operator's own interface uses, and how
+  // absent names are proved — both facts about a signed zone, neither a
+  // verdict about it.
+  if (facts.signed) {
+    const names = (facts.keys || []).map(k => k.name || ("algorithm " + k.algorithm));
+    if (names.length) row("Signed with", [...new Set(names)].join(", "));
+    if (facts.nsec3Read) row("Absent names", absenceLine(facts));
+  }
+
   table.appendChild(body);
   frag.appendChild(table);
   frag.appendChild(textRecords(text));
@@ -1160,6 +1169,14 @@ function textRecords(records) {
     frag.appendChild(el("p", "section-note", "and " + (records.length - shown.length) + " more"));
   }
   return frag;
+}
+
+// absenceLine says how a signed zone proves a name does not exist: hashed, at
+// what cost, or plainly — which is what lets anybody list the zone.
+function absenceLine(facts) {
+  if (!facts.nsec3) return "named plainly, so the zone can be listed";
+  const iterations = facts.nsec3Iterations || 0;
+  return iterations === 0 ? "hashed" : "hashed, " + iterations + " extra times";
 }
 
 // dnssecLine says what the chain is, in the order a reader asks it: whether it
@@ -1211,7 +1228,10 @@ function delegation(facts) {
     const addresses = server.addresses || [];
     let text = addresses.join(", ");
     let mark = null;
-    if (server.reason) {
+    if (server.alias) {
+      text = "an alias for " + server.alias;
+      mark = "weak";
+    } else if (server.reason) {
       text = "not read: " + server.reason;
     } else if (addresses.length === 0) {
       text = "resolves to nothing";

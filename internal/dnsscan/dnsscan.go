@@ -67,6 +67,7 @@ type Resolver interface {
 	LookupDS(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupDNSKEY(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupCNAME(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
+	LookupNSEC3PARAM(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupTXT(ctx context.Context, name string) (dnsclient.TXTAnswer, error)
 }
 
@@ -149,6 +150,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readAlias(ctx, resolver, domain, &facts)
 	s.readNameServers(ctx, resolver, domain, &facts)
 	s.readChain(ctx, resolver, domain, &facts)
+	s.readAbsence(ctx, resolver, domain, &facts)
 
 	graded := policy.GradeDNS(facts)
 
@@ -223,7 +225,16 @@ func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string
 		go func() {
 			defer wg.Done()
 			v4, v6, reason := addressesOf(ctx, r, host)
-			servers[i] = policy.NameServer{Name: host, Addresses: append(v4, v6...), Reason: reason}
+			server := policy.NameServer{Name: host, Addresses: append(v4, v6...), Reason: reason}
+
+			// And whether the name is an alias, which RFC 2181 forbids in a
+			// delegation. Asked of the server's own name rather than inferred
+			// from the addresses: a name that is an alias still resolves to an
+			// address, so nothing above this would show it.
+			if alias, err := r.LookupCNAME(ctx, host); err == nil && len(alias.Alias) > 0 {
+				server.Alias = alias.Alias[0]
+			}
+			servers[i] = server
 		}()
 	}
 	wg.Wait()
@@ -261,6 +272,7 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, fact
 		facts.Keys = append(facts.Keys, policy.KeyDigest{
 			KeyTag:     keyTag(k),
 			Algorithm:  k.Algorithm,
+			Name:       policy.AlgorithmName(k.Algorithm),
 			KeySigning: k.Flags&0x0001 != 0,
 		})
 	}
@@ -522,4 +534,28 @@ func (s *Scanner) readAlias(ctx context.Context, r Resolver, domain string, fact
 			return
 		}
 	}
+}
+
+// readAbsence reads how a signed zone proves a name does not exist.
+//
+// Only where the zone is signed, because the question is meaningless
+// otherwise: an unsigned zone proves nothing at all, and asking would be one
+// more lookup for an answer that could not mean anything.
+func (s *Scanner) readAbsence(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
+	if !facts.Apex || !facts.Signed {
+		return
+	}
+
+	answer, err := r.LookupNSEC3PARAM(ctx, domain)
+	if err != nil {
+		return
+	}
+	facts.NSEC3Read = true
+	if len(answer.NSEC3) == 0 {
+		return
+	}
+
+	facts.NSEC3 = true
+	facts.NSEC3Iterations = answer.NSEC3[0].Iterations
+	facts.NSEC3SaltLength = answer.NSEC3[0].SaltLength
 }

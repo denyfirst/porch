@@ -101,6 +101,7 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 	out.ds = found.ds
 	out.keys = found.keys
 	out.cname = found.cname
+	out.nsec3 = found.nsec3
 	return out, nil
 }
 
@@ -227,6 +228,12 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 				return answerSet{}, err
 			}
 			out.ns = append(out.ns, host)
+		case TypeNSEC3PARAM:
+			record, err := parseNSEC3PARAM(rdata)
+			if err != nil {
+				return answerSet{}, err
+			}
+			out.nsec3 = append(out.nsec3, record)
 		case TypeCNAME:
 			target, err := parseName(raw, rdataAt)
 			if err != nil {
@@ -278,6 +285,7 @@ type answerSet struct {
 	ds        []DS
 	keys      []DNSKEY
 	cname     []string
+	nsec3     []NSEC3PARAM
 }
 
 // parseCAA reads one property: a flags octet, a length-prefixed tag, and the
@@ -694,5 +702,23 @@ func parseDNSKEY(rdata []byte) (DNSKEY, error) {
 		Protocol:  rdata[2],
 		Algorithm: rdata[3],
 		Key:       bytes.Clone(rdata[4:]),
+	}, nil
+}
+
+// parseNSEC3PARAM reads how a zone hashes the names it proves absent: the
+// algorithm, a flags octet, the iteration count, and a length-prefixed salt.
+func parseNSEC3PARAM(rdata []byte) (NSEC3PARAM, error) {
+	if len(rdata) < 5 {
+		return NSEC3PARAM{}, errors.New("dnsclient: an nsec3 parameter record is shorter than its own header")
+	}
+	saltLen := int(rdata[4])
+	if 5+saltLen > len(rdata) {
+		return NSEC3PARAM{}, fmt.Errorf("dnsclient: an nsec3 salt announces %d bytes", saltLen)
+	}
+	return NSEC3PARAM{
+		Hash:       rdata[0],
+		Flags:      rdata[1],
+		Iterations: binary.BigEndian.Uint16(rdata[2:4]),
+		SaltLength: saltLen,
 	}, nil
 }

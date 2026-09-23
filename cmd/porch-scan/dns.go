@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -126,6 +127,18 @@ func printDNS(w io.Writer, r dnsResult) {
 		printText(w, f.Text)
 		fmt.Fprintf(w, "    DNSSEC     %s\n", dnssecLine(*f))
 
+		// The algorithm by the name an operator's own interface uses, and how
+		// absent names are proved: both facts about a signed zone, neither a
+		// verdict about it.
+		if f.Signed {
+			if names := algorithmNames(f.Keys); names != "" {
+				fmt.Fprintf(w, "    Signed with %s\n", names)
+			}
+			if f.NSEC3Read {
+				fmt.Fprintf(w, "    Absent     %s\n", absenceLine(*f))
+			}
+		}
+
 		printDelegation(w, *f)
 	}
 
@@ -171,6 +184,8 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 		switch {
 		case ns.Reason != "":
 			fmt.Fprintf(w, "    %-28s not read: %s\n", ns.Name, ns.Reason)
+		case ns.Alias != "":
+			fmt.Fprintf(w, "    %-28s an alias for %s\n", ns.Name, ns.Alias)
 		case len(ns.Addresses) == 0:
 			fmt.Fprintf(w, "    %-28s resolves to nothing\n", ns.Name)
 		default:
@@ -244,3 +259,33 @@ const (
 	maxTextShown  = 8
 	maxTextLength = 120
 )
+
+// algorithmNames lists the algorithms a zone signs with, by name and without
+// repeating one, in the words the page uses (R16).
+func algorithmNames(keys []policy.KeyDigest) string {
+	var names []string
+	seen := map[string]bool{}
+	for _, k := range keys {
+		name := k.Name
+		if name == "" {
+			name = policy.AlgorithmName(k.Algorithm)
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+// absenceLine says how a signed zone proves a name does not exist, in the
+// words the page uses (R16).
+func absenceLine(f policy.DNSFacts) string {
+	if !f.NSEC3 {
+		return "named plainly, so the zone can be listed"
+	}
+	if f.NSEC3Iterations == 0 {
+		return "hashed"
+	}
+	return "hashed, " + strconv.Itoa(int(f.NSEC3Iterations)) + " extra times"
+}

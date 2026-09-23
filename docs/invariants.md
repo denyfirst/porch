@@ -3870,6 +3870,18 @@ So `porch-dns-v1` grades three things, each of which stops a resolver:
   belongs to cannot be read from the address and asking a third party on every
   scan is not something this project does.
 - **A name server that resolves to nothing** — RFC 1912's lame delegation.
+- **A name server that is an alias**, which RFC 2181 forbids in a delegation:
+  resolvers disagree about what to do with one, so some reach the zone and
+  others do not.
+- **A signing algorithm RFC 8624 retired**, graded insecure because validators
+  are dropping it, and separately one it no longer recommends, graded weak
+  because it still works. Both are read off the keys the zone publishes, so
+  they are facts in the record rather than opinions about it.
+- **Hashing absent names more than once**, which RFC 9276 — a best current
+  practice — closed: the count is zero, the work lands on every resolver, and
+  the secrecy it was meant to buy was measured and is not there. Which kind of
+  proof a zone uses is reported and not graded, because nothing requires the
+  hashed kind; what plain names cost is that anybody can list the zone.
 - **A DNSSEC chain that does not check out.** This is the finding the check
   exists for. A key rotated without the registrar being told leaves every
   validating resolver — which is what the large public resolvers are — answering
@@ -3900,6 +3912,10 @@ whoever claims it next answers for this name.
 `TestASHA1DigestIsSaidWhereTheChainWorks`,
 `TestANameInsideAZoneIsNotGradedAsOne`,
 `TestTheBoundariesAreAskedBeforeAnythingIsLookedUp`,
+`TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem`,
+`TestHowAbsentNamesAreProvedIsReadAndOnlyIterationsAreGraded`,
+`TestANameServerThatIsAnAliasIsGraded`,
+`TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence`,
 `TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
 `TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,
 `TestTheDNSEndpointTakesADomain`, `TestEveryCheckOfferedCanBeRunAndIsExplained`,
@@ -4534,6 +4550,7 @@ broken DNSSEC chain into a clean result.
 `TestRecordsForAnotherOwnerAreIgnored`, `TestOnlyTheAskedForOwnerIsKept`,
 `TestOwnerMatchingIsCaseInsensitive`, `TestCompressedOwnerNamesMatch`,
 `TestWhatAZonePublishesAboutItselfIsRead`, `TestAMalformedZoneRecordIsRefused`,
+`TestHowAZoneHashesAbsentNamesIsRead`,
 `TestAZoneThatDoesNotExistSaysSo`, `TestARecordDoesNotHoldOnToTheReply`,
 `FuzzParseReply`, `FuzzSkipName`
 

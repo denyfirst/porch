@@ -47,6 +47,10 @@ var (
 		"RFC 4035 — Protocol Modifications for the DNS Security Extensions",
 		"https://www.rfc-editor.org/rfc/rfc4035",
 	}
+	rfc9276 = Reference{
+		"RFC 9276 — Guidance for NSEC3 Parameter Settings (BCP 236)",
+		"https://www.rfc-editor.org/rfc/rfc9276",
+	}
 	rfc8624 = Reference{
 		"RFC 8624 — Algorithm Implementation Requirements and Usage Guidance for DNSSEC",
 		"https://www.rfc-editor.org/rfc/rfc8624",
@@ -66,12 +70,21 @@ type NameServer struct {
 	// Reason says why the addresses could not be read, where that is what
 	// happened. A lookup that failed is not a server without an address (R4).
 	Reason string `json:"reason,omitempty"`
+
+	// Alias is what this server's name points at, where the name is an alias.
+	// RFC 2181 forbids that: a resolver following a delegation expects an
+	// address at the name it was given.
+	Alias string `json:"alias,omitempty"`
 }
 
 // KeyDigest is one key a zone publishes.
 type KeyDigest struct {
 	KeyTag    uint16 `json:"keyTag"`
 	Algorithm uint8  `json:"algorithm"`
+
+	// Name is what RFC 8624 calls the algorithm, filled in beside the number so
+	// that a report shows what an operator's own interface shows.
+	Name string `json:"name,omitempty"`
 
 	// KeySigning is true for a key with the secure entry point bit set, which
 	// is the key a delegation signer is normally a digest of.
@@ -152,6 +165,14 @@ type DNSFacts struct {
 	// Signers and Keys are the two ends of the link.
 	Signers []DelegationSigner `json:"signers,omitempty"`
 	Keys    []KeyDigest        `json:"keys,omitempty"`
+
+	// NSEC3Read is whether the record saying how absent names are proved was
+	// read at all. Without it, NSEC3 false is silence rather than a zone using
+	// the plain kind (R4).
+	NSEC3Read       bool   `json:"nsec3Read"`
+	NSEC3           bool   `json:"nsec3"`
+	NSEC3Iterations uint16 `json:"nsec3Iterations,omitempty"`
+	NSEC3SaltLength int    `json:"nsec3SaltLength,omitempty"`
 
 	// ChainMatched is true when at least one digest the parent holds covers a
 	// key this zone publishes.
@@ -265,6 +286,23 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			rfc2182)
 	}
 
+	var aliased []string
+	for _, ns := range f.NameServers {
+		if ns.Alias != "" {
+			aliased = append(aliased, ns.Name)
+		}
+	}
+	if len(aliased) > 0 {
+		add("dns.name-server-is-an-alias", Weak,
+			"A name server this zone names is an alias",
+			"RFC 2181 says the name in a delegation must have an address record and must not be an "+
+				"alias: "+strings.Join(aliased, ", ")+" is one. A resolver that follows the delegation "+
+				"asks for the address at the name it was given, and what it does with the alias it finds "+
+				"instead differs between implementations — which is why some resolvers reach this zone "+
+				"and others do not.",
+			rfc2181)
+	}
+
 	if len(unreachable) > 0 {
 		add("dns.name-server-without-address", Weak,
 			"A name server this zone names resolves to nothing",
@@ -319,6 +357,48 @@ func GradeDNS(f DNSFacts) DNSFinding {
 		}
 	}
 
+	// ── Graded: the algorithms, and how absent names are proved ──────
+
+	// RFC 8624 sorts the signing algorithms into what must not be used and
+	// what is no longer recommended, and the difference is the difference
+	// between a zone validators are dropping and one they still accept while
+	// the advice moves. Both are read off the keys the zone publishes: an
+	// algorithm is a fact in the record, not an opinion about it.
+	retired, weak := algorithmsOf(f.Keys)
+	if len(retired) > 0 {
+		add("dns.dnssec-retired-algorithm", Insecure,
+			"The zone signs with an algorithm RFC 8624 says must not be used",
+			"The keys published here use "+strings.Join(retired, ", ")+". A resolver that follows "+
+				"RFC 8624 treats a zone signed only with one of these as unsigned or as bogus "+
+				"depending on where it is, so the signatures buy nothing and may cost the zone the "+
+				"answers. Replacing the key means a rollover and a new digest at the registrar.",
+			rfc8624)
+	}
+	if len(weak) > 0 {
+		add("dns.dnssec-weak-algorithm", Weak,
+			"The zone signs with an algorithm RFC 8624 no longer recommends",
+			"The keys published here use "+strings.Join(weak, ", ")+", which RFC 8624 marks as not "+
+				"recommended for signing. Validators still accept it today; what it costs is that "+
+				"the zone rests on a hash and a construction nobody would choose now, and the move "+
+				"to ECDSA or Ed25519 is a rollover that has to happen eventually anyway.",
+			rfc8624)
+	}
+
+	// How a signed zone proves a name does not exist. NSEC3 with anything but
+	// zero iterations is what RFC 9276 — a best current practice — closed:
+	// every iteration is work every resolver does on every negative answer,
+	// and the secrecy it was meant to buy was measured and found absent.
+	if f.NSEC3 && f.NSEC3Iterations > 0 {
+		add("dns.nsec3-iterations", Weak,
+			"The zone hashes absent names more than once",
+			"RFC 9276 says the iteration count must be zero: additional iterations cost every "+
+				"resolver that asks for a name which does not exist, they cost this zone's own "+
+				"servers the same work, and they do not keep the zone's names secret — a listing "+
+				"can be recovered from the hashes either way. This zone publishes "+
+				strconv.Itoa(int(f.NSEC3Iterations))+".",
+			rfc9276)
+	}
+
 	for _, ds := range f.Signers {
 		if ds.Unsupported {
 			unsettled("The parent holds a digest of a type this check does not compute (type " +
@@ -344,6 +424,22 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			", retry " + duration(f.SOARetry) + ", expire " + duration(f.SOAExpire) +
 			", minimum " + duration(f.SOAMinimum) + ". RFC 1912 gives ranges for these and calls them " +
 			"recommendations, so they are reported here and not graded.")
+	}
+
+	switch {
+	case !f.Signed || !f.NSEC3Read:
+		// An unsigned zone proves nothing absent, and an unread record is not
+		// a zone using one kind or the other.
+	case f.NSEC3:
+		note("Names that do not exist are proved absent with hashed names, and the hash is applied " +
+			strconv.Itoa(int(f.NSEC3Iterations)) + " extra times with a salt of " +
+			strconv.Itoa(f.NSEC3SaltLength) + " bytes.")
+	default:
+		note("Names that do not exist are proved absent by naming the next name that does, which " +
+			"is what lets anybody list every name in this zone by asking for one that is not there " +
+			"and following the answers. That is how DNSSEC worked before RFC 5155, and a zone whose " +
+			"names are not secret loses nothing by it. It is not graded, because nothing requires " +
+			"the hashed kind.")
 	}
 
 	if f.ResolverValidated {
@@ -416,4 +512,48 @@ var LimitDNSAsksTheResolver = StandingLimit{
 // DNSStandingLimits are true of every DNS check this program runs.
 func DNSStandingLimits() []StandingLimit {
 	return []StandingLimit{LimitDNSAsksTheResolver}
+}
+
+// algorithmsOf sorts the algorithms a zone signs with into what RFC 8624 says
+// must not be used and what it no longer recommends.
+//
+// Named rather than numbered in the finding, because an operator reading
+// "algorithm 5" has to go and look it up, and the name is the thing they will
+// type into their provider's interface.
+func algorithmsOf(keys []KeyDigest) (retired, weak []string) {
+	seen := map[uint8]bool{}
+	for _, k := range keys {
+		if seen[k.Algorithm] {
+			continue
+		}
+		seen[k.Algorithm] = true
+
+		switch k.Algorithm {
+		case 1, 3, 6, 12:
+			retired = append(retired, AlgorithmName(k.Algorithm))
+		case 5, 7:
+			weak = append(weak, AlgorithmName(k.Algorithm))
+		}
+	}
+	return retired, weak
+}
+
+// AlgorithmName is the name RFC 8624 lists an algorithm under, or its number
+// where this does not know it — which is honest rather than a guess, and is
+// what an unknown number should read as.
+//
+// Exported because a report shows it beside the key: an operator reading
+// "algorithm 13" has to go and look it up, and the name is what their
+// provider's interface calls it.
+func AlgorithmName(algorithm uint8) string {
+	names := map[uint8]string{
+		1: "RSAMD5", 3: "DSA", 5: "RSASHA1", 6: "DSA-NSEC3-SHA1",
+		7: "RSASHA1-NSEC3-SHA1", 8: "RSASHA256", 10: "RSASHA512",
+		12: "ECC-GOST", 13: "ECDSAP256SHA256", 14: "ECDSAP384SHA384",
+		15: "Ed25519", 16: "Ed448",
+	}
+	if name, known := names[algorithm]; known {
+		return name
+	}
+	return "algorithm " + strconv.Itoa(int(algorithm))
 }

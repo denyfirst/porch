@@ -129,11 +129,26 @@ Five findings, each of which stops a resolver or contradicts a standard:
 - `dns.alias-at-zone-apex` — a CNAME at the top of a zone, which RFC 1034 and
   RFC 2181 both forbid: resolvers that follow it lose the zone's mail and its
   name servers.
+- `dns.name-server-is-an-alias` — a name in the delegation that is an alias,
+  which RFC 2181 forbids for the same reason and which resolvers disagree
+  about, so some reach the zone and others do not.
+- `dns.dnssec-retired-algorithm` and `dns.dnssec-weak-algorithm` — signing with
+  an algorithm RFC 8624 says must not be used, and with one it no longer
+  recommends. The first is graded insecure because validators are dropping it;
+  the second weak, because it still works.
+- `dns.nsec3-iterations` — hashing absent names more than once, which RFC 9276
+  (BCP 236) closed: the iteration count is zero, the extra work lands on every
+  resolver and on this zone's own servers, and the secrecy it was meant to buy
+  was measured and is not there.
 
 The digest is computed here, from the keys the zone publishes, rather than
 taken from the resolver's AD bit — that bit is the resolver's claim about work
 it did, and where the report repeats it, it says whose word it is. A digest of
 a type this does not compute is reported as neither matched nor ruled out.
+
+Whether absent names are proved with hashed names or plain ones is reported
+and not graded. Plain names let anybody list a zone; nothing requires the
+hashed kind, and a zone whose names are not secret loses nothing by it.
 
 An alias whose target does not exist is reported and not graded: no document
 sets a rule about one. What the note says is what it leads to — the name

@@ -79,9 +79,18 @@
     <p>
       <strong>Reported and not graded:</strong> the addresses, the servers and
       their addresses, the text records, the record at the top of the zone with
-      its serial and its four timers, whether the zone is signed at all, and a
-      digest of a type this does not compute — which is said as that, never as
-      a chain that failed.
+      its serial and its four timers, whether the zone is signed at all, which
+      algorithm signs it, and a digest of a type this does not compute — which is
+      said as that, never as a chain that failed.
+    </p>
+
+    <p>
+      Whether absent names are proved with hashed names or plain ones is
+      reported too. Plain names let anybody list a whole zone by asking for one
+      that is not there and following the answers; that is how DNSSEC worked
+      before RFC 5155, nothing requires the hashed kind, and a zone whose names
+      are not secret loses nothing by it. What is graded is only the one thing
+      a document settles: the iteration count.
     </p>
 
     <h2 id="chain">The DNSSEC chain</h2>
