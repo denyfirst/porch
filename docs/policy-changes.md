@@ -113,8 +113,13 @@ and a domain's mail policy; this one grades the delegation the domain is
 answered through and the DNSSEC chain its parent anchors. A report carries the
 rule set that graded it, and these four are never the same one.
 
-Nothing is connected to. Every fact comes from the resolver the scanning
-machine already uses, so a DNS check leaves no trace at the domain being read.
+Almost nothing is connected to. Every fact but two comes from the resolver the
+scanning machine already uses. The two are put to the servers the zone names,
+over TCP on port 53 and through the guard that refuses private, loopback and
+reserved destinations: whether each answers for the zone, and — for a server
+inside the domain only — whether it answers for other domains as well. An
+installation asks them where control of the domain has been proven; the command
+line asks them always. No zone transfer is ever attempted.
 
 What it grades is deliberately short, and the reason is that DNS carries more
 advice than any other part of the internet and fewer requirements. A serial
@@ -142,6 +147,14 @@ Five findings, each of which stops a resolver or contradicts a standard:
 - `dns.alias-at-zone-apex` — a CNAME at the top of a zone, which RFC 1034 and
   RFC 2181 both forbid: resolvers that follow it lose the zone's mail and its
   name servers.
+- `dns.name-server-not-authoritative` — a server the delegation names that,
+  asked directly, answers without claiming the zone as its own. RFC 1912 calls
+  it a lame delegation, and a resolver cannot show it: one that reached a
+  working server reports a working zone.
+- `dns.name-server-offers-recursion` — a server inside the domain that also
+  answers questions about domains it has nothing to do with, which RFC 5358
+  (BCP 140) says an authoritative server should not: it is what makes a server
+  usable for pointing traffic at somebody else.
 - `dns.name-server-is-an-alias` — a name in the delegation that is an alias,
   which RFC 2181 forbids for the same reason and which resolvers disagree
   about, so some reach the zone and others do not.

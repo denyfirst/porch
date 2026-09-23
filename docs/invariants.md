@@ -3900,6 +3900,14 @@ So `porch-dns-v1` grades three things, each of which stops a resolver:
   the AD bit: the bit is the resolver's word (A06), and the arithmetic is a
   hash over a name and a key.
 
+Two of those are asked of the servers themselves, over TCP and through the
+guard that refuses private, loopback and reserved destinations, because a
+resolver has already smoothed them over: a resolver that reached one working
+server reports a working zone. An installation asks them where control of the
+domain has been proven; the command line asks them always, running as it does
+on the operator's own machine. A server belonging to a provider is asked
+whether it answers for this zone and never about its own behaviour.
+
 Everything else is reported: the addresses, the servers, the text records, the
 SOA and its timers, a digest type this does not compute, and an unsigned zone —
 which is a choice rather than a fault. A digest this cannot compute is never
@@ -3914,7 +3922,7 @@ it leads to, which is the half worth having: the name resolves to nothing, and
 where the target is a name at a provider that hands out unclaimed ones,
 whoever claims it next answers for this name.
 
-*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`,
+*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`, `internal/dnsclient.Client.AskServer`,
 `internal/httpapi.Server.dnsCheck`, `cmd/porch-scan.runDNS`, `internal/web.consoleChecks`
 *Guarded by:* `TestAZoneThatIsServedAndSignedReadsStrong`,
 `TestTheDelegationIsGradedAgainstWhatIsRequired`,
@@ -3925,6 +3933,12 @@ whoever claims it next answers for this name.
 `TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem`,
 `TestHowAbsentNamesAreProvedIsReadAndOnlyIterationsAreGraded`,
 `TestANameServerThatIsAnAliasIsGraded`,
+`TestAServerThatDoesNotAnswerForTheZoneIsFoundByAskingIt`,
+`TestOnlyTheDomainsOwnServersAreAskedAboutOtherDomains`,
+`TestWhatLooksLikeAnAnswerFromAServerAndIsNot`,
+`TestWhatAskingAServerFoundIsDrawnInBothFaces`,
+`TestTheDelegationIsAskedOnlyWhereProofWasRequired`,
+`TestTheCommandLineAsksTheZonesOwnServers`,
 `TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence`,
 `TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
 `TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,

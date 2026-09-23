@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/scan"
+	"github.com/denyfirst/porch/internal/verify"
 )
 
 func postDNS(t *testing.T, s *Server, body string) *httptest.ResponseRecorder {
@@ -70,4 +73,31 @@ func TestTheDNSEndpointTakesADomain(t *testing.T) {
 			t.Errorf("%q: the refusal repeats what was typed: %s", target, w.Body.String())
 		}
 	}
+}
+
+// The delegation is asked about directly only where control of the domain has
+// been proven.
+//
+// Every other question the DNS check asks goes to a resolver; this one opens a
+// connection to an address the measured zone chose, which is the condition the
+// mail check's two connections carry and for the same reason. A service that
+// requires no proof is scanning names nobody proved anything about, and it
+// does not also connect to their servers.
+func TestTheDelegationIsAskedOnlyWhereProofWasRequired(t *testing.T) {
+	open := New(offlineScanner(), Limits{}, nil)
+	if open.dns.AskServers {
+		t.Error("a service that requires no proof asks the zone's own servers")
+	}
+
+	scope := &verify.Scope{Secret: []byte("a deployment secret"), Resolver: nothingPublished{}}
+	guarded := New(&scan.Scanner{Verify: scope}, Limits{}, nil)
+	if !guarded.dns.AskServers {
+		t.Error("a service with proof of control does not ask the zone's own servers")
+	}
+}
+
+type nothingPublished struct{}
+
+func (nothingPublished) LookupChallenge(context.Context, string) ([]string, bool, error) {
+	return nil, true, nil
 }
