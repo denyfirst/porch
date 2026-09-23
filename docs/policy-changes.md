@@ -47,7 +47,7 @@ is entitled to find it still answering.
 
 ## `porch-mail-v1` → `porch-mail-v2`
 
-Unreleased.
+Released in v0.19.0, 2026-09.
 
 One finding is added, and nothing that was graded before is graded
 differently. A domain whose report was strong under `porch-mail-v1` is strong
@@ -92,7 +92,7 @@ recipient bounded as above.
 
 ## `porch-dns-v1` — a new rule set
 
-Unreleased.
+Released in v0.19.0, 2026-09.
 
 A fourth rule set, for a fourth check: how a domain itself is served. **No TLS,
 web or mail verdict changed.** Those three grade a handshake, an HTTP response

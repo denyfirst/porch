@@ -411,14 +411,21 @@ where it lands.
 
 ### Install
 
-**The server still uses the names from before the rename.** The unit is
-`denyfirstd.service` and the binary is `/opt/denyfirst/denyfirstd`, running
-as the `denyfirst` user; the release file is `porchd-demonstration`. This page
-said `/opt/porch/porchd` until 2026-09-18, a path that has never existed on
-that machine, and the v0.16.0 deploy stopped at its first line because of it.
-The file is installed under the old name so that the unit and its sandbox
-stay exactly as they are. Renaming the unit is a change of its own, made on a
-quiet day, and this page changes with it.
+**The unit is `porchd.service` and the binary is `/opt/porch/porchd`**, renamed
+on 2026-09-20. The release file is `porchd-demonstration`.
+
+What kept the old name is the account and everything around it: the service
+runs as the `denyfirst` user, writes to `/var/lib/denyfirst`, and the alerting,
+the watch timer, fail2ban and the audit rules are all `denyfirst-*`. That is
+correct rather than unfinished — denyfirst is the team, porch is the product,
+and a machine's own tooling belongs to the team. Only the service and its
+binary name the product.
+
+The old unit is still on the machine, disabled. Between 2026-09-18 and the
+rename this page said `/opt/porch/porchd` while the machine had
+`/opt/porch/porchd`, and a deploy stopped at its first line because of
+it; the check below is the answer to that, and it reads the running process
+rather than a filename.
 
 The downloaded file is checked before it goes anywhere near the live path: it
 has to run, and it has to say it is the demonstration build.
@@ -430,10 +437,10 @@ chmod +x porchd-demonstration_${V}_linux_amd64
   || { echo 'STOP: not the demonstration build'; exit 1; }
 
 sudo install -o root -g root -m 0755 \
-  porchd-demonstration_${V}_linux_amd64 /opt/denyfirst/denyfirstd.new
-sudo cp -a /opt/denyfirst/denyfirstd /opt/denyfirst/denyfirstd.rollback-pre-${V}
-sudo mv /opt/denyfirst/denyfirstd.new /opt/denyfirst/denyfirstd
-sudo systemctl restart denyfirstd
+  porchd-demonstration_${V}_linux_amd64 /opt/porch/porchd.new
+sudo cp -a /opt/porch/porchd /opt/porch/porchd.rollback-pre-${V}
+sudo mv /opt/porch/porchd.new /opt/porch/porchd
+sudo systemctl restart porchd
 echo INSTALLED
 )
 ```
@@ -444,8 +451,8 @@ version was the plan here once, and it depends on a `-version` whose output
 older builds did not share. To go back:
 
 ```sh
-sudo mv /opt/denyfirst/denyfirstd.rollback-pre-v0.16.0 /opt/denyfirst/denyfirstd
-sudo systemctl restart denyfirstd
+sudo mv /opt/porch/porchd.rollback-pre-v0.19.0 /opt/porch/porchd
+sudo systemctl restart porchd
 ```
 
 `install` sets owner and mode as it writes. `cp` followed by `chmod` leaves a
@@ -477,7 +484,7 @@ capability would grant it to anybody on the machine who runs the file, which
 is a much larger claim than the one that needs making.
 
 ```sh
-getcap /opt/denyfirst/denyfirstd
+getcap /opt/porch/porchd
 ```
 
 must print nothing. `install` does not carry capabilities across, so this
@@ -487,10 +494,10 @@ rather than assumed.
 ### Confirm the service, not the file
 
 ```sh
-/opt/denyfirst/denyfirstd -version | grep -q '^demonstration: ' \
+/opt/porch/porchd -version | grep -q '^demonstration: ' \
   || echo 'STOP: this is not the demonstration build'
-systemctl is-active denyfirstd
-sudo readlink /proc/$(systemctl show -p MainPID --value denyfirstd)/exe
+systemctl is-active porchd
+sudo readlink /proc/$(systemctl show -p MainPID --value porchd)/exe
 curl -s https://denyfirst.dev/healthz
 ```
 
@@ -505,7 +512,7 @@ The first runs the file on disk and says what was installed. It does not say
 what is serving: a restart that failed leaves the previous process alive on
 the previous inode, still answering, while the new file sits in place looking
 correct, and `is-active` still says `active`. The `readlink` line is what
-separates them — it must print `/opt/denyfirst/denyfirstd`, and must not end
+separates them — it must print `/opt/porch/porchd`, and must not end
 in `(deleted)`.
 
 The last is the running process answering over the network, and it is the
@@ -513,7 +520,7 @@ only one that is evidence about what people actually reach: its `policy`
 field names the rule set now serving, `porch-tls-v7` from v0.16.0 on.
 
 Every command here names the binary by its path. Neither `porchd` nor
-`denyfirstd` is on `PATH`.
+`porchd` is on `PATH`.
 
 ### Afterwards
 
