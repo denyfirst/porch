@@ -496,6 +496,12 @@ type reply struct {
 
 	validated bool
 	existed   bool
+
+	// What the server said about itself: the AA bit, and the RA bit. Both are
+	// read only where a name server is asked directly; a resolver sets them
+	// about itself and they mean nothing about the zone.
+	authoritative    bool
+	recursionOffered bool
 }
 
 func (c *Client) exchange(ctx context.Context, server, name string, qtype uint16) (reply, error) {
@@ -648,16 +654,31 @@ func readFull(conn net.Conn, buf []byte) (int, error) {
 // set because a validating resolver reports its result only when asked. EDNS0
 // carries the DO bit for the same reason and raises the size a reply may be.
 func buildQuery(id uint16, question []byte, qtype uint16) []byte {
+	return buildQueryWith(id, question, qtype, true)
+}
+
+// buildQueryWith is buildQuery with the recursion bit a caller chooses.
+//
+// A resolver is asked to recurse, which is what a resolver is for. A name
+// server asked directly is not: the question is what that server itself holds,
+// and asking it to go and find out would measure the internet rather than the
+// server.
+func buildQueryWith(id uint16, question []byte, qtype uint16, recursion bool) []byte {
 	const (
 		recursionDesired = 0x0100
 		authenticData    = 0x0020
 	)
 
+	flags := uint16(authenticData)
+	if recursion {
+		flags |= recursionDesired
+	}
+
 	msg := make([]byte, 0, headerLen+len(question)+4+11)
 
 	header := make([]byte, headerLen)
 	binary.BigEndian.PutUint16(header[0:2], id)
-	binary.BigEndian.PutUint16(header[2:4], recursionDesired|authenticData)
+	binary.BigEndian.PutUint16(header[2:4], flags)
 	binary.BigEndian.PutUint16(header[4:6], 1)   // one question
 	binary.BigEndian.PutUint16(header[10:12], 1) // one additional, the OPT below
 	msg = append(msg, header...)
