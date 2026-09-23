@@ -472,6 +472,10 @@ func (silentZone) LookupTLSA(context.Context, string) (dnsclient.TLSAAnswer, err
 	return dnsclient.TLSAAnswer{}, nil
 }
 
+func (silentZone) LookupCNAME(context.Context, string) (dnsclient.ZoneAnswer, error) {
+	return dnsclient.ZoneAnswer{}, nil
+}
+
 // The service fetches an MTA-STS policy only where it required proof of control.
 //
 // The same hole as the one above, one check later. A deployment that requires no

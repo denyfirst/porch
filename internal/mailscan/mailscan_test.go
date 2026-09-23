@@ -31,6 +31,10 @@ type zone struct {
 	exchangers map[string][]dnsclient.MX
 	dane       map[string][]dnsclient.TLSA
 
+	// aliases names the exchangers whose names are aliases, which RFC 2181
+	// forbids.
+	aliases map[string][]string
+
 	// validated names the TLSA answers the resolver reports with the AD bit.
 	validated map[string]bool
 
@@ -46,6 +50,14 @@ func (z *zone) LookupMX(_ context.Context, name string) (dnsclient.MXAnswer, err
 	}
 	records, ok := z.exchangers[name]
 	return dnsclient.MXAnswer{Records: records, Existed: ok}, nil
+}
+
+func (z *zone) LookupCNAME(_ context.Context, name string) (dnsclient.ZoneAnswer, error) {
+	name = fold(name)
+	if err := z.fail["cname:"+name]; err != nil {
+		return dnsclient.ZoneAnswer{}, err
+	}
+	return dnsclient.ZoneAnswer{Alias: z.aliases[name], Existed: true}, nil
 }
 
 func (z *zone) LookupTLSA(_ context.Context, name string) (dnsclient.TLSAAnswer, error) {

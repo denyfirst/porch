@@ -219,6 +219,14 @@ func printMailPath(w io.Writer, f *policy.MailFacts) {
 		fmt.Fprintf(w, "    MX         %s\n", strings.Join(f.MXHosts, ", "))
 	}
 
+	// An exchanger whose name is an alias, which RFC 2181 forbids. On its own
+	// row rather than beside the list, because it is a fact about one name
+	// among several and the list is what a reader scans first.
+	if len(f.MXAliases) > 0 {
+		fmt.Fprintf(w, "    MX alias   %s: a name RFC 2181 says carries an address\n",
+			strings.Join(f.MXAliases, ", "))
+	}
+
 	fmt.Fprintf(w, "    MTA-STS    %s\n", stsLine(f))
 
 	switch {

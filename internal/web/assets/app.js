@@ -1350,6 +1350,8 @@ function zone(facts) {
   } else {
     const hosts = facts.mxHosts || [];
     row("MX", hosts.length ? hosts.join(", ") : "none published");
+    const aliased = facts.mxAliases || [];
+    if (aliased.length) row("MX alias", aliased.join(", ") + ": a name RFC 2181 says carries an address", "weak");
 
     row("MTA-STS", stsSays(facts));
 

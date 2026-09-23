@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/smtptls"
 )
@@ -137,5 +138,75 @@ func TestAnOpenRelayIsGradedAndSilenceIsNot(t *testing.T) {
 		if f.RuleID == "mail.open-relay" {
 			t.Errorf("a server that refused was graded as a relay: %+v", f)
 		}
+	}
+}
+
+// An exchanger whose name is an alias is found by asking the name itself, and
+// graded: RFC 2181 forbids it, and it is the hardest kind of delivery problem
+// to find, because mail from some senders arrives and mail from others does
+// not.
+func TestAnExchangerThatIsAnAliasIsGraded(t *testing.T) {
+	skipUnderDemo(t)
+
+	z := stsZone("mail.example.com", "aspmx.provider.net")
+	z.aliases = map[string][]string{"mail.example.com": {"host.provider.example"}}
+
+	got, err := (&Scanner{Resolver: z}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(got.Observed.MXAliases) != 1 || got.Observed.MXAliases[0] != "mail.example.com" {
+		t.Errorf("the aliases read %v", got.Observed.MXAliases)
+	}
+
+	var found *policy.Finding
+	for i, f := range got.Findings {
+		if f.RuleID == "mail.exchanger-is-an-alias" {
+			found = &got.Findings[i]
+		}
+	}
+	if found == nil || found.Verdict != policy.Weak {
+		t.Fatalf("an aliased exchanger: %v", got.Findings)
+	}
+	if !strings.Contains(found.Rationale, "mail.example.com") || strings.Contains(found.Rationale, "aspmx.provider.net") {
+		t.Errorf("the finding names the wrong exchangers: %s", found.Rationale)
+	}
+
+	// A domain whose exchangers are plain names is not graded for it, and a
+	// lookup that failed is not an alias.
+	plain := stsZone("mail.example.com")
+	if got, _ := (&Scanner{Resolver: plain}).Scan(context.Background(), "example.com"); len(got.Observed.MXAliases) != 0 {
+		t.Errorf("plain names read as aliases: %v", got.Observed.MXAliases)
+	}
+	unread := stsZone("mail.example.com")
+	unread.fail = map[string]error{"cname:mail.example.com": dnsclient.ErrServerFail}
+	if got, _ := (&Scanner{Resolver: unread}).Scan(context.Background(), "example.com"); len(got.Observed.MXAliases) != 0 {
+		t.Errorf("a failed lookup read as an alias: %v", got.Observed.MXAliases)
+	}
+}
+
+// The alias question is asked of as many exchangers as are contacted and no
+// more. The list belongs to whoever is being measured, so a domain naming
+// forty of them buys forty lookups from this machine unless something bounds
+// it — which is the same bound the exchangers themselves have.
+func TestTheAliasQuestionIsBoundedLikeTheExchangers(t *testing.T) {
+	skipUnderDemo(t)
+
+	var many []string
+	for i := range maxExchangers + 4 {
+		many = append(many, "mx"+string(rune('a'+i))+".example.com")
+	}
+	z := stsZone(many...)
+	z.aliases = map[string][]string{}
+	for _, host := range many {
+		z.aliases[host] = []string{"host.provider.example"}
+	}
+
+	got, err := (&Scanner{Resolver: z}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(got.Observed.MXAliases) != maxExchangers {
+		t.Errorf("%d exchangers were asked, want the bound of %d", len(got.Observed.MXAliases), maxExchangers)
 	}
 }
