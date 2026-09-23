@@ -156,6 +156,27 @@ type DNSFacts struct {
 	// in, counting an IPv4 /24 and an IPv6 /48 as one each.
 	Networks int `json:"networks"`
 
+	// What the zone above this one says serves it, which is a second claim
+	// about the same delegation and the one a resolver starting at the root
+	// actually follows.
+	//
+	// Parent is that zone's name and is filled whether or not it was asked;
+	// ParentServer is the server of it that answered. ParentAsked is the
+	// difference between a list that is empty and a question that was never
+	// put, and ParentReason says which (R4).
+	Parent            string   `json:"parent,omitempty"`
+	ParentServer      string   `json:"parentServer,omitempty"`
+	ParentAsked       bool     `json:"parentAsked"`
+	ParentReason      string   `json:"parentReason,omitempty"`
+	ParentNameServers []string `json:"parentNameServers,omitempty"`
+
+	// What comparing the two lists found: names the parent hands out and the
+	// zone does not, and names the zone lists and the parent does not. Filled
+	// by the scan through DelegationDiff, so that the grade, the printed
+	// report and the page all read one comparison.
+	OnlyAtParent []string `json:"onlyAtParent,omitempty"`
+	OnlyAtZone   []string `json:"onlyAtZone,omitempty"`
+
 	// The record at the top of the zone, as published.
 	SOAFound   bool   `json:"soaFound"`
 	SOAPrimary string `json:"soaPrimary,omitempty"`
@@ -344,6 +365,33 @@ func GradeDNS(f DNSFacts) DNSFinding {
 				"whichever address asked. What it costs the operator is their own bandwidth and, once "+
 				"it has been used that way, their address's reputation.",
 			rfc5358)
+	}
+
+	// The parent's list against the zone's own. Only where the parent was
+	// actually asked: an unasked question is not agreement (R4), and the two
+	// lists being equal is what the report says when it is.
+	if f.ParentAsked && f.NSReason == "" {
+		if atParent, atZone := f.OnlyAtParent, f.OnlyAtZone; len(atParent)+len(atZone) > 0 {
+			detail := "RFC 1912 asks that the zone above this one hand out the same servers the zone " +
+				"itself names. " + f.ParentServer + ", a server of " + f.Parent + ", does not: "
+			switch {
+			case len(atParent) > 0 && len(atZone) > 0:
+				detail += "it delegates to " + strings.Join(atParent, ", ") + ", which this zone does not " +
+					"name, and this zone names " + strings.Join(atZone, ", ") + ", which it does not delegate to."
+			case len(atParent) > 0:
+				detail += "it delegates to " + strings.Join(atParent, ", ") + ", which this zone does not name."
+			default:
+				detail += "this zone names " + strings.Join(atZone, ", ") + ", which it does not delegate to."
+			}
+			add("dns.parent-and-zone-disagree", Weak,
+				"The zone above this one delegates to a different set of servers",
+				detail+" A resolver starting at the root follows the parent's list and never sees the "+
+					"zone's, so a name only the parent hands out is where some lookups go — and whatever "+
+					"is at that address answers them, whether or not it still holds this zone. A name "+
+					"only the zone lists carries none of the traffic it was added to carry. Either way "+
+					"the answer a visitor gets depends on which server their resolver tried first.",
+				rfc1912)
+		}
 	}
 
 	if len(aliased) > 0 {
@@ -554,13 +602,14 @@ var LimitDNSAsksTheResolver = StandingLimit{
 
 	Text: "Almost every answer here came from the resolver this installation uses, so what is " +
 		"reported is what that resolver returns today, which may be an answer it still holds from " +
-		"earlier. Two questions cannot be answered that way and are put to the servers the zone " +
-		"names, over TCP on port 53, where this installation is allowed to ask them: whether each " +
-		"server answers for the zone as its own, and — for a server inside the domain being " +
-		"checked, never one belonging to a provider — whether it also answers questions about " +
-		"domains it has nothing to do with. Nothing else is sent to them, and no zone transfer is " +
-		"attempted. One question stays out of reach: whether the registrar's delegation still names " +
-		"the same servers as the zone does. The DNSSEC chain is checked here by taking the digest " +
+		"earlier. Three questions cannot be answered that way and are put to servers directly, over " +
+		"TCP on port 53, where this installation is allowed to ask them: whether each server the " +
+		"zone names answers for the zone as its own; whether a server inside the domain being " +
+		"checked — never one belonging to a provider — also answers questions about domains it has " +
+		"nothing to do with; and, of one server of the zone above this one, which servers it hands " +
+		"out for this domain. Nothing else is sent to them, and no zone transfer is attempted. That " +
+		"last answer is one server's, so a zone above whose own servers disagree would be read from " +
+		"whichever of them answered first. The DNSSEC chain is checked here by taking the digest " +
 		"of the keys this zone publishes and comparing it with what the parent holds; whether the " +
 		"signatures over every record verify is the resolver's work, and where it says it did " +
 		"that, the report says so as its word rather than as this program's.",
@@ -613,4 +662,45 @@ func AlgorithmName(algorithm uint8) string {
 		return name
 	}
 	return "algorithm " + strconv.Itoa(int(algorithm))
+}
+
+// DelegationDiff compares the two lists of servers by name, and returns what
+// each holds that the other does not.
+//
+// Exported because the scan runs it and the grade reads what it found: the
+// comparison rule belongs beside the rule that grades it, and a scanner, a
+// printer and a page each folding names their own way is three chances for one
+// report to say "the same servers" beside a finding that says otherwise.
+//
+// By name and not by address, because the delegation is a list of names: two
+// names pointing at one address are two entries a resolver treats separately,
+// and one name whose address changed is still the same delegation. The
+// comparison folds case and a trailing dot, which are spellings of a name
+// rather than different names.
+func DelegationDiff(zone []NameServer, parent []string) (onlyAtParent, onlyAtZone []string) {
+	named := map[string]bool{}
+	for _, ns := range zone {
+		named[normalName(ns.Name)] = true
+	}
+	delegated := map[string]bool{}
+	for _, host := range parent {
+		delegated[normalName(host)] = true
+	}
+
+	for _, host := range parent {
+		if !named[normalName(host)] {
+			onlyAtParent = append(onlyAtParent, host)
+		}
+	}
+	for _, ns := range zone {
+		if !delegated[normalName(ns.Name)] {
+			onlyAtZone = append(onlyAtZone, ns.Name)
+		}
+	}
+	return onlyAtParent, onlyAtZone
+}
+
+// normalName is a host name in the one spelling this compares by.
+func normalName(host string) string {
+	return strings.ToLower(strings.TrimSuffix(host, "."))
 }

@@ -1256,7 +1256,31 @@ function delegation(facts) {
         ? "Every address above is in one network, so they fail together."
         : "Their addresses are in " + networks + " networks."));
   }
+
+  frag.appendChild(el("p", "section-note", parentSays(facts)));
   return frag;
+}
+
+// parentSays reports the other claim about this delegation: the list the zone
+// above hands out, which is the one a resolver starting at the root follows.
+//
+// Unmarked, like the note above it: the finding carries the grade, and a
+// sentence that repeats it in colour says the same thing twice.
+function parentSays(facts) {
+  const above = facts.parent || "the zone above this one";
+  if (facts.parentReason) return "The zone above this one was not read: " + facts.parentReason;
+  if (!facts.parentAsked) return "The zone above this one was not asked which servers it delegates to.";
+
+  const atParent = facts.onlyAtParent || [];
+  const atZone = facts.onlyAtZone || [];
+  if (atParent.length === 0 && atZone.length === 0) {
+    return "Asked directly, " + above + " hands out the same servers.";
+  }
+
+  const parts = [];
+  if (atParent.length > 0) parts.push("hands out " + atParent.join(", ") + " as well");
+  if (atZone.length > 0) parts.push("does not hand out " + atZone.join(", "));
+  return "Asked directly, " + above + " " + parts.join(", and ") + ".";
 }
 function buildMail(data) {
   const verdict = verdictOf(data);

@@ -19,6 +19,7 @@ import (
 type zone struct {
 	addresses map[string][]string
 	ns        []string
+	above     map[string][]string
 	soa       *dnsclient.SOA
 	ds        []dnsclient.DS
 	keys      []dnsclient.DNSKEY
@@ -48,7 +49,13 @@ func (z *zone) LookupAddresses(_ context.Context, name string, qtype uint16) (dn
 	return dnsclient.ZoneAnswer{Addresses: out, Existed: z.exists(name), Validated: z.validated}, nil
 }
 
-func (z *zone) LookupNS(_ context.Context, _ string) (dnsclient.ZoneAnswer, error) {
+// LookupNS answers by name, because two different zones are asked this: the
+// one being scanned, and the one above it. A table that answered both from the
+// same list would have every test agree with its parent by construction.
+func (z *zone) LookupNS(_ context.Context, name string) (dnsclient.ZoneAnswer, error) {
+	if hosts, ok := z.above[name]; ok {
+		return dnsclient.ZoneAnswer{NS: hosts, Existed: true}, nil
+	}
 	if err := z.fail["ns"]; err != nil {
 		return dnsclient.ZoneAnswer{}, err
 	}
@@ -640,15 +647,40 @@ type servers struct {
 	// fail names the addresses that answer with an error.
 	fail map[string]error
 
+	// referral is what a server of the zone above hands out when it is asked
+	// about the domain being scanned. Nil is a server that delegates nothing
+	// here, which is not the same as one that delegates a different list.
+	referral []string
+
+	// answering makes that server hold both zones, so it answers from the
+	// answer section instead of pointing. The same claim, the other shape.
+	answering bool
+
 	// asked records what was put to whom, so a test can say which servers
 	// were asked the second question and which were not.
 	asked []string
 }
 
-func (s *servers) AskServer(_ context.Context, address, name string, _ uint16, recursion bool) (dnsclient.ServerAnswer, error) {
+func (s *servers) AskServer(_ context.Context, address, name string, qtype uint16, recursion bool) (dnsclient.ServerAnswer, error) {
 	s.asked = append(s.asked, address+" "+name)
 	if err := s.fail[address]; err != nil {
 		return dnsclient.ServerAnswer{}, err
+	}
+	if qtype == dnsclient.TypeNS {
+		if recursion {
+			// Asked to go and find the answer, a server hands back whatever
+			// the search produced — the zone's own list, or something it held
+			// from earlier — and not the delegation it publishes. The question
+			// this asks is the second one, so the fake answers the first with
+			// nothing.
+			return dnsclient.ServerAnswer{Answered: true, Existed: true}, nil
+		}
+		if s.answering {
+			return dnsclient.ServerAnswer{Answered: true, Authoritative: true, Existed: true, NS: s.referral}, nil
+		}
+		// The zone above, pointing rather than answering: the authority bit is
+		// clear and the list arrives as a referral.
+		return dnsclient.ServerAnswer{Answered: true, Existed: true, Referral: s.referral}, nil
 	}
 	if recursion {
 		switch {
@@ -844,5 +876,171 @@ func TestWhatLooksLikeAnAnswerFromAServerAndIsNot(t *testing.T) {
 	got = asking(t, z, refusing)
 	if got.Observed.NameServers[0].Recursion || has(got, "dns.name-server-offers-recursion") {
 		t.Errorf("a refused question was read as recursion: %+v / %v", got.Observed.NameServers[0], ruleIDs(got))
+	}
+}
+
+// The zone above is asked which servers it hands out, and a list that differs
+// from the zone's own is the finding.
+//
+// This is the second claim about one delegation, and the one a resolver
+// starting at the root follows. A resolver cannot be asked it: it answers an NS
+// question from the zone itself, so the parent's list never appears in any
+// answer this check would otherwise see.
+func TestTheZoneAboveIsAskedWhichServersItHandsOut(t *testing.T) {
+	z := served(t)
+	z.above = map[string][]string{"com": {"a.gtld.test"}}
+	z.addresses["a.gtld.test"] = []string{"203.0.113.53"}
+
+	s := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+
+		// The zone names ns1.example.net and ns2.example.org; the parent hands
+		// out the first and a third nobody here has heard of.
+		referral: []string{"ns1.example.net", "ns9.example.net"},
+	}
+
+	got := asking(t, z, s)
+	if !has(got, "dns.parent-and-zone-disagree") || got.Verdict != policy.Weak {
+		t.Errorf("a delegation the parent disagrees with: %q %v", got.Verdict, ruleIDs(got))
+	}
+
+	f := got.Observed
+	if !f.ParentAsked || f.ParentReason != "" || f.Parent != "com" || f.ParentServer != "a.gtld.test" {
+		t.Errorf("what was asked reads %+v", f)
+	}
+	if strings.Join(f.OnlyAtParent, ",") != "ns9.example.net" {
+		t.Errorf("what only the parent hands out reads %v", f.OnlyAtParent)
+	}
+	if strings.Join(f.OnlyAtZone, ",") != "ns2.example.org" {
+		t.Errorf("what only the zone names reads %v", f.OnlyAtZone)
+	}
+
+	// The question went to the parent's server about this domain, and named
+	// the domain rather than the parent: this reports on the zone being
+	// scanned and never on the zone above it.
+	var toParent []string
+	for _, q := range s.asked {
+		if strings.HasPrefix(q, "203.0.113.53 ") {
+			toParent = append(toParent, q)
+		}
+	}
+	if len(toParent) != 1 || toParent[0] != "203.0.113.53 example.com" {
+		t.Errorf("the parent was asked %v", toParent)
+	}
+
+	// A server that holds both zones answers from the answer section instead of
+	// pointing, and that is the same claim about the same delegation.
+	both := *s
+	both.answering = true
+	if got := asking(t, z, &both); !has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a server holding both zones was read as saying nothing: %+v", got.Observed)
+	}
+
+	// The same lists in the same order agree, whatever case they are spelled
+	// in: a name is a name.
+	same := *s
+	same.referral = []string{"NS2.example.ORG", "ns1.example.net."}
+	if got := asking(t, z, &same); has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a delegation spelled differently was graded: %v", ruleIDs(got))
+	}
+}
+
+// Nothing established is not agreement (R4): a parent that was not asked, one
+// that could not be reached, and one that delegates nothing here are three
+// silences, and none of them is graded.
+func TestAParentThatWasNotAskedIsNotAgreement(t *testing.T) {
+	z := served(t)
+	z.above = map[string][]string{"com": {"a.gtld.test"}}
+	z.addresses["a.gtld.test"] = []string{"203.0.113.53"}
+
+	quiet := &servers{authoritative: map[string]bool{}, claiming: map[string]bool{}, recursing: map[string]bool{}, refusing: map[string]bool{}, fail: map[string]error{}}
+	got, err := (&Scanner{Resolver: z, Servers: quiet}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Observed.ParentAsked || has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a parent nobody asked reads %+v", got.Observed)
+	}
+	for _, q := range quiet.asked {
+		if strings.HasPrefix(q, "203.0.113.53 ") {
+			t.Errorf("a scan that was not allowed to ask servers asked the parent: %v", quiet.asked)
+		}
+	}
+
+	// Reached and refused: the reason is carried and nothing is graded.
+	unreachable := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{"203.0.113.53": errors.New("dnsclient: reaching the name server: connection refused")},
+	}
+	got = asking(t, z, unreachable)
+	if got.Observed.ParentAsked || got.Observed.ParentReason == "" || has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a parent that refused reads %+v", got.Observed)
+	}
+
+	// Answered, and delegates nothing here: not a disagreement either.
+	empty := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+	}
+	got = asking(t, z, empty)
+	if got.Observed.ParentAsked || got.Observed.ParentReason == "" || has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a parent that delegates nothing reads %+v", got.Observed)
+	}
+
+	// And where the two agree, the question was asked and there is no finding:
+	// a report that could not tell agreement from silence would be worth
+	// nothing here.
+	agreeing := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+		referral:      []string{"ns1.example.net", "ns2.example.org"},
+	}
+	got = asking(t, z, agreeing)
+	if !got.Observed.ParentAsked || has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a delegation both agree on reads %+v %v", got.Observed, ruleIDs(got))
+	}
+
+	// A zone whose own delegation could not be read has nothing to compare, and
+	// the parent's list is not that comparison: every name it hands out would
+	// read as one this zone does not name.
+	unread := served(t)
+	unread.above = z.above
+	unread.addresses["a.gtld.test"] = []string{"203.0.113.53"}
+	unread.fail["ns"] = errors.New("dnsclient: the lookup did not complete")
+	got = asking(t, unread, agreeing)
+	if has(got, "dns.parent-and-zone-disagree") {
+		t.Errorf("a delegation that was never read was compared: %v", ruleIDs(got))
+	}
+
+	// And a difference handed to the grade without the question having been put
+	// is not graded either. The scan fills those two lists only after a server
+	// of the zone above answered; a report from another version, or a caller
+	// building facts by hand, must not turn a silence into a finding (R4).
+	silent := policy.GradeDNS(policy.DNSFacts{
+		Apex: true,
+		NameServers: []policy.NameServer{
+			{Name: "ns1.example.net", Addresses: []string{"192.0.2.53"}},
+			{Name: "ns2.example.org", Addresses: []string{"198.51.100.53"}},
+		},
+		OnlyAtParent: []string{"ns9.example.net"},
+		OnlyAtZone:   []string{"ns2.example.org"},
+	})
+	for _, f := range silent.Findings {
+		if f.RuleID == "dns.parent-and-zone-disagree" {
+			t.Error("a difference nobody asked about was graded")
+		}
 	}
 }

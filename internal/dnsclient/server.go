@@ -38,6 +38,15 @@ type ServerAnswer struct {
 	// for them.
 	NS  []string
 	SOA []SOA
+
+	// Referral is what the authority section named as serving the question,
+	// which is how a server holding the parent zone answers a question about a
+	// child: it points rather than answers, and Authoritative is clear.
+	//
+	// Apart from NS, because the two are different claims. NS is the zone's own
+	// list, read from a server that holds the zone; Referral is the list its
+	// parent hands out. A resolver starting from the root follows the second.
+	Referral []string
 }
 
 // serverPort is the one port a name server is asked on.
@@ -87,13 +96,24 @@ func (c *Client) AskServer(ctx context.Context, address, name string, qtype uint
 		return ServerAnswer{}, err
 	}
 
-	reply, err := parseReply(raw, id, question, qtype)
+	// A question about name servers is read with the authority section, because
+	// half the answers to it live there. A server that holds the zone puts them
+	// in the answer section; a server that holds the zone above points at them
+	// from the authority section instead, and both replies answer what was
+	// asked.
+	read := parseReply
+	if qtype == TypeNS {
+		read = parseReferral
+	}
+
+	reply, err := read(raw, id, question, qtype)
 	out := ServerAnswer{
 		Authoritative:    reply.authoritative,
 		RecursionOffered: reply.recursionOffered,
 		Existed:          reply.existed,
 		NS:               reply.ns,
 		SOA:              reply.soa,
+		Referral:         reply.referral,
 	}
 	if err != nil {
 		// A refusal, a failure, or a reply this could not read. The flags

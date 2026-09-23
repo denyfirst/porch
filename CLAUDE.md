@@ -16,7 +16,7 @@ session identifier, and nothing about who is working on it.
 A scanner that measures how a host is reached and grades what it finds. Four
 checks so far: the TLS handshake and the certificate behind it
 (`porch-tls-v7`), how a website is reached over HTTP (`porch-web-v3`),
-what a domain's DNS says about its mail (`porch-mail-v1`), and how the domain
+what a domain's DNS says about its mail (`porch-mail-v2`), and how the domain
 itself is served, down to its DNSSEC chain (`porch-dns-v1`).
 
 Each carries its own rule-set name and its own version, and they move

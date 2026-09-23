@@ -155,6 +155,12 @@ Five findings, each of which stops a resolver or contradicts a standard:
   answers questions about domains it has nothing to do with, which RFC 5358
   (BCP 140) says an authoritative server should not: it is what makes a server
   usable for pointing traffic at somebody else.
+- `dns.parent-and-zone-disagree` — the zone above hands out a different set of
+  servers from the one the zone itself names, which RFC 1912 asks it not to.
+  A resolver starting at the root follows the parent's list, so a name only the
+  parent hands out is where some lookups go and whatever is at that address
+  answers them. A resolver cannot show this either: it answers an NS question
+  from the zone itself, so only the parent's own server can be asked.
 - `dns.name-server-is-an-alias` — a name in the delegation that is an alias,
   which RFC 2181 forbids for the same reason and which resolvers disagree
   about, so some reach the zone and others do not.

@@ -3880,6 +3880,13 @@ So `porch-dns-v1` grades three things, each of which stops a resolver:
   belongs to cannot be read from the address and asking a third party on every
   scan is not something this project does.
 - **A name server that resolves to nothing** — RFC 1912's lame delegation.
+- **A zone above that hands out different servers.** RFC 1912 asks for one
+  list, not two, and a resolver starting at the root follows the parent's: a
+  name only the parent hands out is where some lookups go, and whatever is at
+  that address answers them whether or not it still holds the zone. A resolver
+  cannot show this — it answers an NS question from the zone itself — so one
+  server of the zone above is asked directly, with recursion off, and what
+  comes back is a referral.
 - **A name server that is an alias**, which RFC 2181 forbids in a delegation:
   resolvers disagree about what to do with one, so some reach the zone and
   others do not.
@@ -3900,13 +3907,16 @@ So `porch-dns-v1` grades three things, each of which stops a resolver:
   the AD bit: the bit is the resolver's word (A06), and the arithmetic is a
   hash over a name and a key.
 
-Two of those are asked of the servers themselves, over TCP and through the
-guard that refuses private, loopback and reserved destinations, because a
-resolver has already smoothed them over: a resolver that reached one working
-server reports a working zone. An installation asks them where control of the
-domain has been proven; the command line asks them always, running as it does
-on the operator's own machine. A server belonging to a provider is asked
-whether it answers for this zone and never about its own behaviour.
+Three of those are asked of servers directly, over TCP and through the guard
+that refuses private, loopback and reserved destinations, because a resolver
+has already smoothed them over: a resolver that reached one working server
+reports a working zone, and it answers a question about name servers from the
+zone itself, so the parent's list never appears. An installation asks them
+where control of the domain has been proven; the command line asks them always,
+running as it does on the operator's own machine. A server belonging to a
+provider is asked whether it answers for this zone and never about its own
+behaviour, and the zone above is asked about this domain and never about
+itself.
 
 Everything else is reported: the addresses, the servers, the text records, the
 SOA and its timers, a digest type this does not compute, and an unsigned zone —
@@ -3939,6 +3949,11 @@ whoever claims it next answers for this name.
 `TestWhatAskingAServerFoundIsDrawnInBothFaces`,
 `TestTheDelegationIsAskedOnlyWhereProofWasRequired`,
 `TestTheCommandLineAsksTheZonesOwnServers`,
+`TestTheZoneAboveIsAskedWhichServersItHandsOut`,
+`TestAParentThatWasNotAskedIsNotAgreement`,
+`TestADelegationIsReadFromTheAuthoritySection`,
+`TestOnlyAQuestionAboutServersReadsTheDelegation`,
+`TestWhatTheZoneAboveHandsOutIsDrawnInBothFaces`,
 `TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence`,
 `TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
 `TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,

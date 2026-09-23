@@ -39,20 +39,30 @@
     </p>
 
     <p>
-      <strong>Two questions are put to the servers themselves</strong>, because
-      a resolver cannot answer them: whether each server the delegation names
-      answers for the zone as its own, and whether a server inside the domain
-      also answers questions about domains it has nothing to do with. Those go
-      over TCP on port 53, to the addresses the zone published, through the
-      guard that refuses private, loopback and reserved destinations. Nothing
-      else is sent, and no zone transfer is ever attempted. A server belonging
-      to a provider is asked the first question and never the second: its
-      behaviour is its operator's business, not this zone's.
+      <strong>Three questions are put to servers directly</strong>, because a
+      resolver cannot answer them: whether each server the delegation names
+      answers for the zone as its own, whether a server inside the domain also
+      answers questions about domains it has nothing to do with, and which
+      servers the zone above this one hands out. Those go over TCP on port 53,
+      to the addresses published for the servers in question, through the guard
+      that refuses private, loopback and reserved destinations. Nothing else is
+      sent, and no zone transfer is ever attempted. A server belonging to a
+      provider is asked the first question and never the second: its behaviour
+      is its operator's business, not this zone's.
     </p>
 
     <p>
-      An installation asks those two only where control of the domain has been
-      proven; the command line asks them always, because it runs on the
+      The third goes to one server of the zone above — for
+      <code>example.dev</code>, a server of <code>dev</code> — and asks it
+      about this domain by name, with recursion off. What comes back is a
+      referral: the list that zone hands out, which is what a resolver starting
+      at the root actually follows. A resolver cannot be asked this, because it
+      answers from the zone itself. Nothing about the zone above is reported.
+    </p>
+
+    <p>
+      An installation asks those three only where control of the domain has
+      been proven; the command line asks them always, because it runs on the
       operator's own machine from their own address.
     </p>
 
@@ -88,6 +98,11 @@
         scan is not something this does.</li>
       <li><strong>A server that resolves to nothing.</strong> RFC 1912 calls it
         a lame delegation: a resolver that tries it waits, then tries another.</li>
+      <li><strong>A zone above that hands out different servers.</strong> RFC
+        1912 asks for one list, not two. A resolver starting at the root follows
+        the parent's, so a name only the parent hands out is where some lookups
+        go, and whatever is at that address answers them — whether or not it
+        still holds this zone.</li>
       <li><strong>A DNSSEC chain that does not check out</strong>, and an alias
         at the top of a zone, which RFC 1034 and RFC 2181 both forbid.</li>
     </ul>

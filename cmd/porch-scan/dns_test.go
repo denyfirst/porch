@@ -275,3 +275,74 @@ func TestTheCommandLineAsksTheZonesOwnServers(t *testing.T) {
 		t.Error("the command line no longer asks the servers the zone names")
 	}
 }
+
+// What the zone above hands out is drawn in both faces, in all four states:
+// not asked, not read, the same list, and a different one.
+//
+// Four and not two, because this is the line that says whether a resolver
+// starting at the root reaches the servers the zone names. "The same servers"
+// where nobody asked would be the worst sentence in the report.
+func TestWhatTheZoneAboveHandsOutIsDrawnInBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`"The zone above this one was not asked which servers it delegates to."`,
+		`" hands out the same servers."`,
+		`"hands out " + atParent.join(", ") + " as well"`,
+		`"does not hand out " + atZone.join(", ")`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	facts := func(f policy.DNSFacts) string {
+		f.Apex = true
+		f.NameServers = []policy.NameServer{
+			{Name: "ns1.example.com", Addresses: []string{"192.0.2.53"}},
+			{Name: "ns2.example.com", Addresses: []string{"198.51.100.53"}},
+		}
+		var buf bytes.Buffer
+		printDNS(&buf, dnsResult{
+			Domain: "example.com",
+			Result: &dnsscan.Result{
+				Domain: "example.com", Policy: policy.DNSVersion, Observed: &f,
+			},
+		})
+		return buf.String()
+	}
+
+	for _, tc := range []struct {
+		name  string
+		facts policy.DNSFacts
+		want  string
+	}{
+		{"not asked", policy.DNSFacts{}, "the zone above               not asked"},
+		{
+			"not read",
+			policy.DNSFacts{Parent: "com", ParentReason: "the lookup did not complete"},
+			"the zone above               not read: the lookup did not complete",
+		},
+		{
+			"agreed",
+			policy.DNSFacts{Parent: "com", ParentServer: "a.gtld.test", ParentAsked: true},
+			"the zone above               com hands out the same servers",
+		},
+		{
+			"both ways",
+			policy.DNSFacts{
+				Parent: "com", ParentServer: "a.gtld.test", ParentAsked: true,
+				OnlyAtParent: []string{"ns9.example.com"},
+				OnlyAtZone:   []string{"ns2.example.com"},
+			},
+			"com hands out ns9.example.com as well, and does not hand out ns2.example.com",
+		},
+	} {
+		if text := facts(tc.facts); !strings.Contains(text, tc.want) {
+			t.Errorf("%s: the report does not say %q:\n%s", tc.name, tc.want, text)
+		}
+	}
+}
