@@ -317,3 +317,33 @@ func TestTheRelayAnswerReachesBothFacesOfTheReport(t *testing.T) {
 		t.Errorf("an exchanger that was never asked has a relay row:\n%s", text)
 	}
 }
+
+// An aliased exchanger reaches both faces of the report, in the same words
+// (R16), and a domain whose names are plain says nothing about it.
+func TestAnAliasedExchangerReachesBothFacesOfTheReport(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	if !strings.Contains(string(page), `row("MX alias", aliased.join(", ") + ": a name RFC 2181 says carries an address", "weak")`) {
+		t.Error("the page does not draw an aliased exchanger, so the two faces disagree")
+	}
+
+	r := mailSample()
+	r.Observed.MXRead = true
+	r.Observed.MXHosts = []string{"mail.example.com", "mx2.example.com"}
+	r.Observed.MXAliases = []string{"mail.example.com"}
+
+	var buf bytes.Buffer
+	printMail(&buf, r)
+	if !strings.Contains(buf.String(), "MX alias   mail.example.com: a name RFC 2181 says carries an address") {
+		t.Errorf("the report does not draw the aliased exchanger:\n%s", buf.String())
+	}
+
+	r.Observed.MXAliases = nil
+	buf.Reset()
+	printMail(&buf, r)
+	if strings.Contains(buf.String(), "MX alias") {
+		t.Errorf("a domain with plain names has an alias row:\n%s", buf.String())
+	}
+}

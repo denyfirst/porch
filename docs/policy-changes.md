@@ -49,9 +49,22 @@ is entitled to find it still answering.
 
 Released in v0.19.0, 2026-09.
 
-One finding is added, and nothing that was graded before is graded
+Two findings are added, and nothing that was graded before is graded
 differently. A domain whose report was strong under `porch-mail-v1` is strong
-under this one unless one of its own exchangers is an open relay.
+under this one unless one of its own exchangers is an open relay, or an
+exchanger it names is an alias.
+
+### An exchanger whose name is an alias
+
+`mail.exchanger-is-an-alias`, graded `weak`.
+
+RFC 2181 says the name an MX record points at carries an address and is not an
+alias. A sender looking it up asks for the address at the name it was given,
+and what it does with the alias it finds instead differs between
+implementations — so mail from some senders arrives and mail from others does
+not, which is the hardest kind of delivery problem to find. The question is
+asked of the name itself, because an exchanger whose name is an alias still
+resolves and nothing else read here would show it.
 
 ### An exchanger that forwards mail for a domain it does not serve
 

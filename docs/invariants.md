@@ -1202,9 +1202,16 @@ The mail check reads three names — the domain, `_dmarc.` under it, and
 `_smtp._tls.` under it — and whatever the domain's own sender policy points at.
 It opens two kinds of connection, under conditions set out below: one to the
 MTA-STS policy file a zone announces, and one short conversation with each
-exchanger the zone names. No message is composed or sent, no sender or
-recipient is named, and nothing that would change state at the other end is
-attempted.
+exchanger the zone names. No message is composed or sent, and nothing that
+would change state at the other end is attempted. One question names a
+recipient — whether an exchanger inside the domain forwards mail for a domain
+it does not serve — and N3 sets out what bounds it: an empty sender, a name
+under `.invalid` that cannot exist, and a reset before `DATA`.
+
+The names the zone points at are read as names, too. An MX record that names
+an alias is one RFC 2181 forbids, and finding it means asking that name for
+its own record rather than for an address — an exchanger whose name is an
+alias still resolves, so nothing else read here would show it.
 
 That is not restraint applied to the check. It is what these records are: a
 domain publishes them so that strangers will read them, and reading one is the
@@ -1374,7 +1381,10 @@ every report.
 *Enforced in:* `internal/mailscan`, `internal/spf`, `internal/mtasts`,
 `internal/policy.GradeMail`, `internal/policy.MailStandingLimits`,
 `internal/httpapi.New`, `cmd/porch-scan.mailScanner`, `cmd/porch-scan.runMail`
-*Guarded by:* `TestTheScanAsksOnlyAboutTheDomainItWasGiven`,
+*Guarded by:* `TestAnExchangerThatIsAnAliasIsGraded`,
+`TestAnAliasedExchangerReachesBothFacesOfTheReport`,
+`TestTheAliasQuestionIsBoundedLikeTheExchangers`,
+`TestTheScanAsksOnlyAboutTheDomainItWasGiven`,
 `TestTheWalkStopsWhereAReceiverStops`, `TestAPolicyUnderTheLimitIsWalkedInFull`,
 `TestAnUnreadIncludeIsNotAVoidLookup`, `TestACancelledWalkAsksNothing`,
 `TestTheTenthLookupIsFollowed`,

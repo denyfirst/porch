@@ -132,6 +132,7 @@ type Resolver interface {
 	LookupTXT(ctx context.Context, name string) (dnsclient.TXTAnswer, error)
 	LookupMX(ctx context.Context, name string) (dnsclient.MXAnswer, error)
 	LookupTLSA(ctx context.Context, name string) (dnsclient.TLSAAnswer, error)
+	LookupCNAME(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 }
 
 // PolicyFetcher reads the MTA-STS policy file for a domain.
@@ -569,6 +570,21 @@ func (s *Scanner) readExchangers(ctx context.Context, r Resolver, domain string,
 			continue
 		}
 		facts.MXHosts = append(facts.MXHosts, mx.Host)
+	}
+
+	// And whether any of those names is an alias, which RFC 2181 forbids. The
+	// question is about the name rather than about the host: an exchanger whose
+	// name is an alias still resolves, so nothing else read here would show it.
+	// Bounded by the same count the exchangers are, because the list belongs to
+	// whoever is being measured.
+	hosts := facts.MXHosts
+	if len(hosts) > maxExchangers {
+		hosts = hosts[:maxExchangers]
+	}
+	for _, host := range hosts {
+		if alias, err := r.LookupCNAME(ctx, host); err == nil && len(alias.Alias) > 0 {
+			facts.MXAliases = append(facts.MXAliases, host)
+		}
 	}
 }
 
