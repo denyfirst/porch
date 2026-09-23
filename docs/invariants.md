@@ -4561,6 +4561,9 @@ broken DNSSEC chain into a clean result.
 `TestOwnerMatchingIsCaseInsensitive`, `TestCompressedOwnerNamesMatch`,
 `TestWhatAZonePublishesAboutItselfIsRead`, `TestAMalformedZoneRecordIsRefused`,
 `TestHowAZoneHashesAbsentNamesIsRead`,
+`TestAServerAskedDirectlySaysWhatItHoldsAndWhatItIs`,
+`TestAServerThatRefusesIsNotAnAnswerAboutTheZone`,
+`TestAServerIsDialledThroughTheGuard`,
 `TestAZoneThatDoesNotExistSaysSo`, `TestARecordDoesNotHoldOnToTheReply`,
 `FuzzParseReply`, `FuzzSkipName`
 

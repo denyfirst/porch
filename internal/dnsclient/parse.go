@@ -64,9 +64,16 @@ func parseReply(raw []byte, id uint16, question []byte, qtype uint16) (reply, er
 		return reply{}, errors.New("dnsclient: the reply echoes a different question")
 	}
 
+	const (
+		flagAuthoritative = 0x0400
+		flagRecursionOK   = 0x0080
+	)
+
 	out := reply{
-		validated: flags&flagAuthentic != 0,
-		existed:   true,
+		validated:        flags&flagAuthentic != 0,
+		authoritative:    flags&flagAuthoritative != 0,
+		recursionOffered: flags&flagRecursionOK != 0,
+		existed:          true,
 	}
 
 	switch rcode := flags & maskRcode; rcode {
