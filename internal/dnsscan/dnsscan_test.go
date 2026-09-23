@@ -25,6 +25,7 @@ type zone struct {
 	text      []string
 	alias     map[string][]string
 	missing   map[string]bool
+	nsec3     []dnsclient.NSEC3PARAM
 
 	validated bool
 
@@ -89,6 +90,13 @@ func (z *zone) LookupCNAME(_ context.Context, name string) (dnsclient.ZoneAnswer
 // exists is what the resolver says about a name: a name with no records of the
 // type asked for still exists, and one that was deleted does not.
 func (z *zone) exists(name string) bool { return !z.missing[name] }
+
+func (z *zone) LookupNSEC3PARAM(_ context.Context, _ string) (dnsclient.ZoneAnswer, error) {
+	if err := z.fail["nsec3"]; err != nil {
+		return dnsclient.ZoneAnswer{}, err
+	}
+	return dnsclient.ZoneAnswer{NSEC3: z.nsec3, Existed: true}, nil
+}
 
 func (z *zone) LookupTXT(_ context.Context, _ string) (dnsclient.TXTAnswer, error) {
 	return dnsclient.TXTAnswer{Values: z.text, Existed: true}, nil
@@ -190,6 +198,9 @@ func TestAZoneThatIsServedAndSignedReadsStrong(t *testing.T) {
 	}
 	if len(got.Observed.Text) != 1 || got.Observed.Text[0] != "v=spf1 -all" {
 		t.Errorf("the text records read %v", got.Observed.Text)
+	}
+	if len(got.Observed.Keys) != 1 || got.Observed.Keys[0].Name != "ECDSAP256SHA256" {
+		t.Errorf("the key reads %+v, and an algorithm travels by the name an operator reads", got.Observed.Keys)
 	}
 }
 
@@ -491,5 +502,124 @@ func TestAnAliasAtTheTopOfAZoneIsGraded(t *testing.T) {
 	}
 	if has(other, "dns.alias-at-zone-apex") {
 		t.Errorf("an ordinary alias was graded: %v", ruleIDs(other))
+	}
+}
+
+// The algorithms a zone signs with are read off its keys and sorted the way
+// RFC 8624 sorts them: what must not be used, and what is no longer
+// recommended. The difference is a zone validators are dropping and one they
+// still accept while the advice moves.
+func TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem(t *testing.T) {
+	retired := served(t)
+	retired.keys = []dnsclient.DNSKEY{{Flags: 257, Protocol: 3, Algorithm: 3, Key: []byte("an old key")}}
+	retired.ds = []dnsclient.DS{signerFor(t, "example.com", retired.keys[0])}
+	got := read(t, retired)
+	if !has(got, "dns.dnssec-retired-algorithm") || got.Verdict != policy.Insecure {
+		t.Errorf("DSA: %q %v", got.Verdict, ruleIDs(got))
+	}
+	for _, f := range got.Findings {
+		if f.RuleID == "dns.dnssec-retired-algorithm" && !strings.Contains(f.Rationale, "DSA") {
+			t.Errorf("the finding names no algorithm: %s", f.Rationale)
+		}
+	}
+
+	old := served(t)
+	old.keys = []dnsclient.DNSKEY{{Flags: 257, Protocol: 3, Algorithm: 5, Key: []byte("an rsa key")}}
+	old.ds = []dnsclient.DS{signerFor(t, "example.com", old.keys[0])}
+	got = read(t, old)
+	if !has(got, "dns.dnssec-weak-algorithm") || got.Verdict != policy.Weak {
+		t.Errorf("RSASHA1: %q %v", got.Verdict, ruleIDs(got))
+	}
+	if has(got, "dns.dnssec-retired-algorithm") {
+		t.Errorf("an algorithm that is merely not recommended was graded as retired: %v", ruleIDs(got))
+	}
+
+	// The ones RFC 8624 asks for are not graded at all.
+	for _, algorithm := range []uint8{8, 13, 15} {
+		fine := served(t)
+		fine.keys = []dnsclient.DNSKEY{{Flags: 257, Protocol: 3, Algorithm: algorithm, Key: []byte("a key")}}
+		fine.ds = []dnsclient.DS{signerFor(t, "example.com", fine.keys[0])}
+		if got := read(t, fine); len(got.Findings) != 0 {
+			t.Errorf("algorithm %d: %v", algorithm, ruleIDs(got))
+		}
+	}
+}
+
+// How a signed zone proves a name does not exist is read, and only the one
+// thing a document settles is graded: RFC 9276 says the iteration count is
+// zero. Which kind of proof a zone uses is reported, because nothing requires
+// either.
+func TestHowAbsentNamesAreProvedIsReadAndOnlyIterationsAreGraded(t *testing.T) {
+	hashed := served(t)
+	hashed.nsec3 = []dnsclient.NSEC3PARAM{{Hash: 1, Iterations: 0, SaltLength: 0}}
+	got := read(t, hashed)
+	if !got.Observed.NSEC3Read || !got.Observed.NSEC3 {
+		t.Errorf("a zone with NSEC3 reads %+v", got.Observed)
+	}
+	if len(got.Findings) != 0 {
+		t.Errorf("zero iterations were graded: %v", ruleIDs(got))
+	}
+	if !noteSaying(got, "hashed names") {
+		t.Errorf("the notes are %v", noteTexts(got))
+	}
+
+	costly := served(t)
+	costly.nsec3 = []dnsclient.NSEC3PARAM{{Hash: 1, Iterations: 10, SaltLength: 8}}
+	got = read(t, costly)
+	if !has(got, "dns.nsec3-iterations") || got.Verdict != policy.Weak {
+		t.Errorf("ten iterations: %q %v", got.Verdict, ruleIDs(got))
+	}
+
+	// No NSEC3 record in a signed zone is the plain kind, which is reported
+	// with what it means and never graded.
+	plain := served(t)
+	got = read(t, plain)
+	if got.Observed.NSEC3 || !got.Observed.NSEC3Read {
+		t.Errorf("a zone without NSEC3 reads %+v", got.Observed)
+	}
+	if !noteSaying(got, "list every name in this zone") || len(got.Findings) != 0 {
+		t.Errorf("the plain kind: %v / %v", ruleIDs(got), noteTexts(got))
+	}
+
+	// An unsigned zone is never asked, and a lookup that failed is not an
+	// answer about the zone.
+	unsigned := served(t)
+	unsigned.ds = nil
+	if got := read(t, unsigned); got.Observed.NSEC3Read {
+		t.Error("an unsigned zone was asked how it proves absence")
+	}
+	unread := served(t)
+	unread.fail["nsec3"] = dnsclient.ErrServerFail
+	got = read(t, unread)
+	if got.Observed.NSEC3Read || got.Observed.NSEC3 {
+		t.Errorf("a failed lookup reads %+v", got.Observed)
+	}
+	if noteSaying(got, "list every name in this zone") {
+		t.Errorf("a failed lookup was read as the plain kind: %v", noteTexts(got))
+	}
+}
+
+// A name server that is an alias is found by asking its own name, because a
+// name that is an alias still resolves to an address and nothing else here
+// would show it.
+func TestANameServerThatIsAnAliasIsGraded(t *testing.T) {
+	aliased := served(t)
+	aliased.alias["ns2.example.org"] = []string{"ns2.provider.example"}
+
+	got := read(t, aliased)
+	if !has(got, "dns.name-server-is-an-alias") || got.Verdict != policy.Weak {
+		t.Errorf("an alias in the delegation: %q %v", got.Verdict, ruleIDs(got))
+	}
+	for _, f := range got.Findings {
+		if f.RuleID == "dns.name-server-is-an-alias" && !strings.Contains(f.Rationale, "ns2.example.org") {
+			t.Errorf("the finding does not say which server: %s", f.Rationale)
+		}
+	}
+	if got.Observed.NameServers[1].Alias != "ns2.provider.example" {
+		t.Errorf("the alias is not carried: %+v", got.Observed.NameServers[1])
+	}
+
+	if got := read(t, served(t)); has(got, "dns.name-server-is-an-alias") {
+		t.Errorf("a delegation of plain names was graded: %v", ruleIDs(got))
 	}
 }

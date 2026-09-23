@@ -142,3 +142,73 @@ func TestThePublishedRecordsAreBounded(t *testing.T) {
 		t.Errorf("the report does not say how many there are:\n%s", text)
 	}
 }
+
+// A signed zone says which algorithm signs it and how it proves a name absent,
+// in the words the page uses (R16), and an aliased name server is drawn as
+// that rather than as an address.
+func TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`"named plainly, so the zone can be listed"`,
+		`"hashed, " + iterations + " extra times"`,
+		`row("Signed with", [...new Set(names)].join(", "));`,
+		`text = "an alias for " + server.alias;`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain:  "example.com",
+			Policy:  policy.DNSVersion,
+			Verdict: policy.Strong,
+			Observed: &policy.DNSFacts{
+				Apex:            true,
+				IPv4:            []string{"192.0.2.10"},
+				Signed:          true,
+				ChainMatched:    true,
+				Keys:            []policy.KeyDigest{{KeyTag: 1, Algorithm: 13, Name: "ECDSAP256SHA256"}},
+				NSEC3Read:       true,
+				NSEC3:           true,
+				NSEC3Iterations: 5,
+				NameServers: []policy.NameServer{
+					{Name: "ns1.example.net", Addresses: []string{"192.0.2.53"}},
+					{Name: "ns2.example.net", Alias: "ns2.provider.example"},
+				},
+			},
+		},
+	})
+	text := buf.String()
+
+	for _, want := range []string{
+		"Signed with ECDSAP256SHA256",
+		"Absent     hashed, 5 extra times",
+		"ns2.example.net              an alias for ns2.provider.example",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the report does not say %q:\n%s", want, text)
+		}
+	}
+
+	// An unsigned zone says none of it, because none of it applies.
+	buf.Reset()
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain:   "example.com",
+			Policy:   policy.DNSVersion,
+			Observed: &policy.DNSFacts{Apex: true},
+		},
+	})
+	if strings.Contains(buf.String(), "Signed with") || strings.Contains(buf.String(), "Absent") {
+		t.Errorf("an unsigned zone was described as signed:\n%s", buf.String())
+	}
+}

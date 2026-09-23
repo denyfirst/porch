@@ -226,3 +226,33 @@ func TestTheAliasAtANameIsRead(t *testing.T) {
 		t.Errorf("a name that is not an alias: %+v, %v", got, err)
 	}
 }
+
+// How a zone hashes the names it proves absent is read, and a record that does
+// not hold what it says is refused.
+func TestHowAZoneHashesAbsentNamesIsRead(t *testing.T) {
+	ctx := context.Background()
+	q := name(t, "example.com")
+
+	c := answering(t, TypeNSEC3PARAM, "example.com",
+		record{q, TypeNSEC3PARAM, []byte{1, 0, 0, 12, 4, 0xde, 0xad, 0xbe, 0xef}},
+	)
+	got, err := c.LookupNSEC3PARAM(ctx, "example.com")
+	if err != nil || len(got.NSEC3) != 1 {
+		t.Fatalf("NSEC3PARAM: %+v, %v", got, err)
+	}
+	if got.NSEC3[0].Hash != 1 || got.NSEC3[0].Iterations != 12 || got.NSEC3[0].SaltLength != 4 {
+		t.Errorf("the record reads %+v", got.NSEC3[0])
+	}
+
+	short := answering(t, TypeNSEC3PARAM, "example.com", record{q, TypeNSEC3PARAM, []byte{1, 0, 0}})
+	if _, err := short.LookupNSEC3PARAM(ctx, "example.com"); err == nil {
+		t.Error("a record shorter than its own header was read as one")
+	}
+
+	lying := answering(t, TypeNSEC3PARAM, "example.com",
+		record{q, TypeNSEC3PARAM, []byte{1, 0, 0, 0, 40, 1, 2}},
+	)
+	if _, err := lying.LookupNSEC3PARAM(ctx, "example.com"); err == nil {
+		t.Error("a salt announcing more bytes than the record holds was read")
+	}
+}

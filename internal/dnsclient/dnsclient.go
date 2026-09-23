@@ -76,6 +76,12 @@ const (
 	TypeDS     = 43
 	TypeDNSKEY = 48
 
+	// TypeNSEC3PARAM is the record a signed zone publishes to say it proves a
+	// name does not exist with hashed names rather than plain ones (RFC 5155).
+	// Its absence in a signed zone means the plain kind, which anybody can walk
+	// to list every name in the zone.
+	TypeNSEC3PARAM = 51
+
 	classIN = 1
 	typeOPT = 41
 
@@ -214,6 +220,22 @@ type DNSKEY struct {
 	// Key is the public key as published. Kept as bytes for the same reason a
 	// DS digest is.
 	Key []byte `json:"-"`
+}
+
+// NSEC3PARAM says how a zone hashes the names it proves absent (RFC 5155).
+//
+// The iterations and the salt are what RFC 9276 — a best current practice —
+// has something to say about: every iteration costs every resolver work, and
+// the protection it was meant to buy was measured and found not to be there.
+type NSEC3PARAM struct {
+	Hash       uint8  `json:"hash"`
+	Flags      uint8  `json:"flags"`
+	Iterations uint16 `json:"iterations"`
+
+	// Salt is what the zone adds before hashing. Empty is what RFC 9276 asks
+	// for; the bytes themselves are nobody's business but the zone's, so only
+	// their length travels.
+	SaltLength int `json:"saltLength"`
 }
 
 // TLSA is one DANE record.
@@ -470,6 +492,7 @@ type reply struct {
 	ds        []DS
 	keys      []DNSKEY
 	cname     []string
+	nsec3     []NSEC3PARAM
 
 	validated bool
 	existed   bool
@@ -895,6 +918,7 @@ type ZoneAnswer struct {
 	SOA       []SOA
 	DS        []DS
 	Keys      []DNSKEY
+	NSEC3     []NSEC3PARAM
 
 	// Alias is what a CNAME at the name points to, where the name is one. A
 	// name that is an alias has that record and no others, which is the whole
@@ -958,6 +982,7 @@ func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswe
 	out.DS = reply.ds
 	out.Keys = reply.keys
 	out.Alias = reply.cname
+	out.NSEC3 = reply.nsec3
 	return out, nil
 }
 
@@ -969,4 +994,13 @@ func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswe
 // where the target leads is the target's question.
 func (c *Client) LookupCNAME(ctx context.Context, name string) (ZoneAnswer, error) {
 	return c.zone(ctx, name, TypeCNAME)
+}
+
+// LookupNSEC3PARAM reads how a signed zone proves a name does not exist.
+//
+// A signed zone with no such record uses the plain kind, where the proof
+// names the next name that does exist — which is what lets anybody walk a
+// zone and list everything in it.
+func (c *Client) LookupNSEC3PARAM(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeNSEC3PARAM)
 }
