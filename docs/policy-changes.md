@@ -105,7 +105,7 @@ recipient bounded as above.
 
 ## `porch-dns-v1` → `porch-dns-v2`
 
-**Unreleased.**
+Released in v0.20.0, 2026-09.
 
 Two findings are added and nothing that was graded before is graded
 differently. A domain whose report was strong under `porch-dns-v1` is strong
