@@ -1182,6 +1182,10 @@ function absenceLine(facts) {
 // dnssecLine says what the chain is, in the order a reader asks it: whether it
 // is signed at all, and then whether it holds.
 function dnssecLine(facts) {
+  // The chain belongs to a zone, and at a name inside one nothing about it was
+  // asked. "Not signed" there is a claim about a zone this never looked at,
+  // and the zone above is often signed (R4).
+  if (!facts.apex) return "not read: the chain belongs to the zone above this name";
   if (!facts.signed) return "not signed";
   if (facts.chainReason) return "not checked: " + facts.chainReason;
   if (facts.chainMatched) return "signed, and the parent's digest matches a key here";

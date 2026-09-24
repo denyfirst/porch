@@ -346,3 +346,50 @@ func TestWhatTheZoneAboveHandsOutIsDrawnInBothFaces(t *testing.T) {
 		}
 	}
 }
+
+// At a name inside a zone, the chain is said to be unread rather than absent.
+//
+// Nothing about DNSSEC is asked there — the chain is a property of the zone,
+// and the zone begins above the name. "Not signed" would be a claim about a
+// zone this never looked at, and for the name that prompted this, the zone
+// above was signed (R4).
+func TestANameInsideAZoneSaysTheChainWasNotRead(t *testing.T) {
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "www.example.com",
+		Result: &dnsscan.Result{
+			Domain: "www.example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{IPv4: []string{"192.0.2.10"}},
+		},
+	})
+	text := buf.String()
+
+	if !strings.Contains(text, "DNSSEC     not read: the chain belongs to the zone above this name") {
+		t.Errorf("the report does not say the chain was not read:\n%s", text)
+	}
+	if strings.Contains(text, "not signed") {
+		t.Errorf("a zone nobody asked about was reported unsigned:\n%s", text)
+	}
+
+	// And the top of a zone that publishes no delegation signer still reads as
+	// what it is, so this did not silence the ordinary answer.
+	buf.Reset()
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{Apex: true, SOAFound: true},
+		},
+	})
+	if !strings.Contains(buf.String(), "DNSSEC     not signed") {
+		t.Errorf("an unsigned zone no longer reads as one:\n%s", buf.String())
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	if !strings.Contains(string(page), `if (!facts.apex) return "not read: the chain belongs to the zone above this name";`) {
+		t.Error("the page still reports a zone nobody asked about as unsigned")
+	}
+}

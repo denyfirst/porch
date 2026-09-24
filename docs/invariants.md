@@ -3921,7 +3921,9 @@ itself.
 Everything else is reported: the addresses, the servers, the text records, the
 SOA and its timers, a digest type this does not compute, and an unsigned zone —
 which is a choice rather than a fault. A digest this cannot compute is never
-read as a chain that failed, for the reason R4 exists.
+read as a chain that failed, and a name inside a zone is never read as an
+unsigned one: no zone begins there, so nothing about a chain was asked, and the
+zone above it is often signed. Both are the reason R4 exists.
 
 An alias is read wherever a name is one, and only one of them is graded: a
 CNAME at the top of a zone, which RFC 1034 and RFC 2181 both forbid outright
@@ -3939,6 +3941,7 @@ whoever claims it next answers for this name.
 `TestABrokenChainIsTheFindingThisExistsFor`,
 `TestASHA1DigestIsSaidWhereTheChainWorks`,
 `TestANameInsideAZoneIsNotGradedAsOne`,
+`TestANameInsideAZoneSaysTheChainWasNotRead`,
 `TestTheBoundariesAreAskedBeforeAnythingIsLookedUp`,
 `TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem`,
 `TestHowAbsentNamesAreProvedIsReadAndOnlyIterationsAreGraded`,
