@@ -94,8 +94,8 @@ func TestTheDNSReportSaysWhatWasReadAndWhatItMeans(t *testing.T) {
 	for _, want := range []string{
 		policy.DNSVersion,
 		"192.0.2.10",
-		"IPv6       none",
-		"Alias      none",
+		"IPv6 (AAAA)          none",
+		"Alias (CNAME)        none",
 		"as published",
 		"v=spf1 -all",
 		"google-site-verification=abc",
@@ -142,6 +142,15 @@ func TestThePublishedRecordsAreBounded(t *testing.T) {
 	if !strings.Contains(text, "11 records, as published") {
 		t.Errorf("the report does not say how many there are:\n%s", text)
 	}
+
+	// And each record is indented past the label column, so a reader running an
+	// eye down the labels does not meet a zone's own text among them.
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "x") &&
+			!strings.HasPrefix(line, strings.Repeat(" ", 4+fieldWidth)) {
+			t.Errorf("a published record starts in the label column:\n%q", line)
+		}
+	}
 }
 
 // A signed zone says which algorithm signs it and how it proves a name absent,
@@ -156,7 +165,7 @@ func TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence(t *testing.T) {
 	for _, want := range []string{
 		`"named plainly, so the zone can be listed"`,
 		`"hashed, " + iterations + " extra times"`,
-		`row("Signed with", [...new Set(names)].join(", "));`,
+		`row("Signed with (DNSKEY)", [...new Set(names)].join(", "));`,
 		`text = "an alias for " + server.alias;`,
 	} {
 		if !strings.Contains(script, want) {
@@ -190,8 +199,8 @@ func TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence(t *testing.T) {
 	text := buf.String()
 
 	for _, want := range []string{
-		"Signed with ECDSAP256SHA256",
-		"Absent     hashed, 5 extra times",
+		"Signed with (DNSKEY) ECDSAP256SHA256",
+		"Absent (NSEC3)       hashed, 5 extra times",
 		"ns2.example.net              an alias for ns2.provider.example",
 	} {
 		if !strings.Contains(text, want) {
@@ -365,7 +374,7 @@ func TestANameInsideAZoneSaysTheChainWasNotRead(t *testing.T) {
 	})
 	text := buf.String()
 
-	if !strings.Contains(text, "DNSSEC     not read: the chain belongs to the zone above this name") {
+	if !strings.Contains(text, "DNSSEC (DS)          not read: the chain belongs to the zone above this name") {
 		t.Errorf("the report does not say the chain was not read:\n%s", text)
 	}
 	if strings.Contains(text, "not signed") {
@@ -382,7 +391,7 @@ func TestANameInsideAZoneSaysTheChainWasNotRead(t *testing.T) {
 			Observed: &policy.DNSFacts{Apex: true, SOAFound: true},
 		},
 	})
-	if !strings.Contains(buf.String(), "DNSSEC     not signed") {
+	if !strings.Contains(buf.String(), "DNSSEC (DS)          not signed") {
 		t.Errorf("an unsigned zone no longer reads as one:\n%s", buf.String())
 	}
 
@@ -448,7 +457,7 @@ func TestWhenTheSignatureRunsOutIsDrawnInBothFaces(t *testing.T) {
 	script := string(page)
 	for _, want := range []string{
 		`facts.signatureRead && facts.signatureExpires`,
-		`row("Signature", "runs out " + facts.signatureExpires.slice(0, 10) +`,
+		`row("Signature (RRSIG)", "runs out " + facts.signatureExpires.slice(0, 10) +`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s, so the two faces disagree", want)
@@ -468,7 +477,7 @@ func TestWhenTheSignatureRunsOutIsDrawnInBothFaces(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(buf.String(), "Signature  runs out 2026-10-01, made by key 53731") {
+	if !strings.Contains(buf.String(), "Signature (RRSIG)    runs out 2026-10-01, made by key 53731") {
 		t.Errorf("the report does not say when the signature runs out:\n%s", buf.String())
 	}
 
@@ -481,7 +490,67 @@ func TestWhenTheSignatureRunsOutIsDrawnInBothFaces(t *testing.T) {
 			Observed: &policy.DNSFacts{Apex: true, SOAFound: true, Signed: true, ChainMatched: true},
 		},
 	})
-	if strings.Contains(buf.String(), "Signature ") {
+	if strings.Contains(buf.String(), "Signature (RRSIG)") {
 		t.Errorf("a signature nobody read was given a line:\n%s", buf.String())
+	}
+}
+
+// Every line of the DNS report says which record it came from.
+//
+// What a reader does with this report is open their DNS provider's interface,
+// and there the field is not called "alias" — it is called CNAME. The plain
+// word stays in front for whoever does not know the type, which is the rule
+// R16 states about the DNSSEC algorithm and is the same rule here.
+func TestEveryLineSaysWhichRecordItCameFrom(t *testing.T) {
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{
+				Apex: true, SOAFound: true, SOASerial: 7, SOAPrimary: "ns1.example.net",
+				IPv4: []string{"192.0.2.10"}, Text: []string{"v=spf1 -all"},
+				Signed: true, ChainMatched: true, NSEC3Read: true, NSEC3: true,
+				Keys:             []policy.KeyDigest{{KeyTag: 1, Algorithm: 13, Name: "ECDSAP256SHA256"}},
+				SignatureRead:    true,
+				SignatureExpires: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+				NameServers:      []policy.NameServer{{Name: "ns1.example.net", Addresses: []string{"192.0.2.53"}}},
+			},
+		},
+	})
+	text := buf.String()
+
+	for _, want := range []string{
+		"IPv4 (A)", "IPv6 (AAAA)", "Alias (CNAME)", "Zone (SOA)", "Text (TXT)",
+		"DNSSEC (DS)", "Signed with (DNSKEY)", "Signature (RRSIG)", "Absent (NSEC3)",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the report does not label a line %q:\n%s", want, text)
+		}
+	}
+
+	// The labels are one column, including the long one. "Signed with" ran two
+	// characters past the others from the day it was added, and a block whose
+	// labels are mostly aligned reads worse than one where they are not.
+	for _, line := range strings.Split(text, "\n") {
+		for _, label := range []string{"IPv4 (A)", "Zone (SOA)", "Signed with (DNSKEY)", "Absent (NSEC3)"} {
+			if strings.HasPrefix(line, "    "+label) && !strings.HasPrefix(line, "    "+label+strings.Repeat(" ", fieldWidth-len(label))) {
+				t.Errorf("the value after %q does not start in the same column:\n%s", label, line)
+			}
+		}
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	for _, want := range []string{
+		`row("IPv4 (A)"`, `row("IPv6 (AAAA)"`, `row("Alias (CNAME)"`, `row("Zone (SOA)"`,
+		`row("Text records (TXT)"`, `row("DNSSEC (DS)"`, `row("Signed with (DNSKEY)"`,
+		`row("Signature (RRSIG)"`, `row("Absent names (NSEC3)"`, `"Server (NS)"`,
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
 	}
 }
