@@ -98,6 +98,12 @@ type Result struct {
 	// and what is true of every scan this program runs.
 	Notes []policy.Note `json:"notes,omitempty"`
 
+	// Declared is what the response a visitor lands on said about itself: the
+	// headers it carried, where a content policy was declared, the cookies it
+	// set and what the page pulls in. None of it is graded — no document
+	// requires most of it (R21) — and all of it is measured on every scan.
+	Declared []policy.Declaration `json:"declared,omitempty"`
+
 	// Observed is what the probe saw, kept so that a reader can check a
 	// verdict against the evidence rather than taking it on trust.
 	Observed *webprobe.Report `json:"observed,omitempty"`
@@ -307,9 +313,19 @@ func Grade(observed *webprobe.Report) *Result {
 	reach := policy.GradeReach(hops(observed.Secure), hops(observed.Plain))
 	hsts := policy.GradeHSTS(securePolicy(observed.Secure, observed.Host), plaintextPolicy(observed.Plain),
 		answered(observed.Secure))
-	cookies := policy.GradeCookies(cookieFacts(observed))
-	headers := policy.GradeHeaders(headerFacts(observed.Secure))
-	content := policy.GradeContent(contentFacts(observed.Secure))
+	cookieSet := cookieFacts(observed)
+	headerSet := headerFacts(observed.Secure)
+	contentSet := contentFacts(observed.Secure)
+
+	cookies := policy.GradeCookies(cookieSet)
+	headers := policy.GradeHeaders(headerSet)
+	content := policy.GradeContent(contentSet)
+
+	// What the site said about itself, whether or not any of it is graded.
+	// Thirteen headers were being measured on every scan and shown on none: a
+	// report of a site that declares a content policy looked exactly like a
+	// report of one that declares nothing.
+	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet)
 
 	// Worst case across the checks, for the reason it is worst case within
 	// one: a site reached in the clear is reached in the clear however sound
@@ -524,9 +540,11 @@ func headerFacts(c *webprobe.Chain) policy.HeaderFacts {
 
 		out.Answered = true
 		out.Present = make(map[string]bool, len(h.Headers))
+		out.Values = make(map[string]string, len(h.Headers))
 		for name, values := range h.Headers {
 			if len(values) > 0 {
 				out.Present[name] = true
+				out.Values[name] = values[0]
 			}
 		}
 		out.ACAO = first(h.Headers["Access-Control-Allow-Origin"])

@@ -1092,6 +1092,7 @@ function buildWeb(data) {
   const frag = document.createDocumentFragment();
   frag.appendChild(summary(data));
   frag.appendChild(findings(data.findings, verdict));
+  frag.appendChild(declared(data.declared));
   frag.appendChild(chains(data.observed));
   frag.appendChild(notes(data.notes, verdict, CHECKS.web.methodPage));
   return frag;
@@ -1258,6 +1259,34 @@ function dnssecLine(facts) {
 function dnssecMark(facts) {
   if (!facts.signed || facts.chainReason) return null;
   return facts.chainMatched ? "strong" : "insecure";
+}
+
+// declared draws what the response a visitor lands on said about itself.
+//
+// Every row, whether or not there is an answer in it. Thirteen headers were
+// measured on every scan and shown on none, so a report of a site that declares
+// a content policy looked exactly like a report of one that declares nothing —
+// and the second is the one an operator needs to be told about.
+//
+// Nothing here is marked: no document requires most of it, so none of it is
+// graded, and a colour would say otherwise.
+function declared(rows) {
+  const frag = document.createDocumentFragment();
+  if (!rows || rows.length === 0) return frag;
+
+  frag.appendChild(sectionTitle("What the site declares"));
+
+  const table = el("table", "grid");
+  const body = el("tbody");
+  for (const row of rows) {
+    const tr = el("tr");
+    tr.appendChild(el("th", null, row.label));
+    tr.appendChild(el("td", null, row.says));
+    body.appendChild(tr);
+  }
+  table.appendChild(body);
+  frag.appendChild(table);
+  return frag;
 }
 
 // delegation draws the servers the zone is answered by, one row each, so that a
