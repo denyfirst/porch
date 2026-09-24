@@ -3,6 +3,7 @@ package policy
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Declaration is one thing the site said about itself, and what it said.
@@ -59,7 +60,7 @@ const maxDeclared = 120
 // policy, and R21 leaves what a site declares as something to report. What the
 // rules grade is the handful of cases where a declaration contradicts itself
 // or the transport it arrives on.
-func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts) []Declaration {
+func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, sec SecurityTxtFacts, now time.Time) []Declaration {
 	if !f.Answered {
 		return nil
 	}
@@ -89,6 +90,10 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts) []
 	out = append(out, Declaration{Label: "Content-Security-Policy", Says: contentPolicyLine(f)})
 	out = append(out, Declaration{Label: "Cookies", Says: cookieLine(cookies)})
 	out = append(out, Declaration{Label: "The page", Says: pageLine(content)})
+
+	// Last, because it is the one row that is not about the response a visitor
+	// landed on. It cost the only other request this check makes.
+	out = append(out, Declaration{Label: "Security contact", Says: securityTxtLine(sec, now)})
 	return out
 }
 
@@ -179,4 +184,86 @@ func cut(value string, limit int) string {
 	default:
 		return value[:limit] + "…"
 	}
+}
+
+// SecurityTxtFacts is what a site published about how to report a fault in it.
+//
+// The same shape internal/securitytxt measures, restated here because this
+// package imports nothing of the scanning machinery: a rule that depended on a
+// probe would be a rule that could only be tested by making a request.
+type SecurityTxtFacts struct {
+	// Asked is whether the file was looked for at all. Without it everything
+	// below is silence rather than absence (R4).
+	Asked bool
+
+	// Served is whether the address answered with a file.
+	Served bool
+
+	// Reason says which kind of nothing was there, where the server did not
+	// simply answer that it has none.
+	Reason string
+
+	// Contacts is how many ways to report a fault the file names.
+	Contacts int
+
+	// Expires is the date the file gives for itself, zero where it gives none.
+	Expires time.Time
+
+	// ExpiresUnreadable separates a file with no expiry from one whose expiry
+	// is not a date.
+	ExpiresUnreadable bool
+
+	// Signed is whether the file carries a PGP signature. Nothing verifies it.
+	Signed bool
+}
+
+// securityTxtLine says whether a site publishes a way to report a fault in it,
+// and whether that way still stands.
+//
+// Reported, never graded. RFC 9116 is a proposed standard that defines a
+// format; it requires nothing of anybody who has not chosen to publish one, and
+// no document says a site must. Grading its absence would be this project
+// inventing a threshold, which is what R21 exists to refuse. What the row does
+// is put the fact in front of the operator, because the commonest state of this
+// file in the wild is neither "there" nor "absent" but "there, and expired two
+// years ago" — which is worse than absent. It tells somebody who found a fault
+// that they are expected at an address where nobody is waiting.
+func securityTxtLine(f SecurityTxtFacts, now time.Time) string {
+	switch {
+	case !f.Asked:
+		return "not looked for"
+	case f.Reason != "":
+		return f.Reason
+	case !f.Served:
+		return "none published"
+	}
+
+	var parts []string
+	switch f.Contacts {
+	case 0:
+		// The one field RFC 9116 §2.5.3 requires. A file naming nobody has not
+		// done the thing the file is for, and saying "published" alone would
+		// read as though it had.
+		parts = append(parts, "published, naming no contact")
+	case 1:
+		parts = append(parts, "published, 1 contact")
+	default:
+		parts = append(parts, "published, "+strconv.Itoa(f.Contacts)+" contacts")
+	}
+
+	switch {
+	case f.ExpiresUnreadable:
+		parts = append(parts, "its expiry date cannot be read")
+	case f.Expires.IsZero():
+		parts = append(parts, "no expiry date, which RFC 9116 requires")
+	case now.After(f.Expires):
+		parts = append(parts, "expired "+f.Expires.Format("2006-01-02"))
+	default:
+		parts = append(parts, "expires "+f.Expires.Format("2006-01-02"))
+	}
+
+	if f.Signed {
+		parts = append(parts, "signed")
+	}
+	return strings.Join(parts, "; ")
 }

@@ -3,6 +3,7 @@ package policy
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // Every header a report lists is listed whether or not it was there, and what
@@ -17,7 +18,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		Answered: true,
 		Present:  map[string]bool{"X-Frame-Options": true},
 		Values:   map[string]string{"X-Frame-Options": "DENY"},
-	}, ContentFacts{}, nil)
+	}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
 
 	said := map[string]string{}
 	for _, r := range rows {
@@ -55,7 +56,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		{Name: "a", Secure: true},
 		{Name: "b", Secure: true, HTTPOnly: true},
 		{Name: "c", SameSite: "Lax"},
-	})
+	}, SecurityTxtFacts{}, testNow)
 	for _, r := range counted {
 		if r.Label == "Cookies" && r.Says != "3 set; 2 Secure, 1 HttpOnly, 1 with SameSite" {
 			t.Errorf("the cookies are counted as %q", r.Says)
@@ -68,7 +69,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 	// A response nobody reached declares nothing at all. An empty list says the
 	// question was never put; a list of twelve "none" rows would say the site
 	// answered and carried none of them.
-	if got := Declarations(HeaderFacts{}, ContentFacts{}, nil); got != nil {
+	if got := Declarations(HeaderFacts{}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow); got != nil {
 		t.Errorf("a response nobody reached declared %v", got)
 	}
 }
@@ -84,7 +85,7 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 	says := func(f HeaderFacts, c ContentFacts) map[string]string {
 		f.Answered = true
 		out := map[string]string{}
-		for _, r := range Declarations(f, c, nil) {
+		for _, r := range Declarations(f, c, nil, SecurityTxtFacts{}, testNow) {
 			out[r.Label] = r.Says
 		}
 		return out
@@ -143,7 +144,7 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 // own service answers HTTP/1.1 on purpose, which is the case that decides it:
 // a rule here would grade a deliberate choice as a fault.
 func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
-	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil)
+	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
 	if len(rows) == 0 || rows[0].Label != "Served over" {
 		t.Fatalf("the first thing a report says about the response is %+v", rows)
 	}
@@ -153,8 +154,69 @@ func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
 
 	// And an older version is the same kind of row, carrying no verdict with
 	// it: nothing in this package turns it into one.
-	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil)
+	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
 	if old[0].Says != "HTTP/1.1" {
 		t.Errorf("an older protocol reads %q", old[0].Says)
+	}
+}
+
+// testNow is the clock these rows are read against. A fixed date, because the
+// one row that reads a clock is about whether a date has passed, and a test
+// that used the real one would mean something different every day it ran.
+var testNow = time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+
+// The security contact row says which kind of nothing it found, and says when
+// a published contact has expired.
+//
+// Reported, never graded: RFC 9116 defines a format and requires it of nobody,
+// so a verdict here would be a threshold this project invented (R21). What the
+// row is for is the state that is neither present nor absent — a file that is
+// there and expired two years ago, which tells whoever found a fault that they
+// are expected at an address where nobody is waiting.
+func TestTheSecurityContactRowSaysWhichNothingItFound(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		facts SecurityTxtFacts
+		want  string
+	}{
+		{"never looked for", SecurityTxtFacts{}, "not looked for"},
+		{"the server says it has none", SecurityTxtFacts{Asked: true}, "none published"},
+		{"nothing answered", SecurityTxtFacts{Asked: true, Reason: "the file could not be fetched over HTTPS"},
+			"the file could not be fetched over HTTPS"},
+		{"published and standing", SecurityTxtFacts{
+			Asked: true, Served: true, Contacts: 2,
+			Expires: testNow.Add(24 * time.Hour),
+		}, "published, 2 contacts; expires 2026-09-25"},
+		{"published and expired", SecurityTxtFacts{
+			Asked: true, Served: true, Contacts: 1,
+			Expires: testNow.Add(-24 * time.Hour),
+		}, "published, 1 contact; expired 2026-09-23"},
+		{"published with no expiry", SecurityTxtFacts{Asked: true, Served: true, Contacts: 1},
+			"published, 1 contact; no expiry date, which RFC 9116 requires"},
+		{"published naming nobody", SecurityTxtFacts{
+			Asked: true, Served: true, Expires: testNow.Add(24 * time.Hour),
+		}, "published, naming no contact; expires 2026-09-25"},
+		{"signed", SecurityTxtFacts{
+			Asked: true, Served: true, Contacts: 1, Signed: true,
+			Expires: testNow.Add(24 * time.Hour),
+		}, "published, 1 contact; expires 2026-09-25; signed"},
+	} {
+		if got := securityTxtLine(c.facts, testNow); got != c.want {
+			t.Errorf("%s read as %q, not %q", c.name, got, c.want)
+		}
+	}
+
+	// And the row is drawn on every answered scan, including the one where
+	// nothing was found: a row that disappears when there is nothing to say
+	// reads as a question nobody asked (R4).
+	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
+	var seen bool
+	for _, r := range rows {
+		if r.Label == "Security contact" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Errorf("no security contact row was drawn: %+v", rows)
 	}
 }

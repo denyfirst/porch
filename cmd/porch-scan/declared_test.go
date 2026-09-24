@@ -29,6 +29,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 				{Label: "X-Frame-Options", Says: "none"},
 				{Label: "Cookies", Says: "2 set; 2 Secure, 1 HttpOnly, 2 with SameSite"},
 				{Label: "The page", Says: "read, nothing on it arrives in the clear"},
+				{Label: "Security contact", Says: "published, 1 contact; expires 2027-01-31"},
 			},
 		},
 	})
@@ -43,6 +44,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 		"X-Frame-Options            none",
 		"Cookies                    2 set; 2 Secure, 1 HttpOnly, 2 with SameSite",
 		"The page                   read, nothing on it arrives in the clear",
+		"Security contact           published, 1 contact; expires 2027-01-31",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the report does not say %q:\n%s", want, text)

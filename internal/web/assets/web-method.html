@@ -33,10 +33,11 @@
 
     <p>
       <strong>One <code>GET</code> of <code>/</code>, over HTTPS and over
-      plaintext.</strong> Nothing else was requested by this check, and no
-      address is constructed by this program at any point: there is no attempt
-      at <code>/admin</code>, no <code>/backup.zip</code>, and no second guess
-      of any kind. This reads what a server volunteers to every visitor.
+      plaintext, and one of <code>/.well-known/security.txt</code>.</strong>
+      Nothing else was requested, and no address is constructed by this program
+      at any point: there is no attempt at <code>/admin</code>, no
+      <code>/backup.zip</code>, and no second guess of any kind. This reads
+      what a server volunteers to every visitor.
     </p>
 
     <p>
@@ -46,12 +47,27 @@
       in a way worth correcting in public rather than quietly: the space is a
       register, not a hiding place. RFC 8615 created it for addresses a server
       offers to anyone who asks, and every entry in it is defined by its own
-      document. This check still fetches nothing there. Two other checks do —
-      a mail policy, and only where the zone published a record saying it is
-      there, and the file half of proof of control, which whoever publishes it
-      is asking to have read — and both are named in one list in the source,
-      each beside the document that defines it, so that a third cannot arrive
-      without anybody noticing.
+      document. RFC 9116 defines the one this check fetches:
+      <code>security.txt</code> exists so that a stranger who finds a fault in
+      your site knows who to tell, which makes reading it the clearest case
+      there is. Two other checks fetch one each — a mail policy, and only where
+      the zone published a record saying it is there, and the file half of
+      proof of control, which whoever publishes it is asking to have read.
+      Three addresses, named in one list in the source, each beside the
+      document that defines it, so that a fourth cannot arrive without anybody
+      noticing.
+    </p>
+
+    <p>
+      <strong>What is kept from <code>security.txt</code> is a count and a
+      date.</strong> The report says how many ways to report a fault the file
+      names and when the file says it expires — never the addresses
+      themselves. The state worth seeing is the one that is neither present nor
+      absent: a file published three years ago and expired since, which tells
+      whoever found a problem that they are expected somewhere nobody is
+      waiting. Nothing about this is graded. No document requires the file of
+      anybody, and a verdict here would be a threshold invented by this
+      project.
     </p>
 
     <p>

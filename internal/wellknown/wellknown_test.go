@@ -78,12 +78,15 @@ func TestEveryWellKnownAddressInTheSourceIsNamedHere(t *testing.T) {
 	// And nothing is named here that the program no longer asks for: a list
 	// with an entry nobody uses is a list somebody will trust for the wrong
 	// address.
-	for _, p := range append(append([]Path{}, Requested...), Served...) {
+	for _, p := range Paths {
 		if _, ok := found[p.Path]; !ok {
 			t.Errorf("%s is named here and nothing in the source requests it", p.Path)
 		}
-		if p.Document == "" || p.Why == "" {
-			t.Errorf("%s is named without a document or without a reason", p.Path)
+		if p.Document == "" {
+			t.Errorf("%s is named without the document that defines it", p.Path)
+		}
+		if p.Asked == "" && p.Serves == "" {
+			t.Errorf("%s is named and says neither that it is asked for nor that it is served, which is the one thing an entry cannot be", p.Path)
 		}
 	}
 }
@@ -112,10 +115,12 @@ var n7 = regexp.MustCompile(`(?s)### N7 — .*?\n### `)
 // guessing under /.well-known while two paths under it were already being
 // fetched, one of them for months.
 func TestTheListAndTheWrittenPromiseAgree(t *testing.T) {
-	for _, doc := range []string{
-		filepath.Join("..", "..", "docs", "invariants.md"),
-		filepath.Join("..", "..", "internal", "web", "assets", "web-method.html"),
-	} {
+	// Every file that could carry the sentence, rather than the two that
+	// carried it when this was written. Naming the files was not enough: the
+	// probe's own package comment promised it too, in a doc comment nothing
+	// was reading, and the promise survived a change that added the second
+	// request. A promise is wherever it is written.
+	for _, doc := range writings(t) {
 		body, err := os.ReadFile(doc)
 		if err != nil {
 			t.Fatalf("reading %s: %v", doc, err)
@@ -141,7 +146,7 @@ func TestTheListAndTheWrittenPromiseAgree(t *testing.T) {
 	if rule == "" {
 		t.Fatal("N7 was not found in the invariants, so nothing here checked anything")
 	}
-	for _, p := range Requested {
+	for _, p := range Requested() {
 		if !strings.Contains(rule, p.Path) {
 			t.Errorf("%s is fetched and N7 does not name it, so the rule and the code disagree", p.Path)
 		}
@@ -170,23 +175,75 @@ func TestCoversRefusesAnAddressNobodyDecidedOn(t *testing.T) {
 		}
 	}
 
-	// And the split holds: the address this project answers at is not on the
-	// side that says what it asks other people's servers for. N7's whole
-	// clarification rests on that line, so it is asserted rather than left to
-	// the comments.
-	for _, p := range Requested {
-		if p.Path == "/.well-known/security.txt" {
-			t.Error("security.txt is published by this project, not requested of anybody, and it has moved to the asked-for list")
+	// And each direction says what it means. These were two disjoint lists for
+	// one day, and the next change broke the shape: security.txt is published
+	// by this project and asked of the sites it scans, both at once. What is
+	// asserted now is that neither direction has quietly swallowed the other,
+	// and that no entry sits in the list explaining nothing.
+	asked, served := Requested(), Served()
+	if len(asked) == 0 || len(served) == 0 {
+		t.Fatalf("one direction is empty: %d asked for, %d served", len(asked), len(served))
+	}
+	for _, p := range asked {
+		if p.Asked == "" {
+			t.Errorf("%s is counted as asked for and gives no reason it is", p.Path)
 		}
 	}
-	if !Covers("/.well-known/security.txt") {
-		t.Error("the address this project serves is not named at all")
+	for _, p := range served {
+		if p.Serves == "" {
+			t.Errorf("%s is counted as served and gives no reason it is", p.Path)
+		}
 	}
-	for _, p := range Served {
-		for _, q := range Requested {
-			if p.Path == q.Path {
-				t.Errorf("%s is on both sides, which makes the split say nothing", p.Path)
+	if len(asked)+len(served) < len(Paths) {
+		t.Error("an address is in the list and in neither direction, so something touches it that nothing explains")
+	}
+
+	// The challenge file is the one that must never drift across: this project
+	// fetches it and does not publish it, because an installation publishing it
+	// would be proving control of itself.
+	for _, p := range served {
+		if p.Path == "/.well-known/porch-challenge" {
+			t.Error("the challenge file is listed as something this project serves, which would make proof of control prove nothing")
+		}
+	}
+}
+
+// writings is every file in this repository that says things to people: source
+// comments, pages, documentation and the scripts behind the pages.
+//
+// A promise is wherever it is written, and the first version of the test above
+// named two files. The probe's own package comment made the same promise, in a
+// doc comment nobody was reading, and kept making it through the change that
+// added a second request.
+func writings(t *testing.T) []string {
+	t.Helper()
+
+	var out []string
+	err := filepath.WalkDir(filepath.Join("..", ".."), func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if name := d.Name(); name == ".git" || name == "dist" || name == "tmp" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		switch filepath.Ext(path) {
+		case ".go", ".html", ".md", ".js", ".txt":
+			// Except this file, which quotes the sentence in order to refuse
+			// it and would otherwise be the only thing it ever caught.
+			if filepath.Base(path) != "wellknown_test.go" {
+				out = append(out, path)
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("reading the repository: %v", err)
 	}
+	if len(out) == 0 {
+		t.Fatal("no file was read, so nothing here checked anything")
+	}
+	return out
 }

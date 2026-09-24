@@ -25,12 +25,22 @@
 //
 // So the discipline is written into the code rather than left to the caller:
 //
-//   - One GET of "/", over HTTPS and over plaintext. Nothing else.
+//   - One GET of "/", over HTTPS and over plaintext, and one of
+//     /.well-known/security.txt. Nothing else.
 //
 //   - No path is ever constructed here. After the first request the only
 //     addresses fetched are the ones a Location header names. There is no
-//     probing of /admin, no guessing under /.well-known, and no second guess
-//     of any kind: this reads what the server volunteers to everybody.
+//     probing of /admin, no /backup.zip, and no second guess of any kind: this
+//     reads what the server volunteers to everybody.
+//
+//     The security.txt fetch is the one address under /.well-known, and it is
+//     not a guess: RFC 9116 defines that file as the thing a site publishes so
+//     that a stranger who finds a fault knows who to tell. Every address this
+//     project asks for under that space is named in internal/wellknown, beside
+//     the document defining it. Until 2026-09-24 this paragraph promised no
+//     guessing under /.well-known while the mail check had been reading a
+//     policy there for months, which is why the promise is now a list a test
+//     can check rather than a sentence.
 //
 //   - The body is read only where a caller asks for it, and nothing of it is
 //     kept. Until 2026-09-11 this said "the body is never read", and that
@@ -79,6 +89,7 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/markup"
 	"github.com/denyfirst/porch/internal/safedial"
+	"github.com/denyfirst/porch/internal/securitytxt"
 	"github.com/denyfirst/porch/internal/truststore"
 )
 
@@ -415,6 +426,16 @@ type Report struct {
 	// its own status code rather than passing it through.
 	BlockedDestination bool `json:"-"`
 
+	// SecurityTxt is what the site published at /.well-known/security.txt, or
+	// which kind of nothing was there. Asked once, after both chains, and only
+	// where the secure chain answered.
+	//
+	// A struct rather than a pointer: its own Asked field already separates a
+	// question that was never put from one that was, and a nil would be a
+	// second way of saying the same thing that every reader would have to check
+	// for (R4).
+	SecurityTxt securitytxt.Facts `json:"securityTxt"`
+
 	// TrustStoreUnreadable reports that this machine's certificate store could
 	// not be read, so nothing on either chain was verified against anything.
 	//
@@ -486,7 +507,32 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	// declined is a destination this service will not go to.
 	report.BlockedDestination = blockedDestination(report.Secure, report.Plain)
 
+	// And the one other address this check asks for. It is second because it
+	// is the less important of the two: a deadline that runs out should run
+	// out here rather than on the page a visitor lands on.
+	//
+	// Only where the secure chain answered. A host that did not answer at all
+	// has nothing to say about its security contact either, and asking twice
+	// would turn one refused connection into two in somebody's log for no
+	// added fact. It is asked of the host that was scanned rather than of
+	// wherever the chain ended: RFC 9116 puts the file at the domain being
+	// asked about, and following a redirect here would be reading one site's
+	// file and reporting it as another's.
+	if answered(report.Secure) {
+		f := &securitytxt.Fetcher{Client: client, UserAgent: p.userAgent(), Timeout: p.requestTimeout()}
+		report.SecurityTxt = f.Fetch(ctx, host)
+	}
+
 	return report, nil
+}
+
+// answered reports whether a chain reached a response at all.
+func answered(c *Chain) bool {
+	if c == nil {
+		return false
+	}
+	final := c.Final()
+	return final != nil && final.Status > 0
 }
 
 // chain follows one starting address as far as the limits allow.

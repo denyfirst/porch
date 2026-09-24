@@ -417,8 +417,28 @@ to** be read by strangers — that is what it is for.
 So the rule is exact: **no address this program invents, and no request that
 could change state.** Under `/.well-known` this project fetches a short list
 named in one place, each entry carrying the document that defines it, and
-nothing else. A third path is a decision somebody makes deliberately and writes
-down, not a line somebody adds.
+nothing else. A fourth path is a decision somebody makes deliberately and
+writes down, not a line somebody adds.
+
+The third arrived the day after the list did, which is the argument for having
+built the list: the web check now fetches `/.well-known/security.txt` as well
+as the page, because RFC 9116 defines that file as the thing a site publishes
+so a stranger who finds a fault knows who to tell. It is the clearest case this
+rule allows — an address defined by a standard, served to everybody, and read
+for the only purpose it has. What is kept from it is a count of contacts and
+one date, never an address, and nothing about it is graded (R21).
+
+`TestWhatIsReadIsCountedAndNotKept` checks that last part where it can be
+checked — every string the facts carry is searched for the address that was in
+the file, so a field added later with somewhere to put one fails in a test
+rather than in somebody's report. `TestASignatureIsNotReadAsFields` covers the
+case that looks harmless and is not: a PGP signature block is base64, base64
+holds colons, and a file read line by line past the signature reports contacts
+nobody published. `TestTheThreeKindsOfNothing` keeps apart the three answers
+that mean entirely different things — the file is there, the server says it has
+none, nothing answered at all — and `TestTheSecurityContactRowSaysWhichNothingItFound`
+holds the sentences the report prints for each, including the one the row
+exists for: published, and expired.
 
 That place is `internal/wellknown`, and it is a package rather than a comment
 because a comment cannot fail.
@@ -427,15 +447,25 @@ file in the repository for an address under that space and refuses one the list
 does not name, which is what keeps this paragraph true a year from now. It
 also refuses an entry the source no longer uses: a list carrying an address
 nobody asks for is a list somebody will trust for the wrong one. The same file
-names the one address this project *serves* — `/.well-known/security.txt`,
-which says where to report a fault in it — kept beside the others because the
-two directions are easy to confuse in a search of the source and impossible to
+names what this project *serves* as well as what it asks for, because the two
+directions are easy to confuse in a search of the source and impossible to
 confuse in what they mean.
 
+They were two separate lists for exactly one day. `security.txt` is published
+by this project *and* asked of the sites it scans, and a shape that could not
+say both would have made somebody pick the half that fit — which is how a list
+stops being true. Each entry now carries a reason for each direction it is used
+in, and the one thing an entry may not be is neither.
+
 `TestTheListAndTheWrittenPromiseAgree` holds the other end: every address the
-list says is fetched must be named in this file, and neither this file nor the
-method page may promise *no guessing under `/.well-known`* — words that stood
-until 2026-09-24 — except as a quotation carrying that date. It reads N7 as a
+list says is fetched must be named in this file, and nothing written anywhere
+in this repository may promise *no guessing under `/.well-known`* — words that
+stood until 2026-09-24 — except as a quotation carrying that date. It reads
+every `.go`, `.html`, `.md`, `.js` and `.txt` file rather than the two that
+carried the sentence when it was written, because the next one it caught was
+`internal/webprobe`'s own package comment: a promise in a doc comment nobody
+reads is still a promise, and it survived the change that added the second
+request. It reads N7 as a
 section rather than searching the whole file, because the first attempt at this
 was satisfied by a paragraph five hundred lines away that quotes a mail policy
 URL, and passed while the rule itself had stopped naming what the code fetches.
