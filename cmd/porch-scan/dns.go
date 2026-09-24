@@ -154,6 +154,11 @@ func printDNS(w io.Writer, r dnsResult) {
 // zone is signed at all, and then whether the link holds.
 func dnssecLine(f policy.DNSFacts) string {
 	switch {
+	case !f.Apex:
+		// The chain is a property of a zone, and no zone begins here. Nothing
+		// was asked, so "not signed" would be a claim about a zone this never
+		// looked at — and the zone above may well be signed (R4).
+		return "not read: the chain belongs to the zone above this name"
 	case !f.Signed:
 		return "not signed"
 	case f.ChainReason != "":
