@@ -2770,45 +2770,41 @@ main > .band:last-child { border-bottom: 0; }
   set in a smaller size than the body, so a width written on a <th> would be
   measured in the wrong font.
 */
+/*
+  Both chains get the same columns, and the columns divide the whole width.
+
+  Two attempts got this wrong in opposite directions. Sized by their contents,
+  the two tables did not line up with each other. Capped at 62rem, the table
+  stopped short of the panel it sits in, so every rule in it ended in mid-air
+  while the section rule above ran the full width — a table that has been cut
+  in half is what that looks like.
+
+  Shares of the width settle both. The rules reach the same edge as everything
+  else on the page, and the three columns are spaced by construction rather
+  than by whatever is left over after one of them has taken what it wants.
+*/
 .chain {
   table-layout: fixed;
-
-  /*
-    And it stops widening past what it needs.
-
-    The address column takes whatever the other two do not, so on a wide
-    display every extra pixel goes into empty space after a short URL and
-    pushes "Response" further from the address it belongs to. Measured at 1700
-    pixels the two ends of one row were most of a screen apart. Three columns
-    a reader compares should sit close enough to be read as a row.
-  */
-  max-width: 62rem;
+  width: 100%;
 }
 
 /*
-  "plaintext" is nine characters and is the longest this column holds. The rest
-  of the width is the gutter after it.
+  Half the width to the address, and the rest split between the two facts about
+  the hop: how it was made, and what came back.
 
-  Declared here rather than left to the cell's own padding, which is the
-  0.8rem every table in this stylesheet uses. At that width the two columns
-  read as one: "plaintext" ends and "no response" begins close enough that an
-  eye going down the table has to separate them each time. These are two
-  different facts about the same hop — how it was made, and what came back —
-  and the space between them is what says so.
+  Shares rather than characters, so the three add to the whole and none of them
+  is the one that absorbs the difference. At the cell padding every table here
+  shares, "plaintext" ended and "no response" began close enough that an eye
+  going down the table had to separate them each time; a fifth of the width
+  between their two edges says they are two answers and not one.
+
+  The response column is the widest of the two because of what goes in it: a
+  number, or "no response" with webprobe's own reason underneath, and a reason
+  squeezed narrow arrives as a column of two-word lines.
 */
-.chain .col-transport { width: calc(9ch + 2.6rem); }
-
-/*
-  Wide enough for the status and for the sentence under it. What goes here is
-  a number, or "no response" with webprobe's own reason beneath — and a reason
-  squeezed into the width of "no response" arrives as a column of two-word
-  lines.
-*/
-.chain .col-response { width: 26ch; }
-
-/* Declared rather than left out: the address column takes what the other two
-   do not, and saying so is what those two are measured against. */
-.chain .col-address { width: auto; }
+.chain .col-address   { width: 50%; }
+.chain .col-transport { width: 20%; }
+.chain .col-response  { width: 30%; }
 
 /*
   An address is broken mid-word where it has to be. It is not an identifier

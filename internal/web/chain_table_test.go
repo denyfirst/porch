@@ -1,6 +1,8 @@
 package web
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -62,31 +64,30 @@ func TestTheChainColumnsAreDeclaredRatherThanMeasured(t *testing.T) {
 	if !strings.Contains(cssRule(t, sheet, ".chain"), "table-layout: fixed") {
 		t.Error("the chain tables are still sized by their contents")
 	}
-	// And it stops widening past what it needs: with the address column taking
-	// whatever the other two do not, every extra pixel of a wide display went
-	// into empty space after a short URL and pushed the response away from the
-	// address it belongs to.
-	if !strings.Contains(cssRule(t, sheet, ".chain"), "max-width:") {
-		t.Error("the chain table widens without limit, so one row can span a whole screen")
-	}
-	for _, selector := range []string{".chain .col-transport", ".chain .col-response"} {
-		if !strings.Contains(cssRule(t, sheet, selector), "width:") {
-			t.Errorf("%s has no width, so it takes whatever its own rows need", selector)
-		}
-	}
-	// The transport column carries the gutter between it and the response, and
-	// carries it as width rather than as the cell padding every table here
-	// shares. At that padding "plaintext" and "no response" read as one thing,
-	// and they are two different facts about the same hop.
-	if transport := cssRule(t, sheet, ".chain .col-transport"); !strings.Contains(transport, "9ch +") ||
-		strings.Contains(transport, "+ 0.8rem") {
-		t.Errorf("the transport column is %q, which leaves only the padding between it and the response", transport)
+	// The table fills what it sits in. Capped, its rules ended in mid-air while
+	// the section rule above ran the full width, which is exactly what a table
+	// cut in half looks like.
+	if table := cssRule(t, sheet, ".chain"); !strings.Contains(table, "width: 100%") ||
+		strings.Contains(table, "max-width") {
+		t.Errorf("the chain table is %q, and it has to reach the same edge as everything beside it", table)
 	}
 
-	// Declared rather than left out, because it is what the other two are
-	// measured against.
-	if !strings.Contains(cssRule(t, sheet, ".chain .col-address"), "width: auto") {
-		t.Error("the address column does not say it takes what is left")
+	// Shares of that width, adding to the whole. With one column taking
+	// whatever the others left, the two facts about a hop — how it was made and
+	// what came back — ended up against each other at one end of an empty row.
+	total := 0
+	for _, selector := range []string{".chain .col-address", ".chain .col-transport", ".chain .col-response"} {
+		rule := cssRule(t, sheet, selector)
+		share := regexp.MustCompile(`width:\s*(\d+)%`).FindStringSubmatch(rule)
+		if share == nil {
+			t.Errorf("%s is %q, and a column with no share of the width takes what is left", selector, rule)
+			continue
+		}
+		n, _ := strconv.Atoi(share[1])
+		total += n
+	}
+	if total != 100 {
+		t.Errorf("the columns take %d%% of the width between them", total)
 	}
 
 	// An address longer than its column has to wrap inside the cell. Anywhere
