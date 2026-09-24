@@ -138,12 +138,29 @@ func parseReplyWith(raw []byte, id uint16, question []byte, qtype uint16, author
 		// The same reader over the next section, with the same owner check: a
 		// server pointing at a delegation writes the child's name there, and a
 		// record for any other name answers a question nobody asked.
-		delegated, _, err := parseAnswers(raw, after,
+		delegated, next, err := parseAnswers(raw, after,
 			int(binary.BigEndian.Uint16(raw[8:10])), TypeNS, foldName(question))
 		if err != nil {
 			return out, err
 		}
 		out.referral = delegated.ns
+
+		// And the addresses the same reply carries for those names, which is
+		// the glue.
+		//
+		// A server inside the zone it serves cannot be reached any other way:
+		// looking up ns1.example.com means asking example.com's servers, which
+		// means knowing where they are. So the parent hands the addresses out
+		// beside the delegation, and what a resolver starting at the root uses
+		// is that copy — not the one the zone publishes for the same name.
+		//
+		// Owned by the names in the referral, not by the question: this is the
+		// one section where a record for another name is the answer.
+		glue, err := parseGlue(raw, next, int(binary.BigEndian.Uint16(raw[10:12])), delegated.ns)
+		if err != nil {
+			return out, err
+		}
+		out.glue = glue
 	}
 
 	return out, nil
@@ -831,5 +848,76 @@ func parseRRSIG(raw, rdata []byte, rdataAt int) (RRSIG, error) {
 		return RRSIG{}, err
 	}
 	out.Signer = signer
+	return out, nil
+}
+
+// parseGlue reads the addresses a referral carries for the servers it names.
+//
+// The additional section of a referral, filtered to the names the delegation
+// pointed at. Every other section here is read against the question that was
+// asked; this one is read against the answer, because that is what glue is —
+// the addresses of names nobody asked about, sent because a resolver cannot
+// look them up without them.
+//
+// Records for any other name are skipped rather than refused, which is how
+// every section here treats a record it did not ask for: the additional
+// section is where a server puts whatever it thought might help, and a reply
+// carrying something unrelated is ordinary rather than hostile.
+func parseGlue(raw []byte, offset, count int, names []string) (map[string][]netip.Addr, error) {
+	if count == 0 || len(names) == 0 {
+		return nil, nil
+	}
+
+	// Keyed by the name in wire form, folded, which is what readName returns:
+	// comparing text would mean rebuilding a name from bytes a server chose,
+	// and the bytes are the thing that has to match.
+	wanted := make(map[string]string, len(names))
+	for _, name := range names {
+		wire, err := encodeName(name, false)
+		if err != nil {
+			continue
+		}
+		wanted[string(foldName(wire))] = name
+	}
+
+	out := map[string][]netip.Addr{}
+	for i := 0; i < count; i++ {
+		owner, next, err := readName(raw, offset)
+		if err != nil {
+			return nil, err
+		}
+		offset = next
+
+		if offset+10 > len(raw) {
+			return nil, errors.New("dnsclient: a record ends before its header does")
+		}
+		rrType := binary.BigEndian.Uint16(raw[offset : offset+2])
+		rdLength := int(binary.BigEndian.Uint16(raw[offset+8 : offset+10]))
+		offset += 10
+
+		if rdLength < 0 || offset+rdLength > len(raw) {
+			return nil, errors.New("dnsclient: a record announces more data than the reply holds")
+		}
+		rdata := raw[offset : offset+rdLength]
+		offset += rdLength
+
+		if rrType != TypeA && rrType != TypeAAAA {
+			continue
+		}
+		host, ok := wanted[string(owner)]
+		if !ok {
+			continue
+		}
+
+		size := 4
+		if rrType == TypeAAAA {
+			size = 16
+		}
+		addr, err := parseAddress(rdata, size)
+		if err != nil {
+			return nil, err
+		}
+		out[host] = append(out[host], addr)
+	}
 	return out, nil
 }

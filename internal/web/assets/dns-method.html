@@ -116,6 +116,13 @@
         still holds this zone.</li>
       <li><strong>A DNSSEC chain that does not check out</strong>, and an alias
         at the top of a zone, which RFC 1034 and RFC 2181 both forbid.</li>
+      <li><strong>An address the zone above hands out that this zone does not
+        publish.</strong> A server inside the zone it serves cannot be looked up
+        without being told where it is, so the address its parent hands out is
+        what a resolver starting at the root dials — and whoever reaches it
+        reaches whatever is there now. RFC 1912 describes both halves: an
+        address left behind at the parent, and a server whose addresses are not
+        all listed in the glue.</li>
       <li><strong>A signature that has already run out.</strong> RFC 4035
         requires a validating resolver to refuse a signature whose validity
         period does not contain the current time, so the zone is already gone

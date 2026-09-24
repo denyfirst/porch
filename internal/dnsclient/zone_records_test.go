@@ -372,3 +372,59 @@ func TestAShortSignatureIsRefusedRatherThanReadPastItself(t *testing.T) {
 		t.Error("a signature shorter than its own header was read, out of the bytes after it")
 	}
 }
+
+// A referral's addresses are read for the names it delegated to, and for no
+// other name.
+//
+// Every other section here is read against the question that was asked; this
+// one is read against the answer, because that is what glue is — the addresses
+// of names nobody asked about, sent because a resolver cannot look them up
+// without them. A record for some other name in the same section answers
+// nothing and is skipped.
+func TestTheAddressesInAReferralAreReadForTheNamesItDelegatedTo(t *testing.T) {
+	q := name(t, "example.com")
+	ns1 := name(t, "ns1.example.com")
+	other := name(t, "ns.somewhere.test")
+
+	raw := referralWithGlue(t, q,
+		[]record{{q, TypeNS, nsRecord(t, "ns1.example.com")}},
+		[]record{
+			{ns1, TypeA, []byte{192, 0, 2, 53}},
+			{ns1, TypeAAAA, append(make([]byte, 15), 1)},
+			// For a name the delegation did not mention, which is a record
+			// this was not sent and does not read.
+			{other, TypeA, []byte{198, 51, 100, 9}},
+			// And a type that is not an address at all.
+			{ns1, TypeTXT, []byte{3, 'a', 'b', 'c'}},
+		})
+
+	got, err := parseReferral(raw, 0x1234, q, TypeNS)
+	if err != nil {
+		t.Fatalf("a referral carrying addresses was refused: %v", err)
+	}
+	if len(got.glue) != 1 {
+		t.Fatalf("the glue reads %v, and only the delegated name was asked about", got.glue)
+	}
+	addresses := got.glue["ns1.example.com"]
+	if len(addresses) != 2 || addresses[0].String() != "192.0.2.53" || addresses[1].String() != "::1" {
+		t.Errorf("the addresses read %v", addresses)
+	}
+}
+
+// referralWithGlue builds a referral: nothing in the answer section, the
+// delegation in the authority section, and addresses in the additional one.
+func referralWithGlue(t *testing.T, question []byte, authority, additional []record) []byte {
+	t.Helper()
+
+	msg := pointing(0x1234, question, TypeNS, authority...)
+	binary.BigEndian.PutUint16(msg[10:12], uint16(len(additional)))
+	for _, r := range additional {
+		msg = append(msg, r.name...)
+		msg = binary.BigEndian.AppendUint16(msg, r.rrType)
+		msg = binary.BigEndian.AppendUint16(msg, classIN)
+		msg = binary.BigEndian.AppendUint32(msg, 300)
+		msg = binary.BigEndian.AppendUint16(msg, uint16(len(r.rdata)))
+		msg = append(msg, r.rdata...)
+	}
+	return msg
+}

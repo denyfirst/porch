@@ -102,6 +102,16 @@ type NameServer struct {
 	Serial     uint32 `json:"serial,omitempty"`
 	SerialRead bool   `json:"serialRead,omitempty"`
 
+	// Glue is what the zone above hands out as this server's address, where it
+	// hands out anything, and GlueRead says whether the question was put.
+	//
+	// Only ever filled for a server inside the zone it serves: a resolver
+	// starting at the root cannot look that name up without being told, so the
+	// parent's copy is what it dials. The zone publishes the same addresses
+	// itself, in Addresses above, and the two can disagree.
+	Glue     []string `json:"glue,omitempty"`
+	GlueRead bool     `json:"glueRead,omitempty"`
+
 	// TransferAsked is whether this server was asked for the whole zone, and
 	// Transfer whether it began handing it over. TransferReason says why the
 	// question established nothing, where that is what happened.
@@ -431,6 +441,40 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 					"the answer a visitor gets depends on which server their resolver tried first.",
 				rfc1912)
 		}
+	}
+
+	// The address the zone above hands out for a server, against the one the
+	// zone publishes for the same name.
+	//
+	// A server inside the zone it serves cannot be looked up without being
+	// told where it is, so what a resolver starting at the root dials is the
+	// parent's copy — and nothing in the zone's own records shows what that
+	// copy says. RFC 1912 §2.3 describes both halves of getting it wrong: an
+	// address left behind at the parent, where "random people still see the
+	// old IP address", and a multi-homed server whose addresses are not all
+	// listed, which it states as a requirement.
+	if stale, missing := glueDiff(f.NameServers); len(stale)+len(missing) > 0 {
+		detail := "A server inside this zone can only be reached through the address its parent hands " +
+			"out, so that copy is what a resolver starting at the root dials. "
+		switch {
+		case len(stale) > 0 && len(missing) > 0:
+			detail += "The parent hands out " + strings.Join(stale, ", ") + ", which this zone does not " +
+				"publish, and this zone publishes " + strings.Join(missing, ", ") + ", which the parent " +
+				"does not hand out."
+		case len(stale) > 0:
+			detail += "The parent hands out " + strings.Join(stale, ", ") + ", which this zone does not publish."
+		default:
+			detail += "This zone publishes " + strings.Join(missing, ", ") + ", which the parent does not " +
+				"hand out — and RFC 1912 asks that every address of a server appear in the glue."
+		}
+		add("dns.glue-does-not-match", Weak,
+			"The address the parent hands out is not the one this zone publishes",
+			detail+" Whoever reaches the first address reaches whatever is there now, which may be a "+
+				"machine that no longer serves this zone or somebody else's entirely; whoever reaches the "+
+				"second gets the zone. Which one a visitor gets depends on their resolver, and nothing in "+
+				"this zone's own records can show it. It is changed where the delegation is — at the "+
+				"registrar — and not in the zone file.",
+			rfc1912)
 	}
 
 	if len(aliased) > 0 {
@@ -887,4 +931,47 @@ func transfersOf(servers []NameServer) (open, unread []string) {
 		}
 	}
 	return open, unread
+}
+
+// glueDiff compares what the zone above hands out as each server's address
+// with what the zone itself publishes for the same name.
+//
+// Two lists and not one count, because the two directions are different
+// faults. An address only the parent hands out is one a resolver dials and the
+// zone no longer claims — the one that sends visitors to whatever is there
+// now. An address only the zone publishes is one no resolver starting at the
+// root will ever use, which is the multi-homed case RFC 1912 §2.3 states as a
+// requirement.
+//
+// Only servers whose glue was actually read are compared, and only where the
+// zone's own addresses were read too: a lookup that failed is not an address
+// that disagrees (R4). Each entry names the server, so a reader knows where to
+// go and change it.
+func glueDiff(servers []NameServer) (stale, missing []string) {
+	for _, ns := range servers {
+		if !ns.GlueRead || ns.Reason != "" {
+			continue
+		}
+
+		published := map[string]bool{}
+		for _, addr := range ns.Addresses {
+			published[addr] = true
+		}
+		handed := map[string]bool{}
+		for _, addr := range ns.Glue {
+			handed[addr] = true
+		}
+
+		for _, addr := range ns.Glue {
+			if !published[addr] {
+				stale = append(stale, addr+" for "+ns.Name)
+			}
+		}
+		for _, addr := range ns.Addresses {
+			if !handed[addr] {
+				missing = append(missing, addr+" for "+ns.Name)
+			}
+		}
+	}
+	return stale, missing
 }

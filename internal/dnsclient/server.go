@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/denyfirst/porch/internal/safedial"
 )
@@ -49,6 +50,15 @@ type ServerAnswer struct {
 	// list, read from a server that holds the zone; Referral is the list its
 	// parent hands out. A resolver starting from the root follows the second.
 	Referral []string
+
+	// Glue holds the addresses that referral carried for the servers it named,
+	// keyed by name and written as text.
+	//
+	// A server inside the zone it serves cannot be reached any other way, so
+	// this copy is what a resolver starting at the root actually dials. The zone
+	// publishes the same addresses itself, and the two can differ: then some
+	// resolvers reach one machine and some the other.
+	Glue map[string][]string
 }
 
 // serverPort is the one port a name server is asked on.
@@ -116,6 +126,7 @@ func (c *Client) AskServer(ctx context.Context, address, name string, qtype uint
 		NS:               reply.ns,
 		SOA:              reply.soa,
 		Referral:         reply.referral,
+		Glue:             addressText(reply.glue),
 	}
 	if err != nil {
 		// A refusal, a failure, or a reply this could not read. The flags
@@ -314,4 +325,19 @@ func (c *Client) askServerHead(ctx context.Context, address string, query []byte
 		return nil, fmt.Errorf("dnsclient: reading the reply: %w", err)
 	}
 	return head, nil
+}
+
+// addressText writes the glue as text, which is the shape every other address
+// leaves this package in.
+func addressText(glue map[string][]netip.Addr) map[string][]string {
+	if len(glue) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(glue))
+	for name, addresses := range glue {
+		for _, addr := range addresses {
+			out[name] = append(out[name], addr.String())
+		}
+	}
+	return out
 }
