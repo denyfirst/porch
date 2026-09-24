@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -203,16 +204,21 @@ func mailOutcomes(results []mailResult) []outcome {
 func printMailPath(w io.Writer, f *policy.MailFacts) {
 	fmt.Fprintf(w, "\n  Mail path\n")
 
+	// Whatever the MX line says, the rows under it are still drawn.
+	//
+	// Three of these four used to return here, so a domain whose MX lookup
+	// failed, or that accepts no mail, produced a report with no MTA-STS row
+	// and no DANE row at all — and MTA-STS is a separate lookup at a separate
+	// name that may well have answered. A row that is not there reads as a
+	// question nobody had (R4). What each row says instead is why there was
+	// nothing to say, which is the sentence a reader acts on.
 	switch {
 	case f.MXReason != "":
 		fmt.Fprintf(w, "    MX         not read: %s\n", f.MXReason)
-		return
 	case f.NullMX:
 		fmt.Fprintf(w, "    MX         null MX: the domain accepts no mail\n")
-		return
 	case !f.MXRead:
 		fmt.Fprintf(w, "    MX         not read\n")
-		return
 	case len(f.MXHosts) == 0:
 		fmt.Fprintf(w, "    MX         none published\n")
 	default:
@@ -229,16 +235,7 @@ func printMailPath(w io.Writer, f *policy.MailFacts) {
 
 	fmt.Fprintf(w, "    MTA-STS    %s\n", stsLine(f))
 
-	switch {
-	case len(f.MXHosts) == 0:
-	case len(f.DANEHosts) == 0:
-		fmt.Fprintf(w, "    DANE       none of the %d\n", len(f.MXHosts))
-	case len(f.DANEHosts) == len(f.MXHosts):
-		fmt.Fprintf(w, "    DANE       all %d\n", len(f.MXHosts))
-	default:
-		fmt.Fprintf(w, "    DANE       %d of the %d: %s\n",
-			len(f.DANEHosts), len(f.MXHosts), strings.Join(f.DANEHosts, ", "))
-	}
+	fmt.Fprintf(w, "    DANE       %s\n", daneSummary(f))
 
 	if f.DANEUnread > 0 {
 		fmt.Fprintf(w, "               %d could not be read\n", f.DANEUnread)
@@ -297,4 +294,30 @@ func lowerBound(bound bool) string {
 		return "at least "
 	}
 	return ""
+}
+
+// daneSummary says how many exchangers publish DANE records, or why the
+// question could not be put.
+//
+// The count and the four ways there is no count, in one place, because the row
+// is drawn whether or not there is an answer and each kind of nothing sends a
+// reader somewhere different: a domain that accepts no mail has nothing to
+// protect, one whose exchangers could not be read has an unknown answer, and
+// one whose exchangers publish no records has a measured one.
+func daneSummary(f *policy.MailFacts) string {
+	switch {
+	case f.NullMX:
+		return "not checked: the domain accepts no mail"
+	case f.MXReason != "" || !f.MXRead:
+		return "not checked: the exchangers are not known"
+	case len(f.MXHosts) == 0:
+		return "not checked: the domain publishes no exchanger"
+	case len(f.DANEHosts) == 0:
+		return "none of the " + strconv.Itoa(len(f.MXHosts))
+	case len(f.DANEHosts) == len(f.MXHosts):
+		return "all " + strconv.Itoa(len(f.MXHosts))
+	default:
+		return strconv.Itoa(len(f.DANEHosts)) + " of the " + strconv.Itoa(len(f.MXHosts)) +
+			": " + strings.Join(f.DANEHosts, ", ")
+	}
 }

@@ -1416,6 +1416,13 @@ function zone(facts) {
   // value: a domain with no DANE, a domain whose DANE could not be read, and a
   // domain that accepts no mail at all are three answers a reader acts on
   // differently, and a table that drew them alike would be worse than silent.
+  // Whatever the MX row says, the rows under it are still drawn.
+  //
+  // Three of these four used to end the block, so a domain whose MX lookup
+  // failed, or that accepts no mail, was shown no MTA-STS row and no DANE row
+  // at all — and MTA-STS is a separate lookup at a separate name that may well
+  // have answered. A row that is not there reads as a question nobody had.
+  const hosts = facts.mxHosts || [];
   if (facts.mxReason) {
     row("MX", "not read: " + facts.mxReason);
   } else if (facts.nullMX) {
@@ -1423,44 +1430,34 @@ function zone(facts) {
   } else if (!facts.mxRead) {
     row("MX", "not read");
   } else {
-    const hosts = facts.mxHosts || [];
     row("MX", hosts.length ? hosts.join(", ") : "none published");
     const aliased = facts.mxAliases || [];
     if (aliased.length) row("MX alias", aliased.join(", ") + ": a name RFC 2181 says carries an address", "weak");
+  }
 
-    row("MTA-STS", stsSays(facts));
+  row("MTA-STS", stsSays(facts));
+  row("DANE", daneSummary(facts));
+  if (facts.daneUnread) {
+    row("DANE", facts.daneUnread + " could not be read");
+  }
 
-    if (hosts.length) {
-      const dane = facts.daneHosts || [];
-      if (dane.length === 0) {
-        row("DANE", "none of the " + hosts.length);
-      } else if (dane.length === hosts.length) {
-        row("DANE", "all " + hosts.length);
-      } else {
-        row("DANE", dane.length + " of the " + hosts.length + ": " + dane.join(", "));
+  // What each exchanger answered when asked for encryption, in the words the
+  // terminal uses (R16). Where none was spoken to, why — including when even
+  // the reason is missing, which used to draw nothing at all.
+  if (hosts.length) {
+    if (facts.exchangersContacted) {
+      for (const x of facts.exchangers || []) {
+        row("STARTTLS", x.host + ": " + exchangerSays(x));
       }
-    }
-    if (facts.daneUnread) {
-      row("DANE", facts.daneUnread + " could not be read");
-    }
-
-    // What each exchanger answered when asked for encryption, in the words
-    // the terminal uses (R16).
-    if (hosts.length) {
-      if (facts.exchangersContacted) {
-        for (const x of facts.exchangers || []) {
-          row("STARTTLS", x.host + ": " + exchangerSays(x));
-        }
-        for (const x of facts.exchangers || []) {
-          if (!x.relayAsked && !x.relayReason) continue;
-          row("RELAY", x.host + ": " + relaySays(x), x.relayAccepted ? "insecure" : null);
-        }
-        for (const b of facts.daneBindings || []) {
-          row("DANE", b.host + ": " + daneSays(b));
-        }
-      } else if (facts.exchangersReason) {
-        row("STARTTLS", "not measured: " + facts.exchangersReason);
+      for (const x of facts.exchangers || []) {
+        if (!x.relayAsked && !x.relayReason) continue;
+        row("RELAY", x.host + ": " + relaySays(x), x.relayAccepted ? "insecure" : null);
       }
+      for (const b of facts.daneBindings || []) {
+        row("DANE", b.host + ": " + daneSays(b));
+      }
+    } else {
+      row("STARTTLS", "not measured: " + (facts.exchangersReason || "this scan did not contact them"));
     }
   }
 
@@ -2474,4 +2471,24 @@ if (historyBox && historyReport) {
       historyNote(body && body.status);
     })
     .catch(err => historyStatus(err.message));
+}
+
+// daneSummary says how many exchangers publish DANE records, or why the
+// question could not be put, in the words the terminal uses (R16).
+//
+// The count and the four ways there is no count, in one place, because the row
+// is drawn whether or not there is an answer and each kind of nothing sends a
+// reader somewhere different: a domain that accepts no mail has nothing to
+// protect, one whose exchangers could not be read has an unknown answer, and
+// one whose exchangers publish no records has a measured one.
+function daneSummary(facts) {
+  const hosts = facts.mxHosts || [];
+  const dane = facts.daneHosts || [];
+
+  if (facts.nullMX) return "not checked: the domain accepts no mail";
+  if (facts.mxReason || !facts.mxRead) return "not checked: the exchangers are not known";
+  if (hosts.length === 0) return "not checked: the domain publishes no exchanger";
+  if (dane.length === 0) return "none of the " + hosts.length;
+  if (dane.length === hosts.length) return "all " + hosts.length;
+  return dane.length + " of the " + hosts.length + ": " + dane.join(", ");
 }

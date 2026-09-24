@@ -18,9 +18,15 @@ func printExchangers(w io.Writer, f *policy.MailFacts) {
 		return
 	}
 	if !f.ExchangersContacted {
-		if f.ExchangersReason != "" {
-			fmt.Fprintf(w, "    STARTTLS   not measured: %s\n", f.ExchangersReason)
+		// Why they were not spoken to, and "not measured" where even that is
+		// not recorded. The row is drawn either way: without it a reader
+		// cannot tell an exchanger nobody asked from one that answered well
+		// (R4), and this returned in silence whenever the reason was empty.
+		reason := f.ExchangersReason
+		if reason == "" {
+			reason = "this scan did not contact them"
 		}
+		fmt.Fprintf(w, "    STARTTLS   not measured: %s\n", reason)
 		return
 	}
 	for _, x := range f.Exchangers {

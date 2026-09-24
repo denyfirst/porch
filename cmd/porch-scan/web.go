@@ -191,10 +191,17 @@ func printChains(w io.Writer, r webResult) {
 		{"Over TLS", r.Observed.Secure},
 		{"Over plaintext", r.Observed.Plain},
 	} {
+		fmt.Fprintf(w, "\n  %s\n", c.heading)
 		if c.chain == nil || len(c.chain.Hops) == 0 {
+			// Nothing attempted is not nothing found, and this used to skip
+			// the heading as well — so a report with no plaintext section left
+			// a reader unable to tell an address nothing was tried at from a
+			// section that had been left out. The page has said this sentence
+			// since it was written; the terminal said nothing at all, which is
+			// the two faces of one report disagreeing (R16, R4).
+			fmt.Fprintf(w, "    Nothing was attempted at this address.\n")
 			continue
 		}
-		fmt.Fprintf(w, "\n  %s\n", c.heading)
 		for _, h := range c.chain.Hops {
 			switch {
 			case h.Err != "":
