@@ -3951,6 +3951,12 @@ change whose zone is being given away, while whether it answers for strangers
 is its operator's business. The zone above is asked about this domain and never
 about itself.
 
+**Every line of the report says which record it came from.** "Alias (CNAME)",
+"Zone (SOA)", "Signature (RRSIG)": the plain word for a reader who does not know
+the type, and the type because the interface they will open to change it calls
+the field by that name and nothing else. It is R16's rule about the DNSSEC
+algorithm applied to every line beside it.
+
 **When the signatures run out is reported, and only a signature that has
 already run out is graded.** RFC 4035 §5.3.1 has a validating resolver refuse a
 signature whose validity period does not contain the current time, so a zone
@@ -4028,6 +4034,7 @@ whoever claims it next answers for this name.
 `TestASignatureIsReadOnlyWhereTheRecordsAre`,
 `TestAShortSignatureIsRefusedRatherThanReadPastItself`,
 `TestWhenTheSignatureRunsOutIsDrawnInBothFaces`,
+`TestEveryLineSaysWhichRecordItCameFrom`,
 `TestATransferIsAskedForAndNotTaken`, `TestATransferIsAskedThroughTheGuard`,
 `TestATransferReplyMustAnswerTheQuestionAsked`,
 `TestAServerThatHandsOutTheZoneIsDrawnInBothFaces`,
