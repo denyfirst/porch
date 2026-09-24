@@ -2651,6 +2651,7 @@ rather than a silence in the helper.
 (`cipher.unrecognised`), `policy.GradeLeaf` (`cert.key-algorithm-unrecognised`)
 *Guarded by:* `TestNothingMeasuredIsUngraded`, `TestUnreachableTargetIsUngraded`,
 `TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty`,
+`TestTheMailPathDrawsItsRowsWhateverTheMXSays`,
 `TestEveryStatedReasonIsTrueOfTheSuite`,
 `TestAClosedConnectionIsNotARefusal`,
 `TestSilenceIsNotARefusal`,
