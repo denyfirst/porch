@@ -314,3 +314,43 @@ func hasRule(r *Result, id string) bool {
 	}
 	return false
 }
+
+// What the site declared reaches the result, with what each header said.
+//
+// The probe records thirteen headers on every scan. Two of them are graded and
+// none of them was shown, so a report of a site that declares a content policy
+// read exactly like a report of one that declares nothing — and the second is
+// what an operator came to find out.
+func TestWhatTheSiteDeclaredReachesTheResult(t *testing.T) {
+	observed := &webprobe.Report{
+		Host: "example.test",
+		Secure: chain(hop(true, 200, map[string][]string{
+			hstsHeader:        {"max-age=63072000; includeSubDomains"},
+			"X-Frame-Options": {"DENY"},
+		})),
+		Plain: chain(failed(false)),
+	}
+
+	got := Grade(observed)
+	if len(got.Declared) == 0 {
+		t.Fatal("the result carries nothing the site declared")
+	}
+
+	said := map[string]string{}
+	for _, d := range got.Declared {
+		said[d.Label] = d.Says
+	}
+	// The value, not merely that a header was there: what an operator compares
+	// against their own configuration is what the header said.
+	if said["X-Frame-Options"] != "DENY" {
+		t.Errorf("X-Frame-Options reads %q", said["X-Frame-Options"])
+	}
+	if said[hstsHeader] != "max-age=63072000; includeSubDomains" {
+		t.Errorf("the transport policy reads %q", said[hstsHeader])
+	}
+	// And a header the response did not carry is a row saying so, because a
+	// row that is not there reads as a question nobody asked (R4).
+	if said["Referrer-Policy"] != "none" {
+		t.Errorf("a header that was absent reads %q", said["Referrer-Policy"])
+	}
+}

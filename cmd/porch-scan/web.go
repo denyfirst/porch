@@ -168,6 +168,7 @@ func printWebReport(w io.Writer, r webResult) {
 	}
 	fmt.Fprintf(w, "  Policy    %s\n", r.Policy)
 
+	printDeclared(w, r)
 	printChains(w, r)
 	printFindings(w, r.Findings)
 	printNotes(w, r.Notes, webMethodPage)
@@ -219,5 +220,33 @@ func printChains(w io.Writer, r webResult) {
 		if c.chain.Stopped != "" {
 			fmt.Fprintf(w, "    (%s)\n", c.chain.Stopped)
 		}
+	}
+}
+
+// printDeclared writes what the response a visitor lands on said about itself.
+//
+// Every row, whether or not there is an answer in it. Thirteen headers were
+// measured on every scan and shown on none, so a report of a site that declares
+// a content policy read exactly like a report of one that declares nothing —
+// and the second is the one an operator needs to be told about.
+//
+// The same rows as the page, from the same strings, because two renderers
+// composing one claim from the same facts is how the two faces come apart
+// (R16).
+func printDeclared(w io.Writer, r webResult) {
+	if r.Result == nil || len(r.Declared) == 0 {
+		return
+	}
+
+	fmt.Fprintf(w, "\n  What the site declares\n")
+
+	width := 0
+	for _, d := range r.Declared {
+		if len(d.Label) > width {
+			width = len(d.Label)
+		}
+	}
+	for _, d := range r.Declared {
+		fmt.Fprintf(w, "    %-*s  %s\n", width, d.Label, d.Says)
 	}
 }

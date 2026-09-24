@@ -53,6 +53,17 @@ type HeaderFacts struct {
 	// Present names every header of interest that the response carried.
 	Present map[string]bool
 
+	// Values is what each of them said, keyed by the same names, holding the
+	// first of a repeated header because that is the one a browser acts on.
+	//
+	// Beside Present rather than instead of it: a rule asks whether a header is
+	// there, and a report says what it was. Thirteen headers were being recorded
+	// by the probe, two of them graded and none of them shown — so an operator
+	// reading a clean report could not tell a site that declares a content
+	// policy from one that declares nothing, which is most of what they came to
+	// find out.
+	Values map[string]string
+
 	// ACAO and ACAC are the two CORS values whose combination a browser
 	// refuses. Kept as values rather than as presence, because it is what
 	// they say that decides it.
