@@ -126,9 +126,9 @@ func TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten(t *testing.T) {
 	src := script(t)
 
 	for _, want := range []string{
-		`row("IPv4", listOrNone(facts.ipv4));`,
-		`row("IPv6", listOrNone(facts.ipv6));`,
-		`row("Alias", "none");`,
+		`row("IPv4 (A)", listOrNone(facts.ipv4));`,
+		`row("IPv6 (AAAA)", listOrNone(facts.ipv6));`,
+		`row("Alias (CNAME)", "none");`,
 		`sectionTitle("Text records, as published")`,
 		"function textRecords(records) {",
 		"records.slice(0, 8)",

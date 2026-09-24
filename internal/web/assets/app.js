@@ -1114,47 +1114,47 @@ function published(facts) {
   if (facts.addressReason) {
     row("Addresses", "not read: " + facts.addressReason);
   } else {
-    row("IPv4", listOrNone(facts.ipv4));
-    row("IPv6", listOrNone(facts.ipv6));
+    row("IPv4 (A)", listOrNone(facts.ipv4));
+    row("IPv6 (AAAA)", listOrNone(facts.ipv6));
   }
 
   if (facts.aliasReason) {
-    row("Alias", "not read: " + facts.aliasReason);
+    row("Alias (CNAME)", "not read: " + facts.aliasReason);
   } else if (!facts.alias) {
-    row("Alias", "none");
+    row("Alias (CNAME)", "none");
   } else {
     row(
-      "Alias",
+      "Alias (CNAME)",
       facts.alias + (facts.aliasTargetExists ? "" : ", which does not exist"),
       facts.aliasTargetExists ? null : "weak",
     );
   }
 
   if (facts.soaFound) {
-    row("Zone", "begins here, serial " + facts.soaSerial);
+    row("Zone (SOA)", "begins here, serial " + facts.soaSerial);
     row("Primary", facts.soaPrimary);
   } else {
-    row("Zone", "begins above this name");
+    row("Zone (SOA)", "begins above this name");
   }
 
   const text = facts.text || [];
-  row("Text records", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
+  row("Text records (TXT)", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
 
-  row("DNSSEC", dnssecLine(facts), dnssecMark(facts));
+  row("DNSSEC (DS)", dnssecLine(facts), dnssecMark(facts));
 
   // The algorithm by the name an operator's own interface uses, and how
   // absent names are proved — both facts about a signed zone, neither a
   // verdict about it.
   if (facts.signed) {
     const names = (facts.keys || []).map(k => k.name || ("algorithm " + k.algorithm));
-    if (names.length) row("Signed with", [...new Set(names)].join(", "));
+    if (names.length) row("Signed with (DNSKEY)", [...new Set(names)].join(", "));
     // The date, on its own row. It is the one fact in this block that becomes
     // wrong by itself, while nobody changes anything.
     if (facts.signatureRead && facts.signatureExpires) {
-      row("Signature", "runs out " + facts.signatureExpires.slice(0, 10) +
+      row("Signature (RRSIG)", "runs out " + facts.signatureExpires.slice(0, 10) +
         ", made by key " + facts.signatureKeyTag);
     }
-    if (facts.nsec3Read) row("Absent names", absenceLine(facts));
+    if (facts.nsec3Read) row("Absent names (NSEC3)", absenceLine(facts));
   }
 
   table.appendChild(body);
@@ -1248,7 +1248,7 @@ function delegation(facts) {
   const table = el("table", "grid");
   const head = el("thead");
   const headRow = el("tr");
-  for (const name of ["Server", "Addresses"]) headRow.appendChild(el("th", null, name));
+  for (const name of ["Server (NS)", "Addresses"]) headRow.appendChild(el("th", null, name));
   head.appendChild(headRow);
   table.appendChild(head);
 
