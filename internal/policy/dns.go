@@ -91,6 +91,16 @@ type NameServer struct {
 	// nothing answered on port 53 from here.
 	AskedReason string `json:"askedReason,omitempty"`
 
+	// Serial is the zone's serial as this server answered it, and SerialRead
+	// says whether it answered with one at all. Two servers holding different
+	// serials hold different copies of the zone: the lower one is behind, and
+	// whoever a resolver happens to ask gets that copy.
+	//
+	// SerialRead rather than a zero serial, because zero is a serial somebody
+	// can publish (R4).
+	Serial     uint32 `json:"serial,omitempty"`
+	SerialRead bool   `json:"serialRead,omitempty"`
+
 	// RecursionAsked is whether this server was asked about a domain it has
 	// nothing to do with, and Recursion whether it went and found the answer.
 	// Only a server inside the domain being checked is asked that: a provider's
@@ -528,6 +538,30 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			"recommendations, so they are reported here and not graded.")
 	}
 
+	// Whether the servers hold the same copy of the zone.
+	//
+	// Reported and not graded, and that is R21 rather than caution. A zone
+	// changed a moment ago legitimately has servers at two serials until the
+	// transfer finishes, no document says how long that may take, and a scan
+	// sees one instant. What can be said is what was measured: these servers
+	// answered with these numbers.
+	if agreed, serials := serialsOf(f.NameServers); len(serials) > 1 {
+		if agreed {
+			note("All " + strconv.Itoa(len(serials)) + " servers that answered hold the same copy of the " +
+				"zone: every one of them is at serial " + strconv.FormatUint(uint64(serials[0].serial), 10) + ".")
+		} else {
+			var said []string
+			for _, s := range serials {
+				said = append(said, s.name+" at "+strconv.FormatUint(uint64(s.serial), 10))
+			}
+			note("The servers do not hold the same copy of the zone: " + strings.Join(said, ", ") +
+				". Immediately after a change that is ordinary and lasts as long as the transfer takes. " +
+				"A difference that stays means a server is no longer receiving the zone, and a resolver " +
+				"that happens to ask that one answers from the older copy — so the same name resolves " +
+				"differently depending on who is asking.")
+		}
+	}
+
 	switch {
 	case !f.Signed || !f.NSEC3Read:
 		// An unsigned zone proves nothing absent, and an unread record is not
@@ -703,4 +737,33 @@ func DelegationDiff(zone []NameServer, parent []string) (onlyAtParent, onlyAtZon
 // normalName is a host name in the one spelling this compares by.
 func normalName(host string) string {
 	return strings.ToLower(strings.TrimSuffix(host, "."))
+}
+
+// serverSerial is one server's answer about which copy of the zone it holds.
+type serverSerial struct {
+	name   string
+	serial uint32
+}
+
+// serialsOf collects the serials the servers answered with, and says whether
+// they are all the same.
+//
+// Only the servers that answered are in it. A server nobody could ask holds no
+// opinion about the zone, and counting it as agreeing would turn a silence into
+// a measurement (R4).
+func serialsOf(servers []NameServer) (agreed bool, serials []serverSerial) {
+	for _, ns := range servers {
+		if ns.SerialRead {
+			serials = append(serials, serverSerial{ns.Name, ns.Serial})
+		}
+	}
+
+	agreed = true
+	for _, s := range serials {
+		if s.serial != serials[0].serial {
+			agreed = false
+			break
+		}
+	}
+	return agreed, serials
 }
