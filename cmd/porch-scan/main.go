@@ -623,9 +623,7 @@ func printCertificate(w io.Writer, r result) {
 	fmt.Fprintf(w, "\n  Certificate\n")
 	fmt.Fprintf(w, "    Subject      %s\n", leaf.Subject)
 	fmt.Fprintf(w, "    Issuer       %s\n", leaf.Issuer)
-	if leaf.Validation != "" {
-		fmt.Fprintf(w, "    Validation   %s\n", leaf.Validation)
-	}
+	fmt.Fprintf(w, "    Validation   %s\n", orNone(leaf.Validation, "not stated by the certificate"))
 	fmt.Fprintf(w, "    Valid        %s to %s",
 		leaf.NotBefore.UTC().Format(time.DateOnly),
 		leaf.NotAfter.UTC().Format(time.DateOnly))
@@ -646,12 +644,8 @@ func printCertificate(w io.Writer, r result) {
 	}
 	fmt.Fprintf(w, "    Signature    %s\n", leaf.SignatureAlgorithm)
 
-	if len(leaf.DNSNames) > 0 {
-		fmt.Fprintf(w, "    Names        %s\n", strings.Join(leaf.DNSNames, ", "))
-	}
-	if len(leaf.IPAddresses) > 0 {
-		fmt.Fprintf(w, "    Addresses    %s\n", strings.Join(leaf.IPAddresses, ", "))
-	}
+	fmt.Fprintf(w, "    Names        %s\n", orNone(strings.Join(leaf.DNSNames, ", "), "none"))
+	fmt.Fprintf(w, "    Addresses    %s\n", orNone(strings.Join(leaf.IPAddresses, ", "), "none"))
 
 	fmt.Fprintf(w, "    Fingerprint  %s\n", leaf.FingerprintSHA256)
 
@@ -678,18 +672,39 @@ func printCertificate(w io.Writer, r result) {
 	// The same three lines the page shows, in the same order, from the same
 	// strings. Two renderers composing one claim from the same facts is how
 	// the two come to say different things, so neither builds a sentence here.
-	if r.RevocationLine != "" {
-		fmt.Fprintf(w, "    Revocation   %s\n", wrap(r.RevocationLine, 60, "                 "))
+	//
+	// Each of these is drawn whether or not there is an answer, and an empty
+	// one says it was not established rather than disappearing. A row that is
+	// not there reads as a question nobody had; a row saying "not checked"
+	// reads as what it is, and the difference decides what a reader does next
+	// (R4). "Logged" is the one that made the case: empty means nothing
+	// searched the transparency logs, and a reader who could not see the row
+	// had no way to tell that from "no other certificate exists for this
+	// name".
+	var issuance string
+	if r.Issuance != nil {
+		issuance = r.Issuance.Line
 	}
-	if r.Issuance != nil && r.Issuance.Line != "" {
-		fmt.Fprintf(w, "    Issuance     %s\n", wrap(r.Issuance.Line, 60, "                 "))
+	for _, line := range []struct{ label, value, absent string }{
+		{"Revocation", r.RevocationLine, "not checked"},
+		{"Issuance", issuance, "not read"},
+		{"Transparency", r.TransparencyLine, "not read"},
+		{"Logged", r.LoggedLine, "not searched: the public logs were not asked what else exists for this name"},
+	} {
+		fmt.Fprintf(w, "    %-13s%s\n", line.label, wrap(orNone(line.value, line.absent), 60, "                 "))
 	}
-	if r.TransparencyLine != "" {
-		fmt.Fprintf(w, "    Transparency %s\n", wrap(r.TransparencyLine, 60, "                 "))
+}
+
+// orNone is a value, or the words that say there was none.
+//
+// One helper so that a row cannot be dropped by writing the condition slightly
+// differently from the row beside it, which is how eight of them came to be
+// conditional one at a time.
+func orNone(value, absent string) string {
+	if value == "" {
+		return absent
 	}
-	if r.LoggedLine != "" {
-		fmt.Fprintf(w, "    Logged       %s\n", wrap(r.LoggedLine, 60, "                 "))
-	}
+	return value
 }
 
 // The findings and the notes are rendered from slices rather than from a
