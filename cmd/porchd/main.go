@@ -39,9 +39,11 @@ import (
 
 	"github.com/denyfirst/porch/internal/access"
 	"github.com/denyfirst/porch/internal/challenge"
+	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/httpapi"
+	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
@@ -150,6 +152,12 @@ func run() int {
 		// bit is the resolver's word and worth what the path to it is worth,
 		// so this is a choice about a resolver, not a switch that makes DNS
 		// safe (audit 2026-09-16, A06).
+		askResponder = flag.Bool("ask-responder", false,
+			"ask each certificate's own authority whether it has been revoked. Needs\n"+
+				"\tproof of control, because the question tells that authority which\n"+
+				"\tcertificate is being looked at, from this address and when — so it is\n"+
+				"\tonly a disclosure to make about your own estate")
+
 		requireSigned = flag.Bool("verification-requires-dnssec", false,
 			"accept only a challenge record the resolver reports DNSSEC-validated, and\n"+
 				"\tno challenge file. Worth it only with a validating resolver you trust,\n"+
@@ -339,6 +347,20 @@ func run() int {
 		return 2
 	}
 
+	// A flag that would do nothing is refused rather than ignored.
+	//
+	// -ask-responder discloses a certificate to the authority that issued it,
+	// and that is a disclosure to make about your own estate: without a scope
+	// the names are not the operator's. Accepting it silently would be the
+	// failure the comment on -trusted-proxy-hops describes — a setting that
+	// looks applied and is not, which is worse than not offering it.
+	if *askResponder && scope == nil {
+		fmt.Fprintln(os.Stderr, "-ask-responder needs -verification-secret-file: "+
+			"the question names a certificate to its authority, which is a disclosure to make "+
+			"only about domains this installation has been shown control of")
+		return 2
+	}
+
 	// And a service beyond loopback has a password in front of it, or says out
 	// loud that it has none. Proof of control is about which domains may be
 	// checked, not who may ask: an example that dropped -access-file while
@@ -422,7 +444,7 @@ func run() int {
 	// platform picks, which is the store this program did not check. Verify
 	// is the scope read before that: leaving it nil is a service that scans
 	// whatever it is asked to.
-	api := httpapi.New(serviceScanner(roots, scope, *resolver), limits, nil)
+	api := httpapi.New(serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout), limits, nil)
 
 	// Where results are kept, if anywhere. Before serving, like every other
 	// piece of configuration here: a service that could start keeping records
@@ -878,8 +900,34 @@ func (r *certReloader) reload() error {
 // A function rather than a literal inside run(), so that what each flag
 // reaches can be asserted: run() parses flags and binds a port. porch-scan
 // learned this when its -resolver was parsed, documented and never assigned.
-func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string) *scan.Scanner {
+func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, askResponder bool, timeout time.Duration) *scan.Scanner {
 	scanner := &scan.Scanner{Roots: roots, Verify: scope}
+
+	// What a service with proof of control may find out about the certificates
+	// it is shown.
+	//
+	// Both of these were decided on this page years before they were wired to
+	// anything. N12's table says a service that requires proof of control
+	// searches the transparency logs with no switch, because the certificates
+	// for a name are published to anyone who looks and the name belongs to
+	// whoever proved it; the switch was written for the command line, where
+	// the name may be somebody else's. The table said so and nothing in this
+	// program did it.
+	//
+	// The responder is the other half and needs the switch, because what it
+	// discloses is not public: the authority learns which certificate is being
+	// looked at, from which address and when. R3a refused it to a service on
+	// the ground that its operator had not chosen it scan by scan — and an
+	// operator who passes a flag at start has chosen it for every scan the
+	// installation will run, which is the same choice the command line makes
+	// one scan at a time. Off by default, and only alongside proof of control:
+	// without a scope the names are not the operator's to disclose.
+	if scope != nil {
+		scanner.Logs = &ctsearch.CRTSh{Timeout: timeout}
+		if askResponder {
+			scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
+		}
+	}
 
 	// Only when there is one. An empty Server already means the machine's own
 	// configuration, but a non-nil client where there was nil before is not the
