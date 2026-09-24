@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"time"
 )
 
 // parseReply reads a reply and checks it answers the question that was asked.
@@ -131,6 +132,7 @@ func parseReplyWith(raw []byte, id uint16, question []byte, qtype uint16, author
 	out.keys = found.keys
 	out.cname = found.cname
 	out.nsec3 = found.nsec3
+	out.signatures = found.signatures
 
 	if authority {
 		// The same reader over the next section, with the same owner check: a
@@ -228,6 +230,31 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 		// signed zone. A record for a name outside the chain above is skipped
 		// for the same reason and with more cause: it answers a question
 		// nobody asked.
+		// The signature over what was asked for, kept beside it.
+		//
+		// Every query this package sends already asks for DNSSEC data, so these
+		// are on the wire whether or not anybody reads them: what is added here
+		// is reading the date in one, not a question. Only signatures over the
+		// type that was asked about, and only at a name in the chain — the same
+		// two tests the records themselves pass, for the same reason.
+		if rrType == TypeRRSIG && answering[string(owner)] {
+			// One that cannot be read is skipped, and that is deliberate.
+			//
+			// A signature is extra: it arrives beside every answer to every
+			// query because the DO bit is always set, and it is not what was
+			// asked for. Ending the parse on one would mean a zone with a
+			// record this cannot read loses the record it publishes correctly —
+			// which is what TestOtherRecordTypesAreSkipped has guarded since
+			// before anything here read a signature at all. The records
+			// themselves stay strict; what is lenient is the thing nobody
+			// asked for, and its absence is reported as unread rather than as
+			// a date (R4).
+			if signature, err := parseRRSIG(raw, rdata, rdataAt); err == nil && signature.Covered == qtype {
+				out.signatures = append(out.signatures, signature)
+			}
+			continue
+		}
+
 		if rrType != qtype || !answering[string(owner)] {
 			continue
 		}
@@ -331,6 +358,9 @@ type answerSet struct {
 	keys      []DNSKEY
 	cname     []string
 	nsec3     []NSEC3PARAM
+
+	// signatures are the RRSIG records covering the type that was asked for.
+	signatures []RRSIG
 }
 
 // parseCAA reads one property: a flags octet, a length-prefixed tag, and the
@@ -766,4 +796,40 @@ func parseNSEC3PARAM(rdata []byte) (NSEC3PARAM, error) {
 		Iterations: binary.BigEndian.Uint16(rdata[2:4]),
 		SaltLength: saltLen,
 	}, nil
+}
+
+// parseRRSIG reads the header of a signature and discards the signature.
+//
+// Eighteen fixed bytes, then the signer's name, then the signature itself
+// (RFC 4034 §3.1). What a report needs is in the fixed part and the name: when
+// the signature stops being accepted, which key made it, and over what. The
+// signature bytes are not returned, because nothing here verifies one — that
+// is a validating resolver's work, and keeping the bytes would invite somebody
+// to write the half of the job that looks easy.
+//
+// The signer's name is read from the whole message rather than from the record
+// alone: RFC 4034 §3.1.7 forbids compressing it, and a parser that trusted
+// that would be trusting whoever wrote the message.
+func parseRRSIG(raw, rdata []byte, rdataAt int) (RRSIG, error) {
+	const fixed = 18
+	if len(rdata) < fixed {
+		return RRSIG{}, errors.New("dnsclient: a signature record is shorter than its own header")
+	}
+
+	out := RRSIG{
+		Covered:   binary.BigEndian.Uint16(rdata[0:2]),
+		Algorithm: rdata[2],
+		// rdata[3] is the label count, and rdata[4:8] the original TTL. Both
+		// are for verifying the signature, which is not done here.
+		Expiration: time.Unix(int64(binary.BigEndian.Uint32(rdata[8:12])), 0).UTC(),
+		Inception:  time.Unix(int64(binary.BigEndian.Uint32(rdata[12:16])), 0).UTC(),
+		KeyTag:     binary.BigEndian.Uint16(rdata[16:18]),
+	}
+
+	signer, err := parseName(raw, rdataAt+fixed)
+	if err != nil {
+		return RRSIG{}, err
+	}
+	out.Signer = signer
+	return out, nil
 }

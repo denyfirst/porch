@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"net/netip"
 	"testing"
+	"time"
 )
 
 // soaRecord builds a start of authority in wire form: two uncompressed names
@@ -254,5 +255,120 @@ func TestHowAZoneHashesAbsentNamesIsRead(t *testing.T) {
 	)
 	if _, err := lying.LookupNSEC3PARAM(ctx, "example.com"); err == nil {
 		t.Error("a salt announcing more bytes than the record holds was read")
+	}
+}
+
+// rrsigRecord builds a signature header in wire form: the fixed eighteen
+// bytes, the signer's name uncompressed as RFC 4034 §3.1.7 requires, and a
+// signature this package never looks at.
+func rrsigRecord(t *testing.T, covered uint16, keyTag uint16, signer string, inception, expiration time.Time) []byte {
+	t.Helper()
+
+	name, err := encodeName(signer, false)
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+
+	out := make([]byte, 0, 18+len(name)+8)
+	out = binary.BigEndian.AppendUint16(out, covered)
+	out = append(out, 13) // algorithm
+	out = append(out, 2)  // labels
+	out = binary.BigEndian.AppendUint32(out, 3600)
+	out = binary.BigEndian.AppendUint32(out, uint32(expiration.Unix()))
+	out = binary.BigEndian.AppendUint32(out, uint32(inception.Unix()))
+	out = binary.BigEndian.AppendUint16(out, keyTag)
+	out = append(out, name...)
+	return append(out, []byte("not a signature")...)
+}
+
+// The date a signature runs out is read from the answer it came with.
+//
+// No question asks for it. Every query this package sends sets the DNSSEC OK
+// bit, so a signed zone's answers already carry the signature; what is new is
+// reading the one field in it that a report can act on.
+func TestWhenASignatureRunsOutIsReadFromTheAnswer(t *testing.T) {
+	q := name(t, "example.com")
+	inception := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	expiration := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+
+	got, err := parseReply(message(0x1234, flagsAnswerValidated, q, TypeSOA,
+		record{q, TypeSOA, soaRecord(t, "ns1.example.net", "noc.example.com", 7, 7200, 3600, 1209600, 3600)},
+		record{q, TypeRRSIG, rrsigRecord(t, TypeSOA, 53731, "example.com", inception, expiration)},
+		// A signature over another type, which came with the answer and
+		// answers nothing that was asked.
+		record{q, TypeRRSIG, rrsigRecord(t, TypeDNSKEY, 111, "example.com", inception, expiration.AddDate(0, 0, 30))},
+	), 0x1234, q, TypeSOA)
+	if err != nil {
+		t.Fatalf("a signed answer was refused: %v", err)
+	}
+
+	if len(got.soa) != 1 {
+		t.Fatalf("the record itself was lost: %+v", got.soa)
+	}
+	if len(got.signatures) != 1 {
+		t.Fatalf("the signatures read %+v, and only the one covering the question answers it", got.signatures)
+	}
+	s := got.signatures[0]
+	if !s.Expiration.Equal(expiration) || !s.Inception.Equal(inception) {
+		t.Errorf("the dates read %s to %s", s.Inception, s.Expiration)
+	}
+	if s.Covered != TypeSOA || s.KeyTag != 53731 || s.Signer != "example.com" {
+		t.Errorf("the signature reads %+v", s)
+	}
+}
+
+// A signature is read only where the records are: at a name in the chain the
+// reply itself draws from the question, and long enough to hold its own header.
+//
+// A resolver is hostile (N5) and can put a record for any name in a reply. A
+// signature taken from one would be another zone's date printed as this one's,
+// which is the report saying a domain has three weeks when it has none.
+func TestASignatureIsReadOnlyWhereTheRecordsAre(t *testing.T) {
+	q := name(t, "example.com")
+	other := name(t, "example.net")
+	inception := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	expiration := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+
+	got, err := parseReply(message(0x1234, flagsAnswerValidated, q, TypeSOA,
+		record{q, TypeSOA, soaRecord(t, "ns1.example.net", "noc.example.com", 7, 7200, 3600, 1209600, 3600)},
+		record{other, TypeRRSIG, rrsigRecord(t, TypeSOA, 999, "example.net", inception, expiration)},
+		// And one too short to hold its own header, which is skipped rather
+		// than read past the end of itself.
+		record{q, TypeRRSIG, []byte{0, 6, 13}},
+	), 0x1234, q, TypeSOA)
+	if err != nil {
+		t.Fatalf("a reply carrying a signature this cannot use was refused: %v", err)
+	}
+	if len(got.soa) != 1 {
+		t.Errorf("the record itself was lost: %+v", got.soa)
+	}
+	if len(got.signatures) != 0 {
+		t.Errorf("a signature from elsewhere was kept: %+v", got.signatures)
+	}
+}
+
+// A signature shorter than its own header is refused rather than read past
+// itself.
+//
+// The record's data is a window into the whole message: the slice has capacity
+// beyond its length, so a parser that trusted the length would reslice into the
+// bytes that follow and read them as dates. It would not panic, which is what
+// makes it worth a test — it would answer, with somebody else's numbers.
+func TestAShortSignatureIsRefusedRatherThanReadPastItself(t *testing.T) {
+	name, err := encodeName("example.com", false)
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+
+	// Three bytes of record, then bytes arranged so that everything a reader
+	// past the end would need is there: eighteen bytes of header and a valid
+	// name exactly where the signer's would be.
+	message := make([]byte, 0, 64)
+	message = append(message, 0, 6, 13)
+	message = append(message, make([]byte, 15)...)
+	message = append(message, name...)
+
+	if _, err := parseRRSIG(message, message[0:3], 0); err == nil {
+		t.Error("a signature shorter than its own header was read, out of the bytes after it")
 	}
 }

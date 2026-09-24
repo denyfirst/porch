@@ -219,7 +219,7 @@ whole discipline.
 The four rule sets are separate and never comparable with each other:
 `porch-tls-v7` grades a handshake, `porch-web-v3` grades an HTTP response,
 `porch-mail-v2` grades what a domain's DNS says about its mail, and
-`porch-dns-v1` grades how the domain itself is served — its name servers and
+`porch-dns-v2` grades how the domain itself is served — its name servers and
 its DNSSEC chain. `-version` prints them all, and every report names the one
 that produced it.
 

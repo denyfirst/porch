@@ -103,6 +103,43 @@ recipient bounded as above.
 
 ---
 
+## `porch-dns-v1` → `porch-dns-v2`
+
+**Unreleased.**
+
+One finding is added and nothing that was graded before is graded differently.
+A domain whose report was strong under `porch-dns-v1` is strong under this one
+unless the signatures over its zone have already run out.
+
+### A signature that has run out
+
+`dns.signature-expired`, graded `insecure`.
+
+RFC 4035 §5.3.1 requires a validating resolver to refuse a signature whose
+validity period does not contain the current time. A zone whose signatures have
+expired is therefore already gone for everybody behind one — the same outcome as
+a chain that does not check out, and graded the same way. It is caused by
+signing that stopped running rather than by anything anybody changed, which is
+why nothing else in a report shows it.
+
+**When the signatures run out is reported on every signed zone, and not
+graded.** No document says how much room to leave, and a zone re-signed hourly
+with a two-day window is as correct as one re-signed weekly with a month (R21).
+The date and the key that made the signature are in the report; what to do about
+them is the operator's own judgement about their own schedule.
+
+The date costs no question. Every query this project sends already asks for
+DNSSEC data, so a signed zone's answers carry the signature; until now nothing
+read the one field in it a report can act on.
+
+**Two things are now reported that were not, and neither is graded.** Whether
+the servers hold the same copy of the zone, read from the serial each one
+answers with; and whether the zone can be read whole by anybody, asked of every
+server and never taken. Both are notes rather than findings, so no verdict moves
+for either.
+
+---
+
 ## `porch-dns-v1` — a new rule set
 
 Released in v0.19.0, 2026-09.

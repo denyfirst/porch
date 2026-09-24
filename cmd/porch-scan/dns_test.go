@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/policy"
@@ -91,7 +92,7 @@ func TestTheDNSReportSaysWhatWasReadAndWhatItMeans(t *testing.T) {
 	text := buf.String()
 
 	for _, want := range []string{
-		"porch-dns-v1",
+		policy.DNSVersion,
 		"192.0.2.10",
 		"IPv6       none",
 		"Alias      none",
@@ -431,5 +432,56 @@ func TestAServerThatHandsOutTheZoneIsDrawnInBothFaces(t *testing.T) {
 	// server would bury the one that matters.
 	if !strings.Contains(text, "ns2.example.com              198.51.100.53\n") {
 		t.Errorf("a server that refused a transfer was drawn as something else:\n%s", text)
+	}
+}
+
+// The date the signatures run out is drawn in both faces.
+//
+// On its own row, because it is the one fact in that block which becomes
+// wrong by itself: nobody changes anything, and on a date the zone stops
+// resolving for everybody behind a validating resolver.
+func TestWhenTheSignatureRunsOutIsDrawnInBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`facts.signatureRead && facts.signatureExpires`,
+		`row("Signature", "runs out " + facts.signatureExpires.slice(0, 10) +`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{
+				Apex: true, SOAFound: true, Signed: true, ChainMatched: true,
+				SignatureRead:    true,
+				SignatureExpires: time.Date(2026, 10, 1, 3, 4, 5, 0, time.UTC),
+				SignatureKeyTag:  53731,
+			},
+		},
+	})
+	if !strings.Contains(buf.String(), "Signature  runs out 2026-10-01, made by key 53731") {
+		t.Errorf("the report does not say when the signature runs out:\n%s", buf.String())
+	}
+
+	// A zone whose signature was not read says nothing rather than a date.
+	buf.Reset()
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{Apex: true, SOAFound: true, Signed: true, ChainMatched: true},
+		},
+	})
+	if strings.Contains(buf.String(), "Signature ") {
+		t.Errorf("a signature nobody read was given a line:\n%s", buf.String())
 	}
 }
