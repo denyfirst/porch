@@ -214,6 +214,25 @@ function downloadLink(data) {
   return anchor;
 }
 
+// printButton opens the browser's own print dialogue, which is where a PDF
+// comes from.
+//
+// No PDF is written here. Writing one would mean a library — this project has
+// no dependencies — or writing a PDF writer, which can only use the fonts a
+// reader already has and so would produce a document that is not this report:
+// different type, different rules, different colours. The browser prints what
+// is on the screen, with the stylesheet below deciding what a sheet of paper
+// gets, so the document somebody hands to an auditor is the report they read.
+//
+// A button rather than a link, because it does something to this page rather
+// than going somewhere.
+function printButton() {
+  const button = el("button", "download", "Save as PDF");
+  button.type = "button";
+  button.addEventListener("click", () => window.print());
+  return button;
+}
+
 // reportFilename builds a name from the target.
 //
 // The target reaching here is already canonical — the service accepts letters,
@@ -258,7 +277,12 @@ function summary(data) {
   // Not on the demonstration: a report there is about our own domain, and a
   // visitor has no use for a copy of it. A copy of your own is where a
   // download matters, because nothing is kept for you.
-  if (!DEMO_SITE) left.appendChild(downloadLink(data));
+  if (!DEMO_SITE) {
+    const actions = el("p", "summary-actions");
+    actions.appendChild(downloadLink(data));
+    actions.appendChild(printButton());
+    left.appendChild(actions);
+  }
 
   head.appendChild(left);
 
@@ -1921,6 +1945,22 @@ function showDomainRecord(answer) {
     : "Not proven yet. Publish this record, then check again.";
   state.className = "domain-state " + (answer.verified ? "mark-strong" : "mark-weak");
 
+  // Nothing to publish is nothing to show. A name that was refused, or an
+  // answer carrying no record, used to leave this block standing with an empty
+  // chooser and two Copy buttons for nothing.
+  const proof = document.getElementById("domain-proof");
+  proof.hidden = records.length === 0;
+  if (records.length === 0) return;
+
+  // One choice is not a choice. The chooser exists because a record on a domain
+  // above covers everything beneath it, and above example.com there is nothing
+  // to offer — a dropdown holding one item asks a question with one answer.
+  const single = document.getElementById("domain-single");
+  const only = records.length === 1;
+  level.hidden = only;
+  single.hidden = !only;
+  if (only) single.textContent = records[0].domain;
+
   clear(level);
   records.forEach((r, i) => {
     const option = el("option", null, r.domain);
@@ -1958,6 +1998,9 @@ if (domainForm && domainRecord) {
       showDomainRecord(await check(name, VERIFY));
     } catch (err) {
       domainRecord.hidden = false;
+      // The message and nothing else: there is no record for a name that was
+      // refused, and the block below used to stay behind holding empty fields.
+      document.getElementById("domain-proof").hidden = true;
       state.className = "domain-state mark-weak";
       state.textContent = err.status === 429
         ? "Asked too often. Wait a few seconds and try again."

@@ -152,8 +152,16 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 
-/* deny, then first. The brand's red is the first half. */
-.wordmark-deny { color: var(--brand); }
+/*
+  deny, then first, then the full stop. The brand's red is the first half and
+  the last character.
+
+  The stop was white for a while and read as a typo: it sat inside the pale half
+  of the word with nothing to attach it to, and a reader's eye stopped at
+  "first". Red at both ends closes the word — the mark ends the sentence it
+  begins, which is the whole of what the name says.
+*/
+.wordmark-deny, .wordmark-stop { color: var(--brand); }
 
 .masthead-nav {
   display: flex;
@@ -174,17 +182,58 @@ a:hover { text-decoration-thickness: 2px; }
   The colour scheme switch. Drawn as text rather than an icon so it says what
   it does, and only present where theme.js runs to make it work.
 */
+/*
+  A sun or a moon, and nothing else on it.
+
+  Square rather than a word in a box: the label said "Dark" while the page was
+  light and "Light" while it was dark, which is correct and reads backwards to
+  anybody who does not stop to think about it. A mark of what you are going to
+  get needs no reading at all. 34px is the target a pointer needs, and the name
+  a screen reader announces is on aria-label rather than in the box.
+*/
 .theme-toggle {
   margin-left: auto;
-  min-height: 32px;
-  padding: 0.3rem 0.75rem;
-  font-family: var(--sans);
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   cursor: pointer;
+}
+
+/*
+  The mark takes the button's colour, so the hover below moves both: it is two
+  pieces of geometry, not a typeface and not a file.
+*/
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+/*
+  One choice, shown as the name rather than as a chooser holding one item.
+  Set in the same face as the chooser it replaces, so the block does not move
+  when a name with parents is asked about next.
+*/
+.proof-single {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+/* The half that is filled is the scheme pressing the button gives you. */
+.theme-toggle .theme-half {
+  fill: currentColor;
+  stroke: none;
 }
 
 .masthead-nav + .theme-toggle { margin-left: 0; }
@@ -914,11 +963,26 @@ h1 {
   padding-top: 1.1rem;
   border-top: 1px solid var(--rule);
 }
-/* The link that hands a reader the report they are looking at. Quiet, because
-   it is an offer rather than the point of the page. */
+/*
+  The two ways to take the report away, side by side and quiet: they are an
+  offer rather than the point of the page.
+*/
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.2rem;
+  margin: 0.6rem 0 0;
+}
+
+/* The link that hands a reader the report they are looking at, and the button
+   beside it that hands them a sheet of paper. One face for both, because they
+   are one offer made twice. */
 .download {
   display: inline-block;
-  margin-top: 0.6rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
   font-family: var(--mono);
   font-size: 0.78rem;
   color: var(--ink-faint);
@@ -2755,4 +2819,73 @@ main > .band:last-child { border-bottom: 0; }
 .chain td.address {
   overflow-wrap: anywhere;
   word-break: break-all;
+}
+
+/*
+  What a sheet of paper gets.
+
+  A report is the thing somebody hands to an auditor, and until now the only
+  way to take one away was the JSON, which is a file for a program. The browser
+  prints what is on the screen; this block decides what "on the screen" means
+  when the screen is A4.
+
+  No PDF is written by this project. Writing one would mean a library, and
+  there are none here, or writing a PDF writer — which can only use the fonts a
+  reader already has, and would produce a document in different type with
+  different rules and different colours from the report it claims to be.
+*/
+@media print {
+  /*
+    On paper the light scheme, whatever the screen was set to.
+
+    A report printed from the dark scheme is a black rectangle: it empties a
+    cartridge, and on most printers the pale text on it comes out grey on grey.
+    The values are the light ones from :root, restated rather than referenced,
+    because the dark ones are set on an attribute this cannot unset.
+  */
+  :root, :root[data-theme="dark"] {
+    --paper:      #ffffff;
+    --panel:      #ffffff;
+    --ink:        #16181d;
+    --ink-soft:   #3a3f4a;
+    --ink-faint:  #5c6270;
+    --rule:       #c9ccd4;
+    --brand:      #c42b3a;
+    color-scheme: light;
+  }
+
+  body, .workspace, .workspace-main, .console, .panel {
+    background: #ffffff;
+    color: #16181d;
+  }
+
+  /*
+    What belongs to the screen and not to the document: the way around the
+    installation, the things that are pressed, and the form that produced this.
+    What is left is the report.
+
+    Every name here was read off the page rather than guessed at — .work-main
+    and .report-actions were both in this list and neither exists, which is a
+    rule that does nothing and reads as one that does.
+  */
+  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading,
+  .summary-actions, .composer, .checks, .colophon-links {
+    display: none !important;
+  }
+
+  .workspace-main, .console, .console-results { padding: 0; margin: 0; max-width: none; }
+
+  /*
+    A table is read across, so it is not broken across sheets where that can be
+    helped, and a heading is never left alone at the foot of one.
+  */
+  .rows, .grid, .panel, .check { break-inside: avoid; }
+  tr { break-inside: avoid; }
+  h1, h2, .section-title, .summary-target { break-after: avoid; }
+
+  /* A link that is nothing but blue on paper. The one address worth printing
+     is the method page, and it is named in the text beside it. */
+  a { color: inherit; text-decoration: none; }
+
+  @page { margin: 18mm 16mm; }
 }

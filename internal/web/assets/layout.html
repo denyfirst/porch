@@ -61,7 +61,7 @@
 </header>{{end}}
 {{else}}
 <header class="masthead">
-  <a class="wordmark" href="/"><span class="wordmark-deny">deny</span>first.</a>
+  <a class="wordmark" href="/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>
   <nav class="masthead-nav" aria-label="Main">
     <a href="/">Home</a>
     <!--
@@ -97,8 +97,8 @@
 <footer class="colophon">
   <div class="colophon-row">
     <div class="colophon-by">
-      {{if .Brand}}<p class="colophon-mark"><span class="colophon-brand"><span class="wordmark-deny">deny</span>first.</span></p>
-      <p class="colophon-line">Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first.</span> Cites everything. Records nothing.</p>{{end}}
+      {{if .Brand}}<p class="colophon-mark"><span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span></p>
+      <p class="colophon-line">Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span> Cites everything. Records nothing.</p>{{end}}
     </div>
     {{if ne .Section "login"}}<p class="colophon-links">
       <a href="/docs">Docs</a>

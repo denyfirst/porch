@@ -32,22 +32,31 @@
   <section class="panel domain-record" id="domain-record" aria-live="polite" hidden>
     <p class="domain-state" id="domain-state"></p>
 
-    <label class="field-label" for="domain-level">Publish under</label>
-    <select class="proof-level" id="domain-level"></select>
-    <p class="proof-hint">The name itself unless you choose otherwise. A record on a domain above it covers that domain and every name beneath it: choose one only if you run its DNS.</p>
+    <!--
+      Everything below the state line is the record to publish, and it is hidden
+      whenever there is no record: a name that was refused produced this block
+      with an empty chooser, two Copy buttons for nothing, and a Check again for
+      a domain that does not exist.
+    -->
+    <div id="domain-proof" hidden>
+      <label class="field-label" for="domain-level">Publish under</label>
+      <select class="proof-level" id="domain-level"></select>
+      <p class="proof-single" id="domain-single" hidden></p>
+      <p class="proof-hint">The name itself unless you choose otherwise. A record on a domain above it covers that domain and every name beneath it: choose one only if you run its DNS.</p>
 
-    <dl class="proof-record">
-      <dt>Type</dt>
-      <dd><code>TXT</code></dd>
-      <dt>Name</dt>
-      <dd><code id="domain-name"></code> <button class="proof-copy" type="button" data-copy="domain-name">Copy</button></dd>
-      <dt>Value</dt>
-      <dd><code id="domain-value"></code> <button class="proof-copy" type="button" data-copy="domain-value">Copy</button></dd>
-    </dl>
-    <p class="proof-hint">Some providers want only the part of the name before your domain.</p>
+      <dl class="proof-record">
+        <dt>Type</dt>
+        <dd><code>TXT</code></dd>
+        <dt>Name</dt>
+        <dd><code id="domain-name"></code> <button class="proof-copy" type="button" data-copy="domain-name">Copy</button></dd>
+        <dt>Value</dt>
+        <dd><code id="domain-value"></code> <button class="proof-copy" type="button" data-copy="domain-value">Copy</button></dd>
+      </dl>
+      <p class="proof-hint">Some providers want only the part of the name before your domain.</p>
 
-    <div class="proof-actions">
-      <button class="submit" type="button" id="domain-again">Check again</button>
+      <div class="proof-actions">
+        <button class="submit" type="button" id="domain-again">Check again</button>
+      </div>
     </div>
   </section>
 
