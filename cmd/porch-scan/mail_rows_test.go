@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/webprobe"
+	"github.com/denyfirst/porch/internal/webscan"
 )
 
 // The rows under MX are drawn whatever the MX row says.
@@ -80,5 +82,40 @@ func TestTheMailPathDrawsItsRowsWhateverTheMXSays(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s, so the two faces disagree", want)
 		}
+	}
+}
+
+// A chain nothing was attempted at says so, in both faces.
+//
+// The terminal skipped the heading as well as the rows, so a report with no
+// plaintext section left a reader unable to tell an address nothing was tried
+// at from a section that had been left out. The page has carried the sentence
+// since it was written (R16, R4).
+func TestAChainNothingWasAttemptedAtSaysSo(t *testing.T) {
+	var buf bytes.Buffer
+	printChains(&buf, webResult{
+		Host: "example.com",
+		Result: &webscan.Result{
+			Host: "example.com", Policy: policy.WebVersion,
+			Observed: &webprobe.Report{
+				Secure: &webprobe.Chain{Hops: []webprobe.Hop{{Status: 200, URL: "https://example.com/"}}},
+			},
+		},
+	})
+	text := buf.String()
+
+	if !strings.Contains(text, "Over plaintext") {
+		t.Errorf("the heading for the address nothing was tried at is missing:\n%s", text)
+	}
+	if !strings.Contains(text, "Nothing was attempted at this address.") {
+		t.Errorf("the report does not say nothing was attempted:\n%s", text)
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	if !strings.Contains(string(page), `"Nothing was attempted at this address."`) {
+		t.Error("the page no longer carries the sentence, so the two faces disagree")
 	}
 }

@@ -2652,6 +2652,7 @@ rather than a silence in the helper.
 *Guarded by:* `TestNothingMeasuredIsUngraded`, `TestUnreachableTargetIsUngraded`,
 `TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty`,
 `TestTheMailPathDrawsItsRowsWhateverTheMXSays`,
+`TestAChainNothingWasAttemptedAtSaysSo`,
 `TestEveryStatedReasonIsTrueOfTheSuite`,
 `TestAClosedConnectionIsNotARefusal`,
 `TestSilenceIsNotARefusal`,
