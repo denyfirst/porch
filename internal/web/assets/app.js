@@ -978,7 +978,24 @@ function chain(title, c) {
     return frag;
   }
 
-  const table = el("table", "rows");
+  const table = el("table", "rows chain");
+
+  // The geometry is declared on the columns, exactly as the cipher tables
+  // declare theirs and for the same reason.
+  //
+  // Two chains are drawn one above the other and the comment at the top of
+  // this section says they get identical columns — which they did not. Each
+  // table sized itself to its own contents, and the two chains never hold the
+  // same contents: the secure one carries long https:// addresses and the
+  // plaintext one usually a single short hop. So "Response" sat at the right
+  // edge above and near the middle below, and a reader comparing the two had
+  // to find each column again (W3).
+  const group = el("colgroup");
+  group.appendChild(el("col", "col-address"));
+  group.appendChild(el("col", "col-transport"));
+  group.appendChild(el("col", "col-response"));
+  table.appendChild(group);
+
   const head = el("tr");
   for (const label of ["Address", "Transport", "Response"]) {
     head.appendChild(el("th", null, label));
@@ -992,7 +1009,12 @@ function chain(title, c) {
     // every one after it came out of a Location header — so it is text in a
     // cell and never a link: a redirect target this scanner declined to follow
     // must not become something a reader can click.
-    row.appendChild(el("td", null, hop.url || "—"));
+    //
+    // Marked so the stylesheet may break it mid-word: with the columns
+    // declared, an address longer than its column has to go somewhere, and
+    // wrapping inside the cell is the one option that does not move the two
+    // columns beside it.
+    row.appendChild(el("td", "address", hop.url || "—"));
     row.appendChild(el("td", null, hopTransport(hop)));
     row.appendChild(hopOutcome(hop));
     body.appendChild(row);
