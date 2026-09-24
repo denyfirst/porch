@@ -223,6 +223,17 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 	}
 
 	fmt.Fprintf(w, "    %-28s %s\n", "the zone above", parentLine(f))
+
+	// The address the parent hands out, on its own line under the server it
+	// belongs to, and only where there is one: a server outside the zone it
+	// serves has no glue, and a line saying so on every provider's row would
+	// be about DNS in general rather than about this zone.
+	for _, ns := range f.NameServers {
+		if !ns.GlueRead {
+			continue
+		}
+		fmt.Fprintf(w, "    %-28s the zone above hands out %s\n", ns.Name, listOrNone(ns.Glue))
+	}
 }
 
 // parentLine says what the zone above this one hands out, which is the list a

@@ -3913,6 +3913,14 @@ So `porch-dns-v2` grades three things, each of which stops a resolver:
   belongs to cannot be read from the address and asking a third party on every
   scan is not something this project does.
 - **A name server that resolves to nothing** — RFC 1912's lame delegation.
+- **An address the zone above hands out that the zone does not publish.** A
+  server inside the zone it serves cannot be looked up without being told where
+  it is, so the glue its parent hands out is what a resolver starting at the
+  root dials, and nothing in the zone's own records shows what that copy says.
+  RFC 1912 §2.3 describes both halves: an address left behind at the parent,
+  where "random people still see the old IP address", and a multi-homed server
+  whose addresses are not all listed, which it states as a requirement. A
+  server outside the zone it serves has no glue and nothing is compared.
 - **A zone above that hands out different servers.** RFC 1912 asks for one
   list, not two, and a resolver starting at the root follows the parent's: a
   name only the parent hands out is where some lookups go, and whatever is at
@@ -4036,6 +4044,9 @@ whoever claims it next answers for this name.
 `TestASignatureIsReadOnlyWhereTheRecordsAre`,
 `TestAShortSignatureIsRefusedRatherThanReadPastItself`,
 `TestWhenTheSignatureRunsOutIsDrawnInBothFaces`,
+`TestTheAddressTheZoneAboveHandsOutIsReadAndCompared`,
+`TestTheAddressesInAReferralAreReadForTheNamesItDelegatedTo`,
+`TestTheGlueTheZoneAboveHandsOutIsDrawnInBothFaces`,
 `TestEveryLineSaysWhichRecordItCameFrom`,
 `TestATransferIsAskedForAndNotTaken`, `TestATransferIsAskedThroughTheGuard`,
 `TestATransferReplyMustAnswerTheQuestionAsked`,

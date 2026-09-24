@@ -1303,6 +1303,15 @@ function delegation(facts) {
   }
 
   frag.appendChild(el("p", "section-note", parentSays(facts)));
+
+  // What the zone above hands out as each server's address, where it hands out
+  // anything. Only a server inside the zone it serves has glue, so this is a
+  // row about those and about nothing else.
+  for (const server of servers) {
+    if (!server.glueRead) continue;
+    frag.appendChild(el("p", "section-note",
+      "The zone above hands out " + listOrNone(server.glue) + " for " + server.name + "."));
+  }
   return frag;
 }
 

@@ -657,6 +657,10 @@ type servers struct {
 	// from it answers with the zone's own.
 	serial map[string]uint32
 
+	// glue is what that referral carries as each named server's address, keyed
+	// by name. Only a server inside the zone it serves has any.
+	glue map[string][]string
+
 	// referral is what a server of the zone above hands out when it is asked
 	// about the domain being scanned. Nil is a server that delegates nothing
 	// here, which is not the same as one that delegates a different list.
@@ -696,7 +700,7 @@ func (s *servers) AskServer(_ context.Context, address, name string, qtype uint1
 		}
 		// The zone above, pointing rather than answering: the authority bit is
 		// clear and the list arrives as a referral.
-		return dnsclient.ServerAnswer{Answered: true, Existed: true, Referral: s.referral}, nil
+		return dnsclient.ServerAnswer{Answered: true, Existed: true, Referral: s.referral, Glue: s.glue}, nil
 	}
 	if recursion {
 		switch {
@@ -1327,6 +1331,76 @@ func TestWhenTheSignaturesRunOutIsReadAndOnlyExpiryIsGraded(t *testing.T) {
 	for _, f := range unsigned.Findings {
 		if f.RuleID == "dns.signature-expired" {
 			t.Error("an unsigned zone was graded on a signature it does not have")
+		}
+	}
+}
+
+// The address the zone above hands out is read and compared with the one the
+// zone publishes for the same name.
+//
+// A server inside the zone it serves cannot be looked up without being told
+// where it is, so what a resolver starting at the root dials is the parent's
+// copy. Nothing in the zone's own records shows what that copy says, and where
+// the two disagree some resolvers reach one machine and some the other.
+func TestTheAddressTheZoneAboveHandsOutIsReadAndCompared(t *testing.T) {
+	z := served(t)
+	z.ns = []string{"ns1.example.com", "ns2.provider.net"}
+	z.addresses["ns1.example.com"] = []string{"192.0.2.53"}
+	z.addresses["ns2.provider.net"] = []string{"198.51.100.53"}
+	z.above = map[string][]string{"com": {"a.gtld.test"}}
+	z.addresses["a.gtld.test"] = []string{"203.0.113.53"}
+
+	asker := func(glue map[string][]string) *servers {
+		return &servers{
+			authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+			claiming:      map[string]bool{}, recursing: map[string]bool{},
+			refusing: map[string]bool{}, fail: map[string]error{},
+			referral: []string{"ns1.example.com", "ns2.provider.net"},
+			glue:     glue,
+		}
+	}
+
+	// The parent still hands out an address this zone no longer publishes.
+	got := asking(t, z, asker(map[string][]string{"ns1.example.com": {"192.0.2.99"}}))
+	if !has(got, "dns.glue-does-not-match") || got.Verdict != policy.Weak {
+		t.Errorf("stale glue reads %q %v", got.Verdict, ruleIDs(got))
+	}
+	if !got.Observed.NameServers[0].GlueRead ||
+		strings.Join(got.Observed.NameServers[0].Glue, ",") != "192.0.2.99" {
+		t.Errorf("what the parent hands out is not carried: %+v", got.Observed.NameServers[0])
+	}
+	for _, f := range got.Findings {
+		if f.RuleID == "dns.glue-does-not-match" && !strings.Contains(f.Rationale, "192.0.2.99 for ns1.example.com") {
+			t.Errorf("the finding does not name the address and the server: %s", f.Rationale)
+		}
+	}
+
+	// The same address on both sides is no finding, and the fact is still
+	// carried so a reader can see what was compared.
+	agreed := asking(t, z, asker(map[string][]string{"ns1.example.com": {"192.0.2.53"}}))
+	if has(agreed, "dns.glue-does-not-match") {
+		t.Errorf("glue that agrees was graded: %v", ruleIDs(agreed))
+	}
+	if !agreed.Observed.NameServers[0].GlueRead {
+		t.Error("glue that agrees was not carried")
+	}
+
+	// A server outside the zone it serves has no glue, and a parent that hands
+	// out none says nothing rather than disagreeing with everything (R4).
+	none := asking(t, z, asker(nil))
+	if has(none, "dns.glue-does-not-match") || none.Observed.NameServers[0].GlueRead {
+		t.Errorf("a delegation with no glue reads %+v %v", none.Observed.NameServers[0], ruleIDs(none))
+	}
+
+	// An address the zone publishes and the parent does not hand out is the
+	// other direction, which RFC 1912 states as a requirement of its own.
+	half := asking(t, z, asker(map[string][]string{"ns1.example.com": {}}))
+	if !has(half, "dns.glue-does-not-match") {
+		t.Errorf("an address the parent does not hand out was not graded: %v", ruleIDs(half))
+	}
+	for _, f := range half.Findings {
+		if f.RuleID == "dns.glue-does-not-match" && !strings.Contains(f.Rationale, "192.0.2.53 for ns1.example.com") {
+			t.Errorf("the finding does not name what the parent left out: %s", f.Rationale)
 		}
 	}
 }
