@@ -113,13 +113,21 @@ and a domain's mail policy; this one grades the delegation the domain is
 answered through and the DNSSEC chain its parent anchors. A report carries the
 rule set that graded it, and these four are never the same one.
 
-Almost nothing is connected to. Every fact but two comes from the resolver the
-scanning machine already uses. The two are put to the servers the zone names,
-over TCP on port 53 and through the guard that refuses private, loopback and
-reserved destinations: whether each answers for the zone, and — for a server
-inside the domain only — whether it answers for other domains as well. An
-installation asks them where control of the domain has been proven; the command
-line asks them always. No zone transfer is ever attempted.
+Almost nothing is connected to. Every fact but a few comes from the resolver the
+scanning machine already uses. The rest are put to servers directly, over TCP on
+port 53 and through the guard that refuses private, loopback and reserved
+destinations: whether each server answers for the zone, whether it hands the
+whole zone to anybody who asks, — for a server inside the domain only — whether
+it answers for other domains as well, and which servers the zone above hands
+out. An installation asks them where control of the domain has been proven; the
+command line asks them always.
+
+A transfer is asked for and never taken: the first reply's header says whether
+the server began one, the connection is closed there, and nothing the zone
+contains is read or reported. Whether it can be read whole is reported and not
+graded — RFC 5936 §5 says an implementation ought to let an operator open
+transfers to everybody, while saying it must not be the default, so no document
+calls it a fault (R21).
 
 What it grades is deliberately short, and the reason is that DNS carries more
 advice than any other part of the internet and fewer requirements. A serial

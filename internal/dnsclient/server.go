@@ -1,8 +1,10 @@
 package dnsclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 
@@ -176,4 +178,140 @@ func (c *Client) dialServer(ctx context.Context, address string) (net.Conn, erro
 	// a guard the next caller walks around.
 	dialer := &safedial.Dialer{AllowedPorts: []string{serverPort}}
 	return dialer.DialContext(ctx, "tcp", address)
+}
+
+// AskTransfer asks one server whether it will hand the whole zone to anybody
+// who asks, and stops before it does.
+//
+// # Why the question is worth putting
+//
+// A server that grants AXFR to the internet gives up every name in the zone at
+// once: the staging host, the build server, the thing behind the VPN — names
+// that exist and that nobody publishes a link to. Nothing else in a scan shows
+// it, because every other question here asks about a name somebody already
+// knows. RFC 5936 does not call it a fault, and this does not either: section 5
+// says an implementation ought to let an operator open transfers to all, while
+// saying it must not be the default. So it is measured and reported, never
+// graded (R21).
+//
+// # What it sends, and what it refuses to read
+//
+// One AXFR query, over the same TCP connection every other direct question
+// uses and through the same guard. Then it reads the first thirty-odd bytes of
+// the reply — the header and the echoed question — and closes the connection.
+//
+// That is the whole of it. The header says whether the server refused and
+// whether records follow, which is the entire answer; the records themselves
+// are the operator's own zone, and a scanner that read them would be holding
+// the thing it is warning them about. The bytes are not parsed, not counted,
+// not kept, and mostly not even read off the socket: closing the connection
+// discards them, and a server sending a large zone stops when it does.
+func (c *Client) AskTransfer(ctx context.Context, address, zone string) (bool, error) {
+	id, err := randomUint16()
+	if err != nil {
+		return false, fmt.Errorf("dnsclient: generating a query id: %w", err)
+	}
+	question, err := encodeName(zone, true)
+	if err != nil {
+		return false, err
+	}
+
+	// The header, the question as it is echoed, and its type and class: what
+	// the checks below need and nothing after it.
+	want := headerLen + len(question) + 4
+
+	head, err := c.askServerHead(ctx, address, buildQueryWith(id, question, TypeAXFR, false), want)
+	if err != nil {
+		return false, err
+	}
+	if len(head) < headerLen {
+		return false, errors.New("dnsclient: the reply is shorter than a header")
+	}
+
+	// The same two checks every other reply passes before it is read at all: a
+	// reply that answers another query, or echoes another question, was written
+	// by something that did not see this one.
+	if got := binary.BigEndian.Uint16(head[0:2]); got != id {
+		return false, fmt.Errorf("dnsclient: the reply answers query %d, not %d", got, id)
+	}
+	flags := binary.BigEndian.Uint16(head[2:4])
+	if flags&0x8000 == 0 {
+		return false, errors.New("dnsclient: the reply is not marked as one")
+	}
+	if len(head) >= want {
+		echoed := make([]byte, 0, len(question)+4)
+		echoed = append(echoed, question...)
+		echoed = binary.BigEndian.AppendUint16(echoed, TypeAXFR)
+		echoed = binary.BigEndian.AppendUint16(echoed, classIN)
+		if !bytes.Equal(head[headerLen:want], echoed) {
+			return false, errors.New("dnsclient: the reply echoes a different question")
+		}
+	}
+
+	const (
+		rcodeNotImplemented = 4
+		rcodeRefused        = 5
+		rcodeNotAuthorised  = 9
+	)
+	switch rcode := flags & 0x000F; rcode {
+	case 0:
+	case rcodeRefused, rcodeNotAuthorised, rcodeNotImplemented:
+		// The answer this question is looking for, and the good one. It travels
+		// as an error because a refusal is one everywhere else here, and a
+		// caller reads it as a zone that is not handed out rather than as a
+		// measurement that failed. Three codes and not one: see ErrNoTransfer.
+		return false, ErrNoTransfer
+	default:
+		return false, fmt.Errorf("dnsclient: the server answered with code %d", rcode)
+	}
+
+	// A transfer begins with records. A reply carrying none, and no refusal, is
+	// a server that answered without starting one, and that is not a zone
+	// anybody can read.
+	return binary.BigEndian.Uint16(head[6:8]) > 0, nil
+}
+
+// askServerHead sends one query and reads at most the first want bytes of the
+// reply before closing the connection.
+//
+// Separate from askServerRaw, which reads the whole message and bounds it at
+// maxMessage. Neither behaviour is wanted here: a zone transfer's first message
+// runs to tens of kilobytes, so the bound would report an open server as one
+// that could not be read, and reading it would mean taking a copy of somebody's
+// zone to decide whether it could be taken.
+func (c *Client) askServerHead(ctx context.Context, address string, query []byte, want int) ([]byte, error) {
+	conn, err := c.dialServer(ctx, net.JoinHostPort(address, serverPort))
+	if err != nil {
+		return nil, fmt.Errorf("dnsclient: reaching the name server: %w", err)
+	}
+	defer conn.Close() //nolint:errcheck // whatever is still coming is deliberately not read
+
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+
+	framed := make([]byte, 2+len(query))
+	binary.BigEndian.PutUint16(framed, uint16(len(query))) // #nosec G115 -- a question is tens of bytes
+	copy(framed[2:], query)
+	if _, err := conn.Write(framed); err != nil {
+		return nil, fmt.Errorf("dnsclient: sending the query: %w", err)
+	}
+
+	var length [2]byte
+	if _, err := readFull(conn, length[:]); err != nil {
+		return nil, fmt.Errorf("dnsclient: reading the reply length: %w", err)
+	}
+	size := int(binary.BigEndian.Uint16(length[:]))
+	if size == 0 {
+		return nil, errors.New("dnsclient: the server announced a reply of 0 bytes")
+	}
+	if size < want {
+		want = size
+	}
+
+	head := make([]byte, want)
+	if _, err := readFull(conn, head); err != nil {
+		return nil, fmt.Errorf("dnsclient: reading the reply: %w", err)
+	}
+	return head, nil
 }

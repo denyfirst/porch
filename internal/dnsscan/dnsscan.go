@@ -17,13 +17,19 @@
 // alias, the digest the parent holds and the keys the zone publishes. All of
 // those go to the same recursive resolver every other check uses.
 //
-// Two more are put to the servers the zone names, where the caller allows it,
-// because a resolver cannot answer them: whether each server answers for the
-// zone as its own, and — for a server inside the domain being checked only —
-// whether it answers questions about domains it has nothing to do with. Those
-// go over TCP on port 53, through the guard that refuses private, loopback and
-// reserved destinations, because the addresses come out of the zone being
-// measured. Nothing else is sent to them, and no zone transfer is attempted.
+// Three more are put to the servers the zone names, where the caller allows
+// it, because a resolver cannot answer them: whether each server answers for
+// the zone as its own, whether it will hand the whole zone to anybody who asks
+// for it, and — for a server inside the domain being checked only — whether it
+// answers questions about domains it has nothing to do with. Those go over TCP
+// on port 53, through the guard that refuses private, loopback and reserved
+// destinations, because the addresses come out of the zone being measured.
+//
+// The transfer question is asked and the transfer is not taken: the first
+// reply's header says whether the server began one, and the connection is
+// closed there. What is established is that the zone is readable, and the
+// records are never read, counted or reported — they are the operator's own
+// data, and a scanner holding them would be the thing it was warning about.
 //
 // # What it grades
 //
@@ -591,6 +597,11 @@ func (s *Scanner) readAbsence(ctx context.Context, r Resolver, domain string, fa
 // is the one implementation.
 type ServerAsker interface {
 	AskServer(ctx context.Context, address, name string, qtype uint16, recursion bool) (dnsclient.ServerAnswer, error)
+
+	// AskTransfer answers whether the server hands the zone to anybody, and
+	// deliberately returns a boolean rather than the zone: the caller has no
+	// way to hold what it was told not to take.
+	AskTransfer(ctx context.Context, address, zone string) (bool, error)
 }
 
 // recursionProbe is the name a server is asked about to see whether it answers
@@ -657,6 +668,26 @@ func (s *Scanner) askServers(ctx context.Context, domain string, facts *policy.D
 			}
 		}
 
+		// Whether this server hands the whole zone to anybody who asks.
+		//
+		// Asked of every server the zone names, like the question above it and
+		// unlike the one below: this is a fact about the zone being measured
+		// rather than about the server's own behaviour. A provider's server
+		// handing out your zone is your exposure, and you are the one who can
+		// have it stopped.
+		server.TransferAsked = true
+		open, err := asker.AskTransfer(ctx, address, domain)
+		switch {
+		case errors.Is(err, dnsclient.ErrNoTransfer):
+			// The answer this is looking for, and the good one.
+			server.Transfer = false
+		case err != nil:
+			server.TransferAsked = false
+			server.TransferReason = shape(err)
+		default:
+			server.Transfer = open
+		}
+
 		if !within(server.Name, domain) {
 			continue
 		}
@@ -702,7 +733,8 @@ const maxParentServers = 3
 // One question, to one server of the parent zone, with recursion off: it asks
 // about this zone by name and the answer arrives as a referral, which is the
 // authority section this package now reads. Nothing about the parent zone is
-// reported, and no zone transfer is attempted here or anywhere else.
+// reported, and no transfer is asked of it: the question about transfers is
+// put to the servers of the zone being measured, never to the zone above it.
 func (s *Scanner) askParent(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
 	if !s.AskServers || !facts.Apex {
 		return

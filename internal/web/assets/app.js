@@ -1257,6 +1257,9 @@ function delegation(facts) {
     if (server.asked && !server.authoritative) {
       text = "does not answer for this zone";
       mark = "weak";
+    } else if (server.transfer) {
+      text = addresses.join(", ") + " — hands out the whole zone to anybody";
+      mark = "faint";
     } else if (server.recursion) {
       text = text + " — answers for other domains too";
       mark = "weak";

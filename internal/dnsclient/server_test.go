@@ -27,6 +27,19 @@ type nameServer struct {
 	// section, which is how a server holding the zone above replies.
 	pointing bool
 
+	// wrongID answers a query nobody sent, which is the other half of a reply
+	// written by something that never saw the question.
+	wrongID bool
+
+	// echo replaces the question this server echoes back, which is what a reply
+	// written by something that never saw the query looks like.
+	echo []byte
+
+	// short announces a length far larger than what it sends, which is a server
+	// in the middle of handing over a zone. A client that read the whole
+	// message would wait for bytes that never come.
+	short bool
+
 	// refuse answers every query with REFUSED, which is what a server that
 	// serves neither the zone nor recursion says.
 	refuse bool
@@ -62,6 +75,9 @@ func (s *nameServer) dial(t *testing.T) func(context.Context, string, string) (n
 				return
 			}
 			question := query[headerLen:end]
+			if s.echo != nil {
+				question = s.echo
+			}
 			qtype := binary.BigEndian.Uint16(query[end : end+2])
 
 			flags := s.flags
@@ -69,6 +85,9 @@ func (s *nameServer) dial(t *testing.T) func(context.Context, string, string) (n
 				flags = 0x8005 // a response, REFUSED
 			}
 			id := binary.BigEndian.Uint16(query[0:2])
+			if s.wrongID {
+				id ^= 0xFFFF
+			}
 			reply := message(id, flags, question, qtype, s.records...)
 			if s.pointing {
 				// A server of the zone above: the records go in the
@@ -77,7 +96,11 @@ func (s *nameServer) dial(t *testing.T) func(context.Context, string, string) (n
 			}
 
 			framed := make([]byte, 2+len(reply))
-			binary.BigEndian.PutUint16(framed, uint16(len(reply)))
+			announced := len(reply)
+			if s.short {
+				announced = 60000
+			}
+			binary.BigEndian.PutUint16(framed, uint16(announced))
 			copy(framed[2:], reply)
 			_, _ = server.Write(framed)
 		}()
@@ -267,5 +290,124 @@ func TestOnlyAQuestionAboutServersReadsTheDelegation(t *testing.T) {
 	soa, err := c.AskServer(ctx, "192.0.2.53", "example.com", TypeSOA, false)
 	if err == nil && len(soa.Referral) != 0 {
 		t.Errorf("a question about the record at the top of the zone read a delegation: %+v", soa)
+	}
+}
+
+// A transfer is asked for and not taken.
+//
+// The question is whether a server hands the zone to anybody; the answer is in
+// the first reply's header. What follows it is the operator's own zone, and
+// this reads none of it: the test serves a reply whose announced length is far
+// larger than what arrives, so a client that tried to read the whole message
+// would block until the deadline rather than answer.
+func TestATransferIsAskedForAndNotTaken(t *testing.T) {
+	ctx := context.Background()
+	q := name(t, "example.com")
+
+	// A server that begins the transfer: NOERROR, one record in the answer
+	// section, and an announced length it never finishes sending.
+	handing := &nameServer{
+		flags:   0x8400,
+		records: []record{{q, TypeSOA, soaRecord(t, "ns1.example.net", "noc.example.com", 7, 7200, 3600, 1209600, 3600)}},
+		short:   true,
+	}
+	c := &Client{Dial: handing.dial(t), Timeout: 3 * time.Second}
+
+	open, err := c.AskTransfer(ctx, "192.0.2.53", "example.com")
+	if err != nil {
+		t.Fatalf("AskTransfer: %v", err)
+	}
+	if !open {
+		t.Error("a server that began the transfer was read as one that refused")
+	}
+
+	// The question that was sent is a transfer request and nothing else.
+	if len(handing.asked) < 4 {
+		t.Fatal("no query arrived")
+	}
+	end, err := skipName(handing.asked, headerLen)
+	if err != nil {
+		t.Fatalf("the query is malformed: %v", err)
+	}
+	if got := binary.BigEndian.Uint16(handing.asked[end : end+2]); got != TypeAXFR {
+		t.Errorf("the query asked for type %d, not a transfer", got)
+	}
+
+	// A server that restricts transfers refuses, and a refusal is the answer
+	// rather than a failure to measure.
+	refusing := &nameServer{refuse: true}
+	c = &Client{Dial: refusing.dial(t), Timeout: 3 * time.Second}
+	open, err = c.AskTransfer(ctx, "192.0.2.53", "example.com")
+	if !errors.Is(err, ErrNoTransfer) {
+		t.Errorf("a refusal reads as %v", err)
+	}
+	if open {
+		t.Error("a refusal was read as a zone anybody can read")
+	}
+
+	// Three codes mean the same thing here, and a check that knew only REFUSED
+	// reported the other two as a question that never completed. deSEC answers
+	// NOTAUTH, which is what a live scan of denyfirst.dev met on 2026-09-24.
+	for _, code := range []uint16{0x8005, 0x8009, 0x8004} {
+		declining := &nameServer{flags: code}
+		c = &Client{Dial: declining.dial(t), Timeout: 3 * time.Second}
+		if open, err := c.AskTransfer(ctx, "192.0.2.53", "example.com"); open || !errors.Is(err, ErrNoTransfer) {
+			t.Errorf("code %d reads %v / %v", code&0xF, open, err)
+		}
+	}
+
+	// An answer with no records is a server that answered without beginning a
+	// transfer, and is not a zone anybody can read.
+	empty := &nameServer{flags: 0x8400}
+	c = &Client{Dial: empty.dial(t), Timeout: 3 * time.Second}
+	open, err = c.AskTransfer(ctx, "192.0.2.53", "example.com")
+	if err != nil || open {
+		t.Errorf("an answer carrying nothing reads %v / %v", open, err)
+	}
+}
+
+// The address a zone published is dialled through the guard here too. The
+// transfer question opens its own connection, and a guard that covered only
+// the other one would be a guard the next caller walked around (N3).
+func TestATransferIsAskedThroughTheGuard(t *testing.T) {
+	c := &Client{Timeout: 2 * time.Second}
+
+	for _, address := range []string{"127.0.0.1", "10.0.0.53", "169.254.169.254"} {
+		_, err := c.AskTransfer(context.Background(), address, "example.com")
+		if !errors.Is(err, safedial.ErrBlocked) {
+			t.Errorf("%s was refused by something other than the guard: %v", address, err)
+		}
+	}
+}
+
+// A reply that echoes a different question is not an answer about this zone.
+//
+// The same check every other reply here passes, applied to the one question
+// whose answer would otherwise be a single bit somebody else could set. TCP
+// makes a forged reply hard rather than impossible, and "your zone is open to
+// the world" is a sentence worth being sure of before printing.
+func TestATransferReplyMustAnswerTheQuestionAsked(t *testing.T) {
+	forging := &nameServer{
+		flags:   0x8400,
+		echo:    name(t, "somewhere.else"),
+		records: []record{{name(t, "somewhere.else"), TypeSOA, soaRecord(t, "ns.other.test", "noc.other.test", 1, 1, 1, 1, 1)}},
+	}
+	c := &Client{Dial: forging.dial(t), Timeout: 3 * time.Second}
+
+	open, err := c.AskTransfer(context.Background(), "192.0.2.53", "example.com")
+	if open || err == nil {
+		t.Errorf("a reply about another name reads %v / %v", open, err)
+	}
+
+	// And a reply to a query nobody sent, which is the same forgery from the
+	// other end.
+	answering := &nameServer{
+		flags:   0x8400,
+		wrongID: true,
+		records: []record{{name(t, "example.com"), TypeSOA, soaRecord(t, "ns1.example.net", "noc.example.com", 7, 1, 1, 1, 1)}},
+	}
+	c = &Client{Dial: answering.dial(t), Timeout: 3 * time.Second}
+	if open, err := c.AskTransfer(context.Background(), "192.0.2.53", "example.com"); open || err == nil {
+		t.Errorf("a reply to another query reads %v / %v", open, err)
 	}
 }

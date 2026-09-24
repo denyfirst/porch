@@ -3907,16 +3907,36 @@ So `porch-dns-v1` grades three things, each of which stops a resolver:
   the AD bit: the bit is the resolver's word (A06), and the arithmetic is a
   hash over a name and a key.
 
-Three of those are asked of servers directly, over TCP and through the guard
+Four of those are asked of servers directly, over TCP and through the guard
 that refuses private, loopback and reserved destinations, because a resolver
 has already smoothed them over: a resolver that reached one working server
 reports a working zone, and it answers a question about name servers from the
 zone itself, so the parent's list never appears. An installation asks them
 where control of the domain has been proven; the command line asks them always,
 running as it does on the operator's own machine. A server belonging to a
-provider is asked whether it answers for this zone and never about its own
-behaviour, and the zone above is asked about this domain and never about
-itself.
+provider is asked about this zone — whether it answers for it, and whether it
+hands it out — and never about its own behaviour: whose server it is does not
+change whose zone is being given away, while whether it answers for strangers
+is its operator's business. The zone above is asked about this domain and never
+about itself.
+
+**Whether the zone can be read whole is asked, reported, and not graded.** A
+server that grants AXFR to the internet gives up every name in the zone at
+once, including the ones nobody publishes a link to, and no other question a
+scan can ask reaches them: every other one asks about a name somebody already
+knows. It is not graded because RFC 5936 §5 declines to call it a fault — it
+says a general-purpose implementation ought to let an operator open transfers
+to all, that it must not be the default, and that the arguments for concealing
+a zone have been argued to be questionable. R21 is what that leaves, and it is
+the same treatment plain absence proofs get, which expose the same thing by a
+different route.
+
+**The transfer is asked for and not taken.** The first reply's header says
+whether the server began one and the connection is closed there, so what is
+established is that the zone is readable and never what is in it. A scanner
+that copied somebody's zone to tell them it was copyable would be the thing it
+was warning them about, and the records are not read off the socket at all —
+`AskTransfer` returns a boolean, so a caller has nowhere to put one.
 
 Everything else is reported: the addresses, the servers, the text records, the
 SOA and its timers, whether the servers hold the same copy of the zone — a
@@ -3961,6 +3981,10 @@ whoever claims it next answers for this name.
 `TestOnlyAQuestionAboutServersReadsTheDelegation`,
 `TestWhatTheZoneAboveHandsOutIsDrawnInBothFaces`,
 `TestWhetherTheServersHoldTheSameCopyIsReadAndNotGraded`,
+`TestWhetherTheZoneCanBeReadWholeIsAskedAndReported`,
+`TestATransferIsAskedForAndNotTaken`, `TestATransferIsAskedThroughTheGuard`,
+`TestATransferReplyMustAnswerTheQuestionAsked`,
+`TestAServerThatHandsOutTheZoneIsDrawnInBothFaces`,
 `TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence`,
 `TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
 `TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,

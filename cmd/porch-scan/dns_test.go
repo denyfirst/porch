@@ -393,3 +393,43 @@ func TestANameInsideAZoneSaysTheChainWasNotRead(t *testing.T) {
 		t.Error("the page still reports a zone nobody asked about as unsigned")
 	}
 }
+
+// A server that hands out the whole zone says so in both faces.
+//
+// On the server's own line rather than in the notes alone, because it is the
+// line a reader of that block acts on: every other row there says how the zone
+// is reached, and this one says the whole of it can be taken.
+func TestAServerThatHandsOutTheZoneIsDrawnInBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	if !strings.Contains(string(page), `" — hands out the whole zone to anybody"`) {
+		t.Error("the page does not draw a server that hands out the zone, so the two faces disagree")
+	}
+
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{
+				Apex: true,
+				NameServers: []policy.NameServer{
+					{Name: "ns1.example.com", Addresses: []string{"192.0.2.53"}, Asked: true, Authoritative: true, TransferAsked: true, Transfer: true},
+					{Name: "ns2.example.com", Addresses: []string{"198.51.100.53"}, Asked: true, Authoritative: true, TransferAsked: true},
+				},
+			},
+		},
+	})
+	text := buf.String()
+
+	if !strings.Contains(text, "ns1.example.com              192.0.2.53 — hands out the whole zone to anybody") {
+		t.Errorf("the report does not say the zone can be taken:\n%s", text)
+	}
+	// And the server that refused reads as an ordinary one: a line on every
+	// server would bury the one that matters.
+	if !strings.Contains(text, "ns2.example.com              198.51.100.53\n") {
+		t.Errorf("a server that refused a transfer was drawn as something else:\n%s", text)
+	}
+}
