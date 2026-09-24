@@ -222,3 +222,31 @@ func classesIn(block string) []string {
 	}
 	return out
 }
+
+// What turns the history on is a flag at start, not a password being typed.
+//
+// The page said "put a password in front of it with -access-file", which reads
+// as though signing in is what begins keeping results. It is not: -access-file
+// decides both that nothing is served without signing in and that what is
+// served is kept, and a check run before that flag was given was never written
+// down at all.
+func TestTheHistorySaysWhatTurnsItOn(t *testing.T) {
+	body, err := assets.ReadFile("assets/history.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	markup := string(body)
+
+	for _, want := range []string{
+		"signing in does not change that",
+		"how <code>porchd</code> was started",
+		"Checks run before that were never written down",
+	} {
+		if !strings.Contains(markup, want) {
+			t.Errorf("the empty history does not say %q", want)
+		}
+	}
+	if strings.Contains(markup, "Put a password in front of it with") {
+		t.Error("the page still reads as though a password is what starts keeping results")
+	}
+}

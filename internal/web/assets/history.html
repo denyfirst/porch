@@ -48,9 +48,13 @@
     <pre class="work-code"><code>porch-scan -history -results-dir &lt;the same directory&gt;</code></pre>
     {{else}}
     <p class="report-empty-title">Nothing is kept</p>
-    <p>This installation keeps no results. Put a password in front of it with
-    <code>-access-file</code> and every check is kept here, encrypted, to open
-    again or delete.</p>
+    <p>This installation keeps no results, and signing in does not change that:
+    what decides it is how <code>porchd</code> was started, not who is looking
+    at it.</p>
+    <p>Start it with <code>-access-file</code> and two things follow. Nothing is
+    served without signing in, and every check from then on is kept here,
+    sealed under a key that password opens — to read again, or to delete.
+    Checks run before that were never written down and cannot appear.</p>
     {{end}}
   </div>
   {{end}}
