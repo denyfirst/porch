@@ -381,12 +381,70 @@ state. That difference is why the web check is a separate package with its own
 rules rather than a few more fields on the TLS probe, and why the discipline
 is compiled in rather than left to whoever calls it.
 
-**One `GET` of `/`, over HTTPS and over plaintext.** Nothing else is
-requested. After the first request the only addresses fetched are the ones a
-`Location` header named, resolved against the address that sent them exactly
-as a browser resolves them. **No path is constructed by this program.** There
-is no probing of `/admin`, no guessing under `/.well-known`, and no second
-guess of any kind: this reads what a server volunteers to every visitor.
+**One `GET` of `/`, over HTTPS and over plaintext.** After the first request
+the only addresses fetched are the ones a `Location` header named, resolved
+against the address that sent them exactly as a browser resolves them. **No
+path is guessed at.** There is no probing of `/admin`, no `/backup.zip`, no
+`/.git/config`, and no second guess of any kind: this reads what a server
+volunteers to every visitor.
+
+**A guess and a registered address are different things, and this rule is
+about the first.** It read *no guessing under `/.well-known`* until
+2026-09-24, and by then the project fetched two paths under it and had done
+for months — `/.well-known/mta-sts.txt` since the mail check could read a
+policy, and its own `/.well-known/porch-challenge` since proof of control
+existed. A rule its own code contradicts twice is a rule stated wrongly, not a
+rule being broken.
+
+What makes `/admin` a guess is that this program invented it. Nobody said it
+was there; it might not be; and a `GET` of it can do harm, because plenty of
+real applications change state on one — `/logout`, `/admin/cache/clear`,
+`/delete?id=5`. A stream of such requests is also the signature of an attack:
+it trips the defences in front of the origin, fills the scanned party's logs
+with evidence of an intrusion that never happened, and where it succeeds it
+hands this program something it must then refuse to keep. And a binary that
+tries a thousand addresses is a scanner, which ends the property that makes
+this one safe to install — that the worst a careless colleague can do with it
+is read a page.
+
+A well-known URI is none of that. RFC 8615 created the space precisely as the
+register of addresses a server offers to anyone who asks, IANA keeps the list,
+and each entry is defined by its own document. Fetching one is not a guess
+about what might be there: it is using the door the standard built, for the
+purpose the standard built it. `/.well-known/security.txt` exists **in order
+to** be read by strangers — that is what it is for.
+
+So the rule is exact: **no address this program invents, and no request that
+could change state.** Under `/.well-known` this project fetches a short list
+named in one place, each entry carrying the document that defines it, and
+nothing else. A third path is a decision somebody makes deliberately and writes
+down, not a line somebody adds.
+
+That place is `internal/wellknown`, and it is a package rather than a comment
+because a comment cannot fail.
+`TestEveryWellKnownAddressInTheSourceIsNamedHere` walks every non-test `.go`
+file in the repository for an address under that space and refuses one the list
+does not name, which is what keeps this paragraph true a year from now. It
+also refuses an entry the source no longer uses: a list carrying an address
+nobody asks for is a list somebody will trust for the wrong one. The same file
+names the one address this project *serves* — `/.well-known/security.txt`,
+which says where to report a fault in it — kept beside the others because the
+two directions are easy to confuse in a search of the source and impossible to
+confuse in what they mean.
+
+`TestTheListAndTheWrittenPromiseAgree` holds the other end: every address the
+list says is fetched must be named in this file, and neither this file nor the
+method page may promise *no guessing under `/.well-known`* — words that stood
+until 2026-09-24 — except as a quotation carrying that date. It reads N7 as a
+section rather than searching the whole file, because the first attempt at this
+was satisfied by a paragraph five hundred lines away that quotes a mail policy
+URL, and passed while the rule itself had stopped naming what the code fetches.
+`TestCoversRefusesAnAddressNobodyDecidedOn` asks the other question the walk
+cannot: whether an address in neither list is refused, and whether the served
+address has drifted onto the asked-for side. The page carried that promise
+unqualified while the mail check was already fetching a policy under it. A
+sentence the binary contradicts is worse than one never written, because
+somebody read it and decided to trust the tool.
 
 **The body is read only where a caller asks, and nothing of it is kept.**
 
