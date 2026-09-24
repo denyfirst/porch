@@ -126,7 +126,10 @@
         closed as soon as each finishes, on ports that speak TLS from the first
         byte. No application data is sent.</li>
       <li><strong>Reach</strong>: one <code>GET /</code> over HTTPS and one over
-        HTTP, following redirects a bounded number of times.
+        HTTP, following redirects a bounded number of times, and one
+        <code>GET</code> of <code>/.well-known/security.txt</code> over HTTPS —
+        the file RFC 9116 defines for exactly this, of which a count of
+        contacts and one date are kept, never an address.
         {{if .ReadsPages}}The final page is read, once, to one megabyte, and
         only a short list of facts is kept from it.{{else}}No page body is
         read.{{end}}

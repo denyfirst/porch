@@ -227,7 +227,7 @@ func (s *Scanner) Scan(ctx context.Context, host string) (*Result, error) {
 		return nil, err
 	}
 
-	out := Grade(observed)
+	out := GradeAt(observed, s.now())
 	out.Host = host
 	out.Duration = s.now().Sub(started)
 	return out, nil
@@ -303,7 +303,21 @@ func (s *Scanner) reachable(ctx context.Context, host string) string {
 // after the original stops doing what it copied. There is one copy of the
 // order the checks run in, the way their verdicts combine, and the fact that
 // the limits of the method are attached last.
+// Grade reads the clock. GradeAt is the same work against a clock the caller
+// gives, which is what the scanner uses and what a test uses to say what a
+// date means without waiting for it.
 func Grade(observed *webprobe.Report) *Result {
+	return GradeAt(observed, time.Now())
+}
+
+// GradeAt turns what a probe observed into a graded result, against the clock
+// the caller gives.
+//
+// The clock reaches exactly one row: whether a published security contact has
+// passed the date the site itself put on it. Nothing else here has an opinion
+// about the time — a header is set or it is not — and a date that decided a
+// verdict would need far more care than this.
+func GradeAt(observed *webprobe.Report, now time.Time) *Result {
 	out := &Result{
 		Host:     observed.Host,
 		Policy:   policy.WebVersion,
@@ -325,7 +339,7 @@ func Grade(observed *webprobe.Report) *Result {
 	// Thirteen headers were being measured on every scan and shown on none: a
 	// report of a site that declares a content policy looked exactly like a
 	// report of one that declares nothing.
-	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet)
+	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet, securityTxtFacts(observed), now)
 
 	// Worst case across the checks, for the reason it is worst case within
 	// one: a site reached in the clear is reached in the clear however sound
@@ -671,4 +685,25 @@ func sameHost(address, host string) bool {
 	}
 	fold := func(s string) string { return strings.ToLower(strings.TrimSuffix(s, ".")) }
 	return host != "" && fold(u.Hostname()) == fold(host)
+}
+
+// securityTxtFacts restates what the probe read as what the rules take.
+//
+// A copy rather than the same struct, for the reason every other fact type
+// here is a copy: internal/policy imports nothing of the probing machinery, so
+// a rule can be stated and tested without a request being made anywhere.
+func securityTxtFacts(r *webprobe.Report) policy.SecurityTxtFacts {
+	if r == nil {
+		return policy.SecurityTxtFacts{}
+	}
+	s := r.SecurityTxt
+	return policy.SecurityTxtFacts{
+		Asked:             s.Asked,
+		Served:            s.Served,
+		Reason:            s.Reason,
+		Contacts:          s.Contacts,
+		Expires:           s.Expires,
+		ExpiresUnreadable: s.ExpiresUnreadable,
+		Signed:            s.Signed,
+	}
 }
