@@ -1,6 +1,7 @@
 package web
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -110,4 +111,114 @@ func TestTheProofCardIsShownOnlyWhenThereIsARecord(t *testing.T) {
 			t.Errorf("app.js does not carry %s", want)
 		}
 	}
+}
+
+// What a sheet of paper gets, and that every rule for it reaches something.
+//
+// A report is the thing somebody hands to an auditor, and the only way to take
+// one away was the JSON, which is a file for a program. The browser prints what
+// is on the screen; the print block decides what "on the screen" means when the
+// screen is A4. No PDF is written here: writing one would mean a library, and
+// there are none, or a PDF writer limited to the fonts a reader already has —
+// which would produce a document in different type from the report it claims
+// to be.
+//
+// Each selector is checked against the assets, because a rule naming a class
+// that does not exist does nothing and reads as though it does. Two of them did
+// exactly that when this block was written.
+func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
+	sheet := stylesheet(t)
+
+	start := strings.LastIndex(sheet, "@media print {")
+	if start < 0 {
+		t.Fatal("the stylesheet says nothing about paper")
+	}
+	block := sheet[start:]
+
+	// The light values, restated rather than referenced: a report printed from
+	// the dark scheme is a black rectangle that empties a cartridge, and the
+	// dark values are set on an attribute a media query cannot unset.
+	for _, want := range []string{
+		`:root, :root[data-theme="dark"]`,
+		"--paper:      #ffffff",
+		"--ink:        #16181d",
+		"color-scheme: light",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("paper does not carry %q, so a dark page prints dark", want)
+		}
+	}
+
+	// The way around the installation and the things that are pressed do not
+	// belong to the document.
+	hidden := []string{
+		".rail", ".theme-toggle", ".work-heading",
+		".summary-actions", ".composer", ".checks", ".colophon-links",
+	}
+	for _, class := range hidden {
+		if !strings.Contains(block, class) {
+			t.Errorf("%s is printed, and it is part of the installation rather than the report", class)
+		}
+	}
+
+	// And every class the block names is one the pages use, read out of the
+	// block itself rather than from a list beside it: a list is a second place
+	// to forget, and the rule that does nothing is the one nobody added to it.
+	assets := assetText(t)
+	for _, class := range classesIn(block) {
+		if !strings.Contains(assets, class) {
+			t.Errorf("the print block styles .%s, which nothing on any page carries", class)
+		}
+	}
+
+	// The button that reaches it, which exists only where a report is the
+	// reader's own to keep.
+	src := script(t)
+	if !strings.Contains(src, "button.addEventListener(\"click\", () => window.print());") {
+		t.Error("nothing on the page opens the print dialogue")
+	}
+}
+
+// assetText is every page and script this package serves, read as one string,
+// for asking whether a class name is used anywhere at all.
+func assetText(t *testing.T) string {
+	t.Helper()
+
+	names, err := assets.ReadDir("assets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var all strings.Builder
+	for _, name := range names {
+		if strings.HasSuffix(name.Name(), ".css") {
+			continue
+		}
+		body, err := assets.ReadFile("assets/" + name.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		all.Write(body)
+	}
+	return all.String()
+}
+
+// classesIn returns every class name a stylesheet fragment selects on.
+//
+// Written out rather than taken from a list beside the block, because a list is
+// a second place to forget: the rule that does nothing is precisely the one
+// nobody thought to add.
+func classesIn(block string) []string {
+	// Comments first: this block explains itself in prose, and two names in that
+	// prose are there precisely because they select nothing.
+	block = regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(block, " ")
+
+	var out []string
+	seen := map[string]bool{}
+	for _, match := range regexp.MustCompile(`\.([a-z][a-z0-9-]*)`).FindAllStringSubmatch(block, -1) {
+		if !seen[match[1]] {
+			seen[match[1]] = true
+			out = append(out, match[1])
+		}
+	}
+	return out
 }
