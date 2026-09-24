@@ -53,6 +53,11 @@ type HeaderFacts struct {
 	// Present names every header of interest that the response carried.
 	Present map[string]bool
 
+	// Protocol is the version of HTTP that carried this response, as the client
+	// negotiated it. It costs no request — the transport settled it over ALPN
+	// during the handshake — and nothing was reading it.
+	Protocol string
+
 	// Values is what each of them said, keyed by the same names, holding the
 	// first of a repeated header because that is the one a browser acts on.
 	//

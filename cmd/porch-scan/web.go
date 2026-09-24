@@ -238,7 +238,7 @@ func printDeclared(w io.Writer, r webResult) {
 		return
 	}
 
-	fmt.Fprintf(w, "\n  What the site declares\n")
+	fmt.Fprintf(w, "\n  What the site sends\n")
 
 	width := 0
 	for _, d := range r.Declared {

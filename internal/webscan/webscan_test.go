@@ -324,10 +324,10 @@ func hasRule(r *Result, id string) bool {
 func TestWhatTheSiteDeclaredReachesTheResult(t *testing.T) {
 	observed := &webprobe.Report{
 		Host: "example.test",
-		Secure: chain(hop(true, 200, map[string][]string{
+		Secure: chain(served(hop(true, 200, map[string][]string{
 			hstsHeader:        {"max-age=63072000; includeSubDomains"},
 			"X-Frame-Options": {"DENY"},
-		})),
+		}), "HTTP/1.1")),
 		Plain: chain(failed(false)),
 	}
 
@@ -339,6 +339,12 @@ func TestWhatTheSiteDeclaredReachesTheResult(t *testing.T) {
 	said := map[string]string{}
 	for _, d := range got.Declared {
 		said[d.Label] = d.Says
+	}
+
+	// Which version of HTTP carried it, which the client already knew and
+	// nothing was reading.
+	if said["Served over"] != "HTTP/1.1" {
+		t.Errorf("the protocol reads %q", said["Served over"])
 	}
 	// The value, not merely that a header was there: what an operator compares
 	// against their own configuration is what the header said.
@@ -353,4 +359,10 @@ func TestWhatTheSiteDeclaredReachesTheResult(t *testing.T) {
 	if said["Referrer-Policy"] != "none" {
 		t.Errorf("a header that was absent reads %q", said["Referrer-Policy"])
 	}
+}
+
+// served is a hop that records which version of HTTP carried it.
+func served(h webprobe.Hop, protocol string) webprobe.Hop {
+	h.Protocol = protocol
+	return h
 }

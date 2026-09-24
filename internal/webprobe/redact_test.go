@@ -76,3 +76,28 @@ func TestRedactAddress(t *testing.T) {
 		}
 	}
 }
+
+// Which version of HTTP carried a response travels with the hop.
+//
+// The client already knew it — the transport settles it during the handshake —
+// and nothing was reading it, so a report could not say whether a visitor is
+// served over HTTP/2 or over a protocol from 1997. It is a fact and not a
+// finding: this project's own service answers HTTP/1.1 on purpose, so a rule
+// here would grade a deliberate choice as a fault.
+func TestTheVersionOfHTTPThatCarriedTheResponseIsRecorded(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	p := local()
+	chain := p.chain(context.Background(), p.client(), srv.URL+"/", anywhere())
+	if len(chain.Hops) == 0 {
+		t.Fatal("nothing answered")
+	}
+	// A test server without TLS speaks HTTP/1.1, and what matters here is that
+	// whatever it spoke reached the hop rather than being dropped.
+	if chain.Hops[0].Protocol != "HTTP/1.1" {
+		t.Errorf("the hop records the protocol as %q", chain.Hops[0].Protocol)
+	}
+}

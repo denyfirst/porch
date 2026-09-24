@@ -314,6 +314,10 @@ type Hop struct {
 
 	Status int `json:"status,omitempty"`
 
+	// Protocol is the version of HTTP that carried the response, as the client
+	// negotiated it: "HTTP/2.0", "HTTP/1.1". Empty where nothing answered.
+	Protocol string `json:"protocol,omitempty"`
+
 	// Headers holds only the headers this check grades. See recorded().
 	Headers map[string][]string `json:"headers,omitempty"`
 
@@ -568,6 +572,16 @@ func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) 
 	defer resp.Body.Close()
 
 	hop.Status = resp.StatusCode
+
+	// Which version of HTTP carried it, which the client already knows and
+	// nothing was reading.
+	//
+	// It costs no request: the transport negotiated it over ALPN during the
+	// handshake this hop already made, and nothing was reading it. Whether a
+	// version is the right one is not a question this check answers — this
+	// project's own service answers HTTP/1.1 deliberately — so it travels as a
+	// fact and is graded nowhere.
+	hop.Protocol = resp.Proto
 	hop.Headers = recorded(resp.Header)
 	hop.location = resp.Header.Get("Location")
 	hop.Cookies = cookies(resp.Header.Values("Set-Cookie"))

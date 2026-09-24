@@ -2655,6 +2655,8 @@ rather than a silence in the helper.
 `TestTheContentPolicyAndThePageAreSaidInWords`,
 `TestWhatTheSiteDeclaredReachesTheResult`,
 `TestWhatTheSiteDeclaresIsDrawnInBothFaces`,
+`TestTheProtocolIsAFactAndNotAFinding`,
+`TestTheVersionOfHTTPThatCarriedTheResponseIsRecorded`,
 `TestTheMailPathDrawsItsRowsWhateverTheMXSays`,
 `TestAChainNothingWasAttemptedAtSaysSo`,
 `TestEveryStatedReasonIsTrueOfTheSuite`,

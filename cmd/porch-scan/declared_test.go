@@ -10,8 +10,7 @@ import (
 	"github.com/denyfirst/porch/internal/webscan"
 )
 
-// What the site declares is drawn, and drawn whether or not it declared
-// anything.
+// What the site sends is drawn, and drawn whether or not it sent anything.
 //
 // Thirteen headers were recorded by the probe on every scan. Two of them are
 // graded and none of them was shown, so a report of a site that declares a
@@ -25,6 +24,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 		Result: &webscan.Result{
 			Host: "example.com", Policy: policy.WebVersion,
 			Declared: []policy.Declaration{
+				{Label: "Served over", Says: "HTTP/2.0"},
 				{Label: "Strict-Transport-Security", Says: "max-age=63072000"},
 				{Label: "X-Frame-Options", Says: "none"},
 				{Label: "Cookies", Says: "2 set; 2 Secure, 1 HttpOnly, 2 with SameSite"},
@@ -34,10 +34,11 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 	})
 	text := buf.String()
 
-	if !strings.Contains(text, "What the site declares") {
+	if !strings.Contains(text, "What the site sends") {
 		t.Errorf("the report has no block for what the site said:\n%s", text)
 	}
 	for _, want := range []string{
+		"Served over                HTTP/2.0",
 		"Strict-Transport-Security  max-age=63072000",
 		"X-Frame-Options            none",
 		"Cookies                    2 set; 2 Secure, 1 HttpOnly, 2 with SameSite",
@@ -56,7 +57,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 		Host:   "example.com",
 		Result: &webscan.Result{Host: "example.com", Policy: policy.WebVersion},
 	})
-	if strings.Contains(buf.String(), "What the site declares") {
+	if strings.Contains(buf.String(), "What the site sends") {
 		t.Errorf("a site nothing answered from was described as declaring things:\n%s", buf.String())
 	}
 
@@ -67,7 +68,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 	script := string(page)
 	for _, want := range []string{
 		`frag.appendChild(declared(data.declared));`,
-		`sectionTitle("What the site declares")`,
+		`sectionTitle("What the site sends")`,
 		`tr.appendChild(el("td", null, row.says));`,
 	} {
 		if !strings.Contains(script, want) {

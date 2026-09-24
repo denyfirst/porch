@@ -64,7 +64,20 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts) []
 		return nil
 	}
 
-	out := make([]Declaration, 0, len(declaredHeaders)+3)
+	out := make([]Declaration, 0, len(declaredHeaders)+4)
+
+	// What carried it, first, and reported rather than graded.
+	//
+	// It costs no request: the transport settled it over ALPN during the
+	// handshake the scan already made, and nothing was reading it. What it is
+	// worth is that a reader can see it at all — a client offering HTTP/2 and
+	// being answered in HTTP/1.1 has met a decision, and the decision may be
+	// anybody's: a proxy nobody remembers configuring, or an operator who
+	// turned the protocol off on purpose. This project's own deployment is the
+	// second — see the note beside TLSNextProto in cmd/porchd — which is why
+	// this is a row and not a rule. No document requires a version of HTTP.
+	out = append(out, Declaration{Label: "Served over", Says: cut(f.Protocol, maxDeclared)})
+
 	for _, h := range declaredHeaders {
 		out = append(out, Declaration{Label: h.label, Says: cut(f.Values[h.header], maxDeclared)})
 	}

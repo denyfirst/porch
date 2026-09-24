@@ -1274,7 +1274,7 @@ function declared(rows) {
   const frag = document.createDocumentFragment();
   if (!rows || rows.length === 0) return frag;
 
-  frag.appendChild(sectionTitle("What the site declares"));
+  frag.appendChild(sectionTitle("What the site sends"));
 
   const table = el("table", "grid");
   const body = el("tbody");
