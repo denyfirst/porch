@@ -3,6 +3,7 @@ package policy
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 // The rules for what a domain's own DNS says about itself.
@@ -24,7 +25,7 @@ import (
 
 // DNSVersion identifies this rule set, which moves independently of the
 // others.
-const DNSVersion = "porch-dns-v1"
+const DNSVersion = "porch-dns-v2"
 
 var (
 	rfc1034 = Reference{
@@ -197,6 +198,19 @@ type DNSFacts struct {
 	OnlyAtParent []string `json:"onlyAtParent,omitempty"`
 	OnlyAtZone   []string `json:"onlyAtZone,omitempty"`
 
+	// When the signature over the record at the top of the zone stops being
+	// accepted, and when it started.
+	//
+	// SignatureRead is the difference between a zone that publishes no
+	// signature and an answer that carried none — an unsigned zone, a resolver
+	// that stripped them, a record this could not read (R4). The key tag says
+	// which key made it, so that an operator rolling keys can tell which one
+	// the date belongs to.
+	SignatureRead      bool      `json:"signatureRead"`
+	SignatureExpires   time.Time `json:"signatureExpires,omitempty"`
+	SignatureInception time.Time `json:"signatureInception,omitempty"`
+	SignatureKeyTag    uint16    `json:"signatureKeyTag,omitempty"`
+
 	// The record at the top of the zone, as published.
 	SOAFound   bool   `json:"soaFound"`
 	SOAPrimary string `json:"soaPrimary,omitempty"`
@@ -262,7 +276,12 @@ type DNSFinding struct {
 }
 
 // GradeDNS applies the rules above.
-func GradeDNS(f DNSFacts) DNSFinding {
+//
+// The clock is passed in rather than read here, as GradeLeaf takes it: one
+// rule turns on a date — a signature outside its validity period, which every
+// validator refuses — and a rule that read the machine's clock could not be
+// tested against a fixed one.
+func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	out := DNSFinding{Verdict: Strong}
 
 	add := func(id string, v Verdict, title, rationale string, refs ...Reference) {
@@ -546,6 +565,46 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			", retry " + duration(f.SOARetry) + ", expire " + duration(f.SOAExpire) +
 			", minimum " + duration(f.SOAMinimum) + ". RFC 1912 gives ranges for these and calls them " +
 			"recommendations, so they are reported here and not graded.")
+	}
+
+	// When the signatures run out, which nothing else in a report carries.
+	//
+	// Reported on every signed zone rather than only when it is close, because
+	// close is a number this project would have invented. What a reader does
+	// with "in four days" and "in three weeks" is their own judgement about
+	// their own signing schedule, and the date is the thing they can check
+	// against it.
+	if f.Signed && f.SignatureRead && !f.SignatureExpires.IsZero() && !f.SignatureExpires.Before(now) {
+		left := int(f.SignatureExpires.Sub(now).Hours() / 24)
+		note("The signature over the record at the top of this zone runs out on " +
+			f.SignatureExpires.Format("2006-01-02") + ", in " + strconv.Itoa(left) + " days, and was made " +
+			"by key " + strconv.Itoa(int(f.SignatureKeyTag)) + ". A signed zone is re-signed on a schedule; " +
+			"if that stops, the zone disappears for everybody behind a validating resolver on the date " +
+			"above and keeps working for whoever set it up. No document says how much room to leave, so " +
+			"this is the date and not a grade.")
+	}
+
+	// A signature that has run out, which is the one thing here a document
+	// settles outright.
+	//
+	// RFC 4035 §5.3.1 has a validator refuse a signature whose validity period
+	// does not contain the current time, so a zone whose signatures have
+	// expired is already gone for everybody behind one — the same outcome as a
+	// broken chain and graded the same way. How long is left before that
+	// happens is not graded: no document names a number of days, and a zone
+	// re-signed hourly with a two-day window is as correct as one re-signed
+	// weekly with a month (R21).
+	if f.Signed && f.SignatureRead && !f.SignatureExpires.IsZero() && f.SignatureExpires.Before(now) {
+		add("dns.signature-expired", Insecure,
+			"The signature over this zone has run out",
+			"RFC 4035 requires a validating resolver to refuse a signature whose validity period "+
+				"does not contain the current time, and this zone's ran out on "+
+				f.SignatureExpires.Format("2006-01-02")+" at "+f.SignatureExpires.Format("15:04")+" UTC. "+
+				"For everybody behind such a resolver — which is what the large public resolvers are — "+
+				"this domain now answers with a failure rather than with an address, while it keeps "+
+				"working for anybody whose resolver does not validate. What causes it is signing that "+
+				"stopped running rather than anything that was changed.",
+			rfc4035)
 	}
 
 	// Whether the zone can be read whole, by anybody.

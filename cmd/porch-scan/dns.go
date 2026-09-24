@@ -138,6 +138,12 @@ func printDNS(w io.Writer, r dnsResult) {
 			if names := algorithmNames(f.Keys); names != "" {
 				fmt.Fprintf(w, "    Signed with %s\n", names)
 			}
+			if f.SignatureRead && !f.SignatureExpires.IsZero() {
+				// The date on its own line, because it is the one fact in this
+				// block that becomes wrong by itself while nothing changes.
+				fmt.Fprintf(w, "    Signature  runs out %s, made by key %d\n",
+					f.SignatureExpires.Format("2006-01-02"), f.SignatureKeyTag)
+			}
 			if f.NSEC3Read {
 				fmt.Fprintf(w, "    Absent     %s\n", absenceLine(*f))
 			}

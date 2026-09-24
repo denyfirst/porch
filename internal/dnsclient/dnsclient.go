@@ -82,6 +82,12 @@ const (
 	// to list every name in the zone.
 	TypeNSEC3PARAM = 51
 
+	// TypeRRSIG is the signature over a record set (RFC 4034). Every query here
+	// already asks for DNSSEC data, so these arrive beside the records they
+	// cover and cost no extra question: what they carry that nothing else does
+	// is the date the signature stops being accepted.
+	TypeRRSIG = 46
+
 	// TypeAXFR asks a server for the whole zone (RFC 5936). It is not a record
 	// type and no answer to it is ever kept here: the question is whether a
 	// server will begin the transfer for anybody who asks, and the first reply
@@ -255,6 +261,31 @@ type NSEC3PARAM struct {
 	// for; the bytes themselves are nobody's business but the zone's, so only
 	// their length travels.
 	SaltLength int `json:"saltLength"`
+}
+
+// RRSIG is the header of a signature over a record set (RFC 4034 §3.1).
+//
+// The signature itself is not kept. What a report needs from this record is
+// when it stops being accepted: a validating resolver refuses a signature
+// outside its validity period, and a zone whose signatures have expired is off
+// the internet for everybody behind one — the same failure a broken chain
+// causes, arriving on a date nobody was watching.
+type RRSIG struct {
+	// Covered is the record type this signature is over, so a caller can tell
+	// the signature on the zone's own record from one that came with it.
+	Covered   uint16 `json:"covered"`
+	Algorithm uint8  `json:"algorithm"`
+	KeyTag    uint16 `json:"keyTag"`
+
+	// Signer is the zone whose key made it, which is not always the owner of
+	// the records: at a delegation the parent signs.
+	Signer string `json:"signer,omitempty"`
+
+	// Inception and Expiration are absolute times, as RFC 4034 §3.1.5 writes
+	// them. Seconds since the epoch in 32 bits, which is a date this program
+	// reads plainly and will have to read modularly before 2106.
+	Inception  time.Time `json:"inception"`
+	Expiration time.Time `json:"expiration"`
 }
 
 // TLSA is one DANE record.
@@ -512,6 +543,12 @@ type reply struct {
 	keys      []DNSKEY
 	cname     []string
 	nsec3     []NSEC3PARAM
+
+	// signatures are the RRSIG records covering the type that was asked for.
+	// They arrive with the records because every query here asks for DNSSEC
+	// data, and what they carry that nothing else does is the date the zone's
+	// signatures stop being accepted.
+	signatures []RRSIG
 
 	// referral holds the NS records the authority section named for the
 	// question, and is filled only where a caller asked for that section. It
@@ -973,6 +1010,11 @@ type ZoneAnswer struct {
 	// of RFC 1034 §3.6.2.
 	Alias []string
 
+	// Signatures are the RRSIG records covering what was asked for. They come
+	// with the answer rather than from a question of their own, and the date in
+	// them is what nothing else here carries.
+	Signatures []RRSIG
+
 	Existed   bool
 	Validated bool
 }
@@ -1031,6 +1073,7 @@ func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswe
 	out.Keys = reply.keys
 	out.Alias = reply.cname
 	out.NSEC3 = reply.nsec3
+	out.Signatures = reply.signatures
 	return out, nil
 }
 

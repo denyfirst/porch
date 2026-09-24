@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/policy"
@@ -29,6 +30,10 @@ type zone struct {
 	nsec3     []dnsclient.NSEC3PARAM
 
 	validated bool
+
+	// signatures are the RRSIG records the SOA answer carries, which is where
+	// the date a signed zone stops being accepted comes from.
+	signatures []dnsclient.RRSIG
 
 	// fail names the lookups that answer with an error rather than with
 	// records, which is a different thing everywhere in this project.
@@ -66,7 +71,7 @@ func (z *zone) LookupSOA(_ context.Context, _ string) (dnsclient.ZoneAnswer, err
 	if err := z.fail["soa"]; err != nil {
 		return dnsclient.ZoneAnswer{}, err
 	}
-	out := dnsclient.ZoneAnswer{Existed: true, Validated: z.validated}
+	out := dnsclient.ZoneAnswer{Existed: true, Validated: z.validated, Signatures: z.signatures}
 	if z.soa != nil {
 		out.SOA = []dnsclient.SOA{*z.soa}
 	}
@@ -1052,7 +1057,7 @@ func TestAParentThatWasNotAskedIsNotAgreement(t *testing.T) {
 		},
 		OnlyAtParent: []string{"ns9.example.net"},
 		OnlyAtZone:   []string{"ns2.example.org"},
-	})
+	}, time.Now())
 	for _, f := range silent.Findings {
 		if f.RuleID == "dns.parent-and-zone-disagree" {
 			t.Error("a difference nobody asked about was graded")
@@ -1223,6 +1228,105 @@ func TestWhetherTheZoneCanBeReadWholeIsAskedAndReported(t *testing.T) {
 	for _, q := range quiet.asked {
 		if strings.HasSuffix(q, " AXFR") {
 			t.Errorf("a scan that was not allowed to ask servers asked for a transfer: %v", quiet.asked)
+		}
+	}
+}
+
+// When the zone's signatures run out is reported, and a signature that has
+// already run out is graded.
+//
+// The date is reported and not graded because no document says how much room
+// to leave: a zone re-signed hourly with a two-day window is as correct as one
+// re-signed weekly with a month (R21). Expiry itself is settled — RFC 4035
+// §5.3.1 has a validator refuse a signature whose validity period does not
+// contain the current time, so the zone is already gone for everybody behind
+// one.
+func TestWhenTheSignaturesRunOutIsReadAndOnlyExpiryIsGraded(t *testing.T) {
+	now := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	at := func(z *zone) *Result {
+		t.Helper()
+		got, err := (&Scanner{Resolver: z, Now: func() time.Time { return now }}).Scan(context.Background(), "example.com")
+		if err != nil {
+			t.Fatalf("Scan: %v", err)
+		}
+		return got
+	}
+
+	z := served(t)
+	z.signatures = []dnsclient.RRSIG{
+		{Covered: dnsclient.TypeSOA, KeyTag: 53731, Signer: "example.com",
+			Inception: now.AddDate(0, 0, -7), Expiration: now.AddDate(0, 0, 21)},
+		// A second key's signature, running out first: what decides the zone's
+		// fate is whichever goes first, not whichever was read first.
+		{Covered: dnsclient.TypeSOA, KeyTag: 111, Signer: "example.com",
+			Inception: now.AddDate(0, 0, -7), Expiration: now.AddDate(0, 0, 6)},
+	}
+
+	got := at(z)
+	if !got.Observed.SignatureRead || !got.Observed.SignatureExpires.Equal(now.AddDate(0, 0, 6)) {
+		t.Errorf("the signature reads %+v, and the earliest is the one that decides", got.Observed.SignatureExpires)
+	}
+	if got.Observed.SignatureKeyTag != 111 {
+		t.Errorf("the key that made it reads %d", got.Observed.SignatureKeyTag)
+	}
+	if !noteSaying(got, "runs out on 2026-09-30, in 6 days") {
+		t.Errorf("the date is not reported: %v", noteTexts(got))
+	}
+	if got.Verdict != policy.Strong || len(got.Findings) != 0 {
+		t.Errorf("a signature with time left was graded: %q %v", got.Verdict, ruleIDs(got))
+	}
+
+	// One that has run out, which every validator refuses.
+	expired := served(t)
+	expired.signatures = []dnsclient.RRSIG{
+		{Covered: dnsclient.TypeSOA, KeyTag: 53731, Signer: "example.com",
+			Inception: now.AddDate(0, 0, -40), Expiration: now.AddDate(0, 0, -2)},
+	}
+	got = at(expired)
+	if !has(got, "dns.signature-expired") || got.Verdict != policy.Insecure {
+		t.Errorf("an expired signature reads %q %v", got.Verdict, ruleIDs(got))
+	}
+	if noteSaying(got, "runs out on") {
+		t.Errorf("a signature that has run out was also written about as one that will: %v", noteTexts(got))
+	}
+
+	// An answer that carried no signature says nothing about a date, and is
+	// not a zone whose signatures ran out (R4).
+	quiet := served(t)
+	got = at(quiet)
+	if got.Observed.SignatureRead || has(got, "dns.signature-expired") || noteSaying(got, "runs out on") {
+		t.Errorf("a zone whose signature was not read reads %+v %v", got.Observed.SignatureExpires, ruleIDs(got))
+	}
+
+	// A date handed to the grade without the question having been answered is
+	// not a date: the scan fills the two together, and a report from another
+	// version must not turn a silence into a sentence (R4).
+	unread := policy.GradeDNS(policy.DNSFacts{
+		Apex: true, Signed: true, ChainMatched: true,
+		SignatureExpires: now.AddDate(0, 0, 20),
+		NameServers: []policy.NameServer{
+			{Name: "ns1.example.net", Addresses: []string{"192.0.2.53"}},
+			{Name: "ns2.example.org", Addresses: []string{"198.51.100.53"}},
+		},
+	}, now)
+	for _, n := range unread.Notes {
+		if strings.Contains(n.Text, "runs out on") {
+			t.Errorf("a date nobody read was reported: %s", n.Text)
+		}
+	}
+
+	// And an unsigned zone is not one with an expired signature either, even
+	// if something put a date in front of the grade.
+	unsigned := policy.GradeDNS(policy.DNSFacts{
+		Apex: true, SignatureRead: true, SignatureExpires: now.AddDate(0, 0, -2),
+		NameServers: []policy.NameServer{
+			{Name: "ns1.example.net", Addresses: []string{"192.0.2.53"}},
+			{Name: "ns2.example.org", Addresses: []string{"198.51.100.53"}},
+		},
+	}, now)
+	for _, f := range unsigned.Findings {
+		if f.RuleID == "dns.signature-expired" {
+			t.Error("an unsigned zone was graded on a signature it does not have")
 		}
 	}
 }

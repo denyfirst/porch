@@ -1148,6 +1148,12 @@ function published(facts) {
   if (facts.signed) {
     const names = (facts.keys || []).map(k => k.name || ("algorithm " + k.algorithm));
     if (names.length) row("Signed with", [...new Set(names)].join(", "));
+    // The date, on its own row. It is the one fact in this block that becomes
+    // wrong by itself, while nobody changes anything.
+    if (facts.signatureRead && facts.signatureExpires) {
+      row("Signature", "runs out " + facts.signatureExpires.slice(0, 10) +
+        ", made by key " + facts.signatureKeyTag);
+    }
     if (facts.nsec3Read) row("Absent names", absenceLine(facts));
   }
 
