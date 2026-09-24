@@ -152,8 +152,16 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 
-/* deny, then first. The brand's red is the first half. */
-.wordmark-deny { color: var(--brand); }
+/*
+  deny, then first, then the full stop. The brand's red is the first half and
+  the last character.
+
+  The stop was white for a while and read as a typo: it sat inside the pale half
+  of the word with nothing to attach it to, and a reader's eye stopped at
+  "first". Red at both ends closes the word — the mark ends the sentence it
+  begins, which is the whole of what the name says.
+*/
+.wordmark-deny, .wordmark-stop { color: var(--brand); }
 
 .masthead-nav {
   display: flex;
@@ -174,17 +182,58 @@ a:hover { text-decoration-thickness: 2px; }
   The colour scheme switch. Drawn as text rather than an icon so it says what
   it does, and only present where theme.js runs to make it work.
 */
+/*
+  A sun or a moon, and nothing else on it.
+
+  Square rather than a word in a box: the label said "Dark" while the page was
+  light and "Light" while it was dark, which is correct and reads backwards to
+  anybody who does not stop to think about it. A mark of what you are going to
+  get needs no reading at all. 34px is the target a pointer needs, and the name
+  a screen reader announces is on aria-label rather than in the box.
+*/
 .theme-toggle {
   margin-left: auto;
-  min-height: 32px;
-  padding: 0.3rem 0.75rem;
-  font-family: var(--sans);
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   cursor: pointer;
+}
+
+/*
+  The mark takes the button's colour, so the hover below moves both: it is two
+  pieces of geometry, not a typeface and not a file.
+*/
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+/*
+  One choice, shown as the name rather than as a chooser holding one item.
+  Set in the same face as the chooser it replaces, so the block does not move
+  when a name with parents is asked about next.
+*/
+.proof-single {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+/* The half that is filled is the scheme pressing the button gives you. */
+.theme-toggle .theme-half {
+  fill: currentColor;
+  stroke: none;
 }
 
 .masthead-nav + .theme-toggle { margin-left: 0; }
