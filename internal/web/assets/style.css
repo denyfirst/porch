@@ -2689,3 +2689,49 @@ main > .band:last-child { border-bottom: 0; }
 .shell .sh-str  { color: var(--strong); }
 .shell .sh-op   { color: var(--ink-faint); }
 .shell code     { color: var(--ink-soft); }
+
+/*
+  Both chains get the same columns, because they are the same measurement
+  begun at two addresses.
+
+  Each table used to size itself to its own contents, and the two never hold
+  the same contents: the secure chain carries long https:// addresses and
+  several hops, the plaintext one often a single short address. On a live
+  report "Response" sat at the right edge in the first table and near the
+  middle in the second, a hand's width apart, and the two rows a reader is
+  meant to compare did not line up at all.
+
+  The widths sit on the <col> elements for the reason the cipher tables give:
+  a fixed layout takes its geometry from the columns first, and the header is
+  set in a smaller size than the body, so a width written on a <th> would be
+  measured in the wrong font.
+*/
+.chain {
+  table-layout: fixed;
+}
+
+/* "plaintext" is nine characters and is the longest this column holds. */
+.chain .col-transport { width: calc(9ch + 0.8rem); }
+
+/*
+  Wide enough for the status and for the sentence under it. What goes here is
+  a number, or "no response" with webprobe's own reason beneath — and a reason
+  squeezed into the width of "no response" arrives as a column of two-word
+  lines.
+*/
+.chain .col-response { width: 26ch; }
+
+/* Declared rather than left out: the address column takes what the other two
+   do not, and saying so is what those two are measured against. */
+.chain .col-address { width: auto; }
+
+/*
+  An address is broken mid-word where it has to be. It is not an identifier
+  somebody retypes — it is there to show where the site sent a browser — and
+  the alternative is one long hop pushing the two columns beside it out of
+  line, which is the fault this whole block exists to fix.
+*/
+.chain td.address {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
