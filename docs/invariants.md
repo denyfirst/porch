@@ -2657,6 +2657,7 @@ rather than a silence in the helper.
 `TestWhatTheSiteDeclaresIsDrawnInBothFaces`,
 `TestTheProtocolIsAFactAndNotAFinding`,
 `TestTheVersionOfHTTPThatCarriedTheResponseIsRecorded`,
+`TestTheServiceDoesNotSpeakHTTP2`,
 `TestTheMailPathDrawsItsRowsWhateverTheMXSays`,
 `TestAChainNothingWasAttemptedAtSaysSo`,
 `TestEveryStatedReasonIsTrueOfTheSuite`,

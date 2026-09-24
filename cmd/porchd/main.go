@@ -539,14 +539,27 @@ func run() int {
 		// HTTP/2 is switched off. A non-nil but empty TLSNextProto is what
 		// stops http.Server from enabling it alongside TLS.
 		//
-		// Its concurrent stream handling and its priority scheme have each
-		// produced denial-of-service classes, Rapid Reset among them, and
-		// tuning either needs golang.org/x/net/http2, which this project does
-		// not carry. Removing the protocol removes the question rather than
-		// leaving it to a default somebody would have to keep watching.
+		// It is off because it adds attack surface and nothing this service
+		// needs. The encryption is TLS's and is identical either way; what
+		// HTTP/2 adds is multiplexing, and what it adds with it is a stream
+		// state machine, flow control and HPACK — three mechanisms that have
+		// each produced denial-of-service classes, Rapid Reset among them.
+		// This site is four small files and one request, which keep-alive over
+		// HTTP/1.1 covers entirely, so the protocol would be surface bought
+		// with nothing.
 		//
-		// What it costs is multiplexing. This site is four small files and
-		// one request, which keep-alive over HTTP/1.1 covers entirely.
+		// This note used to say that tuning HTTP/2 needs golang.org/x/net/http2
+		// and that this project does not carry it. That stopped being true: Go
+		// 1.26 has Server.Protocols and http.HTTP2Config, MaxConcurrentStreams
+		// included, so the protocol could now be enabled and bounded from the
+		// standard library alone. The decision is unchanged and the reason it
+		// rests on is the one above — a reason that survives the toolchain
+		// gaining the feature, which the old one did not.
+		//
+		// The scanner is not affected by any of this. What a target answers
+		// with is what a report says it answered with, and "Served over" is a
+		// row rather than a rule precisely because an operator may switch the
+		// protocol off on purpose, as this does.
 		TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){},
 	}
 
