@@ -671,8 +671,18 @@ function certificate(cert, tls, issuance, stapling, report) {
 
   const pairs = el("dl", "pairs");
 
-  function pair(label, value) {
-    if (value === undefined || value === null || value === "") return;
+  // A row with nothing in it says so, rather than not being drawn.
+  //
+  // This returned early on an empty value, so eight rows disappeared whenever
+  // the answer was empty — and a row that is not there reads as a question
+  // nobody had. "Logged" is the one that made the case: empty means nothing
+  // searched the transparency logs, and a reader who could not see the row had
+  // no way to tell that from "no other certificate exists for this name" (R4).
+  //
+  // A caller that means "this does not apply here" leaves the call out, which
+  // is a decision at the call site rather than a silence in the helper.
+  function pair(label, value, absent) {
+    if (value === undefined || value === null || value === "") value = absent || "none";
     pairs.appendChild(el("dt", null, label));
     pairs.appendChild(el("dd", null, value));
   }
@@ -682,7 +692,7 @@ function certificate(cert, tls, issuance, stapling, report) {
   // What the issuer says it checked. Next to the issuer because that is whose
   // claim it is, and above the dates because it is about how the certificate
   // came to exist rather than about how long it lasts.
-  pair("Validation", leaf.validation);
+  pair("Validation", leaf.validation, "not stated by the certificate");
 
   const from = (leaf.notBefore || "").slice(0, 10);
   const to = (leaf.notAfter || "").slice(0, 10);
@@ -702,9 +712,8 @@ function certificate(cert, tls, issuance, stapling, report) {
   pair("Key", leaf.keyBits ? leaf.keyAlgorithm + " " + leaf.keyBits : leaf.keyAlgorithm);
   pair("Signature", leaf.signatureAlgorithm);
 
-  if (Array.isArray(leaf.dnsNames) && leaf.dnsNames.length) {
-    pair("Names", leaf.dnsNames.join(", "));
-  }
+  pair("Names", (leaf.dnsNames || []).join(", "), "none");
+  pair("Addresses", (leaf.ipAddresses || []).join(", "), "none");
 
   pair("Chain", cert.chain.length + (cert.trusted ? " certificates, trusted" : " certificates, not trusted"));
 
@@ -719,7 +728,7 @@ function certificate(cert, tls, issuance, stapling, report) {
   // no longer required to run OCSP, and several have stopped. The
   // distinction between a server that could staple and did not and one that
   // has nothing to staple is the whole content of this line.
-  pair("Revocation", report && report.revocationLine);
+  pair("Revocation", report && report.revocationLine, "not checked");
 
   // Issuance sits above transparency because the two are halves of one
   // question in the order they happen: who may obtain a certificate for this
@@ -730,14 +739,15 @@ function certificate(cert, tls, issuance, stapling, report) {
   // under every verdict but ungraded. For a name with no CAA this is often
   // the most useful sentence in the report — one DNS record, nothing to break
   // by adding it — and a sentence nobody opens is a sentence nobody reads.
-  pair("Issuance", issuance && issuance.line);
-  pair("Transparency", report && report.transparencyLine);
+  pair("Issuance", issuance && issuance.line, "not read");
+  pair("Transparency", report && report.transparencyLine, "not read");
 
   // What the public logs hold for this name, where a deployment searched them.
   // Absent where none did, which is this one: the sentence is composed in
   // internal/policy and arrives empty when no search was made, so nothing here
   // decides whether to show it.
-  pair("Logged", report && report.loggedLine);
+  pair("Logged", report && report.loggedLine,
+    "not searched: the public logs were not asked what else exists for this name");
 
   pair("SHA-256", leaf.fingerprintSha256);
 
@@ -1114,41 +1124,47 @@ function published(facts) {
   if (facts.addressReason) {
     row("Addresses", "not read: " + facts.addressReason);
   } else {
-    row("IPv4", listOrNone(facts.ipv4));
-    row("IPv6", listOrNone(facts.ipv6));
+    row("IPv4 (A)", listOrNone(facts.ipv4));
+    row("IPv6 (AAAA)", listOrNone(facts.ipv6));
   }
 
   if (facts.aliasReason) {
-    row("Alias", "not read: " + facts.aliasReason);
+    row("Alias (CNAME)", "not read: " + facts.aliasReason);
   } else if (!facts.alias) {
-    row("Alias", "none");
+    row("Alias (CNAME)", "none");
   } else {
     row(
-      "Alias",
+      "Alias (CNAME)",
       facts.alias + (facts.aliasTargetExists ? "" : ", which does not exist"),
       facts.aliasTargetExists ? null : "weak",
     );
   }
 
   if (facts.soaFound) {
-    row("Zone", "begins here, serial " + facts.soaSerial);
+    row("Zone (SOA)", "begins here, serial " + facts.soaSerial);
     row("Primary", facts.soaPrimary);
   } else {
-    row("Zone", "begins above this name");
+    row("Zone (SOA)", "begins above this name");
   }
 
   const text = facts.text || [];
-  row("Text records", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
+  row("Text records (TXT)", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
 
-  row("DNSSEC", dnssecLine(facts), dnssecMark(facts));
+  row("DNSSEC (DS)", dnssecLine(facts), dnssecMark(facts));
 
   // The algorithm by the name an operator's own interface uses, and how
   // absent names are proved — both facts about a signed zone, neither a
   // verdict about it.
   if (facts.signed) {
     const names = (facts.keys || []).map(k => k.name || ("algorithm " + k.algorithm));
-    if (names.length) row("Signed with", [...new Set(names)].join(", "));
-    if (facts.nsec3Read) row("Absent names", absenceLine(facts));
+    if (names.length) row("Signed with (DNSKEY)", [...new Set(names)].join(", "));
+    // The date, on its own row. It is the one fact in this block that becomes
+    // wrong by itself, while nobody changes anything.
+    if (facts.signatureRead && facts.signatureExpires) {
+      row("Signature (RRSIG)", "runs out " + facts.signatureExpires.slice(0, 10) +
+        ", made by key " + facts.signatureKeyTag);
+    }
+    if (facts.nsec3Read) row("Absent names (NSEC3)", absenceLine(facts));
   }
 
   table.appendChild(body);
@@ -1242,7 +1258,7 @@ function delegation(facts) {
   const table = el("table", "grid");
   const head = el("thead");
   const headRow = el("tr");
-  for (const name of ["Server", "Addresses"]) headRow.appendChild(el("th", null, name));
+  for (const name of ["Server (NS)", "Addresses"]) headRow.appendChild(el("th", null, name));
   head.appendChild(headRow);
   table.appendChild(head);
 

@@ -2635,10 +2635,22 @@ thing it could not read. Weak rather than ungraded, because `Worst` skips
 ungraded and an unreadable suite would otherwise drop out of the aggregate
 while the server that offered it was called strong.
 
+**And nothing is left out of a report because it was empty.** A row drawn only
+when it has a value disappears exactly when a reader most needs it: a
+certificate with no names, a scan that never searched the transparency logs.
+What is drawn instead says which kind of nothing it was — `none`, `not
+checked`, `not searched` — because a row that is not there reads as a question
+nobody had, and a reader cannot tell it from an answer of none. The page's row
+helper returned early on an empty value and the terminal had wrapped eight rows
+in conditions one at a time; both say it now. A caller that means *this does
+not apply here* leaves the call out, which is a decision at the call site
+rather than a silence in the helper.
+
 *Enforced in:* `internal/policy.Ungraded`, `policy.Worst`,
 `policy.GradeVersion` (`version.unknown`), `policy.GradeCipher`
 (`cipher.unrecognised`), `policy.GradeLeaf` (`cert.key-algorithm-unrecognised`)
 *Guarded by:* `TestNothingMeasuredIsUngraded`, `TestUnreachableTargetIsUngraded`,
+`TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty`,
 `TestEveryStatedReasonIsTrueOfTheSuite`,
 `TestAClosedConnectionIsNotARefusal`,
 `TestSilenceIsNotARefusal`,
@@ -3889,7 +3901,7 @@ recommendations. A zone whose records are written by an API has no reason to
 carry a serial a human can read, and telling its operator otherwise is R21's
 failure with a different record type.
 
-So `porch-dns-v1` grades three things, each of which stops a resolver:
+So `porch-dns-v2` grades three things, each of which stops a resolver:
 
 - **Fewer than two name servers**, which RFC 1034 requires and RFC 2182 — a
   best current practice — explains: one server is one power supply and one
@@ -3938,6 +3950,22 @@ hands it out — and never about its own behaviour: whose server it is does not
 change whose zone is being given away, while whether it answers for strangers
 is its operator's business. The zone above is asked about this domain and never
 about itself.
+
+**Every line of the report says which record it came from.** "Alias (CNAME)",
+"Zone (SOA)", "Signature (RRSIG)": the plain word for a reader who does not know
+the type, and the type because the interface they will open to change it calls
+the field by that name and nothing else. It is R16's rule about the DNSSEC
+algorithm applied to every line beside it.
+
+**When the signatures run out is reported, and only a signature that has
+already run out is graded.** RFC 4035 §5.3.1 has a validating resolver refuse a
+signature whose validity period does not contain the current time, so a zone
+whose signatures have expired is already gone for everybody behind one — the
+same outcome as a broken chain and graded the same way. How long is left is not
+graded: no document names a number of days, and a zone re-signed hourly with a
+two-day window is as correct as one re-signed weekly with a month (R21). The
+date costs no question — every query already asks for DNSSEC data, so the
+signature arrives with the answer and only the field in it was going unread.
 
 **Whether the zone can be read whole is asked, reported, and not graded.** A
 server that grants AXFR to the internet gives up every name in the zone at
@@ -4001,6 +4029,12 @@ whoever claims it next answers for this name.
 `TestWhatTheZoneAboveHandsOutIsDrawnInBothFaces`,
 `TestWhetherTheServersHoldTheSameCopyIsReadAndNotGraded`,
 `TestWhetherTheZoneCanBeReadWholeIsAskedAndReported`,
+`TestWhenTheSignaturesRunOutIsReadAndOnlyExpiryIsGraded`,
+`TestWhenASignatureRunsOutIsReadFromTheAnswer`,
+`TestASignatureIsReadOnlyWhereTheRecordsAre`,
+`TestAShortSignatureIsRefusedRatherThanReadPastItself`,
+`TestWhenTheSignatureRunsOutIsDrawnInBothFaces`,
+`TestEveryLineSaysWhichRecordItCameFrom`,
 `TestATransferIsAskedForAndNotTaken`, `TestATransferIsAskedThroughTheGuard`,
 `TestATransferReplyMustAnswerTheQuestionAsked`,
 `TestAServerThatHandsOutTheZoneIsDrawnInBothFaces`,

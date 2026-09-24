@@ -105,41 +105,47 @@ func printDNS(w io.Writer, r dnsResult) {
 		// merged, a reader cannot tell a name with no IPv6 from one nobody
 		// asked about.
 		if f.AddressReason != "" {
-			fmt.Fprintf(w, "    Addresses  not read: %s\n", f.AddressReason)
+			field(w, "Addresses", "not read: "+f.AddressReason)
 		} else {
-			fmt.Fprintf(w, "    IPv4       %s\n", listOrNone(f.IPv4))
-			fmt.Fprintf(w, "    IPv6       %s\n", listOrNone(f.IPv6))
+			field(w, "IPv4 (A)", listOrNone(f.IPv4))
+			field(w, "IPv6 (AAAA)", listOrNone(f.IPv6))
 		}
 
 		switch {
 		case f.AliasReason != "":
-			fmt.Fprintf(w, "    Alias      not read: %s\n", f.AliasReason)
+			field(w, "Alias (CNAME)", "not read: "+f.AliasReason)
 		case f.Alias == "":
-			fmt.Fprintf(w, "    Alias      none\n")
+			field(w, "Alias (CNAME)", "none")
 		case f.AliasTargetExists:
-			fmt.Fprintf(w, "    Alias      %s\n", f.Alias)
+			field(w, "Alias (CNAME)", f.Alias)
 		default:
-			fmt.Fprintf(w, "    Alias      %s, which does not exist\n", f.Alias)
+			field(w, "Alias (CNAME)", f.Alias+", which does not exist")
 		}
 
 		if f.SOAFound {
-			fmt.Fprintf(w, "    Zone       begins here, serial %d, primary %s\n", f.SOASerial, f.SOAPrimary)
+			field(w, "Zone (SOA)", fmt.Sprintf("begins here, serial %d, primary %s", f.SOASerial, f.SOAPrimary))
 		} else {
-			fmt.Fprintf(w, "    Zone       begins above this name\n")
+			field(w, "Zone (SOA)", "begins above this name")
 		}
 
 		printText(w, f.Text)
-		fmt.Fprintf(w, "    DNSSEC     %s\n", dnssecLine(*f))
+		field(w, "DNSSEC (DS)", dnssecLine(*f))
 
 		// The algorithm by the name an operator's own interface uses, and how
 		// absent names are proved: both facts about a signed zone, neither a
 		// verdict about it.
 		if f.Signed {
 			if names := algorithmNames(f.Keys); names != "" {
-				fmt.Fprintf(w, "    Signed with %s\n", names)
+				field(w, "Signed with (DNSKEY)", names)
+			}
+			if f.SignatureRead && !f.SignatureExpires.IsZero() {
+				// The date on its own line, because it is the one fact in this
+				// block that becomes wrong by itself while nothing changes.
+				field(w, "Signature (RRSIG)", fmt.Sprintf("runs out %s, made by key %d",
+					f.SignatureExpires.Format("2006-01-02"), f.SignatureKeyTag))
 			}
 			if f.NSEC3Read {
-				fmt.Fprintf(w, "    Absent     %s\n", absenceLine(*f))
+				field(w, "Absent (NSEC3)", absenceLine(*f))
 			}
 		}
 
@@ -277,7 +283,7 @@ func listOrNone(values []string) string {
 // eight records, and each cut to a length that still shows what it is.
 func printText(w io.Writer, records []string) {
 	if len(records) == 0 {
-		fmt.Fprintf(w, "    Text       none\n")
+		field(w, "Text (TXT)", "none")
 		return
 	}
 
@@ -285,12 +291,16 @@ func printText(w io.Writer, records []string) {
 	if len(shown) > maxTextShown {
 		shown = shown[:maxTextShown]
 	}
-	fmt.Fprintf(w, "    Text       %d records, as published:\n", len(records))
+	field(w, "Text (TXT)", strconv.Itoa(len(records))+" records, as published:")
+
+	// Indented past the label column, so the records sit under the value they
+	// belong to rather than under the labels beside it.
+	indent := strings.Repeat(" ", 4+fieldWidth+2)
 	for _, record := range shown {
-		fmt.Fprintf(w, "                 %s\n", cut(record, maxTextLength))
+		fmt.Fprintf(w, "%s%s\n", indent, cut(record, maxTextLength))
 	}
 	if len(records) > len(shown) {
-		fmt.Fprintf(w, "                 and %d more\n", len(records)-len(shown))
+		fmt.Fprintf(w, "%sand %d more\n", indent, len(records)-len(shown))
 	}
 }
 
@@ -335,4 +345,24 @@ func absenceLine(f policy.DNSFacts) string {
 		return "hashed"
 	}
 	return "hashed, " + strconv.Itoa(int(f.NSEC3Iterations)) + " extra times"
+}
+
+// fieldWidth is how wide the label column in the block above is.
+//
+// Wide enough for the longest label, which is the one that carries the record
+// type: "Signed with (DNSKEY)". Every line in that block is set to it, because
+// a block whose labels are mostly aligned reads worse than one where they are
+// not aligned at all — and "Signed with" was the exception that proved it,
+// running two characters past the others since the day it was added.
+const fieldWidth = 21
+
+// field writes one labelled line of the block that says what a name publishes.
+//
+// The label carries the record type in brackets: A, AAAA, CNAME, SOA, TXT.
+// What a reader does with this report is open their DNS provider's interface,
+// where the field is not called "alias" — it is called CNAME. The plain word
+// stays in front of it for whoever does not know the type, which is the same
+// reason the DNSSEC algorithm travels by name (R16).
+func field(w io.Writer, label, value string) {
+	fmt.Fprintf(w, "    %-*s%s\n", fieldWidth, label, value)
 }

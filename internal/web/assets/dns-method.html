@@ -63,7 +63,7 @@
     </p>
 
     <p>
-      The third goes to one server of the zone above — for
+      The last of the four goes to one server of the zone above — for
       <code>example.dev</code>, a server of <code>dev</code> — and asks it
       about this domain by name, with recursion off. What comes back is a
       referral: the list that zone hands out, which is what a resolver starting
@@ -72,7 +72,7 @@
     </p>
 
     <p>
-      An installation asks those three only where control of the domain has
+      An installation asks those four only where control of the domain has
       been proven; the command line asks them always, because it runs on the
       operator's own machine from their own address.
     </p>
@@ -116,6 +116,13 @@
         still holds this zone.</li>
       <li><strong>A DNSSEC chain that does not check out</strong>, and an alias
         at the top of a zone, which RFC 1034 and RFC 2181 both forbid.</li>
+      <li><strong>A signature that has already run out.</strong> RFC 4035
+        requires a validating resolver to refuse a signature whose validity
+        period does not contain the current time, so the zone is already gone
+        for everybody behind one. <em>When</em> the signatures run out is
+        reported and not graded: no document says how much room to leave, and a
+        zone re-signed hourly with a two-day window is as correct as one
+        re-signed weekly with a month.</li>
     </ul>
 
     <p>

@@ -182,7 +182,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.askServers(ctx, domain, &facts)
 	s.askParent(ctx, resolver, domain, &facts)
 
-	graded := policy.GradeDNS(facts)
+	graded := policy.GradeDNS(facts, s.now())
 
 	return &Result{
 		Domain:   domain,
@@ -199,6 +199,30 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 // decides whether a zone begins here at all.
 func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
 	answer, err := r.LookupSOA(ctx, domain)
+
+	// The signature over the record at the top of the zone, which came with
+	// the answer because every query here asks for DNSSEC data.
+	//
+	// The zone's own record and not some other one: it is the set every signed
+	// zone has, it is re-signed on the same schedule as the rest, and reading
+	// it costs no question. What it carries that nothing else does is the date
+	// the signatures stop being accepted — a zone whose signatures expire goes
+	// off the internet for everybody behind a validating resolver, exactly as a
+	// broken chain does, and unlike a broken chain it happens on a date nobody
+	// was watching.
+	//
+	// The earliest, where there is more than one. A zone rolling its keys
+	// publishes signatures from both, and what decides the zone's fate is the
+	// first one to run out.
+	for _, signature := range answer.Signatures {
+		if !facts.SignatureRead || signature.Expiration.Before(facts.SignatureExpires) {
+			facts.SignatureRead = true
+			facts.SignatureExpires = signature.Expiration
+			facts.SignatureInception = signature.Inception
+			facts.SignatureKeyTag = signature.KeyTag
+		}
+	}
+
 	if err == nil && len(answer.SOA) > 0 {
 		soa := answer.SOA[0]
 		facts.Apex = true
