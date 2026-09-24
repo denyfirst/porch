@@ -3919,7 +3919,10 @@ behaviour, and the zone above is asked about this domain and never about
 itself.
 
 Everything else is reported: the addresses, the servers, the text records, the
-SOA and its timers, a digest type this does not compute, and an unsigned zone —
+SOA and its timers, whether the servers hold the same copy of the zone — a
+serial difference is ordinary while a transfer runs and no document bounds how
+long that is, so R21 leaves it at what each server answered — a digest type
+this does not compute, and an unsigned zone —
 which is a choice rather than a fault. A digest this cannot compute is never
 read as a chain that failed, and a name inside a zone is never read as an
 unsigned one: no zone begins there, so nothing about a chain was asked, and the
@@ -3957,6 +3960,7 @@ whoever claims it next answers for this name.
 `TestADelegationIsReadFromTheAuthoritySection`,
 `TestOnlyAQuestionAboutServersReadsTheDelegation`,
 `TestWhatTheZoneAboveHandsOutIsDrawnInBothFaces`,
+`TestWhetherTheServersHoldTheSameCopyIsReadAndNotGraded`,
 `TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence`,
 `TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
 `TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,

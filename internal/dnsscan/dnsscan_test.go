@@ -647,6 +647,11 @@ type servers struct {
 	// fail names the addresses that answer with an error.
 	fail map[string]error
 
+	// serial is the zone serial each address answers with, for the question of
+	// whether the servers hold the same copy of the zone. An address missing
+	// from it answers with the zone's own.
+	serial map[string]uint32
+
 	// referral is what a server of the zone above hands out when it is asked
 	// about the domain being scanned. Nil is a server that delegates nothing
 	// here, which is not the same as one that delegates a different list.
@@ -700,9 +705,13 @@ func (s *servers) AskServer(_ context.Context, address, name string, qtype uint1
 	if !s.authoritative[address] {
 		return dnsclient.ServerAnswer{Answered: true, Existed: true}, nil
 	}
+	soa := dnsclient.SOA{Primary: "ns1.example.net", Serial: 7}
+	if n, ok := s.serial[address]; ok {
+		soa.Serial = n
+	}
 	return dnsclient.ServerAnswer{
 		Answered: true, Authoritative: true, Existed: true,
-		SOA: []dnsclient.SOA{{Primary: "ns1.example.net"}},
+		SOA: []dnsclient.SOA{soa},
 	}, nil
 }
 
@@ -1042,5 +1051,76 @@ func TestAParentThatWasNotAskedIsNotAgreement(t *testing.T) {
 		if f.RuleID == "dns.parent-and-zone-disagree" {
 			t.Error("a difference nobody asked about was graded")
 		}
+	}
+}
+
+// Whether the servers hold the same copy of the zone is read from the answers
+// already in hand, and reported rather than graded.
+//
+// Reported, because R21 leaves it there: a zone changed a moment ago has its
+// servers at two serials until the transfer finishes, no document says how
+// long that may take, and a scan sees one instant. What can be said is which
+// server answered with which number.
+func TestWhetherTheServersHoldTheSameCopyIsReadAndNotGraded(t *testing.T) {
+	z := served(t)
+
+	// One server two changes behind the other.
+	behind := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+		serial:        map[string]uint32{"198.51.100.53": 5},
+	}
+
+	got := asking(t, z, behind)
+	if !noteSaying(got, "do not hold the same copy of the zone") ||
+		!noteSaying(got, "ns1.example.net at 7") || !noteSaying(got, "ns2.example.org at 5") {
+		t.Errorf("the disagreement is not reported: %v", noteTexts(got))
+	}
+	if got.Verdict != policy.Strong || len(got.Findings) != 0 {
+		t.Errorf("a serial difference was graded: %q %v", got.Verdict, ruleIDs(got))
+	}
+	if !got.Observed.NameServers[1].SerialRead || got.Observed.NameServers[1].Serial != 5 {
+		t.Errorf("the serial each server answered with is not carried: %+v", got.Observed.NameServers)
+	}
+
+	// The same servers holding one copy, which is the answer worth saying out
+	// loud: silence here would read as a question nobody put.
+	together := *behind
+	together.serial = map[string]uint32{}
+	got = asking(t, z, &together)
+	if !noteSaying(got, "hold the same copy of the zone") || noteSaying(got, "do not hold the same copy") {
+		t.Errorf("agreement is not reported: %v", noteTexts(got))
+	}
+
+	// A server nobody could ask holds no opinion, so one answer is not a
+	// comparison and is not reported as one (R4).
+	alone := *behind
+	alone.fail = map[string]error{"198.51.100.53": errors.New("dnsclient: reaching the name server: connection refused")}
+	got = asking(t, z, &alone)
+	if noteSaying(got, "copy of the zone") {
+		t.Errorf("one server was compared with itself: %v", noteTexts(got))
+	}
+
+	// A server that set the authority bit and answered with no record holds no
+	// serial either. Counting its silence as serial zero would put it in the
+	// comparison as a server two thousand changes behind (R4).
+	silent := *behind
+	silent.serial = map[string]uint32{}
+	silent.authoritative = map[string]bool{"192.0.2.53": true}
+	silent.claiming = map[string]bool{"198.51.100.53": true}
+	got = asking(t, z, &silent)
+	if noteSaying(got, "copy of the zone") {
+		t.Errorf("a server that answered with no record was given a serial: %v", noteTexts(got))
+	}
+	if got.Observed.NameServers[1].SerialRead {
+		t.Errorf("a server that answered with no record reads %+v", got.Observed.NameServers[1])
+	}
+
+	// And a scan that asked no server at all says nothing about it either.
+	if quiet := read(t, z); noteSaying(quiet, "copy of the zone") {
+		t.Errorf("servers nobody asked were compared: %v", noteTexts(quiet))
 	}
 }

@@ -116,6 +116,17 @@
     </p>
 
     <p>
+      <strong>Whether the servers hold the same copy of the zone</strong> is
+      reported too, and it comes out of the answers already in hand: each
+      server that is asked whether it serves the zone says which serial it
+      holds. A difference immediately after a change is ordinary and lasts as
+      long as the transfer; one that stays means a server is no longer
+      receiving the zone, and half the resolvers asking for it get the older
+      copy. Nothing here grades it, because no document says how long a
+      transfer may take.
+    </p>
+
+    <p>
       Whether absent names are proved with hashed names or plain ones is
       reported too. Plain names let anybody list a whole zone by asking for one
       that is not there and following the answers; that is how DNSSEC worked
