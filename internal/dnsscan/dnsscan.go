@@ -646,6 +646,15 @@ func (s *Scanner) askServers(ctx context.Context, domain string, facts *policy.D
 			// the bit and answer with nothing, which is not an answer for the
 			// zone either.
 			server.Authoritative = answer.Authoritative && len(answer.SOA) > 0
+
+			// The serial comes back in the same answer and costs nothing more
+			// to keep. It is the one number that says whether the servers hold
+			// the same copy of the zone, and a resolver cannot show it: it
+			// asks one server and reports what that one said.
+			if len(answer.SOA) > 0 {
+				server.Serial = answer.SOA[0].Serial
+				server.SerialRead = true
+			}
 		}
 
 		if !within(server.Name, domain) {
