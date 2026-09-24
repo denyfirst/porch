@@ -35,6 +35,9 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		}
 	}
 
+	if said["Served over"] != "none" {
+		t.Errorf("a response whose protocol was not recorded reads %q", said["Served over"])
+	}
 	if said["X-Frame-Options"] != "DENY" {
 		t.Errorf("what the header said reads %q", said["X-Frame-Options"])
 	}
@@ -130,5 +133,28 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 	}, ContentFacts{})
 	if !strings.HasSuffix(long["Permissions-Policy"], "…") || len(long["Permissions-Policy"]) > maxDeclared+8 {
 		t.Errorf("a long value was printed in full: %d characters", len(long["Permissions-Policy"]))
+	}
+}
+
+// The version of HTTP that carried the response is a row, and is never graded.
+//
+// It costs no request — the transport settled it over ALPN during a handshake
+// the scan already made — and no document requires a version. This project's
+// own service answers HTTP/1.1 on purpose, which is the case that decides it:
+// a rule here would grade a deliberate choice as a fault.
+func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
+	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil)
+	if len(rows) == 0 || rows[0].Label != "Served over" {
+		t.Fatalf("the first thing a report says about the response is %+v", rows)
+	}
+	if rows[0].Says != "HTTP/2.0" {
+		t.Errorf("the protocol reads %q", rows[0].Says)
+	}
+
+	// And an older version is the same kind of row, carrying no verdict with
+	// it: nothing in this package turns it into one.
+	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil)
+	if old[0].Says != "HTTP/1.1" {
+		t.Errorf("an older protocol reads %q", old[0].Says)
 	}
 }
