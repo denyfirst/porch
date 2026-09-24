@@ -195,6 +195,12 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 			fmt.Fprintf(w, "    %-28s not read: %s\n", ns.Name, ns.Reason)
 		case ns.Asked && !ns.Authoritative:
 			fmt.Fprintf(w, "    %-28s does not answer for this zone\n", ns.Name)
+		case ns.Transfer:
+			// Ahead of the addresses, because it is the line a reader of this
+			// block acts on: everything else here says how the zone is reached,
+			// and this says the whole of it can be taken.
+			fmt.Fprintf(w, "    %-28s %s — hands out the whole zone to anybody\n",
+				ns.Name, strings.Join(ns.Addresses, ", "))
 		case ns.Recursion:
 			fmt.Fprintf(w, "    %-28s %s — answers for other domains too\n",
 				ns.Name, strings.Join(ns.Addresses, ", "))

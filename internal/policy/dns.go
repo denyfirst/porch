@@ -101,6 +101,16 @@ type NameServer struct {
 	Serial     uint32 `json:"serial,omitempty"`
 	SerialRead bool   `json:"serialRead,omitempty"`
 
+	// TransferAsked is whether this server was asked for the whole zone, and
+	// Transfer whether it began handing it over. TransferReason says why the
+	// question established nothing, where that is what happened.
+	//
+	// What was read of the answer is its header. The zone itself is not taken:
+	// what this reports is that the zone is readable, never what is in it.
+	TransferAsked  bool   `json:"transferAsked,omitempty"`
+	Transfer       bool   `json:"transfer,omitempty"`
+	TransferReason string `json:"transferReason,omitempty"`
+
 	// RecursionAsked is whether this server was asked about a domain it has
 	// nothing to do with, and Recursion whether it went and found the answer.
 	// Only a server inside the domain being checked is asked that: a provider's
@@ -538,6 +548,35 @@ func GradeDNS(f DNSFacts) DNSFinding {
 			"recommendations, so they are reported here and not graded.")
 	}
 
+	// Whether the zone can be read whole, by anybody.
+	//
+	// Reported and not graded, and that is RFC 5936 rather than caution.
+	// Section 5 says an implementation ought to let an operator open transfers
+	// to everyone — "a general-purpose implementation SHOULD allow access to be
+	// open to all AXFR requests" — while saying it must not be the default, and
+	// it says in as many words that the arguments for concealing a zone have
+	// been argued to be questionable. So no document calls this a fault, R21
+	// applies, and the sentence says what it costs instead of inventing a
+	// grade: it is the same fact the note about plain absence proofs carries,
+	// reached by a different route.
+	if open, unread := transfersOf(f.NameServers); len(open) > 0 {
+		began := "that server began"
+		if len(open) > 1 {
+			began = "those servers began"
+		}
+		note("The zone can be read whole from " + strings.Join(open, ", ") + ": asked for a transfer, " +
+			began + " handing it over to an address it has never heard of. What that gives " +
+			"away is every name in the zone at once — the staging host, the build server, the name " +
+			"behind the VPN — which no other question here can reach, because every other one asks " +
+			"about a name somebody already knows. RFC 5936 does not call it a fault and neither does " +
+			"this: an operator may open transfers deliberately, and a zone whose names are not secret " +
+			"loses nothing by it. This check read the first reply's header and closed the connection, " +
+			"so the zone itself was not taken and nothing of its contents is reported here.")
+	} else if len(unread) > 0 {
+		note("Whether the zone can be read whole was not established for " + strings.Join(unread, ", ") +
+			": the question did not complete. That is not a zone that refused one (R4).")
+	}
+
 	// Whether the servers hold the same copy of the zone.
 	//
 	// Reported and not graded, and that is R21 rather than caution. A zone
@@ -636,13 +675,16 @@ var LimitDNSAsksTheResolver = StandingLimit{
 
 	Text: "Almost every answer here came from the resolver this installation uses, so what is " +
 		"reported is what that resolver returns today, which may be an answer it still holds from " +
-		"earlier. Three questions cannot be answered that way and are put to servers directly, over " +
+		"earlier. Four questions cannot be answered that way and are put to servers directly, over " +
 		"TCP on port 53, where this installation is allowed to ask them: whether each server the " +
-		"zone names answers for the zone as its own; whether a server inside the domain being " +
-		"checked — never one belonging to a provider — also answers questions about domains it has " +
-		"nothing to do with; and, of one server of the zone above this one, which servers it hands " +
-		"out for this domain. Nothing else is sent to them, and no zone transfer is attempted. That " +
-		"last answer is one server's, so a zone above whose own servers disagree would be read from " +
+		"zone names answers for the zone as its own; whether each of them will hand the whole zone " +
+		"to anybody who asks; whether a server inside the domain being checked — never one " +
+		"belonging to a provider — also answers questions about domains it has nothing to do with; " +
+		"and, of one server of the zone above this one, which servers it hands out for this domain. " +
+		"Nothing else is sent to them. The transfer is asked for and not taken: the first reply's " +
+		"header says whether the server began one, the connection is closed there, and nothing the " +
+		"zone contains is read or reported. That last answer is one server's, so a zone above whose " +
+		"own servers disagree would be read from " +
 		"whichever of them answered first. The DNSSEC chain is checked here by taking the digest " +
 		"of the keys this zone publishes and comparing it with what the parent holds; whether the " +
 		"signatures over every record verify is the resolver's work, and where it says it did " +
@@ -766,4 +808,24 @@ func serialsOf(servers []NameServer) (agreed bool, serials []serverSerial) {
 		}
 	}
 	return agreed, serials
+}
+
+// transfersOf sorts the servers by what asking them for the zone established:
+// the ones that began handing it over, and the ones where the question did not
+// complete.
+//
+// A server nobody could ask is kept apart from one that refused, because a
+// question that failed is not a zone that is closed (R4). A server that
+// refused is in neither list: that is the ordinary answer and the report says
+// nothing about it.
+func transfersOf(servers []NameServer) (open, unread []string) {
+	for _, ns := range servers {
+		switch {
+		case ns.TransferAsked && ns.Transfer:
+			open = append(open, ns.Name)
+		case !ns.TransferAsked && ns.TransferReason != "":
+			unread = append(unread, ns.Name)
+		}
+	}
+	return open, unread
 }

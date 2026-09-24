@@ -661,6 +661,12 @@ type servers struct {
 	// answer section instead of pointing. The same claim, the other shape.
 	answering bool
 
+	// handing names the addresses that begin a transfer for anybody who asks,
+	// and failTransfer the ones where the question itself did not complete. A
+	// server in neither refuses, which is the ordinary answer.
+	handing      map[string]bool
+	failTransfer map[string]error
+
 	// asked records what was put to whom, so a test can say which servers
 	// were asked the second question and which were not.
 	asked []string
@@ -1122,5 +1128,101 @@ func TestWhetherTheServersHoldTheSameCopyIsReadAndNotGraded(t *testing.T) {
 	// And a scan that asked no server at all says nothing about it either.
 	if quiet := read(t, z); noteSaying(quiet, "copy of the zone") {
 		t.Errorf("servers nobody asked were compared: %v", noteTexts(quiet))
+	}
+}
+
+// AskTransfer answers whether this address hands the zone to anybody.
+//
+// A boolean, like the real one: the fake could not hand back a zone if a test
+// asked it to, because the interface gives a caller nowhere to put one.
+func (s *servers) AskTransfer(_ context.Context, address, _ string) (bool, error) {
+	s.asked = append(s.asked, address+" AXFR")
+	if err := s.failTransfer[address]; err != nil {
+		return false, err
+	}
+	if s.handing[address] {
+		return true, nil
+	}
+	return false, dnsclient.ErrNoTransfer
+}
+
+// Whether the zone can be read whole is asked of every server the zone names,
+// reported, and not graded.
+//
+// Not graded because RFC 5936 section 5 declines to call it a fault: it says a
+// general-purpose implementation ought to let an operator open transfers to
+// all, and that the arguments for concealing a zone have been argued to be
+// questionable. R21 is what that leaves.
+func TestWhetherTheZoneCanBeReadWholeIsAskedAndReported(t *testing.T) {
+	z := served(t)
+
+	open := &servers{
+		authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+		claiming:      map[string]bool{},
+		recursing:     map[string]bool{},
+		refusing:      map[string]bool{},
+		fail:          map[string]error{},
+		handing:       map[string]bool{"198.51.100.53": true},
+	}
+
+	got := asking(t, z, open)
+	if !noteSaying(got, "The zone can be read whole from ns2.example.org") {
+		t.Errorf("an open transfer is not reported: %v", noteTexts(got))
+	}
+	if got.Verdict != policy.Strong || len(got.Findings) != 0 {
+		t.Errorf("an open transfer was graded: %q %v", got.Verdict, ruleIDs(got))
+	}
+	if !got.Observed.NameServers[1].TransferAsked || !got.Observed.NameServers[1].Transfer {
+		t.Errorf("the server that handed out the zone reads %+v", got.Observed.NameServers[1])
+	}
+	// The one that refused is not named, and refusing is not a reason either.
+	if got.Observed.NameServers[0].Transfer || got.Observed.NameServers[0].TransferReason != "" {
+		t.Errorf("a server that refused reads %+v", got.Observed.NameServers[0])
+	}
+	// Every server the zone names is asked, and asked about the zone: whose
+	// server it is does not change whose zone is being handed out.
+	var transfers []string
+	for _, q := range open.asked {
+		if strings.HasSuffix(q, " AXFR") {
+			transfers = append(transfers, q)
+		}
+	}
+	if len(transfers) != 2 {
+		t.Errorf("the transfer question went to %v", transfers)
+	}
+
+	// A zone whose servers all refuse says nothing about transfers at all: the
+	// report carries findings and facts, not a line for every question that
+	// came back the ordinary way.
+	closed := *open
+	closed.handing = map[string]bool{}
+	if got := asking(t, z, &closed); noteSaying(got, "read whole") {
+		t.Errorf("a zone nobody can transfer was written about: %v", noteTexts(got))
+	}
+
+	// A question that did not complete is not a zone that refused one (R4).
+	unknown := *open
+	unknown.handing = map[string]bool{}
+	unknown.failTransfer = map[string]error{"192.0.2.53": errors.New("dnsclient: reading the reply: connection reset")}
+	got = asking(t, z, &unknown)
+	if !noteSaying(got, "was not established for ns1.example.net") {
+		t.Errorf("a transfer question that failed is not reported: %v", noteTexts(got))
+	}
+	if got.Observed.NameServers[0].TransferAsked {
+		t.Errorf("a question that failed was recorded as asked: %+v", got.Observed.NameServers[0])
+	}
+
+	// And nothing is asked where the caller did not allow it.
+	quiet := &servers{
+		authoritative: map[string]bool{}, claiming: map[string]bool{}, recursing: map[string]bool{},
+		refusing: map[string]bool{}, fail: map[string]error{}, handing: map[string]bool{"192.0.2.53": true},
+	}
+	if _, err := (&Scanner{Resolver: z, Servers: quiet}).Scan(context.Background(), "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range quiet.asked {
+		if strings.HasSuffix(q, " AXFR") {
+			t.Errorf("a scan that was not allowed to ask servers asked for a transfer: %v", quiet.asked)
+		}
 	}
 }

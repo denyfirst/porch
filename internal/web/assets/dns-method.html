@@ -39,16 +39,27 @@
     </p>
 
     <p>
-      <strong>Three questions are put to servers directly</strong>, because a
+      <strong>Four questions are put to servers directly</strong>, because a
       resolver cannot answer them: whether each server the delegation names
-      answers for the zone as its own, whether a server inside the domain also
-      answers questions about domains it has nothing to do with, and which
-      servers the zone above this one hands out. Those go over TCP on port 53,
-      to the addresses published for the servers in question, through the guard
-      that refuses private, loopback and reserved destinations. Nothing else is
-      sent, and no zone transfer is ever attempted. A server belonging to a
-      provider is asked the first question and never the second: its behaviour
-      is its operator's business, not this zone's.
+      answers for the zone as its own, whether each of them will hand the whole
+      zone to anybody who asks, whether a server inside the domain also answers
+      questions about domains it has nothing to do with, and which servers the
+      zone above this one hands out. Those go over TCP on port 53, to the
+      addresses published for the servers in question, through the guard that
+      refuses private, loopback and reserved destinations. Nothing else is sent.
+      A server belonging to a provider is asked about this zone and never about
+      its own behaviour: whether it hands out your zone is your exposure, and
+      whether it answers for strangers is its operator's business.
+    </p>
+
+    <p>
+      <strong>The transfer is asked for and never taken.</strong> A server that
+      restricts transfers refuses, and one that does not begins sending the
+      zone — the reply's header says which, and the connection is closed there,
+      before any of it is read. What that establishes is that the zone can be
+      read whole; what is in it is not read, not counted and not reported. It
+      is your data, and a scanner that copied it to tell you it was copyable
+      would be the thing it is warning you about.
     </p>
 
     <p>
@@ -124,6 +135,18 @@
       receiving the zone, and half the resolvers asking for it get the older
       copy. Nothing here grades it, because no document says how long a
       transfer may take.
+    </p>
+
+    <p>
+      <strong>Whether the zone can be read whole</strong> is reported and not
+      graded, and that is RFC 5936 rather than caution. Section 5 says a
+      general-purpose implementation ought to let an operator open transfers to
+      everybody, while saying it must not be the default, and it says in as many
+      words that the arguments for concealing a zone have been argued to be
+      questionable. So no document calls an open transfer a fault. What the
+      report says instead is what it costs: every name in the zone at once,
+      including the ones nobody publishes a link to — and that this check did
+      not take them.
     </p>
 
     <p>

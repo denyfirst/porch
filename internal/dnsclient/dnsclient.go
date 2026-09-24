@@ -82,6 +82,12 @@ const (
 	// to list every name in the zone.
 	TypeNSEC3PARAM = 51
 
+	// TypeAXFR asks a server for the whole zone (RFC 5936). It is not a record
+	// type and no answer to it is ever kept here: the question is whether a
+	// server will begin the transfer for anybody who asks, and the first reply
+	// settles that.
+	TypeAXFR = 252
+
 	classIN = 1
 	typeOPT = 41
 
@@ -113,6 +119,19 @@ var (
 	ErrNoResolver = errors.New("dnsclient: no resolver configured")
 	ErrRefused    = errors.New("dnsclient: the resolver refused the query")
 	ErrServerFail = errors.New("dnsclient: the resolver failed the query")
+
+	// ErrNoTransfer is a server declining to hand over the zone, which is the
+	// ordinary answer and the good one.
+	//
+	// Its own error rather than ErrRefused, because servers say it in three
+	// codes and none of them means what ErrRefused means elsewhere here. BIND
+	// answers REFUSED; deSEC and others answer NOTAUTH, which RFC 8945 gives
+	// for a transfer the asker is not authorised for; a server without the
+	// query type answers NOTIMP. All three are "you are not getting this zone",
+	// and a check that recognised only the first would report the other two as
+	// a question that never completed — which is how this was written first,
+	// and what a live scan of denyfirst.dev showed on 2026-09-24.
+	ErrNoTransfer = errors.New("dnsclient: the server does not hand over the zone")
 )
 
 // Answer is one reply, already checked against the question that produced it.
