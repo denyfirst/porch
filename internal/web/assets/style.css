@@ -2708,10 +2708,31 @@ main > .band:last-child { border-bottom: 0; }
 */
 .chain {
   table-layout: fixed;
+
+  /*
+    And it stops widening past what it needs.
+
+    The address column takes whatever the other two do not, so on a wide
+    display every extra pixel goes into empty space after a short URL and
+    pushes "Response" further from the address it belongs to. Measured at 1700
+    pixels the two ends of one row were most of a screen apart. Three columns
+    a reader compares should sit close enough to be read as a row.
+  */
+  max-width: 62rem;
 }
 
-/* "plaintext" is nine characters and is the longest this column holds. */
-.chain .col-transport { width: calc(9ch + 0.8rem); }
+/*
+  "plaintext" is nine characters and is the longest this column holds. The rest
+  of the width is the gutter after it.
+
+  Declared here rather than left to the cell's own padding, which is the
+  0.8rem every table in this stylesheet uses. At that width the two columns
+  read as one: "plaintext" ends and "no response" begins close enough that an
+  eye going down the table has to separate them each time. These are two
+  different facts about the same hop — how it was made, and what came back —
+  and the space between them is what says so.
+*/
+.chain .col-transport { width: calc(9ch + 2.6rem); }
 
 /*
   Wide enough for the status and for the sentence under it. What goes here is

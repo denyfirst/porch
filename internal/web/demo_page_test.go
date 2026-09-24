@@ -126,3 +126,29 @@ func TestTheFrontPageSaysWhatIsNotAvailable(t *testing.T) {
 		t.Error("the front page does not say its planned offerings are not available")
 	}
 }
+
+// The catalogue names the products that exist, and the menu agrees with it.
+//
+// The card and the entry in the Products menu are written in two files, and
+// until 2026-09-24 they named a product that was never started while the one
+// being built was not mentioned anywhere. A catalogue that is wrong about what
+// a company is making is the first thing a reader can check and the first
+// thing they find wrong.
+func TestTheCatalogueAndTheMenuNameTheSameProducts(t *testing.T) {
+	front := get(t, "/").Body.String()
+
+	for _, name := range []string{"Porch", "Rootwell"} {
+		if !strings.Contains(front, ">"+name+"<") {
+			t.Errorf("the front page does not name %s", name)
+		}
+	}
+	if strings.Contains(front, "Porch Elite") {
+		t.Error("the front page still names a product that was replaced")
+	}
+
+	// The menu is on every page, so one page is enough to read it, and it says
+	// the same thing about what is being built.
+	if !strings.Contains(front, `<span class="nav-menu-name">Rootwell</span><span class="nav-menu-note">Being built</span>`) {
+		t.Error("the products menu does not name Rootwell as being built")
+	}
+}
