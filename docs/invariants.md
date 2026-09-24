@@ -2635,10 +2635,22 @@ thing it could not read. Weak rather than ungraded, because `Worst` skips
 ungraded and an unreadable suite would otherwise drop out of the aggregate
 while the server that offered it was called strong.
 
+**And nothing is left out of a report because it was empty.** A row drawn only
+when it has a value disappears exactly when a reader most needs it: a
+certificate with no names, a scan that never searched the transparency logs.
+What is drawn instead says which kind of nothing it was — `none`, `not
+checked`, `not searched` — because a row that is not there reads as a question
+nobody had, and a reader cannot tell it from an answer of none. The page's row
+helper returned early on an empty value and the terminal had wrapped eight rows
+in conditions one at a time; both say it now. A caller that means *this does
+not apply here* leaves the call out, which is a decision at the call site
+rather than a silence in the helper.
+
 *Enforced in:* `internal/policy.Ungraded`, `policy.Worst`,
 `policy.GradeVersion` (`version.unknown`), `policy.GradeCipher`
 (`cipher.unrecognised`), `policy.GradeLeaf` (`cert.key-algorithm-unrecognised`)
 *Guarded by:* `TestNothingMeasuredIsUngraded`, `TestUnreachableTargetIsUngraded`,
+`TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty`,
 `TestEveryStatedReasonIsTrueOfTheSuite`,
 `TestAClosedConnectionIsNotARefusal`,
 `TestSilenceIsNotARefusal`,

@@ -671,8 +671,18 @@ function certificate(cert, tls, issuance, stapling, report) {
 
   const pairs = el("dl", "pairs");
 
-  function pair(label, value) {
-    if (value === undefined || value === null || value === "") return;
+  // A row with nothing in it says so, rather than not being drawn.
+  //
+  // This returned early on an empty value, so eight rows disappeared whenever
+  // the answer was empty — and a row that is not there reads as a question
+  // nobody had. "Logged" is the one that made the case: empty means nothing
+  // searched the transparency logs, and a reader who could not see the row had
+  // no way to tell that from "no other certificate exists for this name" (R4).
+  //
+  // A caller that means "this does not apply here" leaves the call out, which
+  // is a decision at the call site rather than a silence in the helper.
+  function pair(label, value, absent) {
+    if (value === undefined || value === null || value === "") value = absent || "none";
     pairs.appendChild(el("dt", null, label));
     pairs.appendChild(el("dd", null, value));
   }
@@ -682,7 +692,7 @@ function certificate(cert, tls, issuance, stapling, report) {
   // What the issuer says it checked. Next to the issuer because that is whose
   // claim it is, and above the dates because it is about how the certificate
   // came to exist rather than about how long it lasts.
-  pair("Validation", leaf.validation);
+  pair("Validation", leaf.validation, "not stated by the certificate");
 
   const from = (leaf.notBefore || "").slice(0, 10);
   const to = (leaf.notAfter || "").slice(0, 10);
@@ -702,9 +712,8 @@ function certificate(cert, tls, issuance, stapling, report) {
   pair("Key", leaf.keyBits ? leaf.keyAlgorithm + " " + leaf.keyBits : leaf.keyAlgorithm);
   pair("Signature", leaf.signatureAlgorithm);
 
-  if (Array.isArray(leaf.dnsNames) && leaf.dnsNames.length) {
-    pair("Names", leaf.dnsNames.join(", "));
-  }
+  pair("Names", (leaf.dnsNames || []).join(", "), "none");
+  pair("Addresses", (leaf.ipAddresses || []).join(", "), "none");
 
   pair("Chain", cert.chain.length + (cert.trusted ? " certificates, trusted" : " certificates, not trusted"));
 
@@ -719,7 +728,7 @@ function certificate(cert, tls, issuance, stapling, report) {
   // no longer required to run OCSP, and several have stopped. The
   // distinction between a server that could staple and did not and one that
   // has nothing to staple is the whole content of this line.
-  pair("Revocation", report && report.revocationLine);
+  pair("Revocation", report && report.revocationLine, "not checked");
 
   // Issuance sits above transparency because the two are halves of one
   // question in the order they happen: who may obtain a certificate for this
@@ -730,14 +739,15 @@ function certificate(cert, tls, issuance, stapling, report) {
   // under every verdict but ungraded. For a name with no CAA this is often
   // the most useful sentence in the report — one DNS record, nothing to break
   // by adding it — and a sentence nobody opens is a sentence nobody reads.
-  pair("Issuance", issuance && issuance.line);
-  pair("Transparency", report && report.transparencyLine);
+  pair("Issuance", issuance && issuance.line, "not read");
+  pair("Transparency", report && report.transparencyLine, "not read");
 
   // What the public logs hold for this name, where a deployment searched them.
   // Absent where none did, which is this one: the sentence is composed in
   // internal/policy and arrives empty when no search was made, so nothing here
   // decides whether to show it.
-  pair("Logged", report && report.loggedLine);
+  pair("Logged", report && report.loggedLine,
+    "not searched: the public logs were not asked what else exists for this name");
 
   pair("SHA-256", leaf.fingerprintSha256);
 
