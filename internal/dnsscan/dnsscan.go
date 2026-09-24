@@ -824,6 +824,21 @@ func (s *Scanner) askParent(ctx context.Context, r Resolver, domain string, fact
 		facts.ParentServer = host
 		facts.ParentNameServers = named
 		facts.OnlyAtParent, facts.OnlyAtZone = policy.DelegationDiff(facts.NameServers, named)
+
+		// The addresses that same answer carried, against the ones the zone
+		// publishes for the same names.
+		//
+		// A server inside the zone it serves can only be reached through the
+		// parent's copy, so that copy is what a resolver starting at the root
+		// dials. Where the two disagree, some resolvers reach one machine and
+		// some the other, and the zone's own records cannot show it.
+		for i := range facts.NameServers {
+			server := &facts.NameServers[i]
+			if addresses, ok := said.Glue[server.Name]; ok {
+				server.GlueRead = true
+				server.Glue = addresses
+			}
+		}
 		return
 	}
 }

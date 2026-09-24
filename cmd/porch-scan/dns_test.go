@@ -554,3 +554,48 @@ func TestEveryLineSaysWhichRecordItCameFrom(t *testing.T) {
 		}
 	}
 }
+
+// What the zone above hands out as a server's address is drawn in both faces.
+func TestTheGlueTheZoneAboveHandsOutIsDrawnInBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	for _, want := range []string{
+		`"The zone above hands out " + listOrNone(server.glue) + " for " + server.name + "."`,
+		// And the guard that decides which servers get the line: a server
+		// outside the zone it serves has no glue, and one inside it must not
+		// be skipped.
+		"    if (!server.glueRead) continue;",
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{
+				Apex: true,
+				NameServers: []policy.NameServer{
+					{Name: "ns1.example.com", Addresses: []string{"192.0.2.53"}, GlueRead: true, Glue: []string{"192.0.2.99"}},
+					{Name: "ns2.provider.net", Addresses: []string{"198.51.100.53"}},
+				},
+			},
+		},
+	})
+	text := buf.String()
+
+	if !strings.Contains(text, "ns1.example.com              the zone above hands out 192.0.2.99") {
+		t.Errorf("the report does not say what the parent hands out:\n%s", text)
+	}
+	// And a server with no glue gets no line: a server outside the zone it
+	// serves has none, and a line about every one of those would be about DNS
+	// in general rather than about this zone.
+	if strings.Contains(text, "ns2.provider.net             the zone above hands out") {
+		t.Errorf("a server with no glue was given a line:\n%s", text)
+	}
+}

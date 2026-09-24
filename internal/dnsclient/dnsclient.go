@@ -550,6 +550,12 @@ type reply struct {
 	// signatures stop being accepted.
 	signatures []RRSIG
 
+	// glue holds the addresses a referral carried for the servers it named,
+	// keyed by name. It is what a resolver starting at the root uses to reach a
+	// server that lives inside the zone it serves, and it is a second copy of
+	// an address the zone also publishes — which is the whole reason to read it.
+	glue map[string][]netip.Addr
+
 	// referral holds the NS records the authority section named for the
 	// question, and is filled only where a caller asked for that section. It
 	// is separate from ns for the reason above and for one more: these are

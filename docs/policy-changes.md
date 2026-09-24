@@ -107,9 +107,11 @@ recipient bounded as above.
 
 **Unreleased.**
 
-One finding is added and nothing that was graded before is graded differently.
-A domain whose report was strong under `porch-dns-v1` is strong under this one
-unless the signatures over its zone have already run out.
+Two findings are added and nothing that was graded before is graded
+differently. A domain whose report was strong under `porch-dns-v1` is strong
+under this one unless the signatures over its zone have already run out, or the
+zone above hands out an address for one of its servers that the zone itself does
+not publish.
 
 ### A signature that has run out
 
@@ -131,6 +133,28 @@ them is the operator's own judgement about their own schedule.
 The date costs no question. Every query this project sends already asks for
 DNSSEC data, so a signed zone's answers carry the signature; until now nothing
 read the one field in it a report can act on.
+
+### An address the zone above hands out that the zone does not publish
+
+`dns.glue-does-not-match`, graded `weak`.
+
+A server inside the zone it serves cannot be looked up without being told where
+it is, so the address its parent hands out beside the delegation — the glue — is
+what a resolver starting at the root dials. The zone publishes the same address
+itself, and the two can disagree: then whoever reaches the parent's copy reaches
+whatever is at that address now, which may be a machine that no longer serves
+the zone, and whoever reaches the zone's copy gets the zone. Which one a visitor
+gets depends on their resolver, and nothing in the zone's own records can show
+it.
+
+RFC 1912 §2.3 describes both halves: an address left behind at the parent, where
+"random people still see the old IP address", and a multi-homed server whose
+addresses are not all listed in the glue, which it states as a requirement. The
+finding names the address and the server, because it is changed at the registrar
+rather than in the zone file.
+
+A server outside the zone it serves has no glue, so nothing is compared and
+nothing is said.
 
 **Two things are now reported that were not, and neither is graded.** Whether
 the servers hold the same copy of the zone, read from the serial each one
