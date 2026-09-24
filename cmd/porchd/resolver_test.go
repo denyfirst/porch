@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/denyfirst/porch/internal/dnsclient"
+	"github.com/denyfirst/porch/internal/verify"
 )
 
 // -resolver reaches every lookup the service makes itself: the scanner's, which
@@ -17,7 +19,7 @@ import (
 func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 	const named = "192.0.2.53:53"
 
-	scanner := serviceScanner(nil, nil, named)
+	scanner := serviceScanner(nil, nil, named, false, time.Second)
 	if scanner.Resolver == nil || scanner.Resolver.Server != named {
 		t.Errorf("the scanner asks %+v; -resolver named %s", scanner.Resolver, named)
 	}
@@ -37,7 +39,7 @@ func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 
 	// And run() passes the flag to both, rather than the empty string.
 	source := repoFile(t, "cmd/porchd/main.go")
-	for _, call := range []string{"serviceScanner(roots, scope, *resolver)", "verificationScope(*verifySecretFile, *resolver)"} {
+	for _, call := range []string{"serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout)", "verificationScope(*verifySecretFile, *resolver)"} {
 		if !strings.Contains(source, call) {
 			t.Errorf("run() does not call %s, so -resolver may not reach it", call)
 		}
@@ -47,20 +49,57 @@ func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 // Without the flag nothing is set, so the mail check builds its own default
 // rather than receiving a nil pointer inside an interface.
 func TestNoResolverFlagLeavesTheScannerUnset(t *testing.T) {
-	if r := serviceScanner(nil, nil, "").Resolver; r != nil {
+	if r := serviceScanner(nil, nil, "", false, time.Second).Resolver; r != nil {
 		t.Errorf("with no -resolver the scanner holds %+v", r)
 	}
 }
 
-// The service never asks a certificate's responder, with or without proof of
-// control: the question names the certificate to its authority, and only an
-// operator on the command line makes that choice (R3a).
-func TestTheServiceNeverAsksAResponder(t *testing.T) {
-	for _, resolver := range []string{"", "192.0.2.53:53"} {
-		if r := serviceScanner(nil, nil, resolver).Responder; r != nil {
-			t.Errorf("the service's scanner holds a responder fetcher %+v; it must never ask one", r)
-		}
+// What a service may find out about a certificate beyond the handshake, and
+// on what condition.
+//
+// Both were settled in docs/invariants.md long before anything here did them:
+// N12's table gives the transparency logs to a service that requires proof of
+// control with no switch, because what is published is public and the name
+// belongs to whoever proved it. R3a refused the responder to a service on the
+// ground that its operator had not chosen it scan by scan — and a flag at start
+// is that choice, made once for every scan the installation will run.
+//
+// Without a scope, neither: the names are not the operator's to disclose.
+func TestWhatAServiceAsksBeyondTheHandshake(t *testing.T) {
+	scope := testScope(t)
+
+	if s := serviceScanner(nil, nil, "", false, time.Second); s.Logs != nil || s.Responder != nil {
+		t.Errorf("a service with no proof of control holds %+v / %+v", s.Logs, s.Responder)
 	}
+	if s := serviceScanner(nil, nil, "", true, time.Second); s.Responder != nil {
+		t.Errorf("a service with no proof of control was given a responder: %+v", s.Responder)
+	}
+
+	if s := serviceScanner(nil, scope, "", false, time.Second); s.Logs == nil {
+		t.Error("a service with proof of control does not search the logs, which N12 gives it")
+	} else if s.Responder != nil {
+		t.Errorf("a responder was asked without the operator saying so: %+v", s.Responder)
+	}
+
+	if s := serviceScanner(nil, scope, "", true, time.Second); s.Responder == nil {
+		t.Error("the operator asked for the responder and it was not wired")
+	}
+}
+
+// testScope is a verification scope, which is what stands for proof of control
+// in the tests above.
+func testScope(t *testing.T) *verify.Scope {
+	t.Helper()
+
+	secret := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(secret, []byte(strings.Repeat("s", 40)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := verificationScope(secret, "")
+	if err != nil {
+		t.Fatalf("reading the scope: %v", err)
+	}
+	return scope
 }
 
 // A resolver must be an address and a port. A name would be looked up through
@@ -86,5 +125,23 @@ func TestAResolverThatIsNotAnAddressAndPortIsRefused(t *testing.T) {
 	use := strings.Index(source, "verificationScope(*verifySecretFile, *resolver)")
 	if check < 0 || use < 0 || check > use {
 		t.Error("run() does not check -resolver before the first thing that uses it")
+	}
+}
+
+// -ask-responder without proof of control is refused at start, not ignored.
+//
+// A flag that looks applied and does nothing is the failure the comment on
+// -trusted-proxy-hops describes, and here it would be worse than useless: an
+// operator would believe revocation was being checked.
+func TestAskingTheResponderWithoutProofIsRefused(t *testing.T) {
+	source := repoFile(t, "cmd/porchd/main.go")
+
+	if !strings.Contains(source, "if *askResponder && scope == nil {") {
+		t.Error("run() accepts -ask-responder with no scope, where it can do nothing")
+	}
+	// And the flag is read where the scanner is built, rather than parsed and
+	// left behind.
+	if !strings.Contains(source, "serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout)") {
+		t.Error("-ask-responder does not reach the scanner")
 	}
 }

@@ -1125,6 +1125,12 @@ the other party learn?*
 | a service that required proof of control | runs, no switch: the name belongs to whoever asked |
 | the command line | `-check-logs`, because there the name may be somebody else's |
 
+That table was written on 2026-09-08 and the middle row was not true until
+2026-09-24: `porchd` built its scanner without a monitor, so a service with a
+scope searched nothing. Nothing refused it and no test asked — the row simply
+had no code under it. A decision recorded and never wired is worth less than
+no decision, because everyone reading the page believes it is in force.
+
 **Nothing found is the reassuring answer, so every failure must be
 distinguishable from it.** A monitor that is down, rate limiting, or answering
 with a page rather than a document reports that nothing was established, never
@@ -2310,14 +2316,26 @@ needs the caveat as much as a reader of `trusted`.
 A chain reported as trusted reaches a root and is in date. It may still have
 been withdrawn.
 
-No connection is opened to a responder unless an operator on the command line
-asks for one. Asking a certificate authority whether a serial is still good
-tells that authority which certificate somebody is looking at, from which
-address and when. That is why the demonstration compiles the question out and
-the service is never given it, even with proof of control — its operator did
-not choose it scan by scan.
+No connection is opened to a responder unless an operator asks for one. Asking
+a certificate authority whether a serial is still good tells that authority
+which certificate somebody is looking at, from which address and when. That is
+why the demonstration compiles the question out.
 
-**The one exception is `porch-scan -ask-responder`, off by default.** An
+**An operator asks for it in one of two places, and neither of them is a
+scan.** `porch-scan -ask-responder` is the choice made target by target.
+`porchd -ask-responder` is the same choice made once at start, and it is refused
+without a verification scope, because the disclosure is about a certificate:
+it is one to make about an estate the installation has been shown control of,
+never about a name somebody typed into a box.
+
+This invariant read *the service is never given it, even with proof of
+control — its operator did not choose it scan by scan* until 2026-09-24. A flag
+at start **is** that operator choosing, once, for every scan the installation
+will run. The sentence described a service that had no way to be told and was
+being read as a reason it should not be, which is the shape of mistake the
+zone-transfer sentences had on the same day.
+
+**The command-line form is off by default.** An
 operator examining their own certificate may decide the authority learning that
 is no disclosure at all, and a revoked certificate is the most serious thing a
 scan can find. The question is built from the certificate and its issuer, posted
@@ -2356,7 +2374,8 @@ and a test enforces that it does not.
 *Enforced in:* `policy.GradeStapling`, in the notes
 *Guarded by:* `TestNoAuthorityIsAskedOnAnyStapleOutcome`,
 `TestThisPackageClaimsNothingAboutRevocation`,
-`TestTheResponderIsAskedOnlyWhenAskedFor`, `TestTheServiceNeverAsksAResponder`,
+`TestTheResponderIsAskedOnlyWhenAskedFor`, `TestWhatAServiceAsksBeyondTheHandshake`,
+`TestAskingTheResponderWithoutProofIsRefused`,
 `TestAScanGivenAResponderAsksItAndReportsWhatItVerified`,
 `TestAScanGivenNoResponderAsksNone`,
 `TestTheRequestAsksAboutWhatARealResponderAnswered`,

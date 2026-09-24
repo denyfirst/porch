@@ -382,6 +382,25 @@ resolver you trust, `-verification-requires-dnssec` accepts only signed
 records, and no challenge file. A domain whose zone is not signed can then
 not be proven at all.
 
+**What proof buys you, beyond being allowed to scan.** Two questions are only
+asked about an estate an installation has been shown control of, because both
+say a name out loud to somebody else:
+
+- **The transparency logs are searched**, with no switch to turn on. Every
+  certificate for your names is already published to anybody who looks, so the
+  search discloses nothing new about the domain — what it discloses is that
+  somebody is looking, and with proof of control that somebody is you. It finds
+  certificates for your names that are valid today and are not the one your
+  server presented, which is the only way a scan can show a certificate
+  somebody else obtained.
+- **`-ask-responder` asks each certificate's own authority whether it has been
+  revoked.** Off by default, and refused without a verification secret: the
+  question tells that authority which certificate is being looked at, from this
+  address and when. For your own estate that is a disclosure you may find worth
+  making, and a revoked certificate is the most serious thing a scan can find.
+  Without it the report says revocation was not checked, rather than implying it
+  passed.
+
 ### One password, and what it seals
 
 The compose file starts the service with `-access-file /data/access`, and
