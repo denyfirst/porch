@@ -152,6 +152,19 @@ func run() int {
 		// bit is the resolver's word and worth what the path to it is worth,
 		// so this is a choice about a resolver, not a switch that makes DNS
 		// safe (audit 2026-09-16, A06).
+		// Which transparency monitor the inventory endpoint asks, if any.
+		//
+		// Empty means none, and the endpoint then answers that this installation
+		// has no monitor. Off unless asked for, like every other question this
+		// service puts to a third party (N12).
+		namesMonitor = flag.String("names-monitor", "",
+			"the certificate transparency monitor the name inventory asks: `crtsh` or\n"+
+				"\tcertspotter. Empty offers no inventory. The question names a domain to a\n"+
+				"\tservice this project does not run")
+
+		namesMonitorURL = flag.String("names-monitor-url", "",
+			"the `address` of the monitor named by -names-monitor, if not its own")
+
 		askResponder = flag.Bool("ask-responder", false,
 			"ask each certificate's own authority whether it has been revoked. Needs\n"+
 				"\tproof of control, because the question tells that authority which\n"+
@@ -451,6 +464,22 @@ func run() int {
 	// while running would be one whose promise depends on when somebody looked.
 	api.KeepResults(&results.Store{Dir: *resultsDir, Keep: *resultsKeep})
 	api.UseHeloName(*heloName)
+
+	// The monitor the inventory endpoint asks, if the operator named one.
+	//
+	// Off unless asked for, like every other question this service puts to a
+	// third party: the question names a domain to somebody this project does not
+	// run, and that is the operator's disclosure to enable rather than a default
+	// to inherit (N12). Nil leaves the endpoint answering that this installation
+	// has no monitor, which is true.
+	if *namesMonitor != "" {
+		searcher, err := namesSearcher(*namesMonitor, *namesMonitorURL, *requestTimeout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		api.SearchNames(searcher)
+	}
 
 	if *statsFile != "" {
 		if snapshot, err := loadStats(*statsFile); err == nil {
@@ -1222,4 +1251,29 @@ func passwordAllowed(listen string, guarded, without bool) error {
 	return errors.New("porchd will not listen beyond loopback without a password: anyone who " +
 		"can reach it could use it. Add -access-file, or -without-password if no one else can " +
 		"reach this network")
+}
+
+// namesSearcher builds the transparency monitor the inventory endpoint asks.
+//
+// The same two this command line offers everywhere else, named rather than
+// described by an address, because which monitor is being asked decides how its
+// answer is read. crt.sh and SSLMate agree on nothing but the idea.
+func namesSearcher(name, address string, timeout time.Duration) (ctsearch.EstateSearcher, error) {
+	switch name {
+	case "crtsh":
+		if address != "" && !strings.Contains(address, "%s") {
+			return nil, fmt.Errorf("-names-monitor-url for crtsh needs %%s where the name goes")
+		}
+		return &ctsearch.CRTSh{Timeout: timeout, Endpoint: address}, nil
+	case "certspotter":
+		// From the environment rather than a flag: a credential on a command
+		// line is a credential in a process listing, and this one is read by
+		// the service as it starts.
+		return &ctsearch.CertSpotter{
+			Timeout:  timeout,
+			Endpoint: address,
+			Token:    os.Getenv("CERTSPOTTER_TOKEN"),
+		}, nil
+	}
+	return nil, fmt.Errorf("unknown -names-monitor %q: it is crtsh or certspotter", name)
 }

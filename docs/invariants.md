@@ -1105,7 +1105,7 @@ first now, and say what choosing a parent gives away.
 `TestTheSecretIsCreatedByStartingAndNotByAsking`, `TestAnOpenServiceStaysOnLoopback`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestTheProofDialogIsOfferedOnlyWhereProofIsRequired`, `TestTheConsoleAsksForProofBeforeItRuns`,
-`TestOnlyTheVerifyEndpointAsksWithoutScanning`, `TestAServedFileIsNotReportedAsProofForEveryCheck`,
+`TestOnlyTheEndpointsThatOpenNothingAskWithoutScanning`, `TestAServedFileIsNotReportedAsProofForEveryCheck`,
 `TestAnUnprovenNameOpensTheDialog`,
 `TestAProvenDomainReachesTheProbe`,
 `TestTheConstructorGivesEveryCheckTheSameBoundary`,
@@ -1478,6 +1478,56 @@ operator has one, is read from the environment and sent as a credential:
 `TestTheKeyIsSentAsACredentialAndNotWrittenDown` holds both halves, and a
 credential on a command line is a credential in a shell history and in every
 process listing on the machine.
+
+**On a service it is behind proof of control, always, and that is stricter than
+the checks.**
+
+A check measures how a host answers, which is what any visitor learns and which
+the scanned party can see happening in their own logs. Anybody may point this
+tool at a host they do not own and find out how it is reached.
+
+The inventory is different in both halves. What it produces is the shape of an
+estate rather than the state of one host, and the scanned party cannot see it
+happen at all, because nothing is asked of them. A service answering that for
+anybody would be an anonymous reconnaissance endpoint with this project's name
+on it — and the data being public does not change what the service would be
+doing, which is assembling it, on request, for people who will not say who they
+are.
+
+So `POST /api/v1/names/scan` requires proof on every deployment that has a
+scope, and **refuses where no scope is configured at all** — which is the
+opposite of how the checks behave, and deliberately. The checks read "no
+verification configured" as an installation somebody runs for themselves. Here
+that reading is not available: "nobody has proven anything" must not become
+"everybody may ask".
+
+The refusals are ordered for a second reason.
+`TestTheMonitorIsNotDescribedToSomebodyWhoProvedNothing` holds it: proof is
+checked before whether this installation has a monitor at all, because a
+stranger learning which monitors an installation is wired to has learned
+something about the installation in exchange for nothing.
+`TestAnInventoryIsOnlyProducedForAProvenDomain` and
+`TestAnInstallationWithNoVerificationProducesNoInventory` hold the two halves of
+the rule, and each checks that the monitor was never asked — a refusal that
+still made the request would have disclosed the domain to a third party on the
+way to saying no.
+
+**The demonstration does not serve the page either.** The endpoint refuses
+there, as everything that would query a log refuses there, but a page inviting a
+visitor to list an estate and then refusing every time is worse than no page: it
+advertises a capability this deployment has undertaken not to have, and the
+visitor finds out only after typing somebody's domain into it.
+`TestTheDemonstrationOffersNoNameInventory` deletes it from the page table
+rather than trusting the endpoint to say no, and
+`TestTheDemonstrationInventoriesNoEstate` holds the command line's half.
+
+**Both faces say the same thing about what the inventory misses.**
+`TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses` compares the sentences
+the page carries against the ones the command line actually printed. Two
+renderers composing one claim from the same facts is how the faces of a report
+drift apart (R16), and it matters more here than anywhere: the paragraph they
+share is the one that stops a list of names being read as an estate, so a page
+that quietly said something weaker would be the page somebody presents from.
 
 *Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,

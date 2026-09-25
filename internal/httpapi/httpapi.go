@@ -59,6 +59,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dkim"
 	"github.com/denyfirst/porch/internal/dnsscan"
@@ -192,6 +193,11 @@ type Server struct {
 	// so that polling a health check can never consume a scan allowance, or
 	// the reverse.
 	reads *limiter
+
+	// names is the certificate transparency monitor the inventory endpoint
+	// asks, or nil where none was configured. Nil is refused rather than
+	// answered with an empty inventory (R4).
+	names ctsearch.EstateSearcher
 
 	// proofs and proofSem are the allowance and the slots for asking whether
 	// a domain is proven, apart from the scan ones for the same reason.
@@ -359,6 +365,14 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// What a domain must publish for this deployment to scan it, and
 		// whether it has. The same guards as a scan; see verification.go.
 		{method: http.MethodPost, path: "/api/v1/verify", handler: s.handleVerify, asksOnly: true},
+
+		// Which names under a domain appear in publicly logged certificates.
+		// It opens nothing to the domain at all — the question goes to a
+		// monitor — and it is the one endpoint here that requires proof of
+		// control on every deployment that has a scope, because what it
+		// produces is the shape of an estate rather than the state of a host.
+		// See names.go.
+		{method: http.MethodPost, path: "/api/v1/names/scan", handler: s.handleNames, asksOnly: true},
 
 		{http.MethodGet, "/healthz", s.readLimited(s.handleHealth), false},
 		{http.MethodGet, "/api/v1/stats", s.readLimited(s.handleStats), false},
@@ -902,6 +916,15 @@ func SilentErrorLog() *log.Logger {
 // weaknesses is not something a service with no authentication should offer.
 func (s *Server) KeepResults(store *results.Store) {
 	s.store = store
+}
+
+// SearchNames gives the inventory endpoint a monitor to ask.
+//
+// Nil, which is the default, means the endpoint answers that this installation
+// was not started with one — rather than answering with an empty inventory,
+// which would report an estate as publishing nothing (R4).
+func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
+	s.names = searcher
 }
 
 // Keeper keeps a report whole. internal/vault is the one there is.

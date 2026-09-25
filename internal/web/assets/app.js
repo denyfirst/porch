@@ -62,6 +62,20 @@ const CHECKS = {
     working: "Reading the delegation, the records at the name and the DNSSEC chain.",
     build: (data) => buildDNS(data),
   },
+  // Not in CHECK_ORDER: the console runs every check against one name, and
+  // this is not a check. It grades nothing, it asks a third party rather than
+  // the host, and it is produced only for a domain this installation has been
+  // shown control of — so it is reached from its own page, by somebody who
+  // came for it.
+  names: {
+    label: "Names",
+    says: "which names under the domain appear in publicly logged certificates",
+
+    endpoint: "/api/v1/names/scan",
+    methodPage: "/names/method",
+    working: "Asking a transparency monitor what has been logged under this domain.",
+    build: (data) => buildNames(data),
+  },
   mail: {
     label: "Mail",
     says: "what the domain's DNS says about its mail",
@@ -2572,4 +2586,126 @@ function daneSummary(facts) {
   if (dane.length === 0) return "none of the " + hosts.length;
   if (dane.length === hosts.length) return "all " + hosts.length;
   return dane.length + " of the " + hosts.length + ": " + dane.join(", ");
+}
+
+// ── The name inventory ──────────────────────────────────────────────────
+//
+// Not a check and drawn as one thing rather than as a graded report: there is
+// no verdict, no findings list and no rule set, because no document says which
+// names an estate ought to have. What there is, is a list, the window each name
+// was covered in, and — under every one of them — the paragraph saying what the
+// list is missing.
+//
+// That paragraph is not a footnote to be collapsed. A list of forty names read
+// without it says "this estate has forty hosts", which is not what a
+// certificate log establishes for anybody.
+function buildNames(data) {
+  const frag = document.createDocumentFragment();
+  if (!data) return frag;
+
+  frag.appendChild(sectionTitle("Names in public certificates"));
+
+  if (data.reason) {
+    // Not established, and said so rather than drawn as an empty estate. The
+    // reassuring answer here is "none found", so a failure that rendered as an
+    // empty list would be the most comfortable wrong answer available.
+        frag.appendChild(el("p", null, "Not established: " + data.reason));
+    frag.appendChild(namesLimits(data));
+    return frag;
+  }
+
+  const counts = el("table", "grid");
+  const body = el("tbody");
+  const row = (name, value) => {
+    const tr = el("tr");
+    tr.appendChild(el("th", null, name));
+    tr.appendChild(el("td", null, value));
+    body.appendChild(tr);
+  };
+
+  const found = (data.distinct || 0) + (data.distinct === 1 ? " distinct name" : " distinct names");
+  const over = (data.certificates || 0) + (data.certificates === 1 ? " certificate" : " certificates");
+  row("Found", found + " across " + over);
+
+  if (data.wildcards) {
+    row("Wildcards", data.wildcards + ", each covering hosts it does not name");
+  }
+  if (data.foreign) {
+    row("Other names", data.foreign + " on the same certificates, under other domains, not listed");
+  }
+  if (data.truncated) {
+    row("Cut", "more names were found than are listed");
+  }
+  counts.appendChild(body);
+  frag.appendChild(counts);
+
+  if (data.names && data.names.length) {
+    const table = el("table", "grid");
+    const rows = el("tbody");
+    for (const name of data.names) {
+      const tr = el("tr");
+      tr.appendChild(el("th", null, name.name));
+      tr.appendChild(el("td", null, covered(name)));
+      rows.appendChild(tr);
+    }
+    table.appendChild(rows);
+    frag.appendChild(table);
+  }
+
+  frag.appendChild(namesLimits(data));
+  return frag;
+}
+
+// covered is the window the logs show one name in.
+//
+// The expiry is the useful end: a name whose newest certificate ran out two
+// years ago is either gone or is now under a wildcard, and an operator reading
+// their own estate is usually looking for exactly those. Which of the two it
+// is, this does not say — nothing here asked the host anything.
+function covered(name) {
+  if (!name.lastSeen) return "no dates in the log";
+  const to = "certificates to " + name.lastSeen.slice(0, 10);
+  return name.firstSeen ? "from " + name.firstSeen.slice(0, 10) + ", " + to : to;
+}
+
+// namesLimits is printed under every inventory, including the tidy ones.
+//
+// Under the short clean ones especially: those are where a reader is most
+// inclined to take the list for the estate.
+function namesLimits(data) {
+  const wrap = document.createDocumentFragment();
+  wrap.appendChild(sectionTitle("What this does not show"));
+
+  // The same list styling every other note on a report uses, rather than a
+  // class of its own: this is a note, and a note that looked different would
+  // read as a disclaimer somebody added later.
+  const list = el("ul", "notes");
+  const item = (text) => list.appendChild(el("li", null, text));
+
+  item(
+    "Nothing here was guessed and nothing was asked of " +
+      (data.domain || "the domain") +
+      ": these names were published by whoever obtained a certificate for them."
+  );
+  item(
+    "A host with no publicly trusted certificate never appears — plain HTTP, a " +
+      "service that is not HTTPS, or anything behind a private authority leaves " +
+      "no trace in a public log."
+  );
+  if (data.wildcards) {
+    item(
+      "A wildcard covers hosts without naming them, and " +
+        data.wildcards +
+        (data.wildcards === 1
+          ? " of the names above is a wildcard."
+          : " of the names above are wildcards.")
+    );
+  }
+  item(
+    "This is an inventory, not a verdict: nothing above is graded, because no " +
+      "document says which names an estate ought to have."
+  );
+
+  wrap.appendChild(list);
+  return wrap;
 }
