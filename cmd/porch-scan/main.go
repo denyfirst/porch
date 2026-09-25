@@ -367,7 +367,7 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		return runNames(ctx, targets, *timeout, *monitor, *monitorURL, *asJSON)
+		return runNames(ctx, targets, *timeout, *monitor, *monitorURL, *resolver, *asJSON)
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)

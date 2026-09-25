@@ -488,3 +488,34 @@ func FuzzSkipName(f *testing.F) {
 		}
 	})
 }
+
+// A resolver an operator typed works without a port.
+//
+// The resolvers read from this machine's configuration have had the port added
+// since resolverList was written. One given on a command line did not, so
+// `-resolver 8.8.8.8` failed every lookup — and reported it as the names being
+// unresolvable, which is a statement about somebody's estate arrived at from a
+// missing colon.
+func TestAResolverAddressWorksWithoutAPort(t *testing.T) {
+	for _, c := range []struct{ given, want string }{
+		{"8.8.8.8", "8.8.8.8:53"},
+		{"8.8.8.8:53", "8.8.8.8:53"},
+		{"8.8.8.8:5353", "8.8.8.8:5353"},
+		{"2001:4860:4860::8888", "[2001:4860:4860::8888]:53"},
+		{"[2001:4860:4860::8888]:53", "[2001:4860:4860::8888]:53"},
+		{"resolver.example.test", "resolver.example.test:53"},
+	} {
+		if got := withPort(c.given); got != c.want {
+			t.Errorf("%q became %q, want %q", c.given, got, c.want)
+		}
+	}
+
+	// And the client hands on what it was given, with the port.
+	got, err := (&Client{Server: "8.8.8.8"}).servers()
+	if err != nil {
+		t.Fatalf("reading the configured resolver: %v", err)
+	}
+	if len(got) != 1 || got[0] != "8.8.8.8:53" {
+		t.Errorf("the client asks %v", got)
+	}
+}

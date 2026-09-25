@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"net/netip"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/denyfirst/porch/internal/ctsearch"
+	"github.com/denyfirst/porch/internal/liveness"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -34,7 +36,7 @@ func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 			{Name: "old-portal.example.test", FirstSeen: day(2021, 3, 1), LastSeen: day(2022, 6, 1)},
 			{Name: "www.example.test", FirstSeen: day(2023, 2, 14), LastSeen: day(2025, 11, 1)},
 		},
-	})
+	}, nil)
 	out := buf.String()
 
 	for _, want := range []string{
@@ -74,7 +76,7 @@ func TestAFailedSearchPrintsNoInventory(t *testing.T) {
 	printNames(&buf, ctsearch.Estate{
 		Asked: true, Domain: "example.test",
 		Reason: "the certificate transparency monitor could not be reached",
-	})
+	}, nil)
 	out := buf.String()
 
 	if !strings.Contains(out, "Not established: the certificate transparency monitor could not be reached") {
@@ -91,7 +93,7 @@ func TestTheInventoryCountsInWords(t *testing.T) {
 	printNames(&buf, ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1,
 		Names: []ctsearch.Name{{Name: "example.test", LastSeen: day(2026, 1, 1)}},
-	})
+	}, nil)
 	if got := buf.String(); !strings.Contains(got, "1 distinct name across 1 certificate\n") {
 		t.Errorf("the count reads wrongly:\n%s", got)
 	}
@@ -124,7 +126,7 @@ func TestTheLimitsArePrintedEvenWhenNothingWasHidden(t *testing.T) {
 			{Name: "example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
 			{Name: "www.example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
 		},
-	})
+	}, nil)
 	out := buf.String()
 
 	if !strings.Contains(out, "What this does not show") {
@@ -157,7 +159,7 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 	printNames(&buf, ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1, Wildcards: 1,
 		Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}},
-	})
+	}, nil)
 	printed := buf.String()
 
 	// Each is a sentence both faces have to carry. Compared against what the
@@ -185,4 +187,113 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 // broken across two lines can be compared with the same sentence in the page.
 func flatten(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// The status is the first thing on the line, and each state says what it is.
+//
+// An operator reads the left edge and stops at what is not "live". That only
+// works if the five states are distinguishable at a glance and each carries the
+// evidence for itself: where the name points, or why nothing was established.
+func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, ctsearch.Estate{
+		Asked: true, Domain: "example.test", Distinct: 5, Certificates: 5, Wildcards: 1,
+		Names: []ctsearch.Name{
+			{Name: "*.example.test", Wildcard: true, FirstSeen: day(2025, 6, 1), LastSeen: day(2026, 9, 1)},
+			{Name: "api.example.test", LastSeen: day(2026, 9, 1)},
+			{Name: "old.example.test", LastSeen: day(2022, 6, 1)},
+			{Name: "inside.example.test", LastSeen: day(2026, 9, 1)},
+			{Name: "moved.example.test", LastSeen: day(2026, 9, 1)},
+		},
+	}, []liveness.Name{
+		{Name: "api.example.test", Status: liveness.Live,
+			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
+		{Name: "old.example.test", Status: liveness.Gone},
+		{Name: "inside.example.test", Status: liveness.Internal,
+			Addresses: addrsFor(t, "172.23.0.11")},
+		{Name: "moved.example.test", Status: liveness.Dangling, Alias: "target.elsewhere.test"},
+	})
+	out := buf.String()
+
+	for _, want := range []string{
+		"What each name is doing now",
+		"live      api.example.test    93.184.216.34, answering on 443",
+		"gone      old.example.test    does not resolve",
+		"internal  inside.example.test 172.23.0.11",
+		"dangling  moved.example.test  an alias to target.elsewhere.test, which does not resolve",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// The one that cannot be measured says why, in this project's words rather
+	// than a resolver's (I6).
+	if !strings.Contains(out, "nothing here may dial it") {
+		t.Errorf("an internal address is not explained:\n%s", out)
+	}
+
+	// A wildcard is not given a status, because nothing resolves one. It is
+	// listed apart, with what it is.
+	if !strings.Contains(out, "Wildcards, which name no host") {
+		t.Errorf("the wildcards are not listed apart:\n%s", out)
+	}
+	if strings.Contains(out, "live      *.example.test") {
+		t.Errorf("a wildcard was given a status:\n%s", out)
+	}
+
+	// And the limits are still underneath all of it.
+	if !strings.Contains(out, "What this does not show") {
+		t.Errorf("the limits are missing:\n%s", out)
+	}
+}
+
+// Where nothing asked what the names are doing, the names are still drawn.
+//
+// Dropping them would lose the half of the report that was established in
+// order to report the half that was not (R4). The heading says which question
+// went unanswered.
+func TestNamesSurviveAReportThatEstablishedNoStatus(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, ctsearch.Estate{
+		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "api.example.test", LastSeen: day(2026, 9, 1)}},
+	}, nil)
+	out := buf.String()
+
+	if !strings.Contains(out, "api.example.test") {
+		t.Errorf("the names were dropped when nothing established their status:\n%s", out)
+	}
+	if !strings.Contains(out, "none of them asked what it is doing now") {
+		t.Errorf("the report does not say the status went unasked:\n%s", out)
+	}
+}
+
+// A wildcard is never put through a resolver.
+//
+// Nothing resolves `*.example.test`, so asking would produce a failure that
+// reads as a fault in the estate — and the estate would then be reported as
+// having a dead name that never existed.
+func TestAWildcardIsNeverAskedAboutAsAName(t *testing.T) {
+	got := hosts(ctsearch.Estate{Names: []ctsearch.Name{
+		{Name: "*.example.test", Wildcard: true},
+		{Name: "api.example.test"},
+		{Name: "*.staging.example.test", Wildcard: true},
+	}})
+	if len(got) != 1 || got[0] != "api.example.test" {
+		t.Errorf("the names asked about are %v", got)
+	}
+}
+
+func addrsFor(t *testing.T, list ...string) []netip.Addr {
+	t.Helper()
+	var out []netip.Addr
+	for _, s := range list {
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			t.Fatalf("parsing %q: %v", s, err)
+		}
+		out = append(out, a)
+	}
+	return out
 }

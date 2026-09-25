@@ -1469,7 +1469,14 @@ sorted, dated, plausible and missing most of a large estate, with nothing about
 it looking wrong. `TestEveryPageOfAPagedAnswerIsRead` follows every page,
 `TestAnEstatePastTheBoundSaysItWasCut` holds the bound that must exist and the
 only dishonest way to have one, which is to stop quietly, and
-`TestOneCertificateUnderTwoIdentifiersIsOne` keys on the certificate hash rather
+`TestOneCertificateUnderTwoIdentifiersIsOne`,
+`TestEachStateIsItsOwnAnswer`,
+`TestNothingPrivateIsEverDialled`,
+`TestAnEstatePastTheBoundIsCut`,
+`TestWhatEachNameIsDoingIsTheFirstThingOnTheLine`,
+`TestNamesSurviveAReportThatEstablishedNoStatus`,
+`TestAWildcardIsNeverAskedAboutAsAName`,
+`TestAResolverAddressWorksWithoutAPort` keys on the certificate hash rather
 than the monitor's own identifier — the identifier is not what a certificate is.
 `TestRateLimitingIsSaidPlainly` gives that answer its own sentence, because
 "did not answer the search" would send an operator looking for a fault in their
@@ -1549,7 +1556,54 @@ drift apart (R16), and it matters more here than anywhere: the paragraph they
 share is the one that stops a list of names being read as an estate, so a page
 that quietly said something weaker would be the page somebody presents from.
 
+
+**A list of names is not an answer, so every name carries what it is doing
+now.**
+
+Each source of names is a record of the past. A certificate log holds names
+that were covered once, a passive register holds names somebody once looked up,
+and a zone holds whatever nobody has got round to deleting. Handed over as an
+inventory, all three say the same misleading thing: that this is the estate
+today. Usually it is not — a name from five years ago, for a service shut down
+four years ago, is noise in a report somebody has to act on, and worse than
+noise, because time is spent establishing that it is nothing.
+
+`internal/liveness` gives each name one of five states, and they are five rather
+than two because an operator acts differently on each: **live** answers,
+**silent** resolves and answers nothing, **internal** resolves only to addresses
+nothing may dial, **gone** does not resolve at all, and **dangling** is an alias
+whose target does not resolve. `TestEachStateIsItsOwnAnswer` holds them apart.
+Collapsing any two into "nothing answered" is what makes an inventory unusable.
+
+What it sends is one resolution per name and at most one connection per name,
+opened and closed, carrying nothing — no request, no protocol, nothing guessed.
+A wildcard is never asked about, because nothing resolves `*.example.com` and
+the failure would read as a dead name that never existed
+(`TestAWildcardIsNeverAskedAboutAsAName`).
+
+**An address nothing may dial is never dialled, and is its own state.**
+`TestNothingPrivateIsEverDialled` holds it. This is the case that matters in
+practice rather than in theory: a resolver inside an organisation answers that
+organisation's own names with internal addresses, so an inventory built from a
+desk inside it reports the inside while reading as though it had measured the
+outside. Reported as a timeout, that would be the office network printed as the
+state of the estate (R4). It is also why the resolver is the operator's to
+choose here: which resolver answered decides what the whole report means.
+
+Dangling is reported as what it is and no further.  Whether somebody else can
+claim the target depends on what that target is and who runs it, which this has
+not established and will not guess at (R17).
+
+**And `-resolver` takes an address without a port.** It did not until
+2026-09-25: the resolvers read from this machine's own configuration have had
+the port added since `resolverList` was written, and one an operator typed did
+not — so `-resolver 8.8.8.8` failed every lookup and reported it as the names
+being unresolvable. A statement about somebody's estate, arrived at from a
+missing colon. `TestAResolverAddressWorksWithoutAPort` holds it, including the
+IPv6 literal, which is the case that would have been silently wrong rather than
+loudly wrong.
 *Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
+`internal/liveness`, `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
 `internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
