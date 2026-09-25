@@ -1,0 +1,72 @@
+<article class="prose">
+
+    <h1>What denyfirst<br>never receives.</h1>
+
+    <p class="lede">
+      This page is about the people, not the tool. Whatever you run from here,
+      these are the undertakings of the organisation that published it — and
+      beside each one, how to establish it for yourself rather than take it on
+      trust.
+    </p>
+
+    <p>
+      They are separate from any product's page on purpose. Somebody deciding
+      whether to run a tool wants to know what it does to the machine it runs
+      on; somebody deciding whether to trust whoever wrote it wants to know what
+      those people get. One page answering both makes every sentence something
+      you have to read twice to work out which question it belongs to, and the
+      answers that matter most end up buried in the details of a single check.
+    </p>
+
+    <h2 id="organisation">The organisation</h2>
+
+    <dl class="undertakings">
+      {{range .Organisation}}
+      <dt id="{{.ID}}">{{.Says}}</dt>
+      <dd><strong>How you check it.</strong> {{.Checked}}</dd>
+      {{end}}
+    </dl>
+
+    <h2 id="products">What each product adds</h2>
+
+    <p>
+      A product may undertake to keep less than the list above requires. It may
+      never undertake more, and it may not restate one of those undertakings in
+      its own words: an addition that redefined one would be how a weaker
+      promise arrives wearing a stronger promise's name. What follows is
+      narrower than the list above, never a rewording of it.
+    </p>
+
+    {{range .Products}}
+    <h3 id="{{.Name}}">{{.Name}}</h3>
+
+    <p>{{.What}}</p>
+
+    <dl class="undertakings">
+      {{range .Adds}}
+      <dt id="{{.ID}}">{{.Says}}</dt>
+      <dd><strong>How you check it.</strong> {{.Checked}}</dd>
+      {{end}}
+    </dl>
+    {{end}}
+
+    <h2 id="elsewhere">What this page does not cover</h2>
+
+    <p>
+      What a particular check sends, what an installation of it holds, and what
+      a report carries are questions for that product's own pages, because the
+      answers differ between them and a sentence true of one would be a
+      guarantee falsely extended to the other. Porch answers them on
+      <a href="/privacy">its privacy page</a> and on the pages describing each
+      method.
+    </p>
+
+    <p>
+      Nor does it cover the network. Any service is carried by a provider who
+      can see that connections are made, and runs on hardware somebody else
+      owns; that is true of every tool anywhere and no undertaking here can
+      remove it. What this organisation can do is add nothing to it, which is
+      what the first undertaking above is about.
+    </p>
+
+  </article>

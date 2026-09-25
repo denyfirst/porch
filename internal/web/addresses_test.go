@@ -28,6 +28,11 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 		"/privacy": true,
 		"/terms":   true,
 		"/docs":    true,
+
+		// What the organisation undertakes, whatever you run. The most
+		// root-level page there is: it is not about a check, and a copy of it
+		// under each one would be four copies of a promise to keep in step.
+		"/organisation": true,
 	}
 	// The demonstration is the denyfirst site: its front page and the page for
 	// the product are the project's own, at the root, and a self-hosted build
@@ -381,6 +386,12 @@ func TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits(t *testing.T) {
 		for _, l := range links {
 			got = append(got, l[1])
 		}
+		// Three, and the page added on 2026-09-25 saying what the organisation
+		// undertakes is deliberately not a fourth. Two tests pin this count
+		// because the footer once carried six links and nobody read them; the
+		// new page is reached from /docs, which lists every document, and from
+		// the first paragraph of each privacy page, which is where somebody
+		// asking the question is already looking.
 		if strings.Join(got, " ") != "/docs /privacy /terms" {
 			t.Errorf("%s: the footer links %v, want /docs /privacy /terms", path, got)
 		}

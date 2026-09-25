@@ -1744,6 +1744,76 @@ dialled.
 Treat a change to `SplitTarget` as a change to a security boundary, whatever
 it looks like. Add a fuzz seed for anything new it accepts or refuses.
 
+### N14 — The organisation promises once, and a product may only promise more narrowly
+
+Two readers arrive with two questions, and they are not the same question.
+Somebody deciding whether to *run* a tool wants to know what it does to the
+machine it runs on and what it keeps. Somebody deciding whether to trust the
+*people* who wrote it wants to know what those people receive. A page answering
+both makes every sentence something to read twice — is this about the tool or
+about them — and buries the answers that matter most in the details of one
+check.
+
+That was tolerable with one product and stops being tolerable with two. The
+organisation's undertakings would then exist as prose in two places, and two
+places drift: the day one copy is improved and the other is not, a reader has
+two documents from the same people that do not agree, which is worse evidence
+than one vague document. Nobody has to be careless for that; it is what copies
+do.
+
+So `internal/promises` holds the organisation's undertakings once, each product
+holds its own additions, and `/organisation` renders both. `docs/policy.md` is
+the reasoning and the instructions for a second product.
+
+**Only the organisation's own conduct belongs in the organisation's list**: what
+it receives, what it holds, what it publishes, how that can be checked. Nothing
+about what a product measures. This is not tidiness. This organisation has more
+than one product and they are built by different hands, so an organisation
+undertaking describing a product's behaviour would be one repository promising
+on behalf of code it cannot see — which is how a policy becomes untrue without
+anybody lying.
+
+**A product may undertake to keep less than the organisation requires, never
+more, and may not restate one of the organisation's undertakings in its own
+words.** An addition that redefined one is how a weaker promise arrives wearing
+a stronger promise's name, and a reader comparing the two would find them
+agreeing on the identifier and disagreeing on the meaning.
+`TestNoProductRedefinesWhatTheOrganisationUndertakes` refuses an addition
+carrying an organisation identifier, and refuses one not named for the product
+it belongs to.
+
+**Every undertaking says how to check it, and that field is required.** An
+undertaking nobody can establish for themselves is a request to be trusted,
+which is the thing this organisation is trying not to make — and it would be the
+most comfortable entry to add and the only worthless one.
+`TestEveryUndertakingCanBeCheckedAndIsNamed` holds it, along with the
+identifiers being stable and unique, because anything referring to an
+undertaking refers to its identifier rather than its wording: the sentence may
+be improved and the promise is still the same promise.
+
+**Nothing served to a visitor carries these sentences in its own words.**
+`TestTheUndertakingsAreNotCopiedIntoAnyPage` walks every `.html`, `.js` and
+non-test `.go` file and refuses a distinctive run of words from any of them.
+Documentation is deliberately outside that walk: `docs/invariants.md` is where
+several of the product's undertakings were drawn from, it explains and cites
+rather than promising, and forbidding the words here would make the explanations
+worse without protecting a reader. What can drift harmfully is two *pages*
+telling somebody two versions of one undertaking.
+
+**A reader who arrived with the other question is pointed across, above the jump
+list.** A split nobody is pointed across is a page that was hidden rather than
+separated. The pointer is in the prose at the top of each privacy page rather
+than in the footer, because the footer is deliberately three links long — it
+carried six once and nobody read them, and two tests pin the count.
+`TestThePrivacyPageSendsAReaderToTheOrganisation` holds both the pointer and its
+position, and `TestThePageAboutTheOrganisationCarriesEveryUndertaking` holds
+that the rendered page carries every undertaking and every way of checking one,
+each addressable by its identifier.
+
+The self-hosted build serves its own privacy page and the same organisation
+page. What the makers receive is the same question wherever a copy runs, and the
+answer is the same nothing.
+
 ### I1 — One implementation of target parsing
 
 The command line receives typos; the service receives whatever a stranger
