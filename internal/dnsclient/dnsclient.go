@@ -368,9 +368,29 @@ func (c *Client) maxQueries() int {
 
 func (c *Client) servers() ([]string, error) {
 	if c.Server != "" {
-		return []string{c.Server}, nil
+		return []string{withPort(c.Server)}, nil
 	}
 	return systemResolvers()
+}
+
+// withPort adds the DNS port to an address that has none.
+//
+// The resolvers read from this machine's own configuration have had it added
+// since resolverList was written; an address an operator typed did not, so
+// `-resolver 8.8.8.8` failed every lookup and reported it as the name being
+// unresolvable. A flag that needs a port nobody mentions is a flag that reads
+// as broken, and the failure it produced pointed at the wrong thing entirely:
+// the report said the names could not be looked up, which is a statement about
+// somebody's estate arrived at from a missing colon.
+//
+// Left alone where a port is given, so a resolver on another port still works,
+// and bracketed correctly for an IPv6 literal — which is the case that would
+// otherwise be silently wrong rather than loudly wrong.
+func withPort(server string) string {
+	if _, _, err := net.SplitHostPort(server); err == nil {
+		return server
+	}
+	return net.JoinHostPort(server, "53")
 }
 
 // resolverList turns the addresses a platform found into the list a lookup will

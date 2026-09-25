@@ -11,6 +11,8 @@ import (
 
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
+	"github.com/denyfirst/porch/internal/dnsclient"
+	"github.com/denyfirst/porch/internal/liveness"
 )
 
 // The inventory of names a domain's public certificates reveal.
@@ -40,7 +42,7 @@ import (
 // never available on a demonstration build, which promises it queries no log,
 // and why on the command line it is a mode somebody types rather than anything
 // that runs by default.
-func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor, monitorURL string, asJSON bool) int {
+func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor, monitorURL, resolver string, asJSON bool) int {
 	if demo.Enabled {
 		fmt.Fprintln(os.Stderr, "this is a demonstration build, and it asks no certificate "+
 			"transparency monitor anything")
@@ -53,9 +55,28 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 		return 2
 	}
 
+	// Which resolver answers decides what this report means, so it is the
+	// operator's to choose.
+	//
+	// It matters more here than anywhere else in this program. A resolver
+	// inside an organisation answers that organisation's own names with
+	// internal addresses, so an inventory built from a desk reports the inside
+	// while reading as though it had measured the outside. That is why an
+	// address nothing may dial is a status of its own below rather than a
+	// timeout.
+	checker := &liveness.Checker{
+		Timeout:  timeout,
+		Resolver: &dnsclient.Client{Server: resolver, Timeout: timeout},
+	}
+
 	worst := 0
 	for i, domain := range domains {
 		found := searcher.SearchEstate(ctx, domain)
+
+		// And what each of them is doing now, which a list of names cannot
+		// answer. Every source of names is a record of the past; an operator
+		// is asking about the present.
+		live := checker.Check(ctx, hosts(found))
 
 		if asJSON {
 			if err := json.NewEncoder(os.Stdout).Encode(found); err != nil {
@@ -66,7 +87,7 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 			if i > 0 {
 				fmt.Fprintln(os.Stdout)
 			}
-			printNames(os.Stdout, found)
+			printNames(os.Stdout, found, live)
 		}
 
 		if found.Reason != "" {
@@ -77,7 +98,7 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 }
 
 // printNames writes one estate's inventory.
-func printNames(w io.Writer, e ctsearch.Estate) {
+func printNames(w io.Writer, e ctsearch.Estate, live []liveness.Name) {
 	fmt.Fprintf(w, "%s\n", e.Domain)
 	fmt.Fprintf(w, "  Names in public certificates\n")
 
@@ -100,13 +121,8 @@ func printNames(w io.Writer, e ctsearch.Estate) {
 		fmt.Fprintf(w, "    Cut          more names were found than are listed\n")
 	}
 
-	if len(e.Names) > 0 {
-		fmt.Fprintf(w, "\n")
-	}
-	for _, n := range e.Names {
-		fmt.Fprintf(w, "    %-44s %s\n", n.Name, covered(n))
-	}
-
+	printNamesNow(w, e, live)
+	printWildcards(w, e)
 	printNamesLimits(w, e)
 }
 
@@ -220,4 +236,133 @@ func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateS
 		}, nil
 	}
 	return nil, fmt.Errorf("unknown monitor %q: it is %s or %s", name, monitorCRTSh, monitorCertSpotter)
+}
+
+// printNamesNow draws what each name is doing, which is the column an operator
+// reads first.
+//
+// Status before the name, because the question is "what do I have to deal
+// with" rather than "what is this name called". A reader runs an eye down the
+// left edge and stops at the ones that are not "live".
+func printNamesNow(w io.Writer, e ctsearch.Estate, live []liveness.Name) {
+	if len(live) == 0 {
+		// Nothing established what they are doing, so the names are still
+		// drawn and the heading says which question went unanswered. Dropping
+		// them would lose the half of the report that was established, to
+		// report the half that was not (R4).
+		printNamesFound(w, e)
+		return
+	}
+
+	fmt.Fprintf(w, "\n  What each name is doing now\n")
+
+	width := 0
+	for _, n := range live {
+		if len(n.Name) > width {
+			width = len(n.Name)
+		}
+	}
+
+	for _, n := range live {
+		fmt.Fprintf(w, "    %-9s %-*s %s\n", n.Status, width, n.Name, says(n))
+	}
+}
+
+// says is the evidence beside one name: where it points, or why nothing was
+// established.
+func says(n liveness.Name) string {
+	switch {
+	case n.Reason != "":
+		return n.Reason
+	case n.Status == liveness.Dangling:
+		return "an alias to " + n.Alias + ", which does not resolve"
+	case n.Status == liveness.Gone:
+		return "does not resolve"
+	case n.Status == liveness.Internal:
+		return addressList(n) + " — nothing here may dial it, and a resolver elsewhere may answer differently"
+	case n.Status == liveness.Live:
+		return addressList(n) + ", answering on " + strings.Join(n.Answered, " and ")
+	default:
+		return addressList(n) + ", nothing answered"
+	}
+}
+
+// addressList is where a name points, bounded so that one name with forty
+// addresses does not become the report.
+func addressList(n liveness.Name) string {
+	const show = 3
+
+	var out []string
+	for i, a := range n.Addresses {
+		if i >= show {
+			out = append(out, fmt.Sprintf("and %d more", len(n.Addresses)-show))
+			break
+		}
+		out = append(out, a.String())
+	}
+	if n.Alias != "" {
+		return strings.Join(out, ", ") + " via " + n.Alias
+	}
+	return strings.Join(out, ", ")
+}
+
+// printWildcards draws the names that are not hosts.
+//
+// Apart from the rest, and without a status, because a wildcard is not a name
+// anything resolves: asking what `*.example.com` is doing would be asking a
+// question with no answer. What it is doing is hiding however many hosts are
+// behind it, which the paragraph below says.
+func printWildcards(w io.Writer, e ctsearch.Estate) {
+	var wildcards []ctsearch.Name
+	for _, n := range e.Names {
+		if n.Wildcard {
+			wildcards = append(wildcards, n)
+		}
+	}
+	if len(wildcards) == 0 {
+		return
+	}
+
+	fmt.Fprintf(w, "\n  Wildcards, which name no host\n")
+	for _, n := range wildcards {
+		fmt.Fprintf(w, "    %-44s %s\n", n.Name, covered(n))
+	}
+}
+
+// hosts are the names in an inventory that something could resolve.
+//
+// A wildcard is left out because it is not a name: nothing resolves
+// `*.example.com`, and putting it through a resolver would produce a failure
+// that reads as a fault in the estate.
+func hosts(e ctsearch.Estate) []string {
+	var out []string
+	for _, n := range e.Names {
+		if !n.Wildcard {
+			out = append(out, n.Name)
+		}
+	}
+	return out
+}
+
+// printNamesFound draws the names with no status beside them.
+//
+// What a report looks like when the register was read and nothing asked what
+// the names are doing: the list, the window each was covered in, and a heading
+// that says so. It is the older half of this report and it is kept, because a
+// reader who cannot reach a resolver should still get the names.
+func printNamesFound(w io.Writer, e ctsearch.Estate) {
+	var named []ctsearch.Name
+	for _, n := range e.Names {
+		if !n.Wildcard {
+			named = append(named, n)
+		}
+	}
+	if len(named) == 0 {
+		return
+	}
+
+	fmt.Fprintf(w, "\n  Names found, none of them asked what it is doing now\n")
+	for _, n := range named {
+		fmt.Fprintf(w, "    %-44s %s\n", n.Name, covered(n))
+	}
 }
