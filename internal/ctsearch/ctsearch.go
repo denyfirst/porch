@@ -328,13 +328,23 @@ func (c *CRTSh) endpoint() string {
 }
 
 func (c *CRTSh) client() *http.Client {
-	dial := c.Dial
+	return monitorClient(c.Dial, c.Roots)
+}
+
+var _ Searcher = (*CRTSh)(nil)
+
+// monitorClient builds the client both monitors use.
+//
+// One copy, because what it decides is which destinations may be reached and
+// which store judges a certificate — and a second copy is a second place
+// somebody has to remember when either changes (N6, R7).
+func monitorClient(dial func(ctx context.Context, network, address string) (net.Conn, error), roots *x509.CertPool) *http.Client {
 	if dial == nil {
-		d := &safedial.Dialer{Timeout: c.timeout(), AllowedPorts: []string{"443", "80"}}
+		d := &safedial.Dialer{Timeout: defaultTimeout, AllowedPorts: []string{"443", "80"}}
 		dial = d.DialContext
 	}
 
-	roots, _ := truststore.Resolve(c.Roots)
+	resolved, _ := truststore.Resolve(roots)
 
 	return &http.Client{
 		// A redirect from a monitor is an address that monitor chose. The hop
@@ -350,13 +360,11 @@ func (c *CRTSh) client() *http.Client {
 			// As everywhere: RootCAs and nothing that would weaken a
 			// handshake. No InsecureSkipVerify, no pinned ServerName, no
 			// shared session cache, no version named here.
-			TLSClientConfig: &tls.Config{RootCAs: roots},
+			TLSClientConfig: &tls.Config{RootCAs: resolved},
 
 			MaxIdleConns:        2,
 			IdleConnTimeout:     5 * time.Second,
-			TLSHandshakeTimeout: c.timeout(),
+			TLSHandshakeTimeout: defaultTimeout,
 		},
 	}
 }
-
-var _ Searcher = (*CRTSh)(nil)

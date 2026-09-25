@@ -260,3 +260,16 @@ func under(name, domain string) bool {
 	}
 	return strings.HasSuffix(name, "."+domain)
 }
+
+// EstateSearcher is a monitor that can be asked what a domain's certificates
+// name.
+//
+// An interface with two implementations rather than one, which is the whole
+// difference between saying a dependency is replaceable and having replaced it.
+// crt.sh and SSLMate have different owners, different infrastructure and
+// answers that agree on nothing but the idea; everything above this — the
+// filtering, the counting, the report and the sentence about what it cannot
+// show — is written once and works with either.
+type EstateSearcher interface {
+	SearchEstate(ctx context.Context, domain string) Estate
+}
