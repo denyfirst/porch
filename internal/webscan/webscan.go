@@ -339,7 +339,7 @@ func GradeAt(observed *webprobe.Report, now time.Time) *Result {
 	// Thirteen headers were being measured on every scan and shown on none: a
 	// report of a site that declares a content policy looked exactly like a
 	// report of one that declares nothing.
-	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet, securityTxtFacts(observed), now)
+	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet, securityTxtFacts(observed), ipv6Facts(observed), now)
 
 	// Worst case across the checks, for the reason it is worst case within
 	// one: a site reached in the clear is reached in the clear however sound
@@ -705,5 +705,22 @@ func securityTxtFacts(r *webprobe.Report) policy.SecurityTxtFacts {
 		Expires:           s.Expires,
 		ExpiresUnreadable: s.ExpiresUnreadable,
 		Signed:            s.Signed,
+	}
+}
+
+// ipv6Facts restates what the probe measured about the newer protocol as what
+// the rules take.
+func ipv6Facts(r *webprobe.Report) policy.IPv6Facts {
+	if r == nil {
+		return policy.IPv6Facts{}
+	}
+	v := r.IPv6
+	return policy.IPv6Facts{
+		Asked:           v.Asked,
+		Published:       v.Published,
+		Answered:        v.Answered,
+		Verified:        v.Verified,
+		Reason:          v.Reason,
+		NoRouteFromHere: v.NoRouteFromHere,
 	}
 }
