@@ -263,9 +263,41 @@ func printNamesNow(w io.Writer, e ctsearch.Estate, live []liveness.Name) {
 		}
 	}
 
-	for _, n := range live {
-		fmt.Fprintf(w, "    %-9s %-*s %s\n", n.Status, width, n.Name, says(n))
+	// The window each name was covered in, from the register that named it.
+	//
+	// Without it a name is only ever "now", and the finding that matters most
+	// in an old estate cannot be seen: a name whose newest certificate expired
+	// four years ago and which is still answering on 443 is a service nobody
+	// has looked at since, and the two halves of that sentence live in two
+	// different columns. A reader who saw only the status would chase it as
+	// though it were current, and a reader who saw only the date would not
+	// know it was still running.
+	covered := map[string]string{}
+	for _, n := range e.Names {
+		covered[n.Name] = lastCovered(n)
 	}
+
+	for _, n := range live {
+		line := says(n)
+		if when := covered[n.Name]; when != "" {
+			line += "; " + when
+		}
+		fmt.Fprintf(w, "    %-9s %-*s %s\n", n.Status, width, n.Name, line)
+	}
+}
+
+// lastCovered says when the register last had this name, in the fewest words
+// that stay true.
+//
+// The expiry rather than the issue date: what an operator is looking for is a
+// name nobody has renewed, and the issue date of a certificate that ran out
+// three years ago says the same thing less directly. Where the log carried no
+// dates at all this says nothing rather than guessing at one.
+func lastCovered(n ctsearch.Name) string {
+	if n.LastSeen.IsZero() {
+		return ""
+	}
+	return "certificates to " + n.LastSeen.Format("2006-01-02")
 }
 
 // says is the evidence beside one name: where it points, or why nothing was
