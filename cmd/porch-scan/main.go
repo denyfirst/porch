@@ -156,8 +156,29 @@ func run() int {
 		// the same argument as versioning the rules, one level up.
 		check = flag.String("check", checkTLS,
 			"which check to run: `tls` for the transport and its certificates,\n"+
-				"\tweb for how the site is reached over HTTP, or mail for what the\n"+
-				"\tdomain's DNS says about its mail policy")
+				"\tweb for how the site is reached over HTTP, mail for what the\n"+
+				"\tdomain's DNS says about its mail policy, dns for how the domain\n"+
+				"\titself is served, or names to list the names under a domain that\n"+
+				"\tappear in publicly logged certificates. names grades nothing, and\n"+
+				"\tasks a monitor this project does not run (N12)")
+
+		// Which transparency monitor is asked. Empty uses the default.
+		//
+		// internal/ctsearch has said since it was written that the monitor is
+		// replaceable — "a monitor that goes away, changes its interface, or
+		// that an operator would rather not use is a substitution rather than a
+		// rewrite" — and until 2026-09-25 there was no way to substitute one
+		// from here. The promise was true of the package and not of the
+		// product.
+		//
+		// It is not hypothetical. crt.sh answered 502 to every request on the
+		// day the inventory mode was written, which is an ordinary state for a
+		// free service indexing billions of certificates, and an operator with
+		// their own index or a paid one should not have to rebuild this to use
+		// it.
+		monitor = flag.String("monitor", "",
+			"the certificate transparency monitor to ask, as a `url` with %s where the\n"+
+				"\tname goes. Empty asks crt.sh. Used by -check names and nothing else")
 
 		// Which resolver the CAA lookup asks. Empty reads this machine's own.
 		//
@@ -327,6 +348,16 @@ func run() int {
 			selectorsFrom(*dkimSelectors, *dkimCommon), *heloName)
 	case checkDNS:
 		return runDNS(ctx, targets, *timeout, *resolver, *asJSON, store)
+	case checkNames:
+		// Not stored. The others keep a verdict per target so that a history
+		// can say when a grade moved; this produces no verdict, and filing an
+		// inventory under the same machinery would put a row in a history that
+		// every reader of it would try to compare with the row above.
+		if err := namesTargets(targets); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		return runNames(ctx, targets, *timeout, *monitor, *asJSON)
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)
