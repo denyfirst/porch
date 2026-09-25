@@ -4735,7 +4735,7 @@ is read" underneath it pointed at the limits of a TLS handshake. Each page then
 named its own, with the transport page as the default. That held until pages
 ran all three checks, where any one address was the wrong one for two of the
 reports above it. Since 2026-09-17 the footer carries no method link: each
-report links its own check's page, and `/docs` lists all three, which is
+report links its own check's page, and `/docs` lists them all, which is
 where a reader who arrived from a report gets back to what it means.
 
 Privacy and terms are promises about everything this project runs, not about

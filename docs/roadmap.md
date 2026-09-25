@@ -51,10 +51,15 @@ pretending otherwise would be the kind of claim this project does not make
 ### 1. The web check's service surface
 
 **The web check has its service surface**, since 2026-09-10: `POST
-/api/v1/web/scan`, `/web`, and `/web/method`. What is left is a front page at
-`/` that runs both checks against one name and reports one worst-case verdict
-with an explicit list of what neither established. `/` stops being a redirect
-the day there is something to put there.
+/api/v1/web/scan`, `/web`, and `/web/method`. What is left is a report that
+runs every check against one name and gives one verdict for it, with an
+explicit list of what none of them established.
+
+`/` is no longer part of that, and this paragraph said it was until
+2026-09-25. Both builds have had a root of their own since 2026-09-12 — the
+demonstration explains the project, an installation opens on a field — and
+nothing redirects there any more. What is outstanding is the combined report,
+not an address to put it at.
 
 The endpoint inherited the demonstration guard and the exclusion list rather
 than repeating them, because both are asked in `webscan.Scanner.Scan`. It

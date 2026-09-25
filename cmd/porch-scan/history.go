@@ -128,7 +128,7 @@ func printRuleSetBreaks(w io.Writer, records []results.Record) {
 // interleave two servers' verdicts under one name. A colon is not a filename
 // character on every platform this ships to, so the separator is not one.
 //
-// Only the TLS check has a port. The other two take a bare name, and giving
+// Only the TLS check has a port. The other three take a bare name, and giving
 // them a default one would file a history under a port nothing measured.
 func historyName(check, target string) string {
 	if check != checkTLS {
