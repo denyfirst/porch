@@ -133,6 +133,10 @@
         also opened to an address the name publishes for IPv6, carrying no
         request at all, to see whether the site answers where it says it can
         be reached; where no such address is published, nothing is dialled.
+        One <code>GET /</code> is also made of the other form of the name —
+        <code>www.</code> added where there is none and removed where there is —
+        which is not followed further, and of which only the host it points at
+        is kept. No other name is looked up, and none is searched for.
         {{if .ReadsPages}}The final page is read, once, to one megabyte, and
         only a short list of facts is kept from it.{{else}}No page body is
         read.{{end}}

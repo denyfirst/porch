@@ -28,6 +28,11 @@
 //   - One GET of "/", over HTTPS and over plaintext, and one of
 //     /.well-known/security.txt. Nothing else.
 //
+//   - One GET of "/" on the other form of the name: www. added where there is
+//     none, removed where there is one. What it answers is not followed. No
+//     other name is derived and none is searched for — a tool that also tried
+//     mail, dev, staging and old would be enumerating an estate.
+//
 //   - One TLS handshake, carrying no request, to an address the name publishes
 //     for IPv6. It is opened, the certificate is read, and it is closed. A
 //     dialler that tries a name's addresses until one answers cannot report on
@@ -457,6 +462,10 @@ type Report struct {
 	// addresses until one answers can never report on the one that did not.
 	IPv6 IPv6Facts `json:"ipv6"`
 
+	// Counterpart is what the other form of the name does — the www form of a
+	// bare name, or the name underneath a www. One response, not followed.
+	Counterpart CounterpartFacts `json:"counterpart"`
+
 	// TrustStoreUnreadable reports that this machine's certificate store could
 	// not be read, so nothing on either chain was verified against anything.
 	//
@@ -549,6 +558,11 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	// this is for, and a check that skipped it when IPv4 was silent would be
 	// blind to the site it describes best.
 	report.IPv6 = p.reachOverIPv6(ctx, host, roots)
+
+	// And the form of the name the operator does not type. One response from
+	// it, not followed: a redirect says where it is sending people in its own
+	// header, and content is already the finding.
+	report.Counterpart = p.counterpart(ctx, client, host, w)
 
 	return report, nil
 }

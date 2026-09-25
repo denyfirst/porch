@@ -99,7 +99,11 @@ func TestTheSecurityFileIsAskedForOnceAndOnlyWhereTheSiteAnswered(t *testing.T) 
 	}
 }
 
-// A host nothing answers is not asked a third time.
+// A host nothing answers is not asked for its security contact as well.
+//
+// The other form of the name is still asked about, and deliberately: a bare
+// name that answers nothing while its www form serves the site is exactly the
+// arrangement worth reporting, and it cannot be found by giving up.
 func TestNothingIsAskedOfAHostThatAnsweredNothing(t *testing.T) {
 	var mu sync.Mutex
 	var asked int
@@ -144,10 +148,16 @@ func TestNothingIsAskedOfAHostThatAnsweredNothing(t *testing.T) {
 	mu.Lock()
 	n := asked
 	mu.Unlock()
-	// Two chains, two connections. A third is the fetch this test says must
-	// not have been made.
-	if n > 2 {
-		t.Errorf("%d connections were opened to a host that answered nothing, want at most two", n)
+	// Two chains and one more for the other form of the name, which is asked
+	// about even here: a bare name that answers nothing while its www form
+	// works is precisely the arrangement worth reporting. The dialler in this
+	// test sends every name to the one listener, so the third connection counts
+	// here although it is a connection to a different name.
+	//
+	// A fourth would be the security.txt fetch, which the assertion above says
+	// was not made.
+	if n > 3 {
+		t.Errorf("%d connections were opened, want at most three: two chains and the other form of the name", n)
 	}
 }
 

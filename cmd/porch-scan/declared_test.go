@@ -29,6 +29,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 				{Label: "X-Frame-Options", Says: "none"},
 				{Label: "Cookies", Says: "2 set; 2 Secure, 1 HttpOnly, 2 with SameSite"},
 				{Label: "The page", Says: "read, nothing on it arrives in the clear"},
+				{Label: "The other form", Says: "www.example.com sends visitors to this name"},
 				{Label: "Over IPv6", Says: "1 address published, answers on 443, certificate valid for this name"},
 				{Label: "Security contact", Says: "published, 1 contact; expires 2027-01-31"},
 			},
@@ -45,6 +46,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 		"X-Frame-Options            none",
 		"Cookies                    2 set; 2 Secure, 1 HttpOnly, 2 with SameSite",
 		"The page                   read, nothing on it arrives in the clear",
+		"The other form             www.example.com sends visitors to this name",
 		"Over IPv6                  1 address published, answers on 443, certificate valid for this name",
 		"Security contact           published, 1 contact; expires 2027-01-31",
 	} {

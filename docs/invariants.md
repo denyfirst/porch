@@ -428,6 +428,48 @@ rule allows — an address defined by a standard, served to everybody, and read
 for the only purpose it has. What is kept from it is a count of contacts and
 one date, never an address, and nothing about it is graded (R21).
 
+**And one `GET` of the root on the other form of the name.** `www.` added where
+there is none, removed where there is one, asked once over HTTPS, and not
+followed: a redirect names where it is sending a visitor in its own header, so
+following it would cost another connection to somebody's server and buy no
+fact. The host in that header is the only part kept — a path or a query from it
+would be text chosen by whoever is being measured, reaching a report people
+paste into issue trackers.
+
+This is the boundary between reporting on a name somebody gave and enumerating
+an estate, and it is four characters wide. Nothing looks for `mail`, `dev`,
+`staging` or `old`. One name is derived from the one asked about, by an
+operation with no judgement in it, and the report says which name it compared so
+that the reader can decide whether that was the interesting pair. Nothing claims
+to have found an apex: telling `example.co.uk` from `blog.example.com` needs the
+public suffix list, which is a third-party list this project does not carry and
+will not write a copy of — so the honest thing is to compare the two forms every
+visitor's fingers produce and name them.
+
+The row is reported, never graded. No document requires a `www` form to exist or
+to redirect anywhere (R21). What it is for is the question an operator cannot
+ask of their own site, because their habit answers it for them: whoever types
+the short form daily never learns what a visitor typing `www` gets, and whoever
+bookmarked `www` never learns what happens at the short form. Both are in every
+visitor's muscle memory and usually only one has ever been tried. The commonest
+thing it finds is two names serving two sites with nothing joining them, one of
+which stopped being updated years ago.
+
+It is asked even where the name itself answered nothing, and that is deliberate:
+a bare name that is dead while its `www` form serves the site is exactly the
+arrangement worth reporting, and it cannot be found by giving up.
+`TestTheOtherFormIsAskedEvenWhereTheNameItselfIsDead` holds that,
+`TestTheOtherFormIsAskedOnceAndNotFollowed` holds the single request and the
+host-only rule, `TestTheOtherFormOfANameIsDerivedAndNotSearchedFor` holds the
+four characters, and
+`TestTheOtherFormGoesThroughWhateverDecidesWhatMayBeReached` holds the part that
+is easiest to forget — the other form of a name is not automatically inside a
+demonstration build's fixed list, nor inside an estate a service has been shown
+control of, so whatever decides that for every other address decides it for this
+one (N6, N9). `TestTheOtherFormOfTheNameRowSaysHowTheTwoAgree` holds the
+sentences, and `TestWhereThisNameLandsReachesTheRowAboutTheOtherForm` the half
+of the answer that comes from the chain this check already followed.
+
 **And one handshake that carries no request.** The check opens a TLS
 connection to an address the name publishes for IPv6, reads the certificate,
 and closes it. Nothing is asked of the server, so nothing enters an
