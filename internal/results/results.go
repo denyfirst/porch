@@ -74,8 +74,8 @@ type Record struct {
 	// it. A day is enough to answer "is this better than last month".
 	Date string `json:"date"`
 
-	// Check names which of the three produced it, because the three rule sets
-	// are not comparable with each other.
+	// Check names which of them produced it, because the rule sets are not
+	// comparable with each other.
 	Check string `json:"check"`
 
 	// Policy is the rule set that graded it. Kept beside the verdict rather

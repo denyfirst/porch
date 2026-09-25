@@ -299,12 +299,12 @@ var pages = map[string]*page{
 		Data:        methodPage{Limits: policy.WebStandingLimits(), Demo: demo.Enabled, UserAgent: webprobe.DefaultUserAgent},
 	},
 
-	// The mail check's, the third beside the other two.
+	// The mail check's, added third of the four.
 	//
-	// Its report said "1 limit of this method" and had nowhere to point, and
-	// on the Porch page, which runs all three checks, the link it drew went to
-	// the Transport page's limits. It also answers the question its reports
-	// raise most: why an exchanger's offer was not established.
+	// Its report said "1 limit of this method" and had nowhere to point, and on
+	// the Porch page, which runs every check, the link it drew went to the
+	// Transport page's limits. It also answers the question its reports raise
+	// most: why an exchanger's offer was not established.
 	"/mail/method": {
 		Title:       "What the mail check reads, and what it cannot see — Porch by denyfirst",
 		Description: "What the mail check reads and connects to, how to read the report it produces, and the limits of the method.",

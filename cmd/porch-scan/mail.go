@@ -180,9 +180,9 @@ func allOrNone(qualifier string) string {
 
 // mailOutcomes collects what each domain was graded, for the exit status.
 //
-// The same shape the other two checks use, through the same exitCode: a
-// pipeline gated on this command should not have to learn a third set of
-// numbers because a third check exists.
+// The same shape the other three checks use, through the same exitCode: a
+// pipeline gated on this command should not have to learn a new set of numbers
+// because another check exists.
 func mailOutcomes(results []mailResult) []outcome {
 	out := make([]outcome, 0, len(results))
 	for _, r := range results {
