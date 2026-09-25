@@ -217,8 +217,11 @@ in it is there because it has already gone wrong once.
 | | |
 |---|---|
 | `internal/tlsprobe`, `internal/certinfo` | the TLS measurement |
-| `internal/webprobe` | the HTTP measurement: one `GET` of `/`, and its page (N7) |
+| `internal/rawhello` | a ClientHello Go cannot send: SSL 3.0, export and NULL suites, the downgrade probe |
+| `internal/webprobe` | the HTTP measurement: one `GET` of `/`, the other form of the name, IPv6 (N7) |
 | `internal/markup` | reads a page; keeps hosts and booleans, never markup (N7) |
+| `internal/securitytxt` | reads what a site publishes about reporting a fault in it, and keeps a count and a date (N7) |
+| `internal/wellknown` | every address under `/.well-known` this project asks for or serves, each beside its document (N7) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
 | `internal/spf` | walks a sender policy and counts what evaluating it costs |
@@ -234,11 +237,15 @@ in it is there because it has already gone wrong once.
 | `internal/truststore` | which store decides the word "trusted", for both checks (R7) |
 | `internal/rootstores` | Mozilla's, Chrome's, Microsoft's and Apple's root stores, carried and named beside the verdict (R7) |
 | `internal/crl` | reads the revocation list a certificate names (N11) |
+| `internal/ocsp` | reads a stapled status response and says whether it means anything |
 | `internal/ocspquery` | asks a certificate's own responder, only behind `porch-scan -ask-responder` (R3a) |
 | `internal/ctsearch` | finds certificates a public log holds for a name (N12) |
 | `internal/ctlogs` | Google's signed CT log list, carried; checks each transparency receipt against it (R3c) |
 | `internal/dnsclient` | the resolver; CAA, TXT, and the walk up the tree (N5) |
 | `internal/httpapi` | the service; the only package that sees untrusted input |
+| `internal/access` | closes an installation to whoever cannot sign in, and holds the key its kept data is encrypted with |
+| `internal/vault` | the reports an installation keeps, encrypted under the key that password seals |
+| `internal/results` | a deployment's own scans, kept only where it is told to, and never beside `-access-file` |
 | `internal/web` | the pages |
 | `internal/promises` | what denyfirst undertakes, and what each product adds (N14) |
 | `docs/invariants.md` | why all of the above is the way it is |
