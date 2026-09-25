@@ -177,8 +177,18 @@ func run() int {
 		// their own index or a paid one should not have to rebuild this to use
 		// it.
 		monitor = flag.String("monitor", "",
-			"the certificate transparency monitor to ask, as a `url` with %s where the\n"+
-				"\tname goes. Empty asks crt.sh. Used by -check names and nothing else")
+			"which certificate transparency monitor -check names asks: `crtsh` or\n"+
+				"\tcertspotter. They have different owners and different infrastructure,\n"+
+				"\tso one being down is not both")
+
+		// And where it is asked, separately from which one.
+		//
+		// An operator running their own index of either, or a paid one, should
+		// not have to say which answer format it speaks — they already said
+		// that by naming the monitor.
+		monitorURL = flag.String("monitor-url", "",
+			"the `address` of the monitor named by -monitor, if not its own. For crtsh\n"+
+				"\tthis is a template with %s where the name goes")
 
 		// Which resolver the CAA lookup asks. Empty reads this machine's own.
 		//
@@ -357,7 +367,7 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		return runNames(ctx, targets, *timeout, *monitor, *asJSON)
+		return runNames(ctx, targets, *timeout, *monitor, *monitorURL, *asJSON)
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)

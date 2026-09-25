@@ -40,23 +40,18 @@ import (
 // never available on a demonstration build, which promises it queries no log,
 // and why on the command line it is a mode somebody types rather than anything
 // that runs by default.
-func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor string, asJSON bool) int {
+func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor, monitorURL string, asJSON bool) int {
 	if demo.Enabled {
 		fmt.Fprintln(os.Stderr, "this is a demonstration build, and it asks no certificate "+
 			"transparency monitor anything")
 		return 2
 	}
 
-	if monitor != "" && !strings.Contains(monitor, "%s") {
-		// Without it the same address is fetched for every domain, and the
-		// answer would be an inventory of whatever that address holds,
-		// reported under the name that was asked about.
-		fmt.Fprintf(os.Stderr, "-monitor needs %s where the name goes, as in "+
-			"https://example.test/?Identity=%s&output=json\n", "%s", "%s")
+	searcher, err := monitorNamed(monitor, monitorURL, timeout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-
-	searcher := &ctsearch.CRTSh{Timeout: timeout, Endpoint: monitor}
 
 	worst := 0
 	for i, domain := range domains {
@@ -183,4 +178,46 @@ func namesTargets(targets []string) error {
 		}
 	}
 	return nil
+}
+
+// The monitors this can be pointed at, spelled once.
+const (
+	monitorCRTSh       = "crtsh"
+	monitorCertSpotter = "certspotter"
+)
+
+// monitorNamed builds the monitor to ask.
+//
+// Two of them, with different owners and different infrastructure, because a
+// dependency described as replaceable and never replaced is a claim nobody has
+// checked. crt.sh answered 502 to every request for a day while this was being
+// written, which is an ordinary state for a free service indexing billions of
+// certificates — and on that day the argument stopped being theoretical.
+//
+// The address is separate from the choice. An operator running their own index
+// of one of these, or a paid one, overrides where it is asked without having to
+// say which answer format it speaks.
+func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateSearcher, error) {
+	switch name {
+	case "", monitorCRTSh:
+		if address != "" && !strings.Contains(address, "%s") {
+			// Without it the same address is fetched for every domain, and the
+			// answer would be an inventory of whatever that address holds,
+			// reported under the name that was asked about.
+			return nil, fmt.Errorf("-monitor-url for %s needs %%s where the name goes", monitorCRTSh)
+		}
+		return &ctsearch.CRTSh{Timeout: timeout, Endpoint: address}, nil
+
+	case monitorCertSpotter:
+		// The token is read from the environment rather than a flag: it
+		// identifies whoever is running this to the monitor, and a credential
+		// on a command line is a credential in a shell history and in every
+		// process listing on the machine.
+		return &ctsearch.CertSpotter{
+			Timeout:  timeout,
+			Endpoint: address,
+			Token:    os.Getenv("CERTSPOTTER_TOKEN"),
+		}, nil
+	}
+	return nil, fmt.Errorf("unknown monitor %q: it is %s or %s", name, monitorCRTSh, monitorCertSpotter)
 }

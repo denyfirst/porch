@@ -1453,8 +1453,31 @@ that a monitor which goes away or changes is a substitution rather than a
 rewrite, and there was no way to substitute one from the command line. It is
 not hypothetical: crt.sh answered 502 to every request on the day this mode was
 written, which is an ordinary state for a free service indexing billions of
-certificates. `-monitor` takes the address, and a monitor with no place for the
-name in it is refused rather than fetched once per domain.
+certificates. `-monitor` names which one, `-monitor-url` says where, and a crt.sh address
+with no place for the name in it is refused rather than fetched once per domain.
+
+There are two implementations, and that is the point rather than a convenience.
+A dependency described as replaceable and never replaced is a claim nobody has
+checked, including whoever made it. crt.sh and SSLMate have different owners,
+different infrastructure and answers that agree on nothing but the idea, so the
+interface has now been shown to fit something it was not written around — and an
+operator whose monitor is down has somewhere to go.
+
+The second answers in pages of a hundred, which is the part worth getting right:
+a reader that took the first page and stopped would return a list that is
+sorted, dated, plausible and missing most of a large estate, with nothing about
+it looking wrong. `TestEveryPageOfAPagedAnswerIsRead` follows every page,
+`TestAnEstatePastTheBoundSaysItWasCut` holds the bound that must exist and the
+only dishonest way to have one, which is to stop quietly, and
+`TestOneCertificateUnderTwoIdentifiersIsOne` keys on the certificate hash rather
+than the monitor's own identifier — the identifier is not what a certificate is.
+`TestRateLimitingIsSaidPlainly` gives that answer its own sentence, because
+"did not answer the search" would send an operator looking for a fault in their
+network or in the domain when what they need is to wait. A key, where an
+operator has one, is read from the environment and sent as a credential:
+`TestTheKeyIsSentAsACredentialAndNotWrittenDown` holds both halves, and a
+credential on a command line is a credential in a shell history and in every
+process listing on the machine.
 
 *Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
@@ -1492,7 +1515,13 @@ name in it is refused rather than fetched once per domain.
 `TestTheInventoryAlwaysSaysWhatItCannotShow`,
 `TestAFailedSearchPrintsNoInventory`,
 `TestTheInventoryCountsInWords`,
-`TestTheInventoryTakesADomainAndNotAnAddress`
+`TestTheInventoryTakesADomainAndNotAnAddress`,
+`TestEveryPageOfAPagedAnswerIsRead`,
+`TestAnEstatePastTheBoundSaysItWasCut`,
+`TestRateLimitingIsSaidPlainly`,
+`TestTheKeyIsSentAsACredentialAndNotWrittenDown`,
+`TestTheSecondMonitorKeepsOnlyThisEstate`,
+`TestOneCertificateUnderTwoIdentifiersIsOne`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 
