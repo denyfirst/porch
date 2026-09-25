@@ -18,7 +18,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		Answered: true,
 		Present:  map[string]bool{"X-Frame-Options": true},
 		Values:   map[string]string{"X-Frame-Options": "DENY"},
-	}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
 
 	said := map[string]string{}
 	for _, r := range rows {
@@ -56,7 +56,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		{Name: "a", Secure: true},
 		{Name: "b", Secure: true, HTTPOnly: true},
 		{Name: "c", SameSite: "Lax"},
-	}, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	}, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
 	for _, r := range counted {
 		if r.Label == "Cookies" && r.Says != "3 set; 2 Secure, 1 HttpOnly, 1 with SameSite" {
 			t.Errorf("the cookies are counted as %q", r.Says)
@@ -69,7 +69,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 	// A response nobody reached declares nothing at all. An empty list says the
 	// question was never put; a list of twelve "none" rows would say the site
 	// answered and carried none of them.
-	if got := Declarations(HeaderFacts{}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow); got != nil {
+	if got := Declarations(HeaderFacts{}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow); got != nil {
 		t.Errorf("a response nobody reached declared %v", got)
 	}
 }
@@ -85,7 +85,7 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 	says := func(f HeaderFacts, c ContentFacts) map[string]string {
 		f.Answered = true
 		out := map[string]string{}
-		for _, r := range Declarations(f, c, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow) {
+		for _, r := range Declarations(f, c, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow) {
 			out[r.Label] = r.Says
 		}
 		return out
@@ -144,7 +144,7 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 // own service answers HTTP/1.1 on purpose, which is the case that decides it:
 // a rule here would grade a deliberate choice as a fault.
 func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
-	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
 	if len(rows) == 0 || rows[0].Label != "Served over" {
 		t.Fatalf("the first thing a report says about the response is %+v", rows)
 	}
@@ -154,7 +154,7 @@ func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
 
 	// And an older version is the same kind of row, carrying no verdict with
 	// it: nothing in this package turns it into one.
-	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
 	if old[0].Says != "HTTP/1.1" {
 		t.Errorf("an older protocol reads %q", old[0].Says)
 	}
@@ -209,7 +209,7 @@ func TestTheSecurityContactRowSaysWhichNothingItFound(t *testing.T) {
 	// And the row is drawn on every answered scan, including the one where
 	// nothing was found: a row that disappears when there is nothing to say
 	// reads as a question nobody asked (R4).
-	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
 	var seen bool
 	for _, r := range rows {
 		if r.Label == "Security contact" {
@@ -268,7 +268,7 @@ func TestTheIPv6RowSaysWhichKindOfNoItFound(t *testing.T) {
 
 	// And the row is drawn on every answered scan, including the one where
 	// there is nothing to say (R4).
-	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
 	var seen bool
 	for _, r := range rows {
 		if r.Label == "Over IPv6" {
@@ -277,5 +277,72 @@ func TestTheIPv6RowSaysWhichKindOfNoItFound(t *testing.T) {
 	}
 	if !seen {
 		t.Errorf("no IPv6 row was drawn: %+v", rows)
+	}
+}
+
+// The other form of the name is compared, and the row says which way the two
+// forms agree or that they do not.
+//
+// The question an operator cannot ask of their own site: their habit answers it
+// for them. Whoever types the bare name daily never learns what a visitor
+// typing www gets, and whoever bookmarked www never learns what happens at the
+// bare name. Reported, never graded — no document requires a www form to exist
+// or to redirect (R21) — and the commonest fault it surfaces is two names
+// serving two sites, one of which stopped being updated years ago.
+func TestTheOtherFormOfTheNameRowSaysHowTheTwoAgree(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		facts CounterpartFacts
+		want  string
+	}{
+		{"never measured", CounterpartFacts{}, "not measured"},
+		{"out of this deployment's reach", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Refused: true,
+		}, "www.example.com was not checked: this deployment may not reach it"},
+		{"the other form does not exist", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Reason: "could not be reached",
+		}, "www.example.com could not be reached"},
+		{"the other form sends visitors here", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Answered: true, Status: 301,
+			SendsTo: "example.com", Scanned: "example.com",
+		}, "www.example.com sends visitors to this name"},
+		{"this name sends visitors there", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Answered: true, Status: 200,
+			Scanned: "example.com", LandsOn: "www.example.com",
+		}, "this name sends visitors to www.example.com"},
+		{"both end up somewhere else together", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Answered: true, Status: 301,
+			SendsTo: "shop.example.net", Scanned: "example.com", LandsOn: "shop.example.net",
+		}, "www.example.com and this name both end up at shop.example.net"},
+		{"the other form goes somewhere of its own", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Answered: true, Status: 302,
+			SendsTo: "old.example.net", Scanned: "example.com",
+		}, "www.example.com sends visitors to old.example.net"},
+		{"two names, two sites, nothing joining them", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Answered: true, Status: 200,
+			Scanned: "example.com",
+		}, "www.example.com answers with its own site, and nothing sends visitors from one form to the other"},
+		{"the other form refuses the request", CounterpartFacts{
+			Asked: true, Name: "www.example.com", Answered: true, Status: 404,
+			Scanned: "example.com",
+		}, "www.example.com answers 404"},
+	} {
+		if got := counterpartLine(c.facts); got != c.want {
+			t.Errorf("%s read as %q, not %q", c.name, got, c.want)
+		}
+	}
+
+	// And the row is drawn on every answered scan, including where there is
+	// nothing to say (R4).
+	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil,
+		SecurityTxtFacts{}, IPv6Facts{}, CounterpartFacts{}, testNow)
+	var seen bool
+	for _, r := range rows {
+		if r.Label == "The other form" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Errorf("no row for the other form of the name was drawn: %+v", rows)
 	}
 }

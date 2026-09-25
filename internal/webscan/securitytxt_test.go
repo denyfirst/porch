@@ -58,3 +58,38 @@ func says(t *testing.T, r *Result, label string) string {
 	t.Fatalf("no %q row was drawn: %+v", label, r.Declared)
 	return ""
 }
+
+// Where this name's own chain ended is half the answer about whether the two
+// forms agree, and it comes from the chain this check already followed.
+//
+// The probe can only say what the other form did. Whether that amounts to
+// agreement depends on where the scanned name sends a visitor, which nothing
+// but this translation knows — and a chain that stayed put has not sent anybody
+// anywhere, so reporting its own name as somewhere it sends visitors would make
+// every site on earth look as though it redirected to itself.
+func TestWhereThisNameLandsReachesTheRowAboutTheOtherForm(t *testing.T) {
+	at := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+
+	// The scanned name serves its own site, and the www form sends visitors to
+	// it. The two agree, in that direction.
+	toHere := &webprobe.Report{
+		Host:   "example.test",
+		Secure: chain(hop(true, 200, nil)),
+		Counterpart: webprobe.CounterpartFacts{
+			Asked: true, Name: "www.example.test", Answered: true, Status: 301,
+			SendsTo: "example.test",
+		},
+	}
+	if got := says(t, GradeAt(toHere, at), "The other form"); got != "www.example.test sends visitors to this name" {
+		t.Errorf("the row reads %q", got)
+	}
+
+	// A chain that stayed on the scanned name must not be reported as sending
+	// visitors to itself.
+	if got := counterpartFacts(toHere); got.LandsOn != "" {
+		t.Errorf("a chain that never moved says it lands on %q", got.LandsOn)
+	}
+	if got := counterpartFacts(toHere); got.Scanned != "example.test" {
+		t.Errorf("the scanned name reached the rules as %q", got.Scanned)
+	}
+}

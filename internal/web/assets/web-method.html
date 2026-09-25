@@ -41,6 +41,41 @@
     </p>
 
     <p>
+      <strong>And one <code>GET</code> of <code>/</code> on the other form of
+      the name.</strong> A name without <code>www.</code> gets it added, a name
+      with it gets it removed, and that one name is asked for its root over
+      HTTPS. What it answers is <em>not</em> followed: a redirect says where it
+      is sending a visitor in its own header, so following it would buy another
+      connection to a server and no new fact.
+    </p>
+
+    <p>
+      <strong>Nothing else is looked up, and no name is searched for.</strong>
+      Four characters are added or removed from the name you gave. There is no
+      attempt at <code>mail</code>, <code>dev</code>, <code>staging</code> or
+      <code>old</code> — a tool that went looking for those would be
+      enumerating an estate, which is a different instrument with a different
+      argument for existing. The report names the form it compared, so you can
+      see which question was answered. It does not claim to have found your
+      apex: telling <code>example.co.uk</code> from <code>blog.example.com</code>
+      needs the public suffix list, a third-party list this project does not
+      carry and will not write its own copy of.
+    </p>
+
+    <p>
+      <strong>Why it is worth a connection.</strong> This is the question you
+      cannot ask of your own site, because your habit answers it for you:
+      whoever types the short form every day never finds out what a visitor
+      typing <code>www</code> gets, and whoever bookmarked <code>www</code>
+      never finds out what happens at the short form. Both are in every
+      visitor's muscle memory and usually only one has ever been tried. The
+      commonest thing it finds is two names serving two sites with nothing
+      joining them — one of which stopped being updated some years ago. Nothing
+      here is graded: no document requires a <code>www</code> form to exist, or
+      to redirect anywhere.
+    </p>
+
+    <p>
       <strong>And one handshake, carrying no request, to an address the name
       publishes for IPv6.</strong> It is opened, the certificate is read, and
       it is closed; nothing is asked of the server. This exists because a scan

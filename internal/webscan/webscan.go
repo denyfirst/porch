@@ -339,7 +339,8 @@ func GradeAt(observed *webprobe.Report, now time.Time) *Result {
 	// Thirteen headers were being measured on every scan and shown on none: a
 	// report of a site that declares a content policy looked exactly like a
 	// report of one that declares nothing.
-	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet, securityTxtFacts(observed), ipv6Facts(observed), now)
+	out.Declared = policy.Declarations(headerSet, contentSet, cookieSet, securityTxtFacts(observed),
+		ipv6Facts(observed), counterpartFacts(observed), now)
 
 	// Worst case across the checks, for the reason it is worst case within
 	// one: a site reached in the clear is reached in the clear however sound
@@ -723,4 +724,53 @@ func ipv6Facts(r *webprobe.Report) policy.IPv6Facts {
 		Reason:          v.Reason,
 		NoRouteFromHere: v.NoRouteFromHere,
 	}
+}
+
+// counterpartFacts restates what the probe learned about the other form of the
+// name, and adds where the scanned name's own chain ended.
+//
+// The second half is the part that cannot come from the probe's measurement of
+// the other name: whether the two forms agree depends on where each of them
+// sends a visitor, and one of those two answers is the chain this check already
+// followed.
+func counterpartFacts(r *webprobe.Report) policy.CounterpartFacts {
+	if r == nil {
+		return policy.CounterpartFacts{}
+	}
+	c := r.Counterpart
+	out := policy.CounterpartFacts{
+		Asked:    c.Asked,
+		Name:     c.Name,
+		Refused:  c.Refused,
+		Answered: c.Answered,
+		Status:   c.Status,
+		SendsTo:  c.SendsTo,
+		Reason:   c.Reason,
+		Scanned:  strings.ToLower(strings.TrimSuffix(r.Host, ".")),
+	}
+
+	// Where this name's own chain ended, and only where it moved. A chain that
+	// stayed put has not sent anybody anywhere, and reporting its own name as
+	// somewhere it sends visitors would make every site look as though it
+	// redirected to itself.
+	if final := finalHost(r.Secure); final != "" && final != out.Scanned {
+		out.LandsOn = final
+	}
+	return out
+}
+
+// finalHost is the host the last hop of a chain was fetched from.
+func finalHost(c *webprobe.Chain) string {
+	if c == nil {
+		return ""
+	}
+	final := c.Final()
+	if final == nil {
+		return ""
+	}
+	u, err := url.Parse(final.URL)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
 }

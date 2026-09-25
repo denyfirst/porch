@@ -60,7 +60,7 @@ const maxDeclared = 120
 // policy, and R21 leaves what a site declares as something to report. What the
 // rules grade is the handful of cases where a declaration contradicts itself
 // or the transport it arrives on.
-func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, sec SecurityTxtFacts, v6 IPv6Facts, now time.Time) []Declaration {
+func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, sec SecurityTxtFacts, v6 IPv6Facts, other CounterpartFacts, now time.Time) []Declaration {
 	if !f.Answered {
 		return nil
 	}
@@ -91,8 +91,11 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, se
 	out = append(out, Declaration{Label: "Cookies", Says: cookieLine(cookies)})
 	out = append(out, Declaration{Label: "The page", Says: pageLine(content)})
 
-	// Last, because it is the one row that is not about the response a visitor
-	// landed on. It cost the only other request this check makes.
+	// Last, the three rows that are not about the response a visitor landed on:
+	// the other form of the name, the other protocol, and the file that says how
+	// to report a fault. Each cost this check its own connection, which is why
+	// they are kept together and counted in one place.
+	out = append(out, Declaration{Label: "The other form", Says: counterpartLine(other)})
 	out = append(out, Declaration{Label: "Over IPv6", Says: ipv6Line(v6)})
 	out = append(out, Declaration{Label: "Security contact", Says: securityTxtLine(sec, now)})
 	return out
@@ -342,4 +345,85 @@ func published(n int) string {
 		return "1 address published"
 	}
 	return strconv.Itoa(n) + " addresses published"
+}
+
+// CounterpartFacts is what the other form of the name does, and where the name
+// that was scanned itself ended up.
+//
+// Both halves are needed to say whether the two forms agree, and they arrive
+// from different places: one from a single response to the other form, one from
+// the chain this check already followed.
+type CounterpartFacts struct {
+	// Asked is whether this was measured.
+	Asked bool
+
+	// Name is the other form that was compared.
+	Name string
+
+	// Refused is whether this deployment may not reach that name.
+	Refused bool
+
+	// Answered, Status and SendsTo are what the other form's one response was:
+	// whether it came, what it said, and the host it points a visitor at where
+	// it was a redirect.
+	Answered bool
+	Status   int
+	SendsTo  string
+
+	// Reason is the shape of the failure, where there was one.
+	Reason string
+
+	// Scanned is the name that was asked about, and LandsOn is the host its own
+	// chain ended at — which may be the other form, in which case the two
+	// agree in that direction.
+	Scanned string
+	LandsOn string
+}
+
+// counterpartLine says whether both forms of the name take a visitor to the
+// same place.
+//
+// Reported, never graded. No document requires a `www` form to exist, and none
+// requires one to redirect to the other: plenty of well-run sites serve only
+// the bare name, and a verdict here would be a threshold this project invented
+// (R21).
+//
+// The row exists because it is the question an operator cannot ask of their own
+// site. Their own habit answers it for them — whoever types the bare name every
+// day never learns what happens to somebody who types `www`, and whoever
+// bookmarked `www` never learns what happens at the bare name. Both forms are in
+// every visitor's muscle memory and usually only one of them has ever been
+// tried.
+func counterpartLine(f CounterpartFacts) string {
+	switch {
+	case !f.Asked:
+		return "not measured"
+	case f.Refused:
+		return f.Name + " was not checked: this deployment may not reach it"
+	case f.Reason != "":
+		// A name that does not exist reads the same as one that refused the
+		// connection, on purpose: the row is about whether the two forms agree,
+		// and in both cases they do not.
+		return f.Name + " " + f.Reason
+	case !f.Answered:
+		return f.Name + " did not answer"
+	}
+
+	switch {
+	case f.SendsTo != "" && f.SendsTo == f.Scanned:
+		return f.Name + " sends visitors to this name"
+	case f.SendsTo != "" && f.LandsOn != "" && f.SendsTo == f.LandsOn:
+		return f.Name + " and this name both end up at " + f.LandsOn
+	case f.SendsTo != "":
+		return f.Name + " sends visitors to " + f.SendsTo
+	case f.LandsOn != "" && f.LandsOn == f.Name:
+		return "this name sends visitors to " + f.Name
+	case f.Status >= 400:
+		return f.Name + " answers " + strconv.Itoa(f.Status)
+	default:
+		// Two names, two sites, nothing joining them. Not a fault by any
+		// document — and the commonest way a visitor ends up on a copy of a
+		// site that stopped being updated two years ago.
+		return f.Name + " answers with its own site, and nothing sends visitors from one form to the other"
+	}
 }
