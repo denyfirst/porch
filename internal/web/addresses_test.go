@@ -150,14 +150,23 @@ func pathOfDenyfirstURL(t *testing.T, s string) string {
 	return rest
 }
 
-// The root stands in. It does not move.
+// The root is a page, on both builds, and nothing stands in for it.
 //
-// "/" sends a visitor to the one check there is, and will stop doing so when
-// there is a front page to put there. That is a temporary state and the
-// status code says so: a permanent redirect is a promise that an address has
-// finished changing, and this one has not. The method page's redirect is the
-// other kind, because it is not coming back to the root.
-func TestTheRootStandsInAndSaysSoInTheStatusCode(t *testing.T) {
+// It did once: "/" sent a visitor to the one check there was, temporarily and
+// with a status code that said so. Both builds have a front page of their own
+// now — the demonstration explains the project, an installation opens on a
+// field — so the temporary table is empty and this says so rather than leaving
+// a reader to assume it.
+//
+// The permanent kind is still here and still tested, because /method really
+// did move and is not coming back: a permanent redirect is a promise that an
+// address has finished changing, and that promise is the reason the two tables
+// are separate.
+//
+// This test was called TestTheRootStandsInAndSaysSoInTheStatusCode until
+// 2026-09-25, which described behaviour it had stopped asserting. A test whose
+// name says something the body does not is read by its name.
+func TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt(t *testing.T) {
 	// Nothing may be in both tables: an address is either finished moving or
 	// it is not. True of every build, so it is asserted before the branch —
 	// an assertion below one is an assertion half the builds never run.

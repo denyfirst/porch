@@ -445,37 +445,34 @@ var moved = map[string]string{
 	"/method": "/tls/method",
 }
 
-// standingIn are addresses serving something other than what they will serve.
+// standingIn are addresses serving something other than what they will serve,
+// and there are none.
 //
-// "/" is the project's address. Today the project has one check, so "/" sends
-// a visitor to it; when there is a front page to put there, "/" will stop
-// redirecting and /tls will not have moved. That is the whole reason for the
-// split, and it is why this redirect is *temporary* while the one above is
-// permanent — a permanent redirect is a promise that the address is finished
-// changing, and this one is not.
+// It is empty rather than gone because the distinction it holds is worth
+// keeping: a permanent redirect is a promise that an address has finished
+// changing, and a temporary one is the opposite promise. `moved` above is for
+// the first. This is where an address of the second kind goes, so that nobody
+// writing a route has to work out which kind they meant from the status code
+// somebody else typed.
+//
+// It held "/" until both builds had a front page. The demonstration's root
+// stood in for /tls while there was one check to explain — a console asking a
+// visitor to pick between checks answered a question they had not asked — and
+// an installation's root stood in for the tool. Both have a page of their own
+// now, so nothing stands in for anything.
+//
+// This comment said otherwise until 2026-09-25, in twenty-four lines describing
+// a project with one check and a root that redirects. It sat directly above a
+// function whose own comment said the opposite, which is the state a comment
+// reaches when the code under it is changed and the paragraph above it is not.
+// In a project whose method is that the reasoning is written down, that is a
+// defect rather than untidiness: a reader who trusts it learns a routing model
+// this program does not have.
 //
 // Every response here carries Cache-Control: no-store, so neither kind is
 // cached in practice. The status code is still the honest one, because it is
 // read by people and by intermediaries that ignore the header.
-// standingIn holds the temporary redirects, and it is built rather than
-// declared because the root differs by deployment.
-//
-// On the demonstration, "/" still stands in for /tls. That deployment exists to
-// explain a check to somebody who arrived from a log line, and a console asking
-// them to pick checks answers a question they did not ask.
-//
-// On an installation somebody runs themselves, "/" is the tool. Nobody there
-// needs persuading that scanning is safe — they installed it — and what they
-// want on the first screen is a field. Serving the same page to both was the
-// thing that made a self-hosted installation feel like the website running
-// locally rather than like an instrument.
-var standingIn = rootRedirect()
-
-func rootRedirect() map[string]string {
-	// Empty in both builds now. The demonstration has its front page at "/",
-	// and an installation somebody runs has the tool there.
-	return map[string]string{}
-}
+var standingIn = map[string]string{}
 
 // files are the assets served as they are.
 var files = map[string]struct {

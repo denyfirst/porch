@@ -4778,7 +4778,7 @@ meant has never existed under that name.
 *Enforced in:* `internal/web.pages`, `internal/web.moved`,
 `internal/web.standingIn`, `internal/httpapi.New`
 *Guarded by:* `TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot`,
-`TestTheRootStandsInAndSaysSoInTheStatusCode`,
+`TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt`,
 `TestEveryInternalLinkResolves`, `TestEachCheckCallsItsOwnPaths`,
 `TestEachScanPageDeclaresItsCheck`,
 `TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits`,
