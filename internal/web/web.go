@@ -30,6 +30,7 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/httpapi"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/promises"
 	"github.com/denyfirst/porch/internal/webprobe"
 )
 
@@ -195,6 +196,28 @@ var pages = map[string]*page{
 		Title:       "Privacy, and what a scan does — denyfirst",
 		Description: "What this service records, what a scan sends, what it never does, and how to have a domain excluded.",
 		Fragment:    "assets/privacy.html",
+	},
+	// The organisation, separately from any product.
+	//
+	// The two questions a reader arrives with are not the same question, and one
+	// page answering both buries the answers that matter. What the people behind
+	// a tool receive is here; what a particular check sends is on the pages that
+	// describe it. It ranges over internal/promises rather than carrying the
+	// sentences, because a second product would otherwise mean the same
+	// undertakings written twice — and two places drift.
+	"/organisation": {
+		// The top bar of an installation shows this, and an installation says
+		// porch in its header with denyfirst in its footer — two names on the
+		// first screen of a tool is one too many. So the title names the
+		// question rather than the organisation, and the heading inside the page
+		// names the organisation.
+		Title:       "Who makes this, and what they receive — denyfirst",
+		Description: "What the organisation behind Porch undertakes, whatever you run, and how to check each undertaking rather than take it on trust.",
+		Fragment:    "assets/organisation.html",
+		Data: organisationPage{
+			Organisation: promises.Organisation,
+			Products:     promises.Products,
+		},
 	},
 	"/terms": {
 		Title:       "Terms of use — denyfirst",
@@ -917,4 +940,16 @@ func buildPlain() {
 		contentType string
 		body        []byte
 	}{"text/plain; charset=utf-8", []byte(robots)}
+}
+
+// organisationPage is what assets/organisation.html reads.
+//
+// The undertakings are passed in rather than written into the markup, for the
+// reason the Data field exists at all: a second product would otherwise mean
+// the organisation's undertakings written out twice, and the day one copy is
+// improved and the other is not, a reader has two documents from the same
+// people that disagree — worse evidence than one vague document.
+type organisationPage struct {
+	Organisation []promises.Promise
+	Products     []promises.Product
 }

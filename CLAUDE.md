@@ -224,6 +224,8 @@ in it is there because it has already gone wrong once.
 | `internal/dnsclient` | the resolver; CAA, TXT, and the walk up the tree (N5) |
 | `internal/httpapi` | the service; the only package that sees untrusted input |
 | `internal/web` | the pages |
+| `internal/promises` | what denyfirst undertakes, and what each product adds (N14) |
 | `docs/invariants.md` | why all of the above is the way it is |
 | `docs/scope.md` | who may scan what, and where that is decided |
+| `docs/policy.md` | why the organisation promises once and a product only more narrowly (N14) |
 | `docs/roadmap.md` | where this is going, and what is known to be wrong |

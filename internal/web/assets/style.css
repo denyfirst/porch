@@ -2885,3 +2885,32 @@ main > .band:last-child { border-bottom: 0; }
 
   @page { margin: 18mm 16mm; }
 }
+
+/* Undertakings, each with the way to check it underneath.
+   Like .terms, with more room: every term here is a whole sentence rather than
+   a word, so the pairs need separating enough that a reader can see where one
+   ends and the next begins. Deliberately not named for the word this project
+   uses in prose: a retired standalone notice wore that word as a class, a test
+   guards against its rule coming back, and a name that trips a guard written
+   for a different reason is a name worth changing rather than a guard worth
+   loosening. */
+.prose .undertakings {
+  margin: 1.4rem 0;
+}
+
+.prose .undertakings dt {
+  margin-top: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.prose .undertakings dt:first-child {
+  margin-top: 0;
+}
+
+.prose .undertakings dd {
+  margin: 0.45rem 0 0 0;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-soft);
+}
