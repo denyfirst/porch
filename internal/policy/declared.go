@@ -317,6 +317,16 @@ func ipv6Line(f IPv6Facts) string {
 	switch {
 	case !f.Asked:
 		return "not measured"
+	case f.Published == 0 && f.Reason != "":
+		// Nothing was looked up, so how many addresses the name publishes is
+		// not known. Falling through to the line below would print "no AAAA
+		// record" — a flat claim about somebody's zone that was never checked,
+		// and the most confident sentence in the row would be the one with
+		// nothing behind it (R4).
+		//
+		// Found by a test of what a scan says when it runs out of time, which
+		// leaves exactly this state: asked, nothing looked up, a reason.
+		return f.Reason
 	case f.Published == 0:
 		// Not a fault and not a silence. The zone was asked and published no
 		// address, which is a decision somebody made.

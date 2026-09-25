@@ -521,6 +521,50 @@ reserved one that resolves to nothing, so nothing would have come back and
 nothing would have failed — the traffic would simply have been there, from a
 project whose argument is that it can be checked.
 
+**And all three say when the scan ran out of time, rather than what they saw.**
+
+They run after both chains and share one deadline with them, so a slow site
+spends the budget and these are what go without. Each then failed in its own
+way and reported what it found: the security contact could not be fetched, the
+IPv6 address did not answer, the other form could not be reached. Three
+sentences about this program's clock, printed as findings about somebody else's
+server, in the part of a report an operator is most likely to act on. It is
+worse on the service than on the command line, where the whole request has
+thirty seconds for every check and these are last in the queue.
+
+The IPv6 row was the worst of them, twice over. A measurement that never got as
+far as a lookup left `Published` at zero, and the row's own order then answered
+*no address published (no AAAA record)* — the most confident sentence in the
+row was the one with nothing behind it. And a failure after the deadline
+consulted this machine's network, so a scan that ran out of time on a machine
+without IPv6 claimed both that the site does not answer and that nothing here
+could have checked.
+
+So the deadline is answered first, in each of the three:
+`TestAScanThatRanOutOfTimeSaysSoRatherThanBlamingTheHost` for the shape of it,
+`TestADeadlineDuringTheIPv6HandshakeIsNotTheLocalNetworksFault` and
+`TestTheOtherFormSaysTheScanRanOutWhenTheDeadlinePassesMidRequest` and
+`TestTheSecurityContactSaysTheScanRanOutRatherThanThatTheFileIsMissing` for a
+budget that goes mid-request, which is the case a site produces rather than a
+test.
+
+**Nothing is looked up or dialled once the time is gone.** Saying so in the
+report is half of it; the other half is not spending somebody else's resources
+to learn what the clock already says.
+`TestNothingIsLookedUpOrDialledWithNoTimeLeft` holds the resolver query and the
+connections, and `TestTheReachDecisionIsNotAskedWithNoTimeLeft` holds the one
+piece of work that is easy to forget — whatever decides which names a
+deployment may reach is not free, and asking it for a measurement that cannot
+finish is work done for nothing.
+
+There is no guard in front of the security contact fetch, and that is
+deliberate rather than an omission. One would look more careful and buy
+nothing: the transport refuses a request on an expired context before it dials,
+so no connection is made either way and the report comes out the same. A
+sabotage proved it — removing the guard changed nothing any test could see,
+because there was nothing to see — and the branch went rather than gaining a
+test that asserted its own existence.
+
 `TestWhatIsReadIsCountedAndNotKept` checks that last part where it can be
 checked — every string the facts carry is searched for the address that was in
 the file, so a field added later with somewhere to put one fails in a test

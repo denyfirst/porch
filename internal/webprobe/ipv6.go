@@ -61,6 +61,11 @@ type IPv6Facts struct {
 func (p *Prober) reachOverIPv6(ctx context.Context, host string, roots *x509.CertPool) IPv6Facts {
 	out := IPv6Facts{Asked: true}
 
+	if ranOut(ctx) {
+		out.Reason = outOfTime
+		return out
+	}
+
 	addrs, err := p.lookupIPv6(ctx, host)
 	if err != nil || len(addrs) == 0 {
 		// A name with no AAAA record and a name whose lookup failed are not
@@ -84,6 +89,14 @@ func (p *Prober) reachOverIPv6(ctx context.Context, host string, roots *x509.Cer
 	// something to explain would be reading this machine's configuration for
 	// no reason at all.
 	if !answered && reason != "" {
+		// A deadline that passed mid-handshake is this program's clock, not the
+		// host's silence, and it is answered before the local network is
+		// consulted — otherwise a scan that ran out of time on a machine with
+		// no IPv6 would report the one fault it is least entitled to claim.
+		if ranOut(ctx) {
+			out.Reason = outOfTime
+			return out
+		}
 		out.NoRouteFromHere = unmeasurable(answered, reason, machineHasIPv6())
 	}
 	return out
@@ -254,3 +267,29 @@ func (p *Prober) dialFunc() DialFunc {
 	}
 	return d.DialContext
 }
+
+// What a measurement says when the scan's own deadline passed before it could
+// be made.
+//
+// Three measurements run after both chains — the file a site publishes saying
+// how to report a fault, whether it answers over IPv6, and what the other form
+// of its name does — and they share one deadline with the chains that ran
+// first. A slow site spends the budget, and without these sentences each of
+// them would then report a failure that reads as a fault in somebody's server:
+// the security contact could not be fetched, the IPv6 address did not answer,
+// the other form could not be reached. All three would be this program
+// describing its own clock (R4).
+//
+// Two wordings because the rows they appear in are built differently: one
+// stands as a sentence of its own, one follows a name.
+const (
+	outOfTime        = "the scan ran out of time before this was measured"
+	outOfTimeForName = "was not reached before the scan ran out of time"
+)
+
+// ranOut reports that the deadline has passed.
+//
+// Asked before each of the three, so that a measurement known to be impossible
+// is not attempted: a connection this program opens knowing it cannot finish is
+// a connection in somebody's log that bought nothing.
+func ranOut(ctx context.Context) bool { return ctx.Err() != nil }
