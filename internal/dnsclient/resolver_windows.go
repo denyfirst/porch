@@ -155,6 +155,12 @@ func stringValue(key syscall.Handle, name string) string {
 	if err := syscall.RegQueryValueEx(key, wide, nil, &kind, &buf[0], &size); err != nil {
 		return ""
 	}
+	// The second call is asked to write into a buffer of exactly the length the
+	// first call said it needed, and it may report a different size back. This
+	// refuses that rather than slicing past the end.
+	//
+	// #nosec G115 -- len(buf) is the size read above, which is refused unless
+	// it is under maxRegistryValue, so the conversion is exact.
 	if size > uint32(len(buf)) {
 		return ""
 	}
@@ -169,6 +175,7 @@ func subkeys(key syscall.Handle) []string {
 	name := make([]uint16, 256)
 
 	for i := uint32(0); len(out) < maxInterfaces; i++ {
+		// #nosec G115 -- name is the fixed-length slice above, so this is 256.
 		length := uint32(len(name))
 		if err := syscall.RegEnumKeyEx(key, i, &name[0], &length, nil, nil, nil, nil); err != nil {
 			// Including ERROR_NO_MORE_ITEMS, which is how the list ends.
