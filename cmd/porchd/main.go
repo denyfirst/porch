@@ -465,6 +465,14 @@ func run() int {
 	api.KeepResults(&results.Store{Dir: *resultsDir, Keep: *resultsKeep})
 	api.UseHeloName(*heloName)
 
+	// Whether anybody but this machine's operator can reach this service.
+	//
+	// It decides one thing: whether a capability meant for somebody looking at
+	// their own estate is offered without proof. A copy nobody else can reach is
+	// the command line with a browser in front of it, and the command line has
+	// never asked the operator to prove they own their own domain.
+	api.ReachableByOthers(beyondLoopback(*listen) || *allowOpen)
+
 	// The monitor the inventory endpoint asks, if the operator named one.
 	//
 	// Off unless asked for, like every other question this service puts to a
@@ -1132,22 +1140,35 @@ func createSecret(path string) error {
 // An address that does not parse is left for the listener to refuse, which
 // says so better than this could.
 func openAllowed(listen string, scoped, open bool) error {
-	if scoped || open {
-		return nil
-	}
-	host, _, err := net.SplitHostPort(listen)
-	if err != nil {
-		return nil
-	}
-	if host == "localhost" {
-		return nil
-	}
-	if ip, err := netip.ParseAddr(host); err == nil && ip.IsLoopback() {
+	if scoped || open || !beyondLoopback(listen) {
 		return nil
 	}
 	return errors.New("porchd will not listen beyond loopback without proof of control: " +
 		"anyone who can reach it could point it at any host, from this machine's address. " +
 		"Add -verification-secret-file, or -open if no one else can reach this network")
+}
+
+// beyondLoopback reports whether an address somebody other than this machine's
+// operator could reach.
+//
+// One function, because two things now depend on the answer and a second
+// reading of it is a second thing to keep in step (N6): whether this service
+// may start at all without proof, and whether a capability meant for the
+// operator's own machine is offered.
+//
+// An address that cannot be parsed is treated as reachable. Guessing in the
+// direction of "nobody else can see this" is the guess that costs something,
+// and the one that would be made silently.
+func beyondLoopback(listen string) bool {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return true
+	}
+	if host == "localhost" {
+		return false
+	}
+	ip, err := netip.ParseAddr(host)
+	return err != nil || !ip.IsLoopback()
 }
 
 // createAccess writes an access file with a new password if nothing is at

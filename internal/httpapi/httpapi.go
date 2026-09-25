@@ -194,6 +194,15 @@ type Server struct {
 	// the reverse.
 	reads *limiter
 
+	// exposed is whether anybody but this machine's operator can reach this
+	// service. Set by whoever starts it, from the address it listens on.
+	//
+	// True by default, which is the safe direction: the one capability that
+	// reads it is offered without proof only where the caller can only be the
+	// operator, and a server that was never told is not a server that has
+	// established that.
+	exposed bool
+
 	// names is the certificate transparency monitor the inventory endpoint
 	// asks, or nil where none was configured. Nil is refused rather than
 	// answered with an empty inventory (R4).
@@ -305,6 +314,7 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		limits:   limits,
 		rate:     newLimiter(limits.Burst, limits.Refill, limits.MaxTrackedIPs, now),
 		reads:    newLimiter(readBurst, readRefill, limits.MaxTrackedIPs, now),
+		exposed:  true,
 		proofs:   newLimiter(limits.ProofBurst, limits.ProofRefill, limits.MaxTrackedIPs, now),
 		proofSem: newSemaphore(limits.MaxConcurrentProofs),
 		sem:      newSemaphore(limits.MaxConcurrent),
@@ -1011,4 +1021,14 @@ func notKept(err error) string {
 		return "a result was not kept: " + linkErr.Op + ": " + linkErr.Err.Error()
 	}
 	return "a result was not kept: the results store refused it"
+}
+
+// ReachableByOthers says whether somebody other than this machine's operator
+// can reach this service.
+//
+// False is the narrower claim and is not the default: a server nobody told is
+// treated as reachable, because the capability this decides is one that assumes
+// the only caller is the person who started the process.
+func (s *Server) ReachableByOthers(reachable bool) {
+	s.exposed = reachable
 }
