@@ -60,7 +60,7 @@ const maxDeclared = 120
 // policy, and R21 leaves what a site declares as something to report. What the
 // rules grade is the handful of cases where a declaration contradicts itself
 // or the transport it arrives on.
-func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, sec SecurityTxtFacts, now time.Time) []Declaration {
+func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, sec SecurityTxtFacts, v6 IPv6Facts, now time.Time) []Declaration {
 	if !f.Answered {
 		return nil
 	}
@@ -93,6 +93,7 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, se
 
 	// Last, because it is the one row that is not about the response a visitor
 	// landed on. It cost the only other request this check makes.
+	out = append(out, Declaration{Label: "Over IPv6", Says: ipv6Line(v6)})
 	out = append(out, Declaration{Label: "Security contact", Says: securityTxtLine(sec, now)})
 	return out
 }
@@ -266,4 +267,79 @@ func securityTxtLine(f SecurityTxtFacts, now time.Time) string {
 		parts = append(parts, "signed")
 	}
 	return strings.Join(parts, "; ")
+}
+
+// IPv6Facts is whether the site answered where it published an address for the
+// newer protocol.
+//
+// The same shape internal/webprobe measures, restated here for the reason
+// every fact type in this package is restated: a rule that imported the
+// probing machinery could only be tested by making a connection.
+type IPv6Facts struct {
+	// Asked is whether this was measured at all.
+	Asked bool
+
+	// Published is how many IPv6 addresses the name has.
+	Published int
+
+	// Answered is whether one of them answered on 443.
+	Answered bool
+
+	// Verified is whether the certificate it presented was valid for the name.
+	Verified bool
+
+	// Reason is the shape of the failure, where there was one.
+	Reason string
+
+	// NoRouteFromHere is whether the machine running the scan has an IPv6
+	// address of its own at all.
+	NoRouteFromHere bool
+}
+
+// ipv6Line says whether the site answers over IPv6, and — where it does not —
+// which kind of not.
+//
+// Reported, never graded. No document requires a site to be reachable over
+// IPv6, and a great many well-run sites are not; a verdict here would be a
+// threshold this project invented (R21), and it would be a loud one.
+//
+// The row exists because a scan could not answer the question at all. A
+// dialler that tries a name's addresses until one answers is the right way to
+// reach a site and the wrong way to measure one: a host whose AAAA record
+// points at nothing answers every scan through its IPv4 address, reads
+// perfectly, and is unreachable from a network that has only the newer
+// protocol. The operator is the last to know, because their own machine has
+// both.
+func ipv6Line(f IPv6Facts) string {
+	switch {
+	case !f.Asked:
+		return "not measured"
+	case f.Published == 0:
+		// Not a fault and not a silence. The zone was asked and published no
+		// address, which is a decision somebody made.
+		return "no address published (no AAAA record)"
+	case f.NoRouteFromHere:
+		// The distinction that matters most in this row. Reporting this as a
+		// site that does not answer would be printing the scanner's network as
+		// somebody else's fault (R4).
+		return published(f.Published) + ", and this machine has no IPv6 address of its own, so nothing was measured"
+	case f.Answered && f.Verified:
+		return published(f.Published) + ", answers on 443, certificate valid for this name"
+	case f.Answered:
+		// Reachable and unusable, which is a different piece of work from
+		// unreachable for whoever has to fix it.
+		return published(f.Published) + ", answers on 443, " + f.Reason
+	case f.Reason != "":
+		return published(f.Published) + ", " + f.Reason
+	default:
+		return published(f.Published) + ", none of them could be tried"
+	}
+}
+
+// published says how many addresses the name has, in words a row can carry.
+func published(n int) string {
+	if n == 1 {
+		return "1 address published"
+	}
+	return strconv.Itoa(n) + " addresses published"
 }

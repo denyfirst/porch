@@ -428,6 +428,57 @@ rule allows — an address defined by a standard, served to everybody, and read
 for the only purpose it has. What is kept from it is a count of contacts and
 one date, never an address, and nothing about it is graded (R21).
 
+**And one handshake that carries no request.** The check opens a TLS
+connection to an address the name publishes for IPv6, reads the certificate,
+and closes it. Nothing is asked of the server, so nothing enters an
+application, and this rule — which is about requests — is not stretched by it;
+it is written here because a reader counting what a scan costs a server should
+find every connection in one place.
+
+It exists because a scan could not answer the question at all. Reaching a site
+means trying its addresses until one answers, which is correct for reaching and
+useless for measuring: a host with a working IPv4 address and an `AAAA` record
+pointing at nothing answers every scan, reads perfectly, and cannot be opened
+from a network that has only the newer protocol. The operator is the last to
+know, because their own machine has both.
+
+The row that results is reported, never graded — no document requires a site to
+be reachable over IPv6 — and it distinguishes four things that a single
+sentence would flatten: no address published, which is a decision somebody
+made; an address published in a range nothing may dial, which is usually an
+example copied into a zone; an address that answers with a certificate for
+another name, which is reachable and unusable; and an address that does not
+answer. `TestWhichPublishedAddressesCanBeTried` holds the first two apart and
+`TestWhatAnIPv6HandshakeSaysAboutTheCertificate` the last two.
+
+The fifth case is the one that matters most and is not about the scanned party
+at all. A machine with no IPv6 address of its own cannot reach any IPv6 host,
+and reporting "did not answer" from one would be printing the scanner's network
+as somebody else's fault — the distinction `safedial.SingleFamilyError` was
+written for, arriving here at the point where it decides what a report says.
+`TestTheIPv6RowSaysWhichKindOfNoItFound` asserts it about the words rather than
+the struct, because the words are what somebody acts on, and
+`TestWhoAFailedIPv6ConnectionIsAboutDependsOnThisMachine` states the judgement
+itself as a table. Both exist because a sabotage replaced the line deciding it,
+in each direction, and nothing failed either time: a scan from a machine with no
+IPv6 would have printed "did not answer" about every site there is, and a scan
+from one with IPv6 would have excused every site that really was broken.
+`TestWhatCountsAsThisMachineHavingIPv6` holds the part of that which is easiest
+to get wrong — every IPv6-capable interface has a link-local address whether or
+not a packet can leave the machine, so counting one would make every machine
+look connected and the distinction would stop existing quietly.
+
+`TestTheIPv6MeasurementRunsOnAScanAndReachesTheReport` is the plainest of them
+and was missing longest: nothing asserted the measurement happens at all, so the
+call could be deleted and every report would read *not measured* — the sentence
+that means this project did not look. It also settles where the addresses come
+from. The resolver is a hook on the prober, like the dialler, and
+`internal/webprobe/main_test.go` replaces the default for the whole package, so
+no test in it sends a query to anybody. Every name these tests probe is a
+reserved one that resolves to nothing, so nothing would have come back and
+nothing would have failed — the traffic would simply have been there, from a
+project whose argument is that it can be checked.
+
 `TestWhatIsReadIsCountedAndNotKept` checks that last part where it can be
 checked — every string the facts carry is searched for the address that was in
 the file, so a field added later with somewhere to put one fails in a test

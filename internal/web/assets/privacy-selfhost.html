@@ -129,7 +129,10 @@
         HTTP, following redirects a bounded number of times, and one
         <code>GET</code> of <code>/.well-known/security.txt</code> over HTTPS —
         the file RFC 9116 defines for exactly this, of which a count of
-        contacts and one date are kept, never an address.
+        contacts and one date are kept, never an address. One TLS handshake is
+        also opened to an address the name publishes for IPv6, carrying no
+        request at all, to see whether the site answers where it says it can
+        be reached; where no such address is published, nothing is dialled.
         {{if .ReadsPages}}The final page is read, once, to one megabyte, and
         only a short list of facts is kept from it.{{else}}No page body is
         read.{{end}}

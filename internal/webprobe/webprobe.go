@@ -28,6 +28,12 @@
 //   - One GET of "/", over HTTPS and over plaintext, and one of
 //     /.well-known/security.txt. Nothing else.
 //
+//   - One TLS handshake, carrying no request, to an address the name publishes
+//     for IPv6. It is opened, the certificate is read, and it is closed. A
+//     dialler that tries a name's addresses until one answers cannot report on
+//     the one that did not, and that is the address a network with only the
+//     newer protocol has to use.
+//
 //   - No path is ever constructed here. After the first request the only
 //     addresses fetched are the ones a Location header names. There is no
 //     probing of /admin, no /backup.zip, and no second guess of any kind: this
@@ -82,13 +88,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/markup"
-	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/securitytxt"
 	"github.com/denyfirst/porch/internal/truststore"
 )
@@ -145,6 +151,16 @@ type Prober struct {
 	// MaxRedirects bounds one chain. Zero means five. Negative means none are
 	// followed, which is what a test of the first response wants.
 	MaxRedirects int
+
+	// LookupIPv6 returns the addresses a name publishes for IPv6. Nil selects
+	// this machine's resolver, which is the one the dialler uses to reach a
+	// name by the same route.
+	//
+	// A field for the same reason Dial is one: so that a test of what this
+	// concludes about a name is not also a test of whatever the machine's
+	// resolver happens to answer today, and so that nothing in a test suite
+	// sends a query to anybody.
+	LookupIPv6 func(ctx context.Context, host string) ([]netip.Addr, error)
 
 	// Roots is the trust store every certificate on a chain is judged against.
 	//
@@ -436,6 +452,11 @@ type Report struct {
 	// for (R4).
 	SecurityTxt securitytxt.Facts `json:"securityTxt"`
 
+	// IPv6 is whether the site answered on an address it published for the
+	// newer protocol, measured separately because a dialler that tries
+	// addresses until one answers can never report on the one that did not.
+	IPv6 IPv6Facts `json:"ipv6"`
+
 	// TrustStoreUnreadable reports that this machine's certificate store could
 	// not be read, so nothing on either chain was verified against anything.
 	//
@@ -522,6 +543,12 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 		f := &securitytxt.Fetcher{Client: client, UserAgent: p.userAgent(), Timeout: p.requestTimeout()}
 		report.SecurityTxt = f.Fetch(ctx, host)
 	}
+
+	// And whether the site answers where it says it can be reached. Not gated
+	// on either chain: a name that answers only over IPv6 is exactly the case
+	// this is for, and a check that skipped it when IPv4 was silent would be
+	// blind to the site it describes best.
+	report.IPv6 = p.reachOverIPv6(ctx, host, roots)
 
 	return report, nil
 }
@@ -865,17 +892,7 @@ func (p *Prober) client() *http.Client {
 // which fails every handshake closed, and a chain of failed handshakes reads as
 // a site that is not reachable over HTTPS unless something says otherwise (R4).
 func (p *Prober) clientWith(roots *x509.CertPool) *http.Client {
-	dial := p.Dial
-	if dial == nil {
-		d := &safedial.Dialer{
-			Timeout: p.requestTimeout(),
-			// Ports as well as addresses. A redirect can name any port on any
-			// host, and a probe that follows one has been aimed by the server
-			// rather than by the operator.
-			AllowedPorts: []string{securePort, plainPort},
-		}
-		dial = d.DialContext
-	}
+	dial := p.dialFunc()
 
 	return &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error {

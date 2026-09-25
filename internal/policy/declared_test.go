@@ -18,7 +18,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		Answered: true,
 		Present:  map[string]bool{"X-Frame-Options": true},
 		Values:   map[string]string{"X-Frame-Options": "DENY"},
-	}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
+	}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
 
 	said := map[string]string{}
 	for _, r := range rows {
@@ -56,7 +56,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 		{Name: "a", Secure: true},
 		{Name: "b", Secure: true, HTTPOnly: true},
 		{Name: "c", SameSite: "Lax"},
-	}, SecurityTxtFacts{}, testNow)
+	}, SecurityTxtFacts{}, IPv6Facts{}, testNow)
 	for _, r := range counted {
 		if r.Label == "Cookies" && r.Says != "3 set; 2 Secure, 1 HttpOnly, 1 with SameSite" {
 			t.Errorf("the cookies are counted as %q", r.Says)
@@ -69,7 +69,7 @@ func TestEveryDeclarationIsListedWhetherOrNotItWasThere(t *testing.T) {
 	// A response nobody reached declares nothing at all. An empty list says the
 	// question was never put; a list of twelve "none" rows would say the site
 	// answered and carried none of them.
-	if got := Declarations(HeaderFacts{}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow); got != nil {
+	if got := Declarations(HeaderFacts{}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow); got != nil {
 		t.Errorf("a response nobody reached declared %v", got)
 	}
 }
@@ -85,7 +85,7 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 	says := func(f HeaderFacts, c ContentFacts) map[string]string {
 		f.Answered = true
 		out := map[string]string{}
-		for _, r := range Declarations(f, c, nil, SecurityTxtFacts{}, testNow) {
+		for _, r := range Declarations(f, c, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow) {
 			out[r.Label] = r.Says
 		}
 		return out
@@ -144,7 +144,7 @@ func TestTheContentPolicyAndThePageAreSaidInWords(t *testing.T) {
 // own service answers HTTP/1.1 on purpose, which is the case that decides it:
 // a rule here would grade a deliberate choice as a fault.
 func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
-	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
+	rows := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/2.0"}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
 	if len(rows) == 0 || rows[0].Label != "Served over" {
 		t.Fatalf("the first thing a report says about the response is %+v", rows)
 	}
@@ -154,7 +154,7 @@ func TestTheProtocolIsAFactAndNotAFinding(t *testing.T) {
 
 	// And an older version is the same kind of row, carrying no verdict with
 	// it: nothing in this package turns it into one.
-	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
+	old := Declarations(HeaderFacts{Answered: true, Protocol: "HTTP/1.1"}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
 	if old[0].Says != "HTTP/1.1" {
 		t.Errorf("an older protocol reads %q", old[0].Says)
 	}
@@ -209,7 +209,7 @@ func TestTheSecurityContactRowSaysWhichNothingItFound(t *testing.T) {
 	// And the row is drawn on every answered scan, including the one where
 	// nothing was found: a row that disappears when there is nothing to say
 	// reads as a question nobody asked (R4).
-	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, testNow)
+	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
 	var seen bool
 	for _, r := range rows {
 		if r.Label == "Security contact" {
@@ -218,5 +218,64 @@ func TestTheSecurityContactRowSaysWhichNothingItFound(t *testing.T) {
 	}
 	if !seen {
 		t.Errorf("no security contact row was drawn: %+v", rows)
+	}
+}
+
+// The IPv6 row says which kind of "no" it found, and never blames a site for
+// the scanner's own network.
+//
+// The distinction the row exists for is the one in the middle: a name that
+// publishes an address and does not answer on it is a real fault, and a
+// machine with no IPv6 address of its own learns nothing about that name. Said
+// the same way, the second becomes a finding about somebody else's server
+// arrived at from a fact about this one (R4).
+func TestTheIPv6RowSaysWhichKindOfNoItFound(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		facts IPv6Facts
+		want  string
+	}{
+		{"never measured", IPv6Facts{}, "not measured"},
+		{"the zone publishes none", IPv6Facts{Asked: true},
+			"no address published (no AAAA record)"},
+		{"published and answering", IPv6Facts{Asked: true, Published: 1, Answered: true, Verified: true},
+			"1 address published, answers on 443, certificate valid for this name"},
+		{"published and silent", IPv6Facts{Asked: true, Published: 2, Reason: "the address did not answer on 443"},
+			"2 addresses published, the address did not answer on 443"},
+		{"answering with the wrong certificate", IPv6Facts{
+			Asked: true, Published: 1, Answered: true,
+			Reason: "the certificate presented over IPv6 did not verify for this name",
+		}, "1 address published, answers on 443, the certificate presented over IPv6 did not verify for this name"},
+		{"nothing to measure from", IPv6Facts{
+			Asked: true, Published: 1, NoRouteFromHere: true,
+			Reason: "the address did not answer on 443",
+		}, "1 address published, and this machine has no IPv6 address of its own, so nothing was measured"},
+		{"published in a range nothing may dial", IPv6Facts{Asked: true, Published: 1},
+			"1 address published, none of them could be tried"},
+	} {
+		if got := ipv6Line(c.facts); got != c.want {
+			t.Errorf("%s read as %q, not %q", c.name, got, c.want)
+		}
+	}
+
+	// A machine with no route of its own never produces a sentence that reads
+	// as a fault in the site. This is the whole point of the field, so it is
+	// asserted about the words rather than about the struct.
+	blind := ipv6Line(IPv6Facts{Asked: true, Published: 1, NoRouteFromHere: true, Reason: "the address did not answer on 443"})
+	if strings.Contains(blind, "did not answer") {
+		t.Errorf("a scan from a machine with no IPv6 said the site did not answer: %q", blind)
+	}
+
+	// And the row is drawn on every answered scan, including the one where
+	// there is nothing to say (R4).
+	rows := Declarations(HeaderFacts{Answered: true}, ContentFacts{}, nil, SecurityTxtFacts{}, IPv6Facts{}, testNow)
+	var seen bool
+	for _, r := range rows {
+		if r.Label == "Over IPv6" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Errorf("no IPv6 row was drawn: %+v", rows)
 	}
 }

@@ -41,6 +41,22 @@
     </p>
 
     <p>
+      <strong>And one handshake, carrying no request, to an address the name
+      publishes for IPv6.</strong> It is opened, the certificate is read, and
+      it is closed; nothing is asked of the server. This exists because a scan
+      could not answer the question otherwise. Reaching a site means trying
+      its addresses until one answers, which is the right way to reach it and
+      the wrong way to measure it: a host with a working IPv4 address and an
+      <code>AAAA</code> record pointing at nothing answers every scan, reads
+      perfectly, and cannot be opened at all from a network that has only the
+      newer protocol. The operator is the last to find out, because their own
+      machine has both. Where the name publishes no <code>AAAA</code> record,
+      no connection is made and the report says so — that is a decision
+      somebody made and not a fault. Nothing here is graded either: no
+      document requires a site to be reachable over IPv6.
+    </p>
+
+    <p>
       <strong>A guess and a registered address are different things.</strong>
       This paragraph read <em>no guessing under
       <code>/.well-known</code></em> until September 2026, and that was wrong
