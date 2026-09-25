@@ -238,6 +238,9 @@ func TestTheIPv6RowSaysWhichKindOfNoItFound(t *testing.T) {
 		{"never measured", IPv6Facts{}, "not measured"},
 		{"the zone publishes none", IPv6Facts{Asked: true},
 			"no address published (no AAAA record)"},
+		{"nothing was looked up at all", IPv6Facts{
+			Asked: true, Reason: "the scan ran out of time before this was measured",
+		}, "the scan ran out of time before this was measured"},
 		{"published and answering", IPv6Facts{Asked: true, Published: 1, Answered: true, Verified: true},
 			"1 address published, answers on 443, certificate valid for this name"},
 		{"published and silent", IPv6Facts{Asked: true, Published: 2, Reason: "the address did not answer on 443"},

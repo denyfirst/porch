@@ -551,6 +551,20 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	if answered(report.Secure) {
 		f := &securitytxt.Fetcher{Client: client, UserAgent: p.userAgent(), Timeout: p.requestTimeout()}
 		report.SecurityTxt = f.Fetch(ctx, host)
+
+		// A failure after the deadline passed is this program's clock rather
+		// than a fault in somebody's server, and "the file could not be
+		// fetched" would read as the second (R4).
+		//
+		// Checked here rather than before the fetch as well. A guard in front
+		// of it would look more careful and buy nothing: the transport refuses
+		// a request on an expired context before it dials, so no connection is
+		// made either way, and the report comes out the same. A sabotage
+		// proved it — removing the earlier guard changed nothing any test
+		// could see, because there was nothing to see.
+		if report.SecurityTxt.Reason != "" && ranOut(ctx) {
+			report.SecurityTxt = securitytxt.Facts{Asked: true, Reason: outOfTime}
+		}
 	}
 
 	// And whether the site answers where it says it can be reached. Not gated

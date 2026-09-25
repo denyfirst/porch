@@ -83,6 +83,16 @@ func (p *Prober) counterpart(ctx context.Context, client *http.Client, host stri
 	name := counterpartName(host)
 	out := CounterpartFacts{Asked: true, Name: name}
 
+	// Before anything is asked of anybody, including whatever decides which
+	// names this deployment may reach. That decision is not free — an
+	// installation may have to look the name up, or consult what it has been
+	// shown control of — and asking it on behalf of a measurement that cannot
+	// finish is work done for nothing.
+	if ranOut(ctx) {
+		out.Reason = outOfTimeForName
+		return out
+	}
+
 	if why := w.may(ctx, name); why != "" {
 		// Not a failure and not a fault. This deployment was told which names
 		// it may reach and that one is not among them, which the row says
@@ -98,6 +108,10 @@ func (p *Prober) counterpart(ctx context.Context, client *http.Client, host stri
 		// "the other form of the name could not be reached" here, because the
 		// row is about whether the two forms agree and the operator's next
 		// step is to look at that name properly.
+		if ranOut(ctx) {
+			out.Reason = outOfTimeForName
+			return out
+		}
 		out.Reason = "could not be reached"
 		return out
 	}
