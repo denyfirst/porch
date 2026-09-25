@@ -141,6 +141,16 @@ var defaultPorts = []string{"443", "80"}
 type Checker struct {
 	// Resolver answers the lookups. Required: which resolver answers decides
 	// what the report means, and one picked here would hide that.
+	//
+	// It is called from several goroutines at once and has to be safe for
+	// that. internal/dnsclient.Client is, because it assigns to none of its own
+	// fields — every one of them is configuration read on the way through, and
+	// what a lookup needs is built per call.
+	//
+	// Written down because it was not, and the first thing to find out was a
+	// test stub that appended to a slice from every goroutine. The race
+	// detector caught it in CI on a change that passed every gate on the
+	// machine it was written on, which is the whole reason that job runs.
 	Resolver Resolver
 
 	// Dial opens the connection. Nil selects safedial, which refuses private,

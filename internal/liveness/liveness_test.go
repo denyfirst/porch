@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,15 +13,27 @@ import (
 )
 
 // stubResolver answers from a table, so no test here asks anybody anything.
+//
+// Locked, because Checker calls a resolver from several goroutines at once and
+// a stub that is not safe for that is a stub testing something the real thing
+// does not do. This one was not, and the race detector said so in CI after
+// every gate passed on the machine it was written on.
 type stubResolver struct {
 	answers map[string]dnsclient.ZoneAnswer
 	fail    map[string]bool
-	asked   []string
+
+	mu    sync.Mutex
+	asked []string
 }
 
 func (s *stubResolver) LookupAddresses(_ context.Context, name string, qtype uint16) (dnsclient.ZoneAnswer, error) {
+	s.mu.Lock()
 	s.asked = append(s.asked, name)
-	if s.fail[name] {
+	failed := s.fail[name]
+	answer := s.answers[name]
+	s.mu.Unlock()
+
+	if failed {
 		return dnsclient.ZoneAnswer{}, errors.New("resolver said no, with detail nobody should see")
 	}
 	if qtype == dnsclient.TypeAAAA {
@@ -28,7 +41,7 @@ func (s *stubResolver) LookupAddresses(_ context.Context, name string, qtype uin
 		// does by putting the address under the same name.
 		return dnsclient.ZoneAnswer{}, nil
 	}
-	return s.answers[name], nil
+	return answer, nil
 }
 
 func addrs(t *testing.T, list ...string) []netip.Addr {
@@ -143,12 +156,18 @@ func TestNothingPrivateIsEverDialled(t *testing.T) {
 		"d.example.test": {Addresses: addrs(t, "fd00::1"), Existed: true},
 	}}
 
+	// Locked for the same reason the resolver above is: the dialler is called
+	// from every goroutine a check runs in, so a recorder that is not safe for
+	// that is recording a race rather than a dial.
+	var mu sync.Mutex
 	var dialled []string
 	c := &Checker{
 		Resolver: resolver,
 		Timeout:  2 * time.Second,
 		Dial: func(_ context.Context, _, address string) (net.Conn, error) {
+			mu.Lock()
 			dialled = append(dialled, address)
+			mu.Unlock()
 			return nil, errors.New("refused")
 		},
 	}
