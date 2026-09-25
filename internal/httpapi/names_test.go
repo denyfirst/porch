@@ -141,3 +141,64 @@ func TestTheInventoryEndpointTakesADomain(t *testing.T) {
 		}
 	}
 }
+
+// An installation nobody else can reach produces an inventory without proof.
+//
+// It is the command line with a browser in front of it. Asking the operator to
+// publish a DNS record proving to themselves that they own their own domain,
+// on a copy of the service that only they can reach, is friction bought with no
+// safety — and friction bought with no safety is how a rule comes to be turned
+// off altogether.
+//
+// What the rule is for is the other case, and that case is still refused: a
+// service somebody else can reach, answering for anybody, would be an anonymous
+// reconnaissance endpoint with this project's name on it.
+func TestAnInstallationNobodyElseCanReachNeedsNoProof(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+	monitor := &stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Distinct: 1, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.example.test"}},
+	}}
+	s.SearchNames(monitor)
+
+	// Reachable by others, which is what a server that was never told assumes.
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"example.test"}`, "203.0.113.50:5000")); got != "proof_required" {
+		t.Errorf("a reachable installation with no verification answered %q", got)
+	}
+
+	// And the same server, told that nobody else can reach it.
+	s.ReachableByOthers(false)
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"example.test"}`, "203.0.113.51:5000")
+	if w.Code != 200 {
+		t.Fatalf("an installation nobody else can reach answered %d: %s", w.Code, w.Body.String())
+	}
+	if monitor.was() != "example.test" {
+		t.Errorf("the monitor was asked about %q", monitor.was())
+	}
+}
+
+// Configuring verification is opting into it, and it is then enforced wherever
+// the service listens.
+//
+// The loopback exception is about an installation that was never given a scope.
+// An operator who set one has said what they want, and a copy that quietly
+// stopped enforcing it because of the address it bound to would be answering a
+// question they had already answered.
+func TestVerificationConfiguredIsEnforcedEvenOnLoopback(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.ReachableByOthers(false)
+
+	monitor := &stubMonitor{estate: ctsearch.Estate{Asked: true}}
+	s.SearchNames(monitor)
+
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.60:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain on a loopback installation answered %q", got)
+	}
+	if was := monitor.was(); was != "" {
+		t.Errorf("the monitor was asked about %q for an unproven domain", was)
+	}
+}

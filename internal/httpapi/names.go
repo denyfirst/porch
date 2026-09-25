@@ -51,31 +51,54 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scope := s.scanner.Verify
-	if scope == nil {
-		s.refuse(w, http.StatusForbidden, "proof_required",
-			"An inventory of a domain's names is only produced for domains this "+
-				"installation has been shown control of, and this installation has no "+
-				"verification configured.")
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), s.limits.RequestTimeout)
 	defer cancel()
 
-	switch _, err := scope.CoversSigned(ctx, t.host, verify.AnyPort); {
-	case err == nil:
-	case errors.Is(err, verify.ErrNotVerified):
+	// What decides this is whether anybody else can reach this installation,
+	// not whether verification happens to be configured.
+	//
+	// The first version asked the second question and refused wherever the
+	// answer was no, which put the same operator in two places at once: the
+	// command line produced an inventory of their own estate immediately, and
+	// a copy of porchd on the same laptop, reachable by nobody, refused until
+	// they published a DNS record to prove to themselves that they owned their
+	// own domain. That is friction bought with no safety, and friction bought
+	// with no safety is how a rule gets turned off entirely.
+	//
+	// So a service nobody else can reach is the command line with a browser in
+	// front of it, and the command line has never asked for proof (A30, N12).
+	// A service anybody else can reach is the case the rule is for: what this
+	// produces is the shape of an estate, the scanned party cannot see it
+	// happen, and answering it for strangers would make this an anonymous
+	// reconnaissance endpoint with the project's name on it.
+	scope := s.scanner.Verify
+	switch {
+	case scope != nil:
+		// Verification configured is an operator opting into enforcement, and
+		// it is then enforced wherever the service listens — exactly as it is
+		// for every check.
+		switch _, err := scope.CoversSigned(ctx, t.host, verify.AnyPort); {
+		case err == nil:
+		case errors.Is(err, verify.ErrNotVerified):
+			s.refuse(w, http.StatusForbidden, "proof_required",
+				"Publish the proof record for this domain first. An inventory is only "+
+					"produced for domains this installation has been shown control of.")
+			return
+		default:
+			// The lookup failed, which is not the domain being unverified.
+			// Telling somebody to publish a record they have already published
+			// would send them to the wrong place.
+			s.refuse(w, http.StatusBadGateway, "scan_failed",
+				"The proof record could not be looked up. Try again shortly.")
+			return
+		}
+
+	case s.exposed:
 		s.refuse(w, http.StatusForbidden, "proof_required",
-			"Publish the proof record for this domain first. An inventory is only "+
-				"produced for domains this installation has been shown control of.")
-		return
-	default:
-		// The lookup failed, which is not the domain being unverified. Telling
-		// somebody to publish a record they have already published would send
-		// them to the wrong place.
-		s.refuse(w, http.StatusBadGateway, "scan_failed",
-			"The proof record could not be looked up. Try again shortly.")
+			"An inventory of a domain's names is only produced for domains this "+
+				"installation has been shown control of, and this installation has no "+
+				"verification configured. Add -verification-secret-file, or reach it "+
+				"from the machine it runs on.")
 		return
 	}
 

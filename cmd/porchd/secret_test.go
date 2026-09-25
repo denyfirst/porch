@@ -123,3 +123,36 @@ func TestAnOpenServiceStaysOnLoopback(t *testing.T) {
 		t.Error("the open-service check is not made before listening")
 	}
 }
+
+// What counts as an address somebody else could reach.
+//
+// Two things read it now — whether this service may start at all without proof,
+// and whether a capability meant for the operator's own machine is offered — so
+// it is one function and this says what it answers. An address that cannot be
+// parsed counts as reachable: guessing in the direction of "nobody else can see
+// this" is the guess that costs something, and the one that would be made
+// silently.
+func TestWhatCountsAsReachableByAnybodyElse(t *testing.T) {
+	for _, listen := range []string{"127.0.0.1:8080", "[::1]:8080", "localhost:8080", "127.1.2.3:9"} {
+		if beyondLoopback(listen) {
+			t.Errorf("%s was read as reachable by others", listen)
+		}
+	}
+	for _, listen := range []string{
+		"0.0.0.0:8443", ":8443", "[::]:8443", "192.0.2.10:443", "scanner.example:443",
+		// Unparseable, and therefore assumed reachable.
+		"", "not an address", "1.2.3.4",
+	} {
+		if !beyondLoopback(listen) {
+			t.Errorf("%s was read as reachable by nobody", listen)
+		}
+	}
+
+	// And the service tells the API the same answer it decided to start on,
+	// rather than working it out a second time somewhere else.
+	source := repoFile(t, "cmd/porchd/main.go")
+	if !strings.Contains(source, "api.ReachableByOthers(beyondLoopback(*listen) || *allowOpen)") {
+		t.Error("the service does not tell the API whether anybody else can reach it, " +
+			"or works it out from something other than the address it listens on")
+	}
+}

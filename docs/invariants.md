@@ -1495,11 +1495,31 @@ doing, which is assembling it, on request, for people who will not say who they
 are.
 
 So `POST /api/v1/names/scan` requires proof on every deployment that has a
-scope, and **refuses where no scope is configured at all** — which is the
-opposite of how the checks behave, and deliberately. The checks read "no
-verification configured" as an installation somebody runs for themselves. Here
-that reading is not available: "nobody has proven anything" must not become
-"everybody may ask".
+scope, and refuses without one **wherever anybody else can reach the service**.
+
+The measure is reachability rather than configuration, and the first version got
+that wrong. It asked whether verification was configured and refused wherever
+the answer was no, which put one operator in two places at once: the command
+line produced an inventory of their own estate immediately, while a copy of
+`porchd` on the same laptop, reachable by nobody, refused until they published a
+DNS record proving to themselves that they owned their own domain. That is
+friction bought with no safety, and friction bought with no safety is how a rule
+comes to be turned off altogether.
+
+A service nobody else can reach is the command line with a browser in front of
+it, and the command line has never asked for proof (A30). A service anybody else
+can reach is the case the rule is for. Where verification *is* configured it is
+enforced wherever the service listens, because setting it up is an operator
+saying what they want, and a copy that quietly stopped enforcing it because of
+the address it bound to would be answering a question they had already answered.
+
+`cmd/porchd.beyondLoopback` decides it, once, and the same answer decides
+whether the service may start at all without proof —
+`TestWhatCountsAsReachableByAnybodyElse` holds both halves, including that an
+address which cannot be parsed counts as reachable.
+`TestAnInstallationNobodyElseCanReachNeedsNoProof` and
+`TestVerificationConfiguredIsEnforcedEvenOnLoopback` hold the two sides of the
+rule.
 
 The refusals are ordered for a second reason.
 `TestTheMonitorIsNotDescribedToSomebodyWhoProvedNothing` holds it: proof is
