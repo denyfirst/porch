@@ -1,0 +1,103 @@
+<article class="prose">
+
+    <h1>What the inventory reads,<br>and what it cannot see.</h1>
+
+    <p class="lede">
+      This page lists the names under a domain that appear in publicly logged
+      certificates. It is the only part of this installation that produces a
+      list of hosts rather than a verdict about one, and the difference decides
+      how the list should be read.
+    </p>
+
+    <h2 id="sent">What is sent to your domain</h2>
+
+    <p>
+      <strong>Nothing.</strong> Not a packet, not a request, not a lookup of a
+      name this program made up. The names come from a certificate
+      transparency monitor: every publicly trusted certificate is submitted to
+      append-only logs before a browser will accept it, and the names a
+      certificate covers are written inside it. Whoever obtained the
+      certificate published those names, and this reads them back.
+    </p>
+
+    <p>
+      <strong>No name is guessed.</strong> There is no wordlist, no attempt at
+      <code>mail</code>, <code>dev</code>, <code>staging</code> or
+      <code>old</code>. A tool that tried those would be enumerating an estate,
+      which is a different instrument with a different argument for existing —
+      and it would send that guessing to your servers. The boundary is written
+      into this project as N7 and it is not moved for this page.
+    </p>
+
+    <h2 id="asked">Who is asked, and what they learn</h2>
+
+    <p>
+      A monitor this project does not run: crt.sh, or SSLMate's index,
+      whichever this installation was started with. The question contains your
+      domain, so what that monitor learns is that somebody is looking at it.
+      The certificates themselves are already public — that is what
+      transparency means — so nothing about the domain is disclosed by asking.
+      What is disclosed is the asking.
+    </p>
+
+    <p>
+      That is why an inventory is produced only for a domain this installation
+      has been shown control of, and why an installation with no verification
+      configured produces none at all. Everything else here measures how a host
+      answers, which is what any visitor learns and which the scanned party can
+      see happening. This produces the shape of an estate, and the scanned
+      party cannot see it happen at all.
+    </p>
+
+    <h2 id="cannot">What it cannot show</h2>
+
+    <p>
+      <strong>This is not a list of your hosts, and reading it as one is the
+      mistake it is built to prevent.</strong> Three kinds of name are missing
+      from it and no amount of searching will produce them.
+    </p>
+
+    <ul class="plain">
+      <li><strong>A host with no publicly trusted certificate.</strong> Plain
+        HTTP, a service that is not HTTPS at all, or anything behind a private
+        authority leaves no trace in a public log.</li>
+      <li><strong>Anything behind a wildcard.</strong>
+        <code>*.example.com</code> in a log says the hosts exist and nothing
+        about what they are called, which is exactly what a wildcard is for.
+        The report counts the wildcards it found, because that count is the
+        measure of how much it could not see.</li>
+      <li><strong>A name dropped from a monitor's history</strong>, or logged
+        before that monitor's records begin.</li>
+    </ul>
+
+    <p>
+      Every one of those is a name a port scan would find and this will not.
+      The two methods answer different questions, and a report that let its
+      reader forget which one it answered would be worse than no report: a list
+      of forty names, handed to a security team as an estate inventory and then
+      shown to be short by a scan, costs whoever handed it over more than the
+      list was worth. The limits are printed under every inventory for that
+      reason, including the short tidy ones where a reader is most inclined to
+      believe the list is complete.
+    </p>
+
+    <h2 id="graded">Nothing here is graded</h2>
+
+    <p>
+      No document says which names an estate ought to have, so a verdict would
+      be a threshold this project invented — and a threshold nobody can argue
+      with is one nobody can correct either. There is no rule set behind this
+      page and no version to compare between two runs. What there is, is a
+      list, the dates each name was covered between, and the sentence saying
+      what the list is missing.
+    </p>
+
+    <p>
+      The dates are worth reading. A name whose newest certificate expired two
+      years ago is either gone or is now covered by a wildcard, and an operator
+      reading an inventory of their own estate is usually looking for exactly
+      those. Which of the two it is, this does not say: it has asked the host
+      nothing, and saying would be inventing the answer.
+    </p>
+
+  </article>

@@ -219,6 +219,24 @@ var pages = map[string]*page{
 			Products:     promises.Products,
 		},
 	},
+	// The name inventory, and the page that says what it cannot show.
+	//
+	// Its own address space rather than a section under a check: it grades
+	// nothing, it is about a domain rather than a host, and it carries a
+	// paragraph about its own limits that would read as a disclaimer if it sat
+	// inside a graded report.
+	"/names": {
+		Title:       "Names in your certificates — Porch by denyfirst",
+		Description: "Lists the names under a domain that appear in publicly logged certificates. Nothing is sent to the domain, and nothing is graded.",
+		Fragment:    "assets/names.html",
+		Script:      true,
+	},
+	"/names/method": {
+		Title:       "What the name inventory reads, and what it cannot see — Porch by denyfirst",
+		Description: "Where the names come from, who is asked, why proof of control is required, and the three kinds of name that never appear.",
+		Fragment:    "assets/names-method.html",
+	},
+
 	"/terms": {
 		Title:       "Terms of use — denyfirst",
 		Description: "What you agree to when you use this service, and what it does not promise.",
@@ -510,6 +528,15 @@ func init() {
 			Description: "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
 			Fragment:    "assets/home.html",
 		}
+		// And the name inventory does not exist here at all.
+		//
+		// This deployment promises it queries no transparency log (N12), so the
+		// endpoint refuses every time. A page inviting a visitor to list an
+		// estate, which then refuses, is worse than no page: it advertises a
+		// capability this deployment has undertaken not to have.
+		delete(pages, "/names")
+		delete(pages, "/names/method")
+
 		pages["/porch"] = &page{
 			Title:       "Porch — TLS, web and mail checks that cite their sources — denyfirst",
 			Description: "Porch is a self-hosted scanner: the TLS handshake and certificate, how a site is reached, and what a domain's DNS says about its mail. Every verdict cites the document behind it, and nothing about a scan is recorded. See it run on our own domain.",

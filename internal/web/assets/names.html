@@ -1,0 +1,48 @@
+<section class="ask">
+    <!--
+      What this page is for, said in the line people read. It is the only part
+      of this installation that produces a list of hosts rather than a verdict
+      about one, and the difference is worth stating before anybody types a
+      name.
+    -->
+    <h1>The names<br>your certificates<br>have already published.</h1>
+
+    <form class="ask-form" id="scan-form" autocomplete="off" data-check="names">
+      <label class="field-label" for="target">Domain</label>
+      <div class="field-row">
+        <input
+          class="field"
+          type="text"
+          id="target"
+          name="target"
+          placeholder="example.com"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
+          enterkeyhint="go"
+          aria-describedby="field-help">
+        <button class="submit" type="submit" id="submit">List</button>
+      </div>
+
+      <p class="field-help" id="field-help">
+        A bare domain, and one you have proven control of &mdash; this is the
+        one thing here that is produced only for a domain this installation has
+        been shown to belong to you, because it lists an estate rather than
+        measuring a host. Nothing is sent to the domain at all: the names come
+        from a public register of certificates.
+        <a href="/names/method">What is asked, and what it cannot show</a> is
+        written out in full.
+      </p>
+    </form>
+
+    <noscript>
+      <p class="noscript">
+        Listing names needs JavaScript, because the answer is fetched and
+        rendered in the page. The same list is available from the command line
+        tool in the repository with <code>-check names</code>, which needs
+        nothing but Go.
+      </p>
+    </noscript>
+  </section>
+
+  <section class="result" id="result" aria-live="polite" aria-atomic="false" hidden></section>

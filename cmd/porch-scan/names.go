@@ -150,7 +150,7 @@ func printNamesLimits(w io.Writer, e ctsearch.Estate) {
 
 	if e.Wildcards > 0 {
 		fmt.Fprintf(w, "    A wildcard covers hosts without naming them, and %d of the names\n"+
-			"    above %s one.\n", e.Wildcards, plural(e.Wildcards, "is", "are"))
+			"    above %s.\n", e.Wildcards, plural(e.Wildcards, "is a wildcard", "are wildcards"))
 	}
 
 	fmt.Fprintf(w, "    This is an inventory, not a verdict: nothing above is graded, because\n")

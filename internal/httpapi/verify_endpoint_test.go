@@ -157,8 +157,19 @@ func TestTheVerifyRecordsAreBounded(t *testing.T) {
 	}
 }
 
-// Only the verify endpoint is exempt from being driven as a scan.
-func TestOnlyTheVerifyEndpointAsksWithoutScanning(t *testing.T) {
+// Only the endpoints that open nothing to the target are exempt from being
+// driven as a scan.
+//
+// Two of them, and the list is pinned rather than counted because a route
+// exempt here escapes a whole class of guards at once. Adding a third is a
+// decision somebody makes deliberately and writes down.
+//
+// Both qualify for the same reason: neither connects to the name it is given.
+// The verify endpoint looks the name up in DNS. The inventory endpoint asks a
+// transparency monitor, whose own address goes through the refusal of private
+// destinations in internal/ctsearch — so the boundary those tests check, that a
+// target may not be a private or reserved address, has nothing to bind to here.
+func TestOnlyTheEndpointsThatOpenNothingAskWithoutScanning(t *testing.T) {
 	s := New(offlineScanner(), Limits{}, nil)
 	var asking []string
 	for _, rt := range s.routes {
@@ -166,8 +177,14 @@ func TestOnlyTheVerifyEndpointAsksWithoutScanning(t *testing.T) {
 			asking = append(asking, rt.method+" "+rt.path)
 		}
 	}
-	if len(asking) != 1 || asking[0] != "POST /api/v1/verify" {
-		t.Errorf("routes exempt from the scan boundary tests: %v", asking)
+	want := []string{"POST /api/v1/verify", "POST /api/v1/names/scan"}
+	if len(asking) != len(want) {
+		t.Fatalf("routes exempt from the scan boundary tests: %v, want %v", asking, want)
+	}
+	for i, path := range want {
+		if asking[i] != path {
+			t.Errorf("exempt route %d is %q, want %q", i, asking[i], path)
+		}
 	}
 }
 

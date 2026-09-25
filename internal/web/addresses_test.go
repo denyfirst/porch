@@ -49,7 +49,11 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 	//
 	// Mail has a method page and no page of its own: it is run from the console
 	// and the Porch page, which run every check.
-	checks := []string{"/tls", "/web", "/mail", "/dns"}
+	// The inventory has its own prefix although it grades nothing, because it
+	// has its own address space: a page and the method page that says what it
+	// cannot show. Listing it as a check here is a statement about addresses
+	// rather than about verdicts.
+	checks := []string{"/tls", "/web", "/mail", "/dns", "/names"}
 
 	underACheck := func(path string) bool {
 		for _, prefix := range checks {

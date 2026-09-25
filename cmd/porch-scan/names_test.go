@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 	for _, want := range []string{
 		"4 distinct names across 4 certificates",
 		"1, each covering hosts it does not name",
-		"and 1 of the names\n    above is one.",
+		"and 1 of the names\n    above is a wildcard.",
 		"1 on the same certificates, under other domains, not listed",
 		"old-portal.example.test",
 		"from 2021-03-01, certificates to 2022-06-01",
@@ -136,4 +137,52 @@ func TestTheLimitsArePrintedEvenWhenNothingWasHidden(t *testing.T) {
 	if strings.Contains(out, "covers hosts without naming them") {
 		t.Errorf("an inventory with no wildcards mentions one:\n%s", out)
 	}
+}
+
+// The page says what the command line says, in the same words.
+//
+// Two renderers composing one claim from the same facts is how the two faces of
+// a report drift apart, and this project has caught that happening before
+// (R16). It matters more here than anywhere: the paragraph these share is the
+// one that stops a list of names being read as an estate, so a page that
+// quietly said something weaker would be the page somebody presents from.
+func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
+	script, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page's script: %v", err)
+	}
+	page := string(script)
+
+	var buf bytes.Buffer
+	printNames(&buf, ctsearch.Estate{
+		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1, Wildcards: 1,
+		Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}},
+	})
+	printed := buf.String()
+
+	// Each is a sentence both faces have to carry. Compared against what the
+	// command line actually printed, so that a change to one and not the other
+	// fails here rather than in front of a reader.
+	for _, claim := range []string{
+		"these names were published by whoever obtained a certificate for them",
+		"no publicly trusted certificate never appears",
+		"nothing above is graded, because no",
+		"document says which names an estate ought to have",
+		"of the names above is a wildcard",
+	} {
+		if !strings.Contains(page, claim) {
+			t.Errorf("the page does not say %q", claim)
+		}
+		// The command line wraps its lines, so its copy is compared with the
+		// wrapping removed rather than by looking for the same run of bytes.
+		if !strings.Contains(flatten(printed), claim) {
+			t.Errorf("the command line does not say %q:\n%s", claim, printed)
+		}
+	}
+}
+
+// flatten folds the wrapped lines of a printed report into one, so a sentence
+// broken across two lines can be compared with the same sentence in the page.
+func flatten(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
