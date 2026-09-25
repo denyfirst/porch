@@ -442,7 +442,25 @@ jobs:
           git fetch -q --depth 1 origin "${GITHUB_SHA}"
           git checkout -q FETCH_HEAD
 
-      - name: Run gosec
+      # Every platform the release ships, for the reason the vet job gives.
+      #
+      # gosec reads what the Go build system gives it, and on Linux that never
+      # includes a file behind `//go:build windows`. This job ran on ubuntu
+      # alone, so internal/dnsclient/resolver_windows.go — the one file here
+      # that calls syscall directly, walks the registry and does the pointer
+      # and length arithmetic that goes with it — was the one file the security
+      # linter never read.
+      #
+      # It was found on 2026-09-25 by running gosec on a Windows machine, which
+      # reported two integer conversions this job had never seen. Both turned
+      # out to be bounded a line or two above, and that is the point: nobody
+      # had checked, and the gate that exists to check was structurally unable
+      # to. A required check with a platform-shaped hole in it is worse than no
+      # check, because it is believed.
+      - name: Run gosec on every released platform
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
-          "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./...
+          for os in linux darwin windows; do
+            echo "gosec GOOS=$os"
+            GOOS="$os" "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./... || exit 1
+          done

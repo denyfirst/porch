@@ -128,7 +128,23 @@ for os in linux darwin windows; do GOOS="$os" go vet ./... || break; done
 # what CI's "Static analysis" job runs, at the version it pins
 go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
 "$(go env GOPATH)/bin/staticcheck" ./...
+
+# what CI's "Security linter" job runs, at the version it pins — and, like vet,
+# once per platform the release ships
+go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+for os in linux darwin windows; do
+  GOOS="$os" "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./... || break
+done
 ```
+
+**gosec was missing from this list too,** for the same reason staticcheck was
+and with a sharper edge. It is a required check, and until 2026-09-25 CI ran it
+on Linux alone — so `internal/dnsclient/resolver_windows.go`, the one file here
+that calls `syscall` directly and does the pointer and length arithmetic that
+goes with it, was the one file the security linter never read. Two findings sat
+in it, both bounded a line above and therefore harmless, and nobody knew
+because nothing looked. A required check with a platform-shaped hole is worse
+than no check, because it is believed.
 
 **staticcheck belongs in this list and was missing from it.** It is a required
 check, `go vet` does not cover what it covers — an unused helper left behind by
