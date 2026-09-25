@@ -136,6 +136,38 @@ making it for them.
 
 ---
 
+## Reading a register is not scanning
+
+`porch-scan -check names` lists the names under a domain that appear in
+publicly logged certificates. It belongs in this document because it is the one
+thing here that produces a list of somebody's hosts, and it is worth being
+exact about what it is.
+
+**It sends nothing to the domain.** Not a packet, not a lookup of a name it
+made up. Every name it reports was published by whoever obtained a certificate
+for it, in a transparency log that exists to be read. A wordlist tried against
+DNS — `mail`, `dev`, `staging`, `old` — would be enumerating an estate, and
+that is a different instrument with a different argument for existing. N7 draws
+that line and this stays on the reading side of it, for the same reason
+`security.txt` does.
+
+**What it costs is a disclosure, and it is larger than the check's.** The
+question names the domain to a monitor this project does not run, and asking
+for everything under a domain says more than asking about one host. N12
+governs it: never on a demonstration build, and on the command line a mode
+somebody types rather than anything that runs by default.
+
+**It grades nothing and says so.** No document says which names an estate ought
+to have, so a verdict would be a threshold this project invented (R21).
+
+**It is not an estate inventory, and the report says that every time it runs.**
+A host with no publicly trusted certificate never appears. A wildcard covers
+hosts without naming them, which is what a wildcard is for. A name dropped from
+a monitor's history is gone. Somebody who hands the list to a security team as
+*the* inventory, and is then shown more hosts by a port scan, has lost an
+argument that was avoidable — so the limits are printed under every list,
+including the short clean ones where a reader is most inclined to believe them.
+
 ## Two scopes, one methodology
 
 This is the shape of the whole product, and it is written here because getting

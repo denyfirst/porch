@@ -1401,9 +1401,66 @@ list, because they know what they ordered and nobody else does.
 obtained for a subdomain — which is how this is usually done — does not appear.
 Silence there would let a clean answer read as a clean estate.
 
-*Enforced in:* `internal/ctsearch`, `internal/scan.Scanner.searchLogs`,
+**Searching under a domain is a separate mode, and it is not the same act.**
+
+The paragraph above is true of the check: the TLS scan asks about the exact
+name and says so. `porch-scan -check names` asks a different question — which
+names under a domain appear in logged certificates — and it is a mode somebody
+types rather than anything a check does.
+
+Reading it against N7 is where it earns its place. No address is invented: a
+wordlist against DNS would be enumerating an estate, and this sends not one
+packet to the domain asked about. What it reads is a register that exists to be
+read, in which every name was published by whoever obtained a certificate for
+it. That is the same argument `security.txt` rests on, and it is the whole of
+the difference between reading and guessing.
+
+What it costs is the disclosure this invariant is about, unchanged and now
+larger: the question names the domain to a monitor this project does not run,
+and asking for everything under it says more about the estate than asking about
+one host. So it is never on a demonstration build, which promises it queries no
+log, and on the command line it is typed deliberately.
+
+**The inventory says what it cannot show, every time, under every list.** Three
+kinds of name are missing from it and no amount of searching will produce them:
+a host with no publicly trusted certificate is never logged; a wildcard covers
+hosts without naming them, which is what a wildcard is for; and a name dropped
+from a monitor's history is gone from the answer. A list of forty names read
+without that paragraph says *this estate has forty hosts*, which is not what a
+certificate log establishes for anybody — and the person who hands such a list
+to a security team, and is then shown more hosts by a port scan, has lost an
+argument that was avoidable in advance. `Wildcards` is counted rather than
+merely listed for that reason: it is the measure of how much the search could
+not see.
+
+Nothing in it is graded. No document says which names an estate ought to have,
+so a verdict would be a threshold this project invented (R21) — and the report
+says that in its own words, because a reader who finds a list with no verdict
+and no explanation supplies the missing verdict themselves, and the one they
+supply is "fine".
+
+**A name belongs to the estate only on a label boundary.** `notexample.com`
+ends with `example.com` as text and is somebody else's. A shared certificate
+carries names from several estates at once, and reporting those under this
+domain would be this program drawing a boundary the certificate does not draw;
+they are counted and dropped. A wrong name in an inventory is worse than a
+missing one: the missing one is found by the next method, and the wrong one is
+investigated, escalated and reported.
+
+**The monitor is substitutable, and until 2026-09-25 that was true of the
+package and not of the product.** `internal/ctsearch` had said from the start
+that a monitor which goes away or changes is a substitution rather than a
+rewrite, and there was no way to substitute one from the command line. It is
+not hypothetical: crt.sh answered 502 to every request on the day this mode was
+written, which is an ordinary state for a free service indexing billions of
+certificates. `-monitor` takes the address, and a monitor with no place for the
+name in it is refused rather than fetched once per domain.
+
+*Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
+`internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
-`internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`
+`internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
+`cmd/porch-scan.runNames`, `cmd/porch-scan.printNamesLimits`
 *Guarded by:* `TestOneCertificateLoggedTwiceIsOneCertificate`,
 `TestTwoDifferentCertificatesAreTwo`,
 `TestTheNameIsEscapedIntoTheQuery`,
@@ -1425,7 +1482,17 @@ Silence there would let a clean answer read as a clean estate.
 `TestACertificateNotPresentedIsSaidPlainly`,
 `TestWhatTheLogsHoldIsNeverGraded`,
 `TestTheReportSaysSubdomainsWereNotSearched`,
-`TestATruncatedListSaysSoAndKeepsItsCount`
+`TestATruncatedListSaysSoAndKeepsItsCount`,
+`TestANameBelongsToTheEstateOnlyOnALabelBoundary`,
+`TestWhatTheInventoryKeepsAndWhatItCounts`,
+`TestAnEmptyInventoryIsStillAnAnswer`,
+`TestANameFromALogIsCleanedBeforeItIsKept`,
+`TestTheSearchAsksForEverythingUnderTheDomainAndKeepsOnlyThat`,
+`TestAMonitorThatWillNotAnswerIsNotAnEmptyEstate`,
+`TestTheInventoryAlwaysSaysWhatItCannotShow`,
+`TestAFailedSearchPrintsNoInventory`,
+`TestTheInventoryCountsInWords`,
+`TestTheInventoryTakesADomainAndNotAnAddress`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

@@ -22,6 +22,12 @@ const (
 	checkWeb  = "web"
 	checkMail = "mail"
 	checkDNS  = "dns"
+
+	// Not a check: an inventory read out of a public register and graded
+	// against nothing. It is named here because it is what somebody types
+	// after -check, and this list is the one place a reader looks to find out
+	// what they may type.
+	checkNames = "names"
 )
 
 // checkKnown refuses a check nobody wrote.
@@ -31,10 +37,11 @@ const (
 // believes it is testing something it has never tested.
 func checkKnown(name string) error {
 	switch name {
-	case checkTLS, checkWeb, checkMail, checkDNS:
+	case checkTLS, checkWeb, checkMail, checkDNS, checkNames:
 		return nil
 	}
-	return fmt.Errorf("unknown check %q: it is %s, %s, %s or %s", name, checkTLS, checkWeb, checkMail, checkDNS)
+	return fmt.Errorf("unknown check %q: it is %s, %s, %s, %s or %s",
+		name, checkTLS, checkWeb, checkMail, checkDNS, checkNames)
 }
 
 // limitsFor selects the limits of the check being run, and the page that
