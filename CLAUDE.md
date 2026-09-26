@@ -222,6 +222,7 @@ in it is there because it has already gone wrong once.
 | `internal/markup` | reads a page; keeps hosts and booleans, never markup (N7) |
 | `internal/securitytxt` | reads what a site publishes about reporting a fault in it, and keeps a count and a date (N7) |
 | `internal/wellknown` | every address under `/.well-known` this project asks for or serves, each beside its document (N7) |
+| `internal/dnsnames` | the names a domain's own MX, sender policy and delegation already name (N12) |
 | `internal/liveness` | whether a name answers now: resolves, answers, is internal, is gone, or dangles (N12) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
