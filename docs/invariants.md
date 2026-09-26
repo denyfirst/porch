@@ -1576,6 +1576,46 @@ the resolver this installation already asks about every other target, so
 nothing leaves the deployment that was not already leaving it, and N12's
 disclosure argument is untouched by it.
 
+**The service asks what the names are doing, and that is the part that touches
+the estate.** Everything else the inventory does is reading: a register somebody
+else keeps, and records the domain publishes for anyone. The probe resolves each
+name and opens at most one connection to each address it gave — opened, found
+open or not, closed, carrying nothing. So it sits behind the same proof of
+control as the rest (`TestNoNameIsProbedForAnUnprovenDomain`): a service that
+opened connections to a stranger's hosts on request would be a scanner anybody
+could point anywhere, which is the thing this endpoint exists not to be.
+
+**The probe has no dialler of its own, and that is the guard.**
+`internal/liveness` reads a nil dialler as safedial, which refuses private,
+loopback, link-local and reserved destinations. A proven domain whose name
+points at 127.0.0.1, or at a cloud metadata address, must not turn the service
+into a way of reaching it (N6), and the state for such a name is `internal`
+rather than a timeout — the resolver inside an organisation answers its own
+names with internal addresses, and a report that called that "gone" would be
+the office network printed as the state of the estate.
+`TestTheProbeTheServiceBuildsRefusesPrivateDestinations` holds the wiring rather
+than the behaviour, because the behaviour is held where the dialling is.
+
+Four seconds a name there, against the command line's ten. A request has one
+budget for everything in it and a name that will not answer takes all of
+whatever it is given; ten seconds each would spend the request on a handful of
+dead names. The parallelism stays at eight, because eight is a pace and raising
+it would make an estate's own firewall see a burst nobody asked for. When the
+budget runs out the names not reached come back unchecked and say so, and the
+answer is still sent: refusing the whole inventory at that point would throw
+away what was established in order to report what was not (R4).
+
+**A state goes beside its name, never in a list alongside.** The first version
+of the report printed one row per answer, and the answers are bounded — by how
+many names the probe will reach and by the time it has. A name past either
+bound had no row at all: not a row saying nothing was established, no row. An
+inventory that quietly lists fewer names than it found is the one failure this
+mode cannot survive, so the rows are drawn from the inventory and a name with no
+answer says that nothing asked (`TestANameNothingReachedIsStillInTheReport`,
+`TestWhatEachNameIsDoingGoesBesideTheName`). Being asked is what makes a report
+a probed one, not getting answers: an estate where every name is gone was still
+asked (`TestAnEstateWhereNothingAnswersWasStillAsked`).
+
 **The monitor is still the switch.** An installation started without one
 refuses the endpoint, as it always has, even though the records half needs no
 configuration and would answer. Offering somebody a capability they turned off,
@@ -1718,7 +1758,8 @@ loudly wrong.
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`,
 `internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
 `cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`, `cmd/porch-scan.saysRecords`,
-`internal/httpapi.handleNames`, `internal/httpapi.Server.records`,
+`internal/httpapi.handleNames`, `internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
+`internal/inventory.Inventory.WithLiveness`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
 `internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
@@ -1773,7 +1814,15 @@ loudly wrong.
 `TestASourceThatFailedIsANonZeroExit`,
 `TestTheServiceReadsBothSourcesForAProvenDomain`,
 `TestNeitherSourceIsReadForAnUnprovenDomain`,
-`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`
+`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`,
+`TestAnInstallationWithAResolverReadsTheRecords`,
+`TestTheServiceSaysWhatEachNameIsDoing`,
+`TestNoNameIsProbedForAnUnprovenDomain`,
+`TestTheProbeTheServiceBuildsRefusesPrivateDestinations`,
+`TestANameNothingReachedIsStillInTheReport`,
+`TestWhatEachNameIsDoingGoesBesideTheName`,
+`TestAnAnswerIsMatchedToItsNameWhateverTheSpelling`,
+`TestAnEstateWhereNothingAnswersWasStillAsked`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

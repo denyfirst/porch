@@ -157,6 +157,21 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// And what each name is doing now, which no register can answer. Every
+	// source of names is a record of the past, and an operator reading their
+	// own estate is asking about the present: a name from five years ago, for
+	// a service shut down four years ago, is noise in a list somebody has to
+	// act on.
+	//
+	// After this there is no timeout refusal, and that is deliberate. The
+	// probe runs until the request's budget is spent and the names it did not
+	// reach come back unchecked, saying so beside themselves. Refusing the
+	// whole answer at that point would throw away an inventory that was
+	// established, in order to report the part that was not (R4).
+	if s.live != nil {
+		found = found.WithLiveness(s.live.Check(ctx, found.Hosts()))
+	}
+
 	writeJSON(w, http.StatusOK, found)
 }
 

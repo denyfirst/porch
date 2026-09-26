@@ -87,8 +87,10 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 
 		// And what each of them is doing now, which a list of names cannot
 		// answer. Every source of names is a record of the past; an operator
-		// is asking about the present.
-		live := checker.Check(ctx, found.Hosts())
+		// is asking about the present. The answers go beside the names rather
+		// than in a list of their own, so that a name nothing reached is still
+		// a name in the report.
+		found = found.WithLiveness(checker.Check(ctx, found.Hosts()))
 
 		if asJSON {
 			if err := json.NewEncoder(os.Stdout).Encode(found); err != nil {
@@ -99,7 +101,7 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 			if i > 0 {
 				fmt.Fprintln(os.Stdout)
 			}
-			printNames(os.Stdout, found, live)
+			printNames(os.Stdout, found)
 		}
 
 		if shortInventory(found) {
@@ -122,7 +124,7 @@ func shortInventory(inv inventory.Inventory) bool {
 }
 
 // printNames writes one domain's inventory.
-func printNames(w io.Writer, inv inventory.Inventory, live []liveness.Name) {
+func printNames(w io.Writer, inv inventory.Inventory) {
 	fmt.Fprintf(w, "%s\n", inv.Domain)
 	fmt.Fprintf(w, "  Names under this domain\n")
 
@@ -160,9 +162,9 @@ func printNames(w io.Writer, inv inventory.Inventory, live []liveness.Name) {
 		fmt.Fprintf(w, "    Cut          more names were found than are listed\n")
 	}
 
-	printNamesNow(w, inv, live)
+	printNamesNow(w, inv)
 	printWildcards(w, inv)
-	printNamesLimits(w, inv, len(live) > 0)
+	printNamesLimits(w, inv, inv.Probed)
 }
 
 // saysLogs is what the certificate monitor established, in one line.
@@ -410,8 +412,8 @@ func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateS
 // what the status means. A name that does not resolve and came from a
 // certificate is a host somebody once got a certificate for; the same name from
 // a sender policy is mail this domain is still telling the world to expect.
-func printNamesNow(w io.Writer, inv inventory.Inventory, live []liveness.Name) {
-	if len(live) == 0 {
+func printNamesNow(w io.Writer, inv inventory.Inventory) {
+	if !inv.Probed {
 		// Nothing established what they are doing, so the names are still
 		// drawn and the heading says which question went unanswered. Dropping
 		// them would lose the half of the report that was established, to
@@ -420,39 +422,50 @@ func printNamesNow(w io.Writer, inv inventory.Inventory, live []liveness.Name) {
 		return
 	}
 
-	fmt.Fprintf(w, "\n  What each name is doing now, and what named it\n")
-
-	known := map[string]inventory.Name{}
+	var hosts []inventory.Name
 	for _, n := range inv.Names {
-		known[n.Name] = n
+		if !n.Wildcard {
+			hosts = append(hosts, n)
+		}
+	}
+	if len(hosts) == 0 {
+		return
 	}
 
+	fmt.Fprintf(w, "\n  What each name is doing now, and what named it\n")
+
 	nameWidth, sourceWidth := 0, 0
-	for _, n := range live {
+	for _, n := range hosts {
 		if len(n.Name) > nameWidth {
 			nameWidth = len(n.Name)
 		}
-		if width := len(namedBy(known[n.Name])); width > sourceWidth {
+		if width := len(namedBy(n)); width > sourceWidth {
 			sourceWidth = width
 		}
 	}
 
-	// The window each name was covered in, from the register that named it.
+	// Every name in the inventory, and not only the ones an answer came back
+	// for. A row is drawn from the name rather than from the status, because
+	// the other way round is how a name leaves a report without being
+	// mentioned: the check bounds how many names it will reach, and the ones
+	// past that bound had no row at all.
 	//
-	// Without it a name is only ever "now", and the finding that matters most
-	// in an old estate cannot be seen: a name whose newest certificate expired
-	// four years ago and which is still answering on 443 is a service nobody
-	// has looked at since, and the two halves of that sentence live in two
-	// different columns. A reader who saw only the status would chase it as
-	// though it were current, and a reader who saw only the date would not
-	// know it was still running.
-	for _, n := range live {
-		line := says(n)
-		if when := lastCovered(known[n.Name]); when != "" {
+	// The window each name was covered in goes on the same line. Without it a
+	// name is only ever "now", and the finding that matters most in an old
+	// estate cannot be seen: a name whose newest certificate expired four
+	// years ago and which is still answering on 443 is a service nobody has
+	// looked at since, and the two halves of that sentence come from two
+	// different places.
+	for _, n := range hosts {
+		status, line := liveness.Unchecked, "nothing asked what this name is doing"
+		if n.Now != nil {
+			status, line = n.Now.Status, says(*n.Now)
+		}
+		if when := lastCovered(n); when != "" {
 			line += "; " + when
 		}
 		fmt.Fprintf(w, "    %-9s %-*s %-*s %s\n",
-			n.Status, nameWidth, n.Name, sourceWidth, namedBy(known[n.Name]), line)
+			status, nameWidth, n.Name, sourceWidth, namedBy(n), line)
 	}
 }
 

@@ -65,6 +65,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/exclusion"
+	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
@@ -208,6 +209,20 @@ type Server struct {
 	// asks, or nil where none was configured. Nil is refused rather than
 	// answered with an empty inventory (R4).
 	names ctsearch.EstateSearcher
+
+	// live says what each name in an inventory is doing now: whether it
+	// resolves, whether anything answers, and whether it points somewhere
+	// nothing may dial. Nil where this installation has no resolver.
+	//
+	// It is the one part of the inventory that touches the estate, and it is
+	// reached only after proof of control, like everything else this endpoint
+	// does. What it sends is one resolution per name and at most one
+	// connection per address — opened, found open or not, and closed, carrying
+	// nothing. Private, loopback and reserved addresses are never dialled at
+	// all: internal/liveness leaves its dialler nil, which is safedial, so a
+	// proven domain pointing at this machine's own network cannot turn the
+	// service into a way of reaching it (N6).
+	live livenessChecker
 
 	// records reads the second source of names: the hosts a domain's own MX,
 	// sender policy and delegation already name.
@@ -370,6 +385,17 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// resolver this installation already asks about every other target,
 		// so nothing new is disclosed to anybody by reading it.
 		s.records = &dnsnames.Reader{Resolver: scanner.Resolver}
+
+		// Four seconds a name rather than the ten the command line takes.
+		//
+		// A request here has one budget for everything in it, and a name that
+		// is not going to answer takes the whole of whatever it is given. Ten
+		// seconds each would spend the request on a handful of dead names and
+		// report the rest as unreached, which is the truth but a useless one.
+		// The parallelism is left where internal/liveness puts it: eight is a
+		// pace, and raising it here would make an estate's own firewall see a
+		// burst it did not ask for.
+		s.live = &liveness.Checker{Resolver: scanner.Resolver, Timeout: 4 * time.Second}
 	}
 
 	tls, web := s.tlsCheck(), s.webCheck()
@@ -960,6 +986,12 @@ func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
 // internal/dnsnames.Reader is the one there is.
 type recordReader interface {
 	Under(ctx context.Context, domain string) dnsnames.Found
+}
+
+// livenessChecker says what a set of names is doing now.
+// internal/liveness.Checker is the one there is.
+type livenessChecker interface {
+	Check(ctx context.Context, names []string) []liveness.Name
 }
 
 // Keeper keeps a report whole. internal/vault is the one there is.

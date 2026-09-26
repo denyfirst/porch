@@ -11,6 +11,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
+	"github.com/denyfirst/porch/internal/liveness"
 )
 
 // stubMonitor answers without asking anybody, and records what it was asked.
@@ -358,5 +359,127 @@ func TestAnInstallationWithAResolverReadsTheRecords(t *testing.T) {
 	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
 	if s.records == nil {
 		t.Error("an installation with a resolver has nothing to read the domain's own records with")
+	}
+}
+
+// stubLiveness answers what the names are doing without dialling anything, and
+// records which names it was given.
+type stubLiveness struct {
+	asked  atomic.Value
+	answer []liveness.Name
+}
+
+func (l *stubLiveness) Check(_ context.Context, names []string) []liveness.Name {
+	l.asked.Store(strings.Join(names, " "))
+	return l.answer
+}
+
+func (l *stubLiveness) was() string {
+	if v, ok := l.asked.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// The service says what each name is doing now, as the command line does.
+//
+// A list of names is a record of the past whichever register it came from, and
+// an operator reading their own estate is asking about the present. Until this
+// the page handed them names with dates and left the question unanswered, so
+// the work of finding out which of forty names still exist was theirs.
+func TestTheServiceSaysWhatEachNameIsDoing(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 2,
+		Names: []ctsearch.Name{
+			{Name: "www.proven.example"},
+			{Name: "old.proven.example"},
+			{Name: "*.proven.example", Wildcard: true},
+		},
+	}})
+	probe := &stubLiveness{answer: []liveness.Name{
+		{Name: "www.proven.example", Status: liveness.Live, Answered: []string{"443"}},
+		{Name: "old.proven.example", Status: liveness.Gone},
+	}}
+	s.live = probe
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.80:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.Probed {
+		t.Error("the names were asked what they are doing and the answer does not say so")
+	}
+
+	states := map[string]liveness.Status{}
+	for _, n := range got.Names {
+		if n.Now != nil {
+			states[n.Name] = n.Now.Status
+		}
+	}
+	if states["www.proven.example"] != liveness.Live || states["old.proven.example"] != liveness.Gone {
+		t.Errorf("the states came back as %+v", states)
+	}
+
+	// A wildcard is never put through a resolver: nothing resolves
+	// `*.proven.example`, and the failure would read as a dead host that never
+	// existed.
+	if strings.Contains(probe.was(), "*") {
+		t.Errorf("a wildcard was asked about as a name: %q", probe.was())
+	}
+}
+
+// No name is probed for a domain nobody proved control of.
+//
+// This is the part of the inventory that touches the estate — one resolution
+// per name and at most one connection per address — so it sits behind the same
+// gate as the registers. A service that opened connections to a stranger's
+// hosts on request would be a scanner anybody could point anywhere, which is
+// the thing this endpoint exists not to be.
+func TestNoNameIsProbedForAnUnprovenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
+	probe := &stubLiveness{}
+	s.live = probe
+
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.81:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain was answered %q", got)
+	}
+	if was := probe.was(); was != "" {
+		t.Errorf("names were probed for a domain nobody proved: %q", was)
+	}
+}
+
+// The probe this installation builds dials through safedial.
+//
+// Nothing here sets a dialler, and that is the guard rather than an omission:
+// internal/liveness reads a nil dialler as safedial, which refuses private,
+// loopback, link-local and reserved destinations. A proven domain whose name
+// points at 127.0.0.1, or at a cloud metadata address, must not turn this
+// service into a way of reaching it (N6).
+func TestTheProbeTheServiceBuildsRefusesPrivateDestinations(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+
+	checker, ok := s.live.(*liveness.Checker)
+	if !ok {
+		t.Fatalf("the installation's probe is a %T", s.live)
+	}
+	if checker.Dial != nil {
+		t.Error("the probe was given a dialler of its own, so safedial no longer decides what it may reach")
+	}
+	if checker.Resolver == nil {
+		t.Error("the probe has no resolver, so every name would come back unchecked")
 	}
 }
