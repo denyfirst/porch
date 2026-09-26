@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
@@ -312,13 +313,15 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
 		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
 			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 1, 1)}}},
-		Passive: passivedns.Found{Asked: true, Names: []string{"bitrix.example.test"}},
+		Passive:   passivedns.Found{Asked: true, Names: []string{"bitrix.example.test"}},
+		Presented: certnames.Found{Asked: true, Hosts: 1, Answered: 1, Names: []string{"internal.example.test"}},
 	}))
 	withRegister := flatten(buf.String())
 
 	for _, claim := range []string{
 		"A passive register holds what somebody's resolver saw, not what this domain published.",
 		"A name in it may never have existed",
+		"The hosts that answered were asked for their certificates, which is how a name a private authority issued is found: no public log holds one.",
 	} {
 		if !strings.Contains(page, claim) {
 			t.Errorf("the page does not say %q", claim)
@@ -681,5 +684,89 @@ func TestNoRegisterIsBuiltUntilOneIsNamedWithAKey(t *testing.T) {
 
 	if _, err := registerNamed("somebody-elses-register", "", time.Second); err == nil {
 		t.Error("an unknown register was accepted")
+	}
+}
+
+// The report says what the hosts themselves presented.
+//
+// It is the source that finds what a private authority issued — no public log
+// holds such a certificate — and the report has to say both that it asked and
+// how much it could not see, because a host that did not answer presented
+// nothing.
+func TestTheReportSaysWhatTheHostsPresented(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}}},
+		Presented: certnames.Found{Asked: true, Hosts: 2, Answered: 1,
+			Names: []string{"www.example.test", "internal-billing.example.test"}},
+	}))
+	out := buf.String()
+
+	for _, want := range []string{
+		"The hosts    named 2 of them, off the certificates they presented",
+		"internal-billing.example.test",
+		"The hosts that answered were asked for their certificates, which is",
+		"no public log holds",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// The provenance column says which of them named each host.
+	if !strings.Contains(out, "certificate, host") {
+		t.Errorf("a name both a log and a host named does not say so:\n%s", out)
+	}
+	if !strings.Contains(out, "host ") {
+		t.Errorf("a name only a host presented does not say so:\n%s", out)
+	}
+}
+
+// A report that did not ask the hosts says so, rather than leaving the line
+// out.
+//
+// A reader who sees three sources and no fourth line does not know a fourth
+// exists. One that reads "not asked" knows there is something else to try, and
+// what it would cost (R4).
+func TestAReportThatAskedNoHostSaysSo(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}},
+	}))
+	out := buf.String()
+
+	if !strings.Contains(out, "The hosts    not asked: -read-certificates was not given") {
+		t.Errorf("the report does not say the hosts went unasked:\n%s", out)
+	}
+	if strings.Contains(out, "were asked for their certificates") {
+		t.Errorf("a report that asked no host says it did:\n%s", out)
+	}
+}
+
+// No host is asked for a certificate unless the operator asked for that.
+//
+// It is the one source that opens a connection to the estate on purpose, so
+// the decision to run it at all is a thing to be able to look at: a default
+// that quietly knocked on every answering host in an estate would be a
+// different instrument from the one the report describes.
+func TestNoHostIsAskedForACertificateUnlessItWasAskedFor(t *testing.T) {
+	if reader := certificatesFrom(namesOptions{Timeout: time.Second}); reader != nil {
+		t.Error("a report that was not asked to read certificates built a reader anyway")
+	}
+
+	reader := certificatesFrom(namesOptions{Timeout: 3 * time.Second, ReadCertificates: true})
+	if reader == nil {
+		t.Fatal("a report that was asked to read certificates has nothing to read them with")
+	}
+	if reader.Timeout != 3*time.Second {
+		t.Errorf("the reader was given a timeout of %s", reader.Timeout)
+	}
+
+	// And it dials through safedial, because nothing sets a dialler on it: a
+	// name pointing at this machine's own network is never reached (N6).
+	if reader.Dial != nil {
+		t.Error("the reader was given a dialler of its own, so safedial no longer decides what it may reach")
 	}
 }

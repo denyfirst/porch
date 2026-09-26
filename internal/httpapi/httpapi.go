@@ -59,6 +59,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dkim"
@@ -224,6 +225,14 @@ type Server struct {
 	// proven domain pointing at this machine's own network cannot turn the
 	// service into a way of reaching it (N6).
 	live livenessChecker
+
+	// presented reads the certificates the hosts themselves serve, where an
+	// operator asked for that. Nil is the ordinary state.
+	//
+	// It is the one source that opens a connection to the estate on purpose,
+	// so it is off unless configured and, like everything else here, read only
+	// after proof of control.
+	presented certificateReader
 
 	// passive is the register the inventory asks what it has observed under a
 	// domain, or nil where none was configured.
@@ -1005,6 +1014,22 @@ func (s *Server) AskPassiveRegister(register passivedns.Register) {
 // internal/dnsnames.Reader is the one there is.
 type recordReader interface {
 	Under(ctx context.Context, domain string) dnsnames.Found
+}
+
+// certificateReader reads the names the hosts themselves present.
+// internal/certnames.Reader is the one there is.
+type certificateReader interface {
+	Under(ctx context.Context, domain string, hosts []string) certnames.Found
+}
+
+// ReadHostCertificates tells this service to ask each name that answers for
+// the certificate it presents, and to keep the names on it.
+//
+// Off unless called, because it is the one part of the inventory that opens a
+// connection to the estate on purpose. Called before serving, like every other
+// piece of configuration here.
+func (s *Server) ReadHostCertificates(reader certificateReader) {
+	s.presented = reader
 }
 
 // livenessChecker says what a set of names is doing now.

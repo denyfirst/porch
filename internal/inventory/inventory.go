@@ -38,6 +38,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/liveness"
@@ -68,6 +69,10 @@ const (
 	// than publication, which is why it is spelled out in full beside the
 	// short names of the sources that publish.
 	FromPassive Source = "passive DNS"
+
+	// FromHost: a host presented a certificate carrying it. The only source
+	// that is the estate itself rather than a record of it.
+	FromHost Source = "host"
 )
 
 // order is the order sources are listed in beside one name.
@@ -75,7 +80,7 @@ const (
 // Fixed rather than the order they were read, so that two runs of the same
 // inventory read the same and a difference between two reports is a difference
 // in the estate.
-var order = []Source{FromCertificate, FromMX, FromSPF, FromNS, FromPassive}
+var order = []Source{FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost}
 
 // Name is one host, everything that named it, and the window a log covered it
 // in.
@@ -157,6 +162,9 @@ type Inventory struct {
 	Records Reading `json:"records"`
 	Passive Reading `json:"passive"`
 
+	// Presented is what the hosts themselves said, where they were asked.
+	Presented Reading `json:"presented"`
+
 	// Probed reports that the names were asked what they are doing now.
 	//
 	// A report where nothing was asked and a report where everything answered
@@ -172,7 +180,8 @@ type Inventory struct {
 // empty list as a domain with no names, and presenting that as an inventory is
 // the most comfortable wrong answer this mode can give (R4).
 func (i Inventory) Established() bool {
-	return i.Logs.Established() || i.Records.Established() || i.Passive.Established()
+	return i.Logs.Established() || i.Records.Established() ||
+		i.Passive.Established() || i.Presented.Established()
 }
 
 // Sources are the answers to merge, one field per source.
@@ -192,6 +201,12 @@ type Sources struct {
 	// observation rather than publication, which is why the report says which
 	// source named a host and never merges the three into one number.
 	Passive passivedns.Found
+
+	// Presented is what the hosts themselves said: the names on the
+	// certificates they served. The only source that is the estate rather
+	// than a record of it, and the only one that finds what a private
+	// authority issued.
+	Presented certnames.Found
 }
 
 // Merge builds one inventory out of what each source said.
@@ -200,7 +215,7 @@ type Sources struct {
 // failed before it got anywhere carries no domain and the report is still
 // about one.
 func Merge(domain string, from Sources) Inventory {
-	e, d, p := from.Logs, from.Records, from.Passive
+	e, d, p, h := from.Logs, from.Records, from.Passive, from.Presented
 
 	out := Inventory{
 		Domain:       fold(domain),
@@ -209,6 +224,7 @@ func Merge(domain string, from Sources) Inventory {
 		Logs:         Reading{Asked: e.Asked, Foreign: e.Foreign, Reason: e.Reason},
 		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason},
 		Passive:      Reading{Asked: p.Asked, Foreign: p.Foreign, Reason: p.Reason},
+		Presented:    Reading{Asked: h.Asked, Foreign: h.Foreign, Reason: h.Reason},
 	}
 	if out.Domain == "" {
 		out.Domain = fold(e.Domain)
@@ -264,6 +280,26 @@ func Merge(domain string, from Sources) Inventory {
 		host.Sources = append(host.Sources, FromPassive)
 	}
 
+	for _, n := range h.Names {
+		host := at(n)
+		if host == nil {
+			continue
+		}
+		host.Sources = append(host.Sources, FromHost)
+	}
+
+	// A wildcard a host presented is a wildcard: nothing resolves it, and
+	// putting it in the list of names to ask about would produce a failure that
+	// reads as a fault in the estate.
+	for _, n := range h.Wildcards {
+		host := at(n)
+		if host == nil {
+			continue
+		}
+		host.Wildcard = true
+		host.Sources = append(host.Sources, FromHost)
+	}
+
 	for _, host := range found {
 		host.Sources = sorted(host.Sources)
 		if host.Wildcard {
@@ -275,13 +311,17 @@ func Merge(domain string, from Sources) Inventory {
 		// per host rather than once per mention.
 		fromLog := names(host, FromCertificate)
 		fromPassive := names(host, FromPassive)
+		fromHost := names(host, FromHost)
 		if fromLog > 0 {
 			out.Logs.Named++
 		}
 		if fromPassive > 0 {
 			out.Passive.Named++
 		}
-		if fromLog+fromPassive < len(host.Sources) {
+		if fromHost > 0 {
+			out.Presented.Named++
+		}
+		if fromLog+fromPassive+fromHost < len(host.Sources) {
 			out.Records.Named++
 		}
 		out.Names = append(out.Names, *host)
@@ -395,4 +435,25 @@ func names(n *Name, want Source) int {
 // produce one entry rather than two.
 func fold(name string) string {
 	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
+}
+
+// Unasked are the names in this inventory that nothing has asked about yet.
+//
+// A source that runs after the first round of questions — the hosts' own
+// certificates, which need somewhere to knock before they can be read — brings
+// names in late. A report where the newest names are the ones with nothing
+// beside them would be answering the easy half (R4), so they are asked too.
+func (i Inventory) Unasked(live []liveness.Name) []string {
+	asked := map[string]bool{}
+	for _, n := range live {
+		asked[fold(n.Name)] = true
+	}
+
+	var out []string
+	for _, name := range i.Hosts() {
+		if !asked[name] {
+			out = append(out, name)
+		}
+	}
+	return out
 }

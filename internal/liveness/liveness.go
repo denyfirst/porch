@@ -322,3 +322,19 @@ func (c *Checker) parallel() int {
 	}
 	return defaultParallel
 }
+
+// Answering are the names something is listening on.
+//
+// The set worth knocking on again: a name that does not resolve has nothing to
+// knock on, and spending a timeout on it buys a fact the report already
+// carries. Live rather than "not gone", because a name that resolves and
+// answers nothing has nothing to hand over either.
+func Answering(live []Name) []string {
+	var out []string
+	for _, n := range live {
+		if n.Status == Live {
+			out = append(out, n.Name)
+		}
+	}
+	return out
+}

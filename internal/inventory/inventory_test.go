@@ -1,9 +1,11 @@
 package inventory
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/liveness"
@@ -446,5 +448,77 @@ func TestARegisterThatWasCutSaysSoInTheInventory(t *testing.T) {
 	}
 	if got.Passive.Foreign != 3 {
 		t.Errorf("%d names were dropped for belonging to somebody else, want 3", got.Passive.Foreign)
+	}
+}
+
+// What a host presented is its own source, and a wildcard on a certificate is
+// still a wildcard.
+//
+// This is the only source that is the estate rather than a record of it, and
+// the only one that finds what a private authority issued. A wildcard it hands
+// over must not become a name to resolve: nothing resolves `*.example.test`,
+// and the failure would read as a dead host that never existed.
+func TestWhatAHostPresentedIsItsOwnSource(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Certificates: 1, Names: []ctsearch.Name{
+			{Name: "www.example.test"},
+		}},
+		Presented: certnames.Found{Asked: true, Hosts: 1, Answered: 1,
+			Names:     []string{"www.example.test", "internal-billing.example.test"},
+			Wildcards: []string{"*.internal.example.test"},
+		},
+	})
+
+	want := map[string][]Source{
+		"www.example.test":              {FromCertificate, FromHost},
+		"internal-billing.example.test": {FromHost},
+		"*.internal.example.test":       {FromHost},
+	}
+	if len(got.Names) != len(want) {
+		t.Fatalf("the merged inventory holds %+v", got.Names)
+	}
+	for _, n := range got.Names {
+		sources, known := want[n.Name]
+		if !known || len(n.Sources) != len(sources) {
+			t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+			continue
+		}
+		for i := range sources {
+			if n.Sources[i] != sources[i] {
+				t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+				break
+			}
+		}
+	}
+
+	if got.Wildcards != 1 {
+		t.Errorf("%d wildcards were counted, want 1", got.Wildcards)
+	}
+	for _, name := range got.Hosts() {
+		if strings.HasPrefix(name, "*") {
+			t.Errorf("a wildcard is in the names to resolve: %v", got.Hosts())
+		}
+	}
+	if got.Presented.Named != 3 {
+		t.Errorf("the hosts are credited with %d names, want 3", got.Presented.Named)
+	}
+}
+
+// The names nothing has asked about yet are the ones a late source brought in.
+//
+// A report where the newest names are the ones with nothing beside them would
+// be answering the easy half (R4).
+func TestUnaskedAreTheNamesNothingHasAskedAboutYet(t *testing.T) {
+	inv := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{
+			{Name: "old.example.test"},
+			{Name: "*.example.test", Wildcard: true},
+		}},
+		Presented: certnames.Found{Asked: true, Names: []string{"new.example.test"}},
+	})
+
+	got := inv.Unasked([]liveness.Name{{Name: "old.example.test", Status: liveness.Live}})
+	if len(got) != 1 || got[0] != "new.example.test" {
+		t.Errorf("the names still to ask about are %v", got)
 	}
 }

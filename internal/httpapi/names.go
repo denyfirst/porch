@@ -10,6 +10,7 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
+	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/scan"
@@ -160,11 +161,12 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		observed = s.passive.Under(ctx, t.host)
 	}
 
-	found := inventory.Merge(t.host, inventory.Sources{
+	sources := inventory.Sources{
 		Logs:    estate,
 		Records: records,
 		Passive: observed,
-	})
+	}
+	found := inventory.Merge(t.host, sources)
 	if ctx.Err() != nil {
 		s.refuse(w, http.StatusGatewayTimeout, "timeout",
 			"The inventory did not finish within the time allowed.")
@@ -182,11 +184,28 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// reach come back unchecked, saying so beside themselves. Refusing the
 	// whole answer at that point would throw away an inventory that was
 	// established, in order to report the part that was not (R4).
-	if s.live != nil {
-		found = found.WithLiveness(s.live.Check(ctx, found.Hosts()))
+	if s.live == nil {
+		writeJSON(w, http.StatusOK, found)
+		return
+	}
+	live := s.live.Check(ctx, found.Hosts())
+
+	// Then, where the operator asked for it, the estate itself: the
+	// certificate each answering host presents, and the names written in it.
+	//
+	// After the probe rather than beside it, because it needs somewhere to
+	// knock — the hosts worth asking are the ones something has just
+	// established are answering. What it finds is merged back in and asked
+	// what it is doing like any other name, so the newest half of the
+	// inventory is not the half with nothing beside it (R4).
+	if s.presented != nil {
+		sources.Presented = s.presented.Under(ctx, t.host, liveness.Answering(live))
+
+		found = inventory.Merge(t.host, sources)
+		live = append(live, s.live.Check(ctx, found.Unasked(live))...)
 	}
 
-	writeJSON(w, http.StatusOK, found)
+	writeJSON(w, http.StatusOK, found.WithLiveness(live))
 }
 
 // parseNamesTarget takes a bare domain.
