@@ -41,6 +41,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/passivedns"
 )
 
 // Source is what named a host.
@@ -62,6 +63,11 @@ const (
 
 	// FromNS: it answers for the zone, and is under the domain itself.
 	FromNS Source = "NS"
+
+	// FromPassive: a register saw something resolve it. Observation rather
+	// than publication, which is why it is spelled out in full beside the
+	// short names of the sources that publish.
+	FromPassive Source = "passive DNS"
 )
 
 // order is the order sources are listed in beside one name.
@@ -69,7 +75,7 @@ const (
 // Fixed rather than the order they were read, so that two runs of the same
 // inventory read the same and a difference between two reports is a difference
 // in the estate.
-var order = []Source{FromCertificate, FromMX, FromSPF, FromNS}
+var order = []Source{FromCertificate, FromMX, FromSPF, FromNS, FromPassive}
 
 // Name is one host, everything that named it, and the window a log covered it
 // in.
@@ -144,10 +150,12 @@ type Inventory struct {
 	// Truncated is set where a source found more than it listed.
 	Truncated bool `json:"truncated,omitempty"`
 
-	// Logs is what the certificate transparency monitor established, and
-	// Records what the domain's own MX, sender policy and delegation did.
+	// Logs is what the certificate transparency monitor established, Records
+	// what the domain's own MX, sender policy and delegation did, and Passive
+	// what a register has observed.
 	Logs    Reading `json:"logs"`
 	Records Reading `json:"records"`
+	Passive Reading `json:"passive"`
 
 	// Probed reports that the names were asked what they are doing now.
 	//
@@ -163,20 +171,44 @@ type Inventory struct {
 // unreachable monitor and a resolver that answered nothing produce the same
 // empty list as a domain with no names, and presenting that as an inventory is
 // the most comfortable wrong answer this mode can give (R4).
-func (i Inventory) Established() bool { return i.Logs.Established() || i.Records.Established() }
+func (i Inventory) Established() bool {
+	return i.Logs.Established() || i.Records.Established() || i.Passive.Established()
+}
+
+// Sources are the answers to merge, one field per source.
+//
+// A struct rather than a parameter each, because the list grows: it was one
+// source, then two, then three, and a positional call that gained a third
+// argument was a call every reader had to count the commas in. A source
+// nobody read is the zero value, which is what "not read" is here.
+type Sources struct {
+	// Logs is what a certificate transparency monitor established.
+	Logs ctsearch.Estate
+
+	// Records is what the domain's own MX, sender policy and delegation did.
+	Records dnsnames.Found
+
+	// Passive is what a register observed. Unlike the other two it is
+	// observation rather than publication, which is why the report says which
+	// source named a host and never merges the three into one number.
+	Passive passivedns.Found
+}
 
 // Merge builds one inventory out of what each source said.
 //
-// The domain is passed rather than taken from either source, because a source
-// that failed before it got anywhere carries no domain and the report is still
+// The domain is passed rather than taken from a source, because a source that
+// failed before it got anywhere carries no domain and the report is still
 // about one.
-func Merge(domain string, e ctsearch.Estate, d dnsnames.Found) Inventory {
+func Merge(domain string, from Sources) Inventory {
+	e, d, p := from.Logs, from.Records, from.Passive
+
 	out := Inventory{
 		Domain:       fold(domain),
 		Certificates: e.Certificates,
-		Truncated:    e.Truncated,
+		Truncated:    e.Truncated || p.Truncated,
 		Logs:         Reading{Asked: e.Asked, Foreign: e.Foreign, Reason: e.Reason},
 		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason},
+		Passive:      Reading{Asked: p.Asked, Foreign: p.Foreign, Reason: p.Reason},
 	}
 	if out.Domain == "" {
 		out.Domain = fold(e.Domain)
@@ -224,17 +256,32 @@ func Merge(domain string, e ctsearch.Estate, d dnsnames.Found) Inventory {
 		}
 	}
 
+	for _, n := range p.Names {
+		host := at(n)
+		if host == nil {
+			continue
+		}
+		host.Sources = append(host.Sources, FromPassive)
+	}
+
 	for _, host := range found {
 		host.Sources = sorted(host.Sources)
 		if host.Wildcard {
 			out.Wildcards++
 		}
 
+		// One name an MX and a sender policy both named is one name the
+		// records are answerable for, so each source group is counted once
+		// per host rather than once per mention.
 		fromLog := names(host, FromCertificate)
+		fromPassive := names(host, FromPassive)
 		if fromLog > 0 {
 			out.Logs.Named++
 		}
-		if fromLog < len(host.Sources) {
+		if fromPassive > 0 {
+			out.Passive.Named++
+		}
+		if fromLog+fromPassive < len(host.Sources) {
 			out.Records.Named++
 		}
 		out.Names = append(out.Names, *host)

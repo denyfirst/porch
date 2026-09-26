@@ -67,6 +67,7 @@ import (
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
+	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
@@ -223,6 +224,15 @@ type Server struct {
 	// proven domain pointing at this machine's own network cannot turn the
 	// service into a way of reaching it (N6).
 	live livenessChecker
+
+	// passive is the register the inventory asks what it has observed under a
+	// domain, or nil where none was configured.
+	//
+	// Nil is the ordinary state and the report says so. It is configured
+	// rather than assumed for the same reason the monitor is, and one more:
+	// the key is the operator's own, the question names a domain to a company
+	// they chose, and the answer is billed to them (N12).
+	passive passivedns.Register
 
 	// records reads the second source of names: the hosts a domain's own MX,
 	// sender policy and delegation already name.
@@ -980,6 +990,15 @@ func (s *Server) KeepResults(store *results.Store) {
 // which would report an estate as publishing nothing (R4).
 func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
 	s.names = searcher
+}
+
+// AskPassiveRegister gives the inventory endpoint a passive register to ask.
+//
+// Nil, which is the default, means no register is asked and the inventory says
+// so — rather than reporting an estate as having nothing behind its wildcards,
+// which is the one thing this source exists to answer (R4).
+func (s *Server) AskPassiveRegister(register passivedns.Register) {
+	s.passive = register
 }
 
 // recordReader reads the names a domain's own records name.

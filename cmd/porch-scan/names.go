@@ -15,6 +15,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/passivedns"
 )
 
 // The inventory of names a domain's own records and its public certificates
@@ -45,7 +46,7 @@ import (
 // never available on a demonstration build, which promises it queries no log,
 // and why on the command line it is a mode somebody types rather than anything
 // that runs by default.
-func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor, monitorURL, resolver string, asJSON bool) int {
+func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor, monitorURL, resolver, register, registerURL string, asJSON bool) int {
 	if demo.Enabled {
 		fmt.Fprintln(os.Stderr, "this is a demonstration build, and it asks no certificate "+
 			"transparency monitor anything")
@@ -53,6 +54,16 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 	}
 
 	searcher, err := monitorNamed(monitor, monitorURL, timeout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+
+	// The third source, and the only one that sees behind a wildcard. Off
+	// unless an operator names one: it wants their own key, the question names
+	// their domain to a company they chose, and nothing here picks one for
+	// them.
+	passive, err := registerNamed(register, registerURL, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -81,9 +92,14 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 
 	worst := 0
 	for i, domain := range domains {
-		found := inventory.Merge(domain,
-			searcher.SearchEstate(ctx, domain),
-			records.Under(ctx, domain))
+		sources := inventory.Sources{
+			Logs:    searcher.SearchEstate(ctx, domain),
+			Records: records.Under(ctx, domain),
+		}
+		if passive != nil {
+			sources.Passive = passive.Under(ctx, domain)
+		}
+		found := inventory.Merge(domain, sources)
 
 		// And what each of them is doing now, which a list of names cannot
 		// answer. Every source of names is a record of the past; an operator
@@ -151,6 +167,7 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	// report they are holding.
 	fmt.Fprintf(w, "    Certificates %s\n", saysLogs(inv))
 	fmt.Fprintf(w, "    Records      %s\n", saysRecords(inv))
+	fmt.Fprintf(w, "    Passive DNS  %s\n", saysPassive(inv))
 
 	if inv.Wildcards > 0 {
 		fmt.Fprintf(w, "    Wildcards    %d, each covering hosts it does not name\n", inv.Wildcards)
@@ -202,6 +219,26 @@ func saysRecords(inv inventory.Inventory) string {
 		return "named none of them: its mail, sender policy and delegation name no host under it"
 	default:
 		return fmt.Sprintf("named %d of them, from %s", r.Named, wordList(recordSources(inv)))
+	}
+}
+
+// saysPassive is what a passive register observed, in one line.
+//
+// "Not read" where none was configured, because that is the ordinary state and
+// a reader has to be able to tell it from a register that answered with
+// nothing. This is the source that sees behind a wildcard, so an estate
+// covered by one and a report with this line reading "not read" is a reader
+// being told exactly how much they are not seeing.
+func saysPassive(inv inventory.Inventory) string {
+	switch r := inv.Passive; {
+	case !r.Asked:
+		return "not read: no register was named"
+	case r.Reason != "":
+		return "Not established: " + r.Reason
+	case r.Named == 0:
+		return "named none of them: the register has observed no host under this domain"
+	default:
+		return fmt.Sprintf("named %d of them, observed by the register", r.Named)
 	}
 }
 
@@ -319,9 +356,23 @@ func printNamesLimits(w io.Writer, inv inventory.Inventory, probed bool) {
 		fmt.Fprintf(w, "    mail, sends none and answers for no zone is in none of them.\n")
 	}
 
+	if inv.Passive.Established() {
+		fmt.Fprintf(w, "    A passive register holds what somebody's resolver saw, not what this\n")
+		fmt.Fprintf(w, "    domain published. A name in it may never have existed — a typo, or a\n")
+		fmt.Fprintf(w, "    name that resolved for an hour years ago — and a host nobody outside\n")
+		fmt.Fprintf(w, "    ever looked up is not in it at all.\n")
+	}
+
 	if inv.Wildcards > 0 {
 		fmt.Fprintf(w, "    A wildcard covers hosts without naming them, and %d of the names\n"+
 			"    above %s.\n", inv.Wildcards, plural(inv.Wildcards, "is a wildcard", "are wildcards"))
+		if !inv.Passive.Established() {
+			// The one source that sees behind one, and it was not read. A
+			// reader who is told a wildcard hides hosts, and not told that
+			// nothing looked for them, has been given half the sentence.
+			fmt.Fprintf(w, "    Nothing here looked behind them: a passive register is the source\n")
+			fmt.Fprintf(w, "    that can, and none was named.\n")
+		}
 	}
 
 	if probed {
@@ -401,6 +452,50 @@ func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateS
 		}, nil
 	}
 	return nil, fmt.Errorf("unknown monitor %q: it is %s or %s", name, monitorCRTSh, monitorCertSpotter)
+}
+
+// The passive registers this can be pointed at, spelled once.
+const (
+	registerSecurityTrails = "securitytrails"
+	registerVirusTotal     = "virustotal"
+)
+
+// registerNamed builds the passive register to ask, or nil where none was
+// named.
+//
+// Nil rather than an empty implementation, because "no register" is a state
+// the report has to be able to say: a register that was never asked and a
+// register that found nothing are the same empty list and only one of them is
+// an answer (R4).
+//
+// The key comes from the environment and never from a flag. It identifies
+// whoever is running this to the register, it is billed to them, and a
+// credential on a command line is a credential in a shell history and in every
+// process listing on the machine. A register named with no key in the
+// environment is refused here rather than asked and rejected: naming somebody's
+// domain to a company that will not answer buys nothing and discloses the same
+// thing a successful search would.
+func registerNamed(name, address string, timeout time.Duration) (passivedns.Register, error) {
+	switch name {
+	case "":
+		return nil, nil
+
+	case registerSecurityTrails:
+		token := os.Getenv("SECURITYTRAILS_TOKEN")
+		if token == "" {
+			return nil, fmt.Errorf("-passive %s needs a key in SECURITYTRAILS_TOKEN", registerSecurityTrails)
+		}
+		return &passivedns.SecurityTrails{Endpoint: address, Token: token, Timeout: timeout}, nil
+
+	case registerVirusTotal:
+		token := os.Getenv("VIRUSTOTAL_TOKEN")
+		if token == "" {
+			return nil, fmt.Errorf("-passive %s needs a key in VIRUSTOTAL_TOKEN", registerVirusTotal)
+		}
+		return &passivedns.VirusTotal{Endpoint: address, Token: token, Timeout: timeout}, nil
+	}
+	return nil, fmt.Errorf("unknown passive register %q: it is %s or %s",
+		name, registerSecurityTrails, registerVirusTotal)
 }
 
 // printNamesNow draws what each name is doing and what named it, which are the

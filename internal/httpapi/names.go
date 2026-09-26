@@ -11,6 +11,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/mailscan"
+	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
 )
@@ -150,7 +151,20 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		records = s.records.Under(ctx, t.host)
 	}
 
-	found := inventory.Merge(t.host, estate, records)
+	// And the register, where an operator configured one. It is the only
+	// source that sees behind a wildcard certificate, and the only one whose
+	// names were observed rather than published — which is why the report
+	// keeps them apart rather than adding them to a total.
+	var observed passivedns.Found
+	if s.passive != nil {
+		observed = s.passive.Under(ctx, t.host)
+	}
+
+	found := inventory.Merge(t.host, inventory.Sources{
+		Logs:    estate,
+		Records: records,
+		Passive: observed,
+	})
 	if ctx.Err() != nil {
 		s.refuse(w, http.StatusGatewayTimeout, "timeout",
 			"The inventory did not finish within the time allowed.")

@@ -146,7 +146,9 @@ somebody's hosts, and it is worth being exact about what it is.
 
 **It invents no name.** Not one. Every name it reports was published by whoever
 obtained a certificate for it, in a transparency log that exists to be read, or
-by the domain itself in its MX, its sender policy or its delegation. A wordlist
+by the domain itself in its MX, its sender policy or its delegation, or was
+observed resolving by a passive register the operator named and holds the key
+for. A wordlist
 tried against DNS — `mail`, `dev`, `staging`, `old` — would be enumerating an
 estate, and that is a different instrument with a different argument for
 existing. N7 draws that line and this stays on the reading side of it, for the
@@ -170,6 +172,14 @@ adds nothing to that cost — a domain's own records are read with the resolver
 this installation already uses for every other target — but it is read behind
 the same proof of control, because a lookup a stranger caused this installation
 to make is a lookup this installation made.
+
+**A passive register is a larger disclosure again, and it is off until an
+operator names one.** What it holds was not published by anybody: it is
+observation, collected by watching resolvers, which is why the report says a
+register named a host rather than folding it into a total, and why it is the
+operator's own account and key that asks. It is also the only source that finds
+a name a wildcard certificate hides, so a report with no register read says
+that nothing looked behind the wildcards it found.
 
 **It grades nothing and says so.** No document says which names an estate ought
 to have, so a verdict would be a threshold this project invented (R21).

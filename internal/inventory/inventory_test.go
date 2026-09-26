@@ -7,6 +7,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/passivedns"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -21,7 +22,7 @@ func day(y int, m time.Month, d int) time.Time {
 // would tell an operator they have two hosts where they have one, and every
 // count in the report above it would be wrong by the same amount.
 func TestOneHostNamedTwiceIsOneName(t *testing.T) {
-	got := Merge("Example.TEST.", ctsearch.Estate{
+	got := merge("Example.TEST.", ctsearch.Estate{
 		Asked: true, Domain: "example.test", Certificates: 3,
 		Names: []ctsearch.Name{
 			{Name: "mail.example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
@@ -85,7 +86,7 @@ func TestOneHostNamedTwiceIsOneName(t *testing.T) {
 // the finding that matters most in an old estate — still answering, last
 // covered years ago — and quietly remove half of it.
 func TestTheWindowSurvivesTheMerge(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{
+	got := merge("example.test", ctsearch.Estate{
 		Asked: true, Domain: "example.test",
 		Names: []ctsearch.Name{
 			{Name: "mail.example.test", FirstSeen: day(2019, 3, 1), LastSeen: day(2021, 6, 1)},
@@ -120,14 +121,14 @@ func TestTheWindowSurvivesTheMerge(t *testing.T) {
 // all; one where a source answered is an inventory, and the reading says which
 // half of it is missing.
 func TestASourceThatFailedIsNotAnEmptyEstate(t *testing.T) {
-	both := Merge("example.test",
+	both := merge("example.test",
 		ctsearch.Estate{Asked: true, Reason: "the certificate transparency monitor could not be reached"},
 		dnsnames.Found{Asked: true, Reason: "the domain's own records could not be read"})
 	if both.Established() {
 		t.Error("an inventory neither source answered reports that something was established")
 	}
 
-	half := Merge("example.test",
+	half := merge("example.test",
 		ctsearch.Estate{Asked: true, Reason: "the certificate transparency monitor could not be reached"},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
 			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
@@ -147,7 +148,7 @@ func TestASourceThatFailedIsNotAnEmptyEstate(t *testing.T) {
 
 	// A source nobody read is not a source that failed either, and saying so
 	// is what stops a report claiming coverage it never had.
-	unasked := Merge("example.test",
+	unasked := merge("example.test",
 		ctsearch.Estate{Asked: true, Names: []ctsearch.Name{{Name: "www.example.test"}}},
 		dnsnames.Found{})
 	if unasked.Records.Asked || unasked.Records.Reason != "" {
@@ -161,7 +162,7 @@ func TestASourceThatFailedIsNotAnEmptyEstate(t *testing.T) {
 // reads as a fault in the estate — and the estate would then be reported as
 // having a dead host that never existed.
 func TestAWildcardIsNeverAHostToResolve(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{
+	got := merge("example.test", ctsearch.Estate{
 		Asked: true,
 		Names: []ctsearch.Name{
 			{Name: "*.example.test", Wildcard: true},
@@ -188,7 +189,7 @@ func TestAWildcardIsNeverAHostToResolve(t *testing.T) {
 // the inventory silently — a name missing from a list somebody acts on, with
 // nothing anywhere saying it was ever found.
 func TestARecordSourceWithNoShortLabelIsStillCarried(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{Asked: true}, dnsnames.Found{
+	got := merge("example.test", ctsearch.Estate{Asked: true}, dnsnames.Found{
 		Asked: true,
 		Names: []dnsnames.Name{
 			{Name: "new.example.test", Sources: []dnsnames.Source{dnsnames.Source("SRV record")}},
@@ -217,7 +218,7 @@ func TestARecordSourceWithNoShortLabelIsStillCarried(t *testing.T) {
 // What each source dropped is kept, per source, and not added together into
 // one number nobody can read.
 func TestWhatEachSourceDroppedIsKeptApart(t *testing.T) {
-	got := Merge("example.test",
+	got := merge("example.test",
 		ctsearch.Estate{Asked: true, Foreign: 4, Certificates: 2},
 		dnsnames.Found{Asked: true, Foreign: 1})
 
@@ -237,7 +238,7 @@ func TestWhatEachSourceDroppedIsKeptApart(t *testing.T) {
 // source each — which reads as two hosts, each with less evidence behind it
 // than the one that is really there.
 func TestTwoSpellingsOfOneHostAreOneHost(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{
+	got := merge("example.test", ctsearch.Estate{
 		Asked: true,
 		Names: []ctsearch.Name{{Name: "Mail.Example.Test."}},
 	}, dnsnames.Found{
@@ -265,7 +266,7 @@ func TestTwoSpellingsOfOneHostAreOneHost(t *testing.T) {
 // renderer walking the answers prints a shorter estate than the one that was
 // found, with nothing saying so (R4).
 func TestWhatEachNameIsDoingGoesBesideTheName(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{
+	got := merge("example.test", ctsearch.Estate{
 		Asked: true,
 		Names: []ctsearch.Name{
 			{Name: "answered.example.test"},
@@ -302,7 +303,7 @@ func TestWhatEachNameIsDoingGoesBesideTheName(t *testing.T) {
 // and braces — but a state attached to the wrong name is worse than no state,
 // and the cost of being sure is one call.
 func TestAnAnswerIsMatchedToItsNameWhateverTheSpelling(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{
+	got := merge("example.test", ctsearch.Estate{
 		Asked: true,
 		Names: []ctsearch.Name{{Name: "mail.example.test"}},
 	}, dnsnames.Found{}).WithLiveness([]liveness.Name{
@@ -320,12 +321,130 @@ func TestAnAnswerIsMatchedToItsNameWhateverTheSpelling(t *testing.T) {
 // that as "nobody asked" would leave the operator with the one thing they came
 // for unsaid.
 func TestAnEstateWhereNothingAnswersWasStillAsked(t *testing.T) {
-	got := Merge("example.test", ctsearch.Estate{
+	got := merge("example.test", ctsearch.Estate{
 		Asked: true,
 		Names: []ctsearch.Name{{Name: "gone.example.test"}},
 	}, dnsnames.Found{}).WithLiveness(nil)
 
 	if !got.Probed {
 		t.Error("an estate that answered nothing is reported as never having been asked")
+	}
+}
+
+// merge is Merge with the two sources most fixtures here use.
+//
+// A helper so that adding a source does not rewrite every fixture in the file:
+// what each test is about is the merging, and a test that has to name three
+// sources to say nothing about two of them reads as though it did.
+func merge(domain string, e ctsearch.Estate, d dnsnames.Found) Inventory {
+	return Merge(domain, Sources{Logs: e, Records: d})
+}
+
+// A register's names join the list, and say that a register named them.
+//
+// This is the source that sees behind a wildcard, so most of what it
+// contributes is names no other source has. Reporting them without saying
+// where they came from would put an observation and a publication on the same
+// line with nothing to tell them apart — and they are not worth the same: a
+// name a register saw may never have existed.
+func TestWhatARegisterObservedIsItsOwnSource(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Certificates: 1, Names: []ctsearch.Name{
+			{Name: "www.example.test"},
+			{Name: "*.example.test", Wildcard: true},
+		}},
+		Records: dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
+		}},
+		Passive: passivedns.Found{Asked: true, Register: "securitytrails", Names: []string{
+			"bitrix.example.test",
+			"www.example.test",
+		}},
+	})
+
+	if got.Distinct != 4 {
+		t.Fatalf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+
+	want := map[string][]Source{
+		"*.example.test":      {FromCertificate},
+		"bitrix.example.test": {FromPassive},
+		"mail.example.test":   {FromMX},
+		"www.example.test":    {FromCertificate, FromPassive},
+	}
+	for _, n := range got.Names {
+		sources, known := want[n.Name]
+		if !known {
+			t.Errorf("%s is in the inventory and should not be", n.Name)
+			continue
+		}
+		if len(n.Sources) != len(sources) {
+			t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+			continue
+		}
+		for i := range sources {
+			if n.Sources[i] != sources[i] {
+				t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+				break
+			}
+		}
+	}
+
+	// Each source is credited with what it named, and a name two of them
+	// named is credited to both.
+	if got.Logs.Named != 2 || got.Records.Named != 1 || got.Passive.Named != 2 {
+		t.Errorf("the sources are credited with logs=%d records=%d passive=%d",
+			got.Logs.Named, got.Records.Named, got.Passive.Named)
+	}
+	if !got.Passive.Established() {
+		t.Error("a register that answered is not reported as having answered")
+	}
+}
+
+// A register nobody configured is not a register that found nothing.
+//
+// The zero value is "not read", and it has to render as that: an estate behind
+// a wildcard with no register asked has hosts nothing here looked for, and a
+// report that let that read as "none found" would be the comfortable wrong
+// answer (R4).
+func TestARegisterThatWasNeverAskedIsNotAnEmptyRegister(t *testing.T) {
+	unasked := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{{Name: "www.example.test"}}},
+	})
+	if unasked.Passive.Asked || unasked.Passive.Reason != "" {
+		t.Errorf("a register nobody asked is reported as %+v", unasked.Passive)
+	}
+	if !unasked.Established() {
+		t.Error("an inventory with one source answering established nothing")
+	}
+
+	failed := Merge("example.test", Sources{
+		Passive: passivedns.Found{Asked: true, Reason: "the passive register is rate limiting this search"},
+	})
+	if failed.Established() {
+		t.Error("an inventory whose only source failed reports that something was established")
+	}
+
+	// And a register alone is an inventory: an installation with no monitor
+	// and a register still has names to show.
+	alone := Merge("example.test", Sources{
+		Passive: passivedns.Found{Asked: true, Names: []string{"bitrix.example.test"}},
+	})
+	if !alone.Established() || len(alone.Names) != 1 {
+		t.Errorf("a register on its own established %+v", alone)
+	}
+}
+
+// What a register could not finish is carried into the inventory.
+func TestARegisterThatWasCutSaysSoInTheInventory(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Passive: passivedns.Found{Asked: true, Truncated: true, Foreign: 3,
+			Names: []string{"one.example.test"}},
+	})
+	if !got.Truncated {
+		t.Error("a register that was cut produced an inventory that says it is whole")
+	}
+	if got.Passive.Foreign != 3 {
+		t.Errorf("%d names were dropped for belonging to somebody else, want 3", got.Passive.Foreign)
 	}
 }

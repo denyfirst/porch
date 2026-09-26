@@ -23,6 +23,23 @@
     </p>
 
     <p>
+      <strong>A third, where this installation was given one:</strong> a
+      passive register. Resolvers around the world write down the answers they
+      saw, so a name anything ever resolved can be found there — and it is the
+      only source that sees behind a wildcard certificate, which names no host
+      by design. It is off unless an operator configures one, because the key
+      is their own account with a company they chose.
+    </p>
+
+    <p>
+      What a register holds is <em>observation</em> rather than publication,
+      and that makes it worth less per name than the other two. A name in it
+      may never have existed: a typo somebody typed once, a name that resolved
+      for an hour years ago, an internal name that leaked out of a laptop on a
+      hotel network. A host nobody outside ever looked up is not in it at all.
+    </p>
+
+    <p>
       <strong>Every name says which of them named it</strong>, and that column
       is the one to read first. A name only a log has is a host somebody
       obtained a certificate for — if nothing answers there, the certificate is
@@ -105,7 +122,7 @@
       <li><strong>A host with no publicly trusted certificate.</strong> Plain
         HTTP, a service that is not HTTPS at all, or anything behind a private
         authority leaves no trace in a public log.</li>
-      <li><strong>Anything behind a wildcard.</strong>
+      <li><strong>Anything behind a wildcard, unless a register was read.</strong>
         <code>*.example.com</code> in a log says the hosts exist and nothing
         about what they are called, which is exactly what a wildcard is for.
         The report counts the wildcards it found, because that count is the
