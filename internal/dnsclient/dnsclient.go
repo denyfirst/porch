@@ -67,7 +67,12 @@ const (
 	// TypeNS names the servers a zone is delegated to, and TypeSOA is the
 	// record that says a zone begins here and carries its timers. Both from
 	// RFC 1035.
-	TypeNS  = 2
+	TypeNS = 2
+
+	// TypePTR is the name an address answers to, read under in-addr.arpa or
+	// ip6.arpa. It is the one lookup here whose question is an address rather
+	// than a name (N12).
+	TypePTR = 12
 	TypeSOA = 6
 
 	// TypeDS is the digest of a zone's key held by its parent, and TypeDNSKEY
@@ -558,6 +563,7 @@ type reply struct {
 	// filled would be reading the query type back out of the answer.
 	addresses []netip.Addr
 	ns        []string
+	ptr       []string
 	soa       []SOA
 	ds        []DS
 	keys      []DNSKEY
@@ -1026,10 +1032,13 @@ func (c *Client) LookupTLSA(ctx context.Context, name string) (TLSAAnswer, error
 type ZoneAnswer struct {
 	Addresses []netip.Addr
 	NS        []string
-	SOA       []SOA
-	DS        []DS
-	Keys      []DNSKEY
-	NSEC3     []NSEC3PARAM
+
+	// PTR is what an address answers to, where the question was one.
+	PTR   []string
+	SOA   []SOA
+	DS    []DS
+	Keys  []DNSKEY
+	NSEC3 []NSEC3PARAM
 
 	// Alias is what a CNAME at the name points to, where the name is one. A
 	// name that is an alias has that record and no others, which is the whole
@@ -1060,6 +1069,15 @@ func (c *Client) LookupAddresses(ctx context.Context, name string, qtype uint16)
 // question, and asking it means asking the parent's servers directly.
 func (c *Client) LookupNS(ctx context.Context, name string) (ZoneAnswer, error) {
 	return c.zone(ctx, name, TypeNS)
+}
+
+// LookupPTR reads the name an address answers to.
+//
+// The name asked for is the reverse form — 4.3.2.1.in-addr.arpa, or the
+// nibble form under ip6.arpa — and building it is the caller's job, because
+// what a caller has is usually a range rather than one address.
+func (c *Client) LookupPTR(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypePTR)
 }
 
 // LookupSOA reads the record at the top of a zone.
@@ -1094,6 +1112,7 @@ func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswe
 
 	out.Addresses = reply.addresses
 	out.NS = reply.ns
+	out.PTR = reply.ptr
 	out.SOA = reply.soa
 	out.DS = reply.ds
 	out.Keys = reply.keys

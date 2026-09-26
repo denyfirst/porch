@@ -43,6 +43,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
+	"github.com/denyfirst/porch/internal/ptrnames"
 )
 
 // Source is what named a host.
@@ -73,6 +74,10 @@ const (
 	// FromHost: a host presented a certificate carrying it. The only source
 	// that is the estate itself rather than a record of it.
 	FromHost Source = "host"
+
+	// FromPTR: an address in a range the operator named answers to it. The
+	// only source that starts from an address rather than from a name.
+	FromPTR Source = "PTR"
 )
 
 // order is the order sources are listed in beside one name.
@@ -80,7 +85,7 @@ const (
 // Fixed rather than the order they were read, so that two runs of the same
 // inventory read the same and a difference between two reports is a difference
 // in the estate.
-var order = []Source{FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost}
+var order = []Source{FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR}
 
 // Name is one host, everything that named it, and the window a log covered it
 // in.
@@ -165,6 +170,10 @@ type Inventory struct {
 	// Presented is what the hosts themselves said, where they were asked.
 	Presented Reading `json:"presented"`
 
+	// Reverse is what the addresses in the ranges the operator named answer
+	// to, where any were named.
+	Reverse Reading `json:"reverse"`
+
 	// Probed reports that the names were asked what they are doing now.
 	//
 	// A report where nothing was asked and a report where everything answered
@@ -181,7 +190,7 @@ type Inventory struct {
 // the most comfortable wrong answer this mode can give (R4).
 func (i Inventory) Established() bool {
 	return i.Logs.Established() || i.Records.Established() ||
-		i.Passive.Established() || i.Presented.Established()
+		i.Passive.Established() || i.Presented.Established() || i.Reverse.Established()
 }
 
 // Sources are the answers to merge, one field per source.
@@ -207,6 +216,12 @@ type Sources struct {
 	// than a record of it, and the only one that finds what a private
 	// authority issued.
 	Presented certnames.Found
+
+	// Reverse is what the addresses answered to, in the ranges the operator
+	// said are theirs. The only source that starts from an address, and the
+	// only one nothing can prove belongs to whoever asked — which is why no
+	// service offers it.
+	Reverse ptrnames.Found
 }
 
 // Merge builds one inventory out of what each source said.
@@ -216,6 +231,7 @@ type Sources struct {
 // about one.
 func Merge(domain string, from Sources) Inventory {
 	e, d, p, h := from.Logs, from.Records, from.Passive, from.Presented
+	v := from.Reverse
 
 	out := Inventory{
 		Domain:       fold(domain),
@@ -225,6 +241,7 @@ func Merge(domain string, from Sources) Inventory {
 		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason},
 		Passive:      Reading{Asked: p.Asked, Foreign: p.Foreign, Reason: p.Reason},
 		Presented:    Reading{Asked: h.Asked, Foreign: h.Foreign, Reason: h.Reason},
+		Reverse:      Reading{Asked: v.Asked, Foreign: v.Foreign, Reason: v.Reason},
 	}
 	if out.Domain == "" {
 		out.Domain = fold(e.Domain)
@@ -288,6 +305,14 @@ func Merge(domain string, from Sources) Inventory {
 		host.Sources = append(host.Sources, FromHost)
 	}
 
+	for _, n := range v.Names {
+		host := at(n)
+		if host == nil {
+			continue
+		}
+		host.Sources = append(host.Sources, FromPTR)
+	}
+
 	// A wildcard a host presented is a wildcard: nothing resolves it, and
 	// putting it in the list of names to ask about would produce a failure that
 	// reads as a fault in the estate.
@@ -312,6 +337,7 @@ func Merge(domain string, from Sources) Inventory {
 		fromLog := names(host, FromCertificate)
 		fromPassive := names(host, FromPassive)
 		fromHost := names(host, FromHost)
+		fromPTR := names(host, FromPTR)
 		if fromLog > 0 {
 			out.Logs.Named++
 		}
@@ -321,7 +347,10 @@ func Merge(domain string, from Sources) Inventory {
 		if fromHost > 0 {
 			out.Presented.Named++
 		}
-		if fromLog+fromPassive+fromHost < len(host.Sources) {
+		if fromPTR > 0 {
+			out.Reverse.Named++
+		}
+		if fromLog+fromPassive+fromHost+fromPTR < len(host.Sources) {
 			out.Records.Named++
 		}
 		out.Names = append(out.Names, *host)

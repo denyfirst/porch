@@ -219,6 +219,19 @@ func run() int {
 		// name that answers, and the names on the certificate it presents.
 		// What that finds is what a private authority issued, which no public
 		// log holds and no register saw.
+		// The fifth source, and the only one that starts from an address.
+		//
+		// The ranges are typed by the operator because nothing here can
+		// establish that a range is theirs: a domain can be proven with a
+		// record in its zone, and an address range cannot be, by anything this
+		// project can check. That is also why no service offers this — one
+		// that did would be a reverse-scanner for whoever asked.
+		ranges = flag.String("ranges", "",
+			"address `ranges` you own, comma separated, read for the names their\n"+
+				"\treverse records answer to: 203.0.113.0/24,198.51.100.0/28. Nothing is\n"+
+				"\tsent to the addresses themselves. A range wider than /20, or more than\n"+
+				"\tfour thousand addresses in total, is refused rather than cut short")
+
 		readCertificates = flag.Bool("read-certificates", false,
 			"ask each name that answers for the certificate it presents, and keep\n"+
 				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
@@ -402,7 +415,18 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
+
+		// Refused here rather than mid-walk. An operator who typed a range too
+		// wide to read finds out when they press return, instead of after
+		// sixty-five thousand questions have gone to their resolver.
+		walk, err := rangesNamed(*ranges)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+
 		return runNames(ctx, targets, namesOptions{
+			Ranges:           walk,
 			Timeout:          *timeout,
 			Monitor:          *monitor,
 			MonitorURL:       *monitorURL,

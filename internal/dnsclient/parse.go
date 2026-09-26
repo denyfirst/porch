@@ -127,6 +127,7 @@ func parseReplyWith(raw []byte, id uint16, question []byte, qtype uint16, author
 	out.tlsa = found.tlsa
 	out.addresses = found.addresses
 	out.ns = found.ns
+	out.ptr = found.ptr
 	out.soa = found.soa
 	out.ds = found.ds
 	out.keys = found.keys
@@ -317,6 +318,15 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 				return answerSet{}, 0, err
 			}
 			out.ns = append(out.ns, host)
+		case TypePTR:
+			// The same wire form as an NS record — a name — and its own field,
+			// because a caller switching on which field was filled would be
+			// reading the query type back out of the answer.
+			host, err := parseName(raw, rdataAt)
+			if err != nil {
+				return answerSet{}, 0, err
+			}
+			out.ptr = append(out.ptr, host)
 		case TypeNSEC3PARAM:
 			record, err := parseNSEC3PARAM(rdata)
 			if err != nil {
@@ -370,6 +380,7 @@ type answerSet struct {
 	// halves of the DNSSEC link.
 	addresses []netip.Addr
 	ns        []string
+	ptr       []string
 	soa       []SOA
 	ds        []DS
 	keys      []DNSKEY

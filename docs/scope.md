@@ -173,6 +173,14 @@ this installation already uses for every other target — but it is read behind
 the same proof of control, because a lookup a stranger caused this installation
 to make is a lookup this installation made.
 
+**The reverse records of a range you name are a command-line source and
+nothing else.** A domain can be proven with a record in its zone; an address
+range cannot be proven by anything this project can check. So the ranges are
+typed by an operator on their own machine, no service offers the walk, and a
+range wider than /20 — or more than four thousand addresses in total — is
+refused rather than cut short. Nothing is sent to the addresses: the questions
+are reverse lookups, to the same resolver as everything else.
+
 **The hosts' own certificates are the one source that touches the estate, and
 they are off until an operator asks.** Each name that answers is asked for the
 certificate it presents — a handshake, closed as soon as it has been read, with
