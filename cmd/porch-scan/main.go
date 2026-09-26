@@ -191,6 +191,27 @@ func run() int {
 			"the `address` of the monitor named by -monitor, if not its own. For crtsh\n"+
 				"\tthis is a template with %s where the name goes")
 
+		// The third source of names, and the only one that sees behind a
+		// wildcard certificate.
+		//
+		// Off unless it is named here. Every register worth reading wants an
+		// account: the key is the operator's, the question names their domain
+		// to a company they chose, and the answer is billed to them. Nothing
+		// picks one for them, and a build with none named asks nobody.
+		//
+		// The key is read from the environment rather than taken here, because
+		// a credential on a command line is a credential in a shell history
+		// and in every process listing on the machine.
+		register = flag.String("passive", "",
+			"a passive DNS register for -check names to ask as well: `securitytrails`\n"+
+				"\tor virustotal. Off unless named. It is the only source that finds names\n"+
+				"\ta wildcard certificate hides, and it holds what somebody's resolver saw\n"+
+				"\trather than what the domain published. The key is read from\n"+
+				"\tSECURITYTRAILS_TOKEN or VIRUSTOTAL_TOKEN (N12)")
+
+		registerURL = flag.String("passive-url", "",
+			"the `address` of the register named by -passive, if not its own")
+
 		// Which resolver the CAA lookup asks. Empty reads this machine's own.
 		//
 		// It exists because the machine's own answer is assembled rather than
@@ -368,7 +389,8 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		return runNames(ctx, targets, *timeout, *monitor, *monitorURL, *resolver, *asJSON)
+		return runNames(ctx, targets, *timeout, *monitor, *monitorURL, *resolver,
+			*register, *registerURL, *asJSON)
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)

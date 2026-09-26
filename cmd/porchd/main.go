@@ -44,6 +44,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/httpapi"
 	"github.com/denyfirst/porch/internal/ocspquery"
+	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
@@ -164,6 +165,21 @@ func run() int {
 
 		namesMonitorURL = flag.String("names-monitor-url", "",
 			"the `address` of the monitor named by -names-monitor, if not its own")
+
+		// The register the inventory asks as well, if any.
+		//
+		// Off unless named, like the monitor, and for one more reason: the key
+		// is the operator's own account with a company they chose, and the
+		// question is billed to them. It is the only source that finds names a
+		// wildcard certificate hides, and the only one holding what somebody's
+		// resolver saw rather than what the domain published (N12).
+		namesPassive = flag.String("names-passive", "",
+			"a passive DNS register the name inventory asks as well: `securitytrails`\n"+
+				"\tor virustotal. Empty asks none. The key is read from\n"+
+				"\tSECURITYTRAILS_TOKEN or VIRUSTOTAL_TOKEN")
+
+		namesPassiveURL = flag.String("names-passive-url", "",
+			"the `address` of the register named by -names-passive, if not its own")
 
 		askResponder = flag.Bool("ask-responder", false,
 			"ask each certificate's own authority whether it has been revoked. Needs\n"+
@@ -487,6 +503,19 @@ func run() int {
 			return 2
 		}
 		api.SearchNames(searcher)
+	}
+
+	// The register, the same way: named or not asked. It is wired even where
+	// no monitor is, so that the endpoint's refusal stays the monitor's to
+	// decide — this adds a source to an inventory that is offered, and offers
+	// none of its own.
+	if *namesPassive != "" {
+		register, err := namesRegister(*namesPassive, *namesPassiveURL, *requestTimeout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		api.AskPassiveRegister(register)
 	}
 
 	if *statsFile != "" {
@@ -1297,4 +1326,30 @@ func namesSearcher(name, address string, timeout time.Duration) (ctsearch.Estate
 		}, nil
 	}
 	return nil, fmt.Errorf("unknown -names-monitor %q: it is crtsh or certspotter", name)
+}
+
+// namesRegister builds the passive register the inventory asks, where one was
+// named.
+//
+// The key is read from the environment, as the monitor's is, and a register
+// named with no key is refused at startup rather than at the first request:
+// naming somebody's domain to a company that will not answer buys nothing and
+// discloses the same thing a successful search would. An operator finds out
+// when they start the service, which is when they can fix it.
+func namesRegister(name, address string, timeout time.Duration) (passivedns.Register, error) {
+	switch name {
+	case "securitytrails":
+		token := os.Getenv("SECURITYTRAILS_TOKEN")
+		if token == "" {
+			return nil, fmt.Errorf("-names-passive securitytrails needs a key in SECURITYTRAILS_TOKEN")
+		}
+		return &passivedns.SecurityTrails{Timeout: timeout, Endpoint: address, Token: token}, nil
+	case "virustotal":
+		token := os.Getenv("VIRUSTOTAL_TOKEN")
+		if token == "" {
+			return nil, fmt.Errorf("-names-passive virustotal needs a key in VIRUSTOTAL_TOKEN")
+		}
+		return &passivedns.VirusTotal{Timeout: timeout, Endpoint: address, Token: token}, nil
+	}
+	return nil, fmt.Errorf("unknown -names-passive %q: it is securitytrails or virustotal", name)
 }

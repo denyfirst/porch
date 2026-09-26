@@ -2607,12 +2607,13 @@ function buildNames(data) {
 
   const logs = data.logs || {};
   const records = data.records || {};
+  const passive = data.passive || {};
 
-  if (!answered(logs) && !answered(records)) {
+  if (!answered(logs) && !answered(records) && !answered(passive)) {
     // Not one source answered, so there is no inventory. The reassuring
     // answer here is "none found", so a failure that rendered as an empty
     // list would be the most comfortable wrong answer available.
-    for (const reason of [logs.reason, records.reason]) {
+    for (const reason of [logs.reason, records.reason, passive.reason]) {
       if (reason) frag.appendChild(el("p", null, "Not established: " + reason));
     }
     return frag;
@@ -2636,6 +2637,7 @@ function buildNames(data) {
   // reader which report they are holding.
   row("Certificates", saysLogs(data));
   row("Records", saysRecords(data));
+  row("Passive DNS", saysPassive(data));
 
   if (data.wildcards) {
     row("Wildcards", data.wildcards + ", each covering hosts it does not name");
@@ -2744,6 +2746,22 @@ function saysRecords(data) {
     return "named none of them: its mail, sender policy and delegation name no host under it";
   }
   return "named " + r.named + " of them, from " + wordList(recordSources(data));
+}
+
+// saysPassive is what a passive register observed, in one line.
+//
+// "Not read" where none was configured, because that is the ordinary state and
+// a reader has to be able to tell it from a register that answered with
+// nothing. This is the source that sees behind a wildcard: an estate covered
+// by one, read with this line saying "not read", is a reader being told
+// exactly how much they are not seeing.
+function saysPassive(data) {
+  const r = data.passive || {};
+
+  if (!r.asked) return "not read: no register was named";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) return "named none of them: the register has observed no host under this domain";
+  return "named " + r.named + " of them, observed by the register";
 }
 
 // recordSources are the record types that named something, in a fixed order.
@@ -2875,6 +2893,13 @@ function namesLimits(data) {
         "A host that takes no mail, sends none and answers for no zone is in none of them."
     );
   }
+  if (answered(data.passive)) {
+    item(
+      "A passive register holds what somebody's resolver saw, not what this domain published. " +
+        "A name in it may never have existed — a typo, or a name that resolved for an hour years ago — " +
+        "and a host nobody outside ever looked up is not in it at all."
+    );
+  }
   if (data.probed) {
     item(
       "What each name is doing now was established by resolving it and opening a connection to each address it gave. " +
@@ -2889,6 +2914,12 @@ function namesLimits(data) {
           ? " of the names above is a wildcard."
           : " of the names above are wildcards.")
     );
+    if (!answered(data.passive)) {
+      // Half a sentence is the danger: a reader told that a wildcard hides
+      // hosts, and not told that nothing went looking for them, is left
+      // believing the report tried.
+      item("Nothing here looked behind them: a passive register is the source that can, and none was named.");
+    }
   }
   item(
     "This is an inventory, not a verdict: nothing above is graded, because no " +

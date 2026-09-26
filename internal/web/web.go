@@ -233,7 +233,7 @@ var pages = map[string]*page{
 	},
 	"/names/method": {
 		Title:       "What the name inventory reads, and what it cannot see — Porch by denyfirst",
-		Description: "Where the two sources of names come from, who is asked, why proof of control is required, and the kinds of name that never appear.",
+		Description: "Where each source of names comes from, who is asked, why proof of control is required, and the kinds of name that never appear.",
 		Fragment:    "assets/names-method.html",
 	},
 

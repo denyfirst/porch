@@ -1576,6 +1576,93 @@ the resolver this installation already asks about every other target, so
 nothing leaves the deployment that was not already leaving it, and N12's
 disclosure argument is untouched by it.
 
+**A passive register is a third source, and the only one that is not
+publication.**
+
+A certificate log holds what somebody published on purpose. A domain's own
+records hold what its mail, its sender policy and its delegation have to say.
+Both are blind to a host behind a wildcard certificate that takes no mail and
+answers for no zone — which is most of an estate that uses one wildcard, and
+the reason `emanat.az` yields two names from certificates and its operators run
+many more.
+
+A passive register is not blind to it: resolvers write down the answers they
+saw, so a name anything ever resolved can be found without one packet being
+sent to the estate and without one name being guessed at. N7 is untouched —
+nothing is invented — and what this costs is the disclosure N12 is about.
+
+That disclosure is **larger than the monitor's, and of a different kind**.
+Certificate transparency is public by design, so asking a monitor discloses
+only that somebody is looking. A register's data is not published by anybody:
+it is observation, collected by watching resolvers. Three things follow, and
+the report carries all three:
+
+- **A name in a register may never have existed.** A typo somebody typed once,
+  a name that resolved for an hour in 2019, an internal name that leaked out of
+  a laptop on a hotel network — all of them look exactly like a host. This is
+  why what each name is doing now is asked separately, and why the report never
+  adds the three sources into one number.
+- **A name that exists may not be in it**, because nobody outside ever looked
+  it up.
+- **The register knows because it was watching.** This project takes no view on
+  that beyond saying, in the report, which source named a host.
+
+So it is **off unless an operator names one**, on both faces — `porch-scan
+-passive`, `porchd -names-passive` — and never on the demonstration, which
+refuses the whole mode. Every register worth reading wants an account: the key
+is the operator's own, the question names their domain to a company they chose,
+and the answer is billed to them. Nothing picks one for them and nothing falls
+back to one.
+
+**A register named with no key is refused before anything is sent.** At startup
+for the service, at the flag for the command line
+(`TestNoRegisterIsBuiltUntilOneIsNamedWithAKey`). Naming somebody's domain to a
+company that will refuse the question buys nothing and discloses exactly what a
+successful search would, which is the worst trade available. The key itself
+comes from the environment, never from a flag: a credential on a command line
+is a credential in a shell history and in every process listing on the machine.
+
+**What a register returns is untrusted, and less trustworthy than a
+certificate.** The names in it are whatever somebody's resolver was asked for,
+so they were chosen by whoever made the query — including, one day, by somebody
+hoping they would be printed into a terminal. Each is folded, bounded, checked
+against the label boundary, and checked against what a host name may contain:
+letters, digits, hyphen, dot, and the underscore real service names carry. Text
+that is not a name is **dropped rather than cleaned** — what would be left is
+not the thing the register saw
+(`TestWhatARegisterSaysIsCleanedBeforeItIsKept`,
+`TestANameFromARegisterBelongsToTheEstateOnlyOnALabelBoundary`).
+
+**The paging is followed, the bound is reported, and a cursor that does not
+move ends the walk.** A reader that took the first page and stopped would
+return a list that is sorted, plausible and missing most of a large estate,
+with nothing about it looking wrong; a walk that never advanced would make
+twenty-five identical requests to a service the operator is paying for
+(`TestEveryPageOfARegistersAnswerIsRead`,
+`TestACursorThatDoesNotMoveEndsTheWalk`,
+`TestAnEstatePastTheRegistersPageBoundSaysItWasCut`). A redirect is not
+followed: it is an address the register chose, and the request carries the
+operator's domain and their key (`TestARegisterIsNotFollowedToAnotherAddress`).
+Each answer an operator can act on gets its own sentence — a refused key sends
+them to their account, a rate limit sends them to wait, and "did not answer"
+would send them to their network
+(`TestWhatARegisterRefusedIsSaidPlainly`,
+`TestNothingHeldIsNotTheSameAsNothingEstablished`).
+
+**And a wildcard with no register read says that nothing looked behind it.**
+Half a sentence is the danger: a reader told that a wildcard hides hosts, and
+not told that nothing went looking for them, is left believing the report tried
+(`TestAWildcardWithNoRegisterSaysNothingLookedBehindIt`,
+`TestTheReportSaysWhatARegisterObserved`). On the service the register is read
+behind the same proof of control as everything else
+(`TestTheServiceReadsTheRegisterOnlyForAProvenDomain`), and an installation
+with none configured says so rather than reporting an estate with nothing
+behind its wildcards (`TestAnInstallationWithNoRegisterSaysItAskedNone`,
+`TestARegisterThatWasNeverAskedIsNotAnEmptyRegister`,
+`TestWhatARegisterObservedIsItsOwnSource`,
+`TestARegisterThatWasCutSaysSoInTheInventory`,
+`TestWhatARegisterHasSeenUnderADomain`).
+
 **The service asks what the names are doing, and that is the part that touches
 the estate.** Everything else the inventory does is reading: a register somebody
 else keeps, and records the domain publishes for anyone. The probe resolves each
@@ -1759,7 +1846,9 @@ loudly wrong.
 `internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
 `cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`, `cmd/porch-scan.saysRecords`,
 `internal/httpapi.handleNames`, `internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
-`internal/inventory.Inventory.WithLiveness`,
+`internal/inventory.Inventory.WithLiveness`, `internal/inventory.Sources`,
+`internal/passivedns`, `internal/passivedns.SecurityTrails.Under`, `internal/passivedns.VirusTotal.Under`,
+`internal/passivedns.looksLikeAName`, `cmd/porch-scan.registerNamed`, `cmd/porchd.namesRegister`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
 `internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,

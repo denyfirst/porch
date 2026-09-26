@@ -12,6 +12,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/passivedns"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -24,7 +25,7 @@ func day(y int, m time.Month, d int) time.Time {
 // shape the report takes: a resolver that answers nothing leaves the logs as
 // the only source there is.
 func fromLogs(e ctsearch.Estate) inventory.Inventory {
-	return inventory.Merge(e.Domain, e, dnsnames.Found{})
+	return inventory.Merge(e.Domain, inventory.Sources{Logs: e})
 }
 
 // The inventory prints what was found and, every time, what it cannot show.
@@ -120,7 +121,7 @@ func TestAFailedSearchPrintsNoInventory(t *testing.T) {
 // estate.
 func TestAnInventoryMissingASourceSaysWhichOne(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, inventory.Merge("example.test",
+	printNames(&buf, merged("example.test",
 		ctsearch.Estate{Asked: true, Domain: "example.test",
 			Reason: "the certificate transparency monitor could not be reached"},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
@@ -159,7 +160,7 @@ func TestAnInventoryMissingASourceSaysWhichOne(t *testing.T) {
 // a caller a list from two sources on the days both answered and from one on
 // the days they did not, with nothing in the status to tell those apart (R4).
 func TestASourceThatFailedIsANonZeroExit(t *testing.T) {
-	answered := inventory.Merge("example.test",
+	answered := merged("example.test",
 		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
 			Names: []ctsearch.Name{{Name: "www.example.test"}}},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
@@ -170,12 +171,12 @@ func TestASourceThatFailedIsANonZeroExit(t *testing.T) {
 	}
 
 	for _, short := range []inventory.Inventory{
-		inventory.Merge("example.test",
+		merged("example.test",
 			ctsearch.Estate{Asked: true, Reason: "the certificate transparency monitor could not be reached"},
 			dnsnames.Found{Asked: true, Names: []dnsnames.Name{
 				{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
 			}}),
-		inventory.Merge("example.test",
+		merged("example.test",
 			ctsearch.Estate{Asked: true, Certificates: 1,
 				Names: []ctsearch.Name{{Name: "www.example.test"}}},
 			dnsnames.Found{Asked: true, Reason: "the domain's own records could not be read"}),
@@ -268,7 +269,7 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 	// this one report. A fixture with one source would compare the shared
 	// paragraph against a report that never printed half of it.
 	var buf bytes.Buffer
-	printNames(&buf, inventory.Merge("example.test",
+	printNames(&buf, merged("example.test",
 		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1, Wildcards: 1,
 			Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}}},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
@@ -292,6 +293,7 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 		"document says which names an estate ought to have",
 		"of the names above is a wildcard",
 		"What each name is doing now was established by resolving it and opening a connection to each address it gave.",
+		"Nothing here looked behind them: a passive register is the source that can, and none was named.",
 	} {
 		if !strings.Contains(page, claim) {
 			t.Errorf("the page does not say %q", claim)
@@ -300,6 +302,29 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 		// wrapping removed rather than by looking for the same run of bytes.
 		if !strings.Contains(flatten(printed), claim) {
 			t.Errorf("the command line does not say %q:\n%s", claim, printed)
+		}
+	}
+
+	// And the sentences that belong to a report where a register was read,
+	// which the fixture above deliberately does not have: they are the other
+	// side of the wildcard note, and a report cannot carry both.
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 1, 1)}}},
+		Passive: passivedns.Found{Asked: true, Names: []string{"bitrix.example.test"}},
+	}))
+	withRegister := flatten(buf.String())
+
+	for _, claim := range []string{
+		"A passive register holds what somebody's resolver saw, not what this domain published.",
+		"A name in it may never have existed",
+	} {
+		if !strings.Contains(page, claim) {
+			t.Errorf("the page does not say %q", claim)
+		}
+		if !strings.Contains(withRegister, claim) {
+			t.Errorf("the command line does not say %q:\n%s", claim, withRegister)
 		}
 	}
 }
@@ -382,7 +407,7 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 // the column those two are one line each and indistinguishable.
 func TestEveryNameSaysWhatNamedIt(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, inventory.Merge("example.test",
+	printNames(&buf, merged("example.test",
 		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 3,
 			Names: []ctsearch.Name{
 				{Name: "api.example.test", LastSeen: day(2026, 9, 1)},
@@ -432,7 +457,7 @@ func TestEveryNameSaysWhatNamedIt(t *testing.T) {
 // went unanswered.
 func TestNamesSurviveAReportThatEstablishedNoStatus(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, inventory.Merge("example.test",
+	printNames(&buf, merged("example.test",
 		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
 			Names: []ctsearch.Name{{Name: "api.example.test", LastSeen: day(2026, 9, 1)}}},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
@@ -556,5 +581,105 @@ func TestANameNothingReachedIsStillInTheReport(t *testing.T) {
 	}
 	if !strings.Contains(out, "live      answered.example.test  certificate 93.184.216.34") {
 		t.Errorf("the name that answered is not drawn as it was:\n%s", out)
+	}
+}
+
+// merged is inventory.Merge with the two sources most fixtures here use.
+func merged(domain string, e ctsearch.Estate, d dnsnames.Found) inventory.Inventory {
+	return inventory.Merge(domain, inventory.Sources{Logs: e, Records: d})
+}
+
+// The report says which source named each host, including the register.
+//
+// And it says what a register is, because the three sources are not worth the
+// same: a certificate and an MX record are things somebody published on
+// purpose, and a register holds what a resolver happened to see.
+func TestTheReportSaysWhatARegisterObserved(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}}},
+		Passive: passivedns.Found{Asked: true, Register: "securitytrails",
+			Names: []string{"bitrix.example.test", "www.example.test"}},
+	}))
+	out := buf.String()
+
+	for _, want := range []string{
+		"2 distinct names",
+		"Passive DNS  named 2 of them, observed by the register",
+		"bitrix.example.test",
+		"passive DNS",
+		"A passive register holds what somebody's resolver saw, not what this",
+		"may never have existed",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// A name only a register has was in no certificate, and the report says
+	// that rather than leaving the column empty for a reader to fill in.
+	if !strings.Contains(out, "in no logged certificate") {
+		t.Errorf("a name no certificate covered does not say so:\n%s", out)
+	}
+}
+
+// A wildcard with no register read says that nothing looked behind it.
+//
+// Half a sentence is the danger here. A reader told that a wildcard hides
+// hosts, and not told that nothing went looking for them, is left believing
+// the report tried.
+func TestAWildcardWithNoRegisterSaysNothingLookedBehindIt(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 1, Wildcards: 1,
+		Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 9, 1)}},
+	}))
+	out := buf.String()
+
+	if !strings.Contains(out, "Passive DNS  not read: no register was named") {
+		t.Errorf("the report does not say the register went unread:\n%s", out)
+	}
+	if !strings.Contains(flatten(out), "Nothing here looked behind them: a passive register is the source that can, and none was named.") {
+		t.Errorf("the report does not say nothing looked behind the wildcard:\n%s", out)
+	}
+
+	// And with a register read, that sentence is not printed: it would be
+	// telling a reader that nothing looked when something did.
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1, Wildcards: 1,
+			Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 9, 1)}}},
+		Passive: passivedns.Found{Asked: true, Names: []string{"bitrix.example.test"}},
+	}))
+	if strings.Contains(flatten(buf.String()), "Nothing here looked behind them") {
+		t.Errorf("a report that did look behind the wildcards says it did not:\n%s", buf.String())
+	}
+}
+
+// A register is asked only where the operator named one, and only with a key.
+//
+// The key is the disclosure: it is the operator's account with a company they
+// chose, and naming a domain to a register that will refuse the question buys
+// nothing while disclosing the same thing a successful search would.
+func TestNoRegisterIsBuiltUntilOneIsNamedWithAKey(t *testing.T) {
+	register, err := registerNamed("", "", time.Second)
+	if err != nil || register != nil {
+		t.Errorf("naming no register produced %v, %v", register, err)
+	}
+
+	t.Setenv("SECURITYTRAILS_TOKEN", "")
+	if _, err := registerNamed(registerSecurityTrails, "", time.Second); err == nil {
+		t.Error("a register with no key in the environment was built anyway")
+	}
+
+	t.Setenv("SECURITYTRAILS_TOKEN", "a-key")
+	register, err = registerNamed(registerSecurityTrails, "", time.Second)
+	if err != nil || register == nil {
+		t.Errorf("a register with a key was not built: %v, %v", register, err)
+	}
+
+	if _, err := registerNamed("somebody-elses-register", "", time.Second); err == nil {
+		t.Error("an unknown register was accepted")
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/passivedns"
 )
 
 // stubMonitor answers without asking anybody, and records what it was asked.
@@ -481,5 +482,109 @@ func TestTheProbeTheServiceBuildsRefusesPrivateDestinations(t *testing.T) {
 	}
 	if checker.Resolver == nil {
 		t.Error("the probe has no resolver, so every name would come back unchecked")
+	}
+}
+
+// stubRegister answers as a passive register would, and records what it was
+// asked about.
+type stubRegister struct {
+	asked atomic.Value
+	found passivedns.Found
+}
+
+func (r *stubRegister) Under(_ context.Context, domain string) passivedns.Found {
+	r.asked.Store(domain)
+	return r.found
+}
+
+func (r *stubRegister) was() string {
+	if v, ok := r.asked.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// The service reads a register where one was configured, and never for a
+// domain nobody proved.
+//
+// This source is the one that sees behind a wildcard, and it is also the one
+// that spends the operator's own account: two reasons for it to be asked only
+// about estates somebody has been shown to control.
+func TestTheServiceReadsTheRegisterOnlyForAProvenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}},
+	}})
+	register := &stubRegister{found: passivedns.Found{
+		Asked: true, Register: "securitytrails",
+		Names: []string{"bitrix.proven.example", "www.proven.example"},
+	}}
+	s.AskPassiveRegister(register)
+
+	// The domain nobody proved: not one question is put to the register.
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.90:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain was answered %q", got)
+	}
+	if was := register.was(); was != "" {
+		t.Errorf("the register was asked about %q, which nobody proved", was)
+	}
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.91:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+	if register.was() != "proven.example" {
+		t.Errorf("the register was asked about %q", register.was())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.Passive.Established() || got.Passive.Named != 2 {
+		t.Errorf("the register's reading came back as %+v", got.Passive)
+	}
+	if got.Distinct != 2 {
+		t.Errorf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+
+	// The name only the register has says so, and the name both have says
+	// both.
+	sources := map[string]int{}
+	for _, n := range got.Names {
+		sources[n.Name] = len(n.Sources)
+	}
+	if sources["bitrix.proven.example"] != 1 || sources["www.proven.example"] != 2 {
+		t.Errorf("the provenance came back as %+v", sources)
+	}
+}
+
+// An installation with no register configured says so, rather than reporting
+// an estate with nothing behind its wildcards.
+func TestAnInstallationWithNoRegisterSaysItAskedNone(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}},
+	}})
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.92:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if got.Passive.Asked || got.Passive.Reason != "" {
+		t.Errorf("an installation with no register reports %+v", got.Passive)
 	}
 }
