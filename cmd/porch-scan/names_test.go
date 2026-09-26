@@ -14,6 +14,7 @@ import (
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
+	"github.com/denyfirst/porch/internal/ptrnames"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -768,5 +769,76 @@ func TestNoHostIsAskedForACertificateUnlessItWasAskedFor(t *testing.T) {
 	// name pointing at this machine's own network is never reached (N6).
 	if reader.Dial != nil {
 		t.Error("the reader was given a dialler of its own, so safedial no longer decides what it may reach")
+	}
+}
+
+// The ranges are read, and a range too wide to walk is refused when the flag
+// is read.
+//
+// Before anything is asked, which is the point: an operator who typed a /16
+// finds out when they press return rather than after sixty-five thousand
+// questions have gone to their resolver.
+func TestTheRangesAreReadAndRefusedEarly(t *testing.T) {
+	got, err := rangesNamed("203.0.113.0/24, 198.51.100.0/28")
+	if err != nil {
+		t.Fatalf("two ordinary ranges were refused: %v", err)
+	}
+	if len(got) != 2 || got[0].String() != "203.0.113.0/24" || got[1].String() != "198.51.100.0/28" {
+		t.Errorf("the ranges read are %v", got)
+	}
+
+	if got, err := rangesNamed(""); err != nil || got != nil {
+		t.Errorf("naming no range produced %v, %v", got, err)
+	}
+
+	for _, bad := range []string{"203.0.113.0", "not-a-range", "203.0.0.0/16", "2001:db8::/64"} {
+		if _, err := rangesNamed(bad); err == nil {
+			t.Errorf("%q was accepted as a range to walk", bad)
+		}
+	}
+
+	// And the refusal says what the rule is rather than echoing what was typed
+	// back at the person who typed it (I6).
+	_, err = rangesNamed("203.0.113.999/24")
+	if err == nil || strings.Contains(err.Error(), "999") {
+		t.Errorf("the refusal reads %v", err)
+	}
+}
+
+// The report says what the reverse walk found, and says when none was made.
+func TestTheReportSaysWhatTheAddressesAnsweredTo(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}}},
+		Reverse: ptrnames.Found{Asked: true, Addresses: 256, Answered: 3, Foreign: 2,
+			Names: []string{"build.example.test", "www.example.test"}},
+	}))
+	out := buf.String()
+
+	for _, want := range []string{
+		"Reverse DNS  named 2 of them, off the reverse records in the ranges named",
+		"build.example.test",
+		"The addresses in the ranges named were asked what they answer to,",
+		"nothing was sent to any of them",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "certificate, PTR") {
+		t.Errorf("a name both a log and an address named does not say so:\n%s", out)
+	}
+
+	// And a report with no range named says that, rather than leaving the line
+	// out: a reader who sees no line does not know there is a source they
+	// could have used.
+	buf.Reset()
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}},
+	}))
+	if !strings.Contains(buf.String(), "Reverse DNS  not walked: no address range was named") {
+		t.Errorf("the report does not say no range was walked:\n%s", buf.String())
 	}
 }

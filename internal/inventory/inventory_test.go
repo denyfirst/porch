@@ -10,6 +10,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
+	"github.com/denyfirst/porch/internal/ptrnames"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -520,5 +521,56 @@ func TestUnaskedAreTheNamesNothingHasAskedAboutYet(t *testing.T) {
 	got := inv.Unasked([]liveness.Name{{Name: "old.example.test", Status: liveness.Live}})
 	if len(got) != 1 || got[0] != "new.example.test" {
 		t.Errorf("the names still to ask about are %v", got)
+	}
+}
+
+// What an address answers to is its own source.
+//
+// The only one that starts from an address rather than from a name, so it
+// finds a machine that is in no certificate, in no record the domain
+// publishes, and in no register — and a reader has to be able to see that
+// that is where the name came from.
+func TestWhatAnAddressAnsweredToIsItsOwnSource(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Certificates: 1, Names: []ctsearch.Name{
+			{Name: "www.example.test"},
+		}},
+		Reverse: ptrnames.Found{Asked: true, Addresses: 256, Answered: 2,
+			Names: []string{"build.example.test", "www.example.test"}},
+	})
+
+	want := map[string][]Source{
+		"www.example.test":   {FromCertificate, FromPTR},
+		"build.example.test": {FromPTR},
+	}
+	if len(got.Names) != len(want) {
+		t.Fatalf("the merged inventory holds %+v", got.Names)
+	}
+	for _, n := range got.Names {
+		sources, known := want[n.Name]
+		if !known || len(n.Sources) != len(sources) {
+			t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+			continue
+		}
+		for i := range sources {
+			if n.Sources[i] != sources[i] {
+				t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+				break
+			}
+		}
+	}
+	if got.Reverse.Named != 2 {
+		t.Errorf("the reverse walk is credited with %d names, want 2", got.Reverse.Named)
+	}
+	if !got.Reverse.Established() {
+		t.Error("a walk that answered is not reported as having answered")
+	}
+
+	// A walk nobody asked for is not a walk that found nothing.
+	none := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{{Name: "www.example.test"}}},
+	})
+	if none.Reverse.Asked || none.Reverse.Reason != "" {
+		t.Errorf("a walk nobody asked for is reported as %+v", none.Reverse)
 	}
 }

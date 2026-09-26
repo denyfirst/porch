@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
+	"github.com/denyfirst/porch/internal/ptrnames"
 )
 
 // The inventory of names a domain's own records and its public certificates
@@ -67,6 +69,10 @@ type namesOptions struct {
 	// Register and RegisterURL choose the passive register, where one is
 	// wanted. Empty asks none.
 	Register, RegisterURL string
+
+	// Ranges are the address ranges the operator says are theirs, walked for
+	// the names their reverse records answer to. Empty walks none.
+	Ranges []netip.Prefix
 
 	// ReadCertificates asks each live host for the certificate it presents.
 	// Off unless the operator says so: it is the one part of this mode that
@@ -129,6 +135,16 @@ func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 			Logs:    searcher.SearchEstate(ctx, domain),
 			Records: records.Under(ctx, domain),
 		}
+		// The estate from its other half: an address the operator says is
+		// theirs, and the name its reverse record answers to. Nothing is sent
+		// to the address itself.
+		//
+		// Called whether or not any range was named, because the reader is
+		// where "no range" is answered: it reports that nothing was asked,
+		// which is what the report has to say. A condition here as well would
+		// be a second place for the two to disagree.
+		addresses := &ptrnames.Reader{Resolver: client, Timeout: timeout}
+		sources.Reverse = addresses.Under(ctx, domain, opt.Ranges)
 		if passive != nil {
 			sources.Passive = passive.Under(ctx, domain)
 		}
@@ -234,6 +250,7 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	fmt.Fprintf(w, "    Records      %s\n", saysRecords(inv))
 	fmt.Fprintf(w, "    Passive DNS  %s\n", saysPassive(inv))
 	fmt.Fprintf(w, "    The hosts    %s\n", saysPresented(inv))
+	fmt.Fprintf(w, "    Reverse DNS  %s\n", saysReverse(inv))
 
 	if inv.Wildcards > 0 {
 		fmt.Fprintf(w, "    Wildcards    %d, each covering hosts it does not name\n", inv.Wildcards)
@@ -323,6 +340,24 @@ func saysPresented(inv inventory.Inventory) string {
 		return "named none of them"
 	default:
 		return fmt.Sprintf("named %d of them, off the certificates they presented", r.Named)
+	}
+}
+
+// saysReverse is what the addresses in the named ranges answered to.
+//
+// It carries the addresses asked and the ones that answered, because the
+// difference is the shape of the range: a /24 with four answers is four
+// machines and two hundred and fifty-two addresses nobody has named.
+func saysReverse(inv inventory.Inventory) string {
+	switch r := inv.Reverse; {
+	case !r.Asked:
+		return "not walked: no address range was named"
+	case r.Reason != "":
+		return "Not established: " + r.Reason
+	case r.Named == 0:
+		return "named none of them"
+	default:
+		return fmt.Sprintf("named %d of them, off the reverse records in the ranges named", r.Named)
 	}
 }
 
@@ -438,6 +473,13 @@ func printNamesLimits(w io.Writer, inv inventory.Inventory, probed bool) {
 		fmt.Fprintf(w, "    From the domain's own records, these are the hosts its mail, its\n")
 		fmt.Fprintf(w, "    sender policy and its delegation have to name. A host that takes no\n")
 		fmt.Fprintf(w, "    mail, sends none and answers for no zone is in none of them.\n")
+	}
+
+	if inv.Reverse.Established() {
+		fmt.Fprintf(w, "    The addresses in the ranges named were asked what they answer to,\n")
+		fmt.Fprintf(w, "    and nothing was sent to any of them. A range this program was not\n")
+		fmt.Fprintf(w, "    given is a range nothing looked at, and an address with no reverse\n")
+		fmt.Fprintf(w, "    record is a machine this cannot name.\n")
 	}
 
 	if inv.Presented.Established() {
@@ -778,4 +820,38 @@ func printNamesFound(w io.Writer, inv inventory.Inventory) {
 	for _, n := range named {
 		fmt.Fprintf(w, "    %-*s %-*s %s\n", nameWidth, n.Name, sourceWidth, namedBy(n), covered(n))
 	}
+}
+
+// rangesNamed reads the address ranges an operator typed.
+//
+// Every one of them is parsed and the whole set is measured before anything is
+// asked, because the refusal is the point: a range too wide to read is refused
+// when the flag is read rather than after tens of thousands of questions have
+// gone to somebody's resolver. Empty names none, which is the ordinary case.
+func rangesNamed(list string) ([]netip.Prefix, error) {
+	list = strings.TrimSpace(list)
+	if list == "" {
+		return nil, nil
+	}
+
+	var out []netip.Prefix
+	for _, raw := range strings.Split(list, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(raw)
+		if err != nil {
+			// The rule rather than what was typed (I6). A range with a typo in
+			// it is a range, and echoing it back adds nothing a reader of the
+			// flag does not already have.
+			return nil, fmt.Errorf("-ranges takes address ranges such as 203.0.113.0/24, comma separated")
+		}
+		out = append(out, prefix)
+	}
+
+	if _, err := ptrnames.Addresses(out); err != nil {
+		return nil, fmt.Errorf("-ranges: %w", err)
+	}
+	return out, nil
 }

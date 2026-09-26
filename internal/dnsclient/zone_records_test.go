@@ -428,3 +428,42 @@ func referralWithGlue(t *testing.T, question []byte, authority, additional []rec
 	}
 	return msg
 }
+
+// The name an address answers to comes back from a PTR query.
+//
+// The one lookup here whose question is an address rather than a name, and the
+// record carries a name in the same wire form an NS record does. It has its
+// own field for the reason every other type here does: a caller switching on
+// which field was filled would be reading the query type back out of the
+// answer — and a reader that dropped the record on the floor would leave the
+// reverse walk reporting a range of nameless addresses, which is the estate
+// being under-reported with nothing saying so (R4).
+func TestTheNameAnAddressAnswersToIsRead(t *testing.T) {
+	const reverse = "42.113.0.203.in-addr.arpa"
+
+	q := name(t, reverse)
+	encoded, err := encodeName("build.example.com", false)
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+	second, err := encodeName("mail.example.com", false)
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+
+	c := answering(t, TypePTR, reverse,
+		record{q, TypePTR, encoded},
+		record{q, TypePTR, second},
+	)
+
+	got, err := c.LookupPTR(context.Background(), reverse)
+	if err != nil {
+		t.Fatalf("LookupPTR: %v", err)
+	}
+	if len(got.PTR) != 2 {
+		t.Fatalf("the address answers to %v", got.PTR)
+	}
+	if got.PTR[0] != "build.example.com" || got.PTR[1] != "mail.example.com" {
+		t.Errorf("the address answers to %v", got.PTR)
+	}
+}

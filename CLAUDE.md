@@ -234,6 +234,7 @@ in it is there because it has already gone wrong once.
 | `internal/dnsnames` | the names a domain's own MX, sender policy and delegation already name (N12) |
 | `internal/liveness` | whether a name answers now: resolves, answers, is internal, is gone, or dangles (N12) |
 | `internal/inventory` | one list of names out of every source that named them, each name carrying which ones did (N12) |
+| `internal/ptrnames` | the names the addresses in a range the operator names answer to; command line only, never a service (N12) |
 | `internal/certnames` | the names the hosts themselves present, read off the certificate each one serves; off unless asked for (N12) |
 | `internal/passivedns` | what a register observed under a domain — the only source that sees behind a wildcard, off unless an operator names one (N12) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |

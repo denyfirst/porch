@@ -1576,6 +1576,50 @@ the resolver this installation already asks about every other target, so
 nothing leaves the deployment that was not already leaving it, and N12's
 disclosure argument is untouched by it.
 
+**The reverse records of ranges the operator names are a fifth source, and the
+command line is the only place it exists.**
+
+Every other source starts from a name. This one starts from an address the
+operator says is theirs and asks what it answers to, which finds a machine from
+the other direction: one whose name is in no certificate, in no record the
+domain publishes and in no register, but whose reverse record its own network
+kept up to date. Nothing is sent to the addresses — the questions are reverse
+lookups to the resolver this installation already asks about everything else —
+and no name is invented, because a reverse record is a name somebody published
+for that address (N7).
+
+**No service offers it, and that is the invariant rather than an omission.**
+A domain can be proven with a record in its zone. An address range cannot be
+proven by anything this project can check, so a service answering this would
+be a reverse-scanner for whoever asked — the thing the inventory endpoint
+exists not to be. The ranges are typed by an operator on their own machine,
+and `porchd` has no flag for them.
+
+**A range too wide to read is refused when the flag is read.** A /16 is
+sixty-five thousand questions to somebody's resolver, which is how an operator
+gets rate-limited off their own DNS; a /64 is not slow but impossible, and a
+tool that accepted the flag and then ran for a week would be lying about what
+it does. So: nothing wider than /20 for IPv4 or /116 for IPv6, four thousand
+and ninety-six addresses across all the ranges together, and **refused rather
+than cut short** — before anything is asked, so an operator finds out when they
+press return (`TestARangeTooWideToWalkIsRefused`,
+`TestTheRangesAreReadAndRefusedEarly`). The refusal says what the rule is
+rather than echoing back what was typed (I6).
+
+What comes back is untrusted, as everything from outside is: in a leased range
+the reverse record is written by the provider, and in any range by whoever
+holds the address. Folded, bounded, stripped of control characters, held to the
+label boundary, and a name under somebody else's domain is counted rather than
+listed (`TestWhatAReverseRecordSaysIsCleanedBeforeItIsKept`,
+`TestWhatTheAddressesAnswerTo`). A resolver that refused every question is not
+a range of nameless addresses (`TestAResolverThatAnsweredNothingIsNotAnEmptyRange`,
+`TestNamingNoRangeAsksNothing`, `TestTheReportSaysWhatTheAddressesAnsweredTo`),
+and the reverse name asked about is the one a resolver answers — the nibble
+form under `ip6.arpa` for IPv6, which is RFC 3596 §2.5
+(`TestTheReverseNameIsTheOneAResolverAnswers`,
+`TestTheNameAnAddressAnswersToIsRead`,
+`TestWhatAnAddressAnsweredToIsItsOwnSource`).
+
 **The hosts' own certificates are a fourth source, and the only one that is the
 estate rather than a record of it.**
 
@@ -1891,6 +1935,8 @@ loudly wrong.
 `internal/inventory.Inventory.WithLiveness`, `internal/inventory.Sources`,
 `internal/passivedns`, `internal/passivedns.SecurityTrails.Under`, `internal/passivedns.VirusTotal.Under`,
 `internal/certnames`, `internal/certnames.Reader.Under`, `internal/liveness.Answering`,
+`internal/ptrnames`, `internal/ptrnames.Reader.Under`, `internal/ptrnames.Addresses`,
+`internal/ptrnames.Reverse`, `internal/dnsclient.Client.LookupPTR`, `cmd/porch-scan.rangesNamed`,
 `internal/inventory.Inventory.Unasked`, `internal/httpapi.Server.presented`,
 `internal/passivedns.looksLikeAName`, `cmd/porch-scan.registerNamed`, `cmd/porchd.namesRegister`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
