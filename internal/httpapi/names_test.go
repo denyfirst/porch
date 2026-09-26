@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
@@ -586,5 +587,105 @@ func TestAnInstallationWithNoRegisterSaysItAskedNone(t *testing.T) {
 	}
 	if got.Passive.Asked || got.Passive.Reason != "" {
 		t.Errorf("an installation with no register reports %+v", got.Passive)
+	}
+}
+
+// stubCertificates answers as the hosts' own certificates would, and records
+// which hosts it was given.
+type stubCertificates struct {
+	asked atomic.Value
+	found certnames.Found
+}
+
+func (c *stubCertificates) Under(_ context.Context, _ string, hosts []string) certnames.Found {
+	c.asked.Store(strings.Join(hosts, " "))
+	return c.found
+}
+
+func (c *stubCertificates) was() string {
+	if v, ok := c.asked.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// The service reads the certificates the hosts present, asks only the ones
+// that answer, and asks what the new names are doing.
+//
+// The order is the whole of it: the hosts worth knocking on are the ones the
+// probe has just established are answering, and a name that arrives off a
+// certificate has to be asked what it is doing like any other — otherwise the
+// newest half of the inventory is the half with nothing beside it (R4).
+func TestTheServiceReadsTheCertificatesTheHostsPresent(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{
+			{Name: "www.proven.example"},
+			{Name: "gone.proven.example"},
+		},
+	}})
+
+	probe := &stubLiveness{answer: []liveness.Name{
+		{Name: "www.proven.example", Status: liveness.Live, Answered: []string{"443"}},
+		{Name: "gone.proven.example", Status: liveness.Gone},
+	}}
+	s.live = probe
+
+	certificates := &stubCertificates{found: certnames.Found{
+		Asked: true, Hosts: 1, Answered: 1,
+		Names: []string{"www.proven.example", "internal.proven.example"},
+	}}
+	s.ReadHostCertificates(certificates)
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.93:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+
+	// Only the host that answers is knocked on again. Asking one that does not
+	// resolve spends a timeout to learn what the report already says.
+	if certificates.was() != "www.proven.example" {
+		t.Errorf("the certificates were asked of %q", certificates.was())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.Presented.Established() || got.Presented.Named != 2 {
+		t.Errorf("the hosts' reading came back as %+v", got.Presented)
+	}
+	if got.Distinct != 3 {
+		t.Errorf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+
+	// And the name that arrived off a certificate was asked what it is doing,
+	// rather than being the one line in the report with nothing beside it.
+	if !strings.Contains(probe.was(), "internal.proven.example") {
+		t.Errorf("the name a certificate produced was never asked about: %q", probe.was())
+	}
+}
+
+// No certificate is asked for on a domain nobody proved.
+func TestNoCertificateIsReadForAnUnprovenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
+	s.live = &stubLiveness{}
+	certificates := &stubCertificates{}
+	s.ReadHostCertificates(certificates)
+
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.94:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain was answered %q", got)
+	}
+	if was := certificates.was(); was != "" {
+		t.Errorf("a host was asked for its certificate on a domain nobody proved: %q", was)
 	}
 }

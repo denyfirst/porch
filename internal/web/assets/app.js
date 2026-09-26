@@ -2609,7 +2609,7 @@ function buildNames(data) {
   const records = data.records || {};
   const passive = data.passive || {};
 
-  if (!answered(logs) && !answered(records) && !answered(passive)) {
+  if (!answered(logs) && !answered(records) && !answered(passive) && !answered(data.presented)) {
     // Not one source answered, so there is no inventory. The reassuring
     // answer here is "none found", so a failure that rendered as an empty
     // list would be the most comfortable wrong answer available.
@@ -2638,6 +2638,7 @@ function buildNames(data) {
   row("Certificates", saysLogs(data));
   row("Records", saysRecords(data));
   row("Passive DNS", saysPassive(data));
+  row("The hosts", saysPresented(data));
 
   if (data.wildcards) {
     row("Wildcards", data.wildcards + ", each covering hosts it does not name");
@@ -2762,6 +2763,20 @@ function saysPassive(data) {
   if (r.reason) return "Not established: " + r.reason;
   if (!r.named) return "named none of them: the register has observed no host under this domain";
   return "named " + r.named + " of them, observed by the register";
+}
+
+// saysPresented is what the hosts themselves said, in one line.
+//
+// It carries how many were asked and how many answered, because the difference
+// is the measure of how much this could not see: an estate where two hosts in
+// twenty presented a certificate has eighteen nobody here read.
+function saysPresented(data) {
+  const r = data.presented || {};
+
+  if (!r.asked) return "not asked: this installation does not read them";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) return "named none of them";
+  return "named " + r.named + " of them, off the certificates they presented";
 }
 
 // recordSources are the record types that named something, in a fixed order.
@@ -2891,6 +2906,12 @@ function namesLimits(data) {
     item(
       "From the domain's own records, these are the hosts its mail, its sender policy and its delegation have to name. " +
         "A host that takes no mail, sends none and answers for no zone is in none of them."
+    );
+  }
+  if (answered(data.presented)) {
+    item(
+      "The hosts that answered were asked for their certificates, which is how a name a private authority issued is found: no public log holds one. " +
+        "A handshake was made and closed, nothing was requested over it, and the certificates were read rather than judged."
     );
   }
   if (answered(data.passive)) {

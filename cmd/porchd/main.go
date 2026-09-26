@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/access"
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/challenge"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
@@ -180,6 +181,17 @@ func run() int {
 
 		namesPassiveURL = flag.String("names-passive-url", "",
 			"the `address` of the register named by -names-passive, if not its own")
+
+		// The fourth source: the certificate each answering host presents.
+		//
+		// Off unless asked for. It is the one part of the inventory that opens
+		// a connection to the estate on purpose, and what it finds is what a
+		// private authority issued — which no public log holds and no register
+		// saw. Behind proof of control like everything else this endpoint does.
+		namesReadCertificates = flag.Bool("names-read-certificates", false,
+			"ask each name that answers for the certificate it presents, and keep\n"+
+				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
+				"\tand the certificate is read rather than judged")
 
 		askResponder = flag.Bool("ask-responder", false,
 			"ask each certificate's own authority whether it has been revoked. Needs\n"+
@@ -516,6 +528,14 @@ func run() int {
 			return 2
 		}
 		api.AskPassiveRegister(register)
+	}
+
+	// And the estate itself, where the operator asked for it. One handshake
+	// per name that answers, nothing requested over it, and the certificate
+	// read rather than judged — which is how a name a private authority issued
+	// reaches an inventory at all.
+	if *namesReadCertificates {
+		api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})
 	}
 
 	if *statsFile != "" {

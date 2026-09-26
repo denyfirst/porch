@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
@@ -46,14 +47,46 @@ import (
 // never available on a demonstration build, which promises it queries no log,
 // and why on the command line it is a mode somebody types rather than anything
 // that runs by default.
-func runNames(ctx context.Context, domains []string, timeout time.Duration, monitor, monitorURL, resolver, register, registerURL string, asJSON bool) int {
+// namesOptions is what the inventory mode was asked for.
+//
+// A struct rather than eleven parameters. The list has grown with every source
+// and a positional call that long is one every reader has to count the commas
+// in — and one a test in another build file gets wrong silently, which has
+// happened twice.
+type namesOptions struct {
+	// Timeout bounds each question this mode asks.
+	Timeout time.Duration
+
+	// Monitor and MonitorURL choose the certificate transparency monitor.
+	Monitor, MonitorURL string
+
+	// Resolver is the resolver every lookup goes to. Which one answers
+	// decides what the whole report means.
+	Resolver string
+
+	// Register and RegisterURL choose the passive register, where one is
+	// wanted. Empty asks none.
+	Register, RegisterURL string
+
+	// ReadCertificates asks each live host for the certificate it presents.
+	// Off unless the operator says so: it is the one part of this mode that
+	// opens a connection to the estate on purpose.
+	ReadCertificates bool
+
+	// JSON writes the inventory as it stands rather than as a report.
+	JSON bool
+}
+
+func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 	if demo.Enabled {
 		fmt.Fprintln(os.Stderr, "this is a demonstration build, and it asks no certificate "+
 			"transparency monitor anything")
 		return 2
 	}
 
-	searcher, err := monitorNamed(monitor, monitorURL, timeout)
+	timeout := opt.Timeout
+
+	searcher, err := monitorNamed(opt.Monitor, opt.MonitorURL, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -63,7 +96,7 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 	// unless an operator names one: it wants their own key, the question names
 	// their domain to a company they chose, and nothing here picks one for
 	// them.
-	passive, err := registerNamed(register, registerURL, timeout)
+	passive, err := registerNamed(opt.Register, opt.RegisterURL, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -78,7 +111,7 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 	// while reading as though it had measured the outside. That is why an
 	// address nothing may dial is a status of its own below rather than a
 	// timeout.
-	client := &dnsclient.Client{Server: resolver, Timeout: timeout}
+	client := &dnsclient.Client{Server: opt.Resolver, Timeout: timeout}
 	checker := &liveness.Checker{Timeout: timeout, Resolver: client}
 
 	// And the cheapest source of names there is, which is the domain itself.
@@ -106,9 +139,27 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 		// is asking about the present. The answers go beside the names rather
 		// than in a list of their own, so that a name nothing reached is still
 		// a name in the report.
-		found = found.WithLiveness(checker.Check(ctx, found.Hosts()))
+		live := checker.Check(ctx, found.Hosts())
 
-		if asJSON {
+		// Then, where it was asked for, the estate itself: the certificate
+		// each answering host presents, and the names written in it.
+		//
+		// It runs after the registers rather than beside them because it needs
+		// somewhere to knock: the hosts to ask are the ones something has just
+		// established are answering. What it finds is then merged back in, and
+		// a name that arrives this way is asked what it is doing like any
+		// other — otherwise the newest half of the inventory would be the half
+		// with no state beside it.
+		if hosts := certificatesFrom(opt); hosts != nil {
+			sources.Presented = hosts.Under(ctx, domain, liveness.Answering(live))
+
+			found = inventory.Merge(domain, sources)
+			live = append(live, checker.Check(ctx, found.Unasked(live))...)
+		}
+
+		found = found.WithLiveness(live)
+
+		if opt.JSON {
 			if err := json.NewEncoder(os.Stdout).Encode(found); err != nil {
 				fmt.Fprintln(os.Stderr, "the inventory could not be written")
 				return 2
@@ -125,6 +176,20 @@ func runNames(ctx context.Context, domains []string, timeout time.Duration, moni
 		}
 	}
 	return worst
+}
+
+// certificatesFrom builds the reader that asks each answering host for its
+// certificate, or nil where the operator did not ask for it.
+//
+// Nil rather than a reader nobody uses, and a function rather than a condition
+// inside the loop, because this is the one source that opens a connection to
+// the estate: whether it runs at all is a decision worth being able to look at
+// on its own, and worth a test of its own.
+func certificatesFrom(opt namesOptions) *certnames.Reader {
+	if !opt.ReadCertificates {
+		return nil
+	}
+	return &certnames.Reader{Timeout: opt.Timeout}
 }
 
 // shortInventory reports that a source failed.
@@ -168,6 +233,7 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	fmt.Fprintf(w, "    Certificates %s\n", saysLogs(inv))
 	fmt.Fprintf(w, "    Records      %s\n", saysRecords(inv))
 	fmt.Fprintf(w, "    Passive DNS  %s\n", saysPassive(inv))
+	fmt.Fprintf(w, "    The hosts    %s\n", saysPresented(inv))
 
 	if inv.Wildcards > 0 {
 		fmt.Fprintf(w, "    Wildcards    %d, each covering hosts it does not name\n", inv.Wildcards)
@@ -239,6 +305,24 @@ func saysPassive(inv inventory.Inventory) string {
 		return "named none of them: the register has observed no host under this domain"
 	default:
 		return fmt.Sprintf("named %d of them, observed by the register", r.Named)
+	}
+}
+
+// saysPresented is what the hosts themselves said, in one line.
+//
+// It carries how many were asked and how many answered, because the difference
+// is the measure of how much this could not see: an estate where two hosts in
+// twenty presented a certificate has eighteen nobody here read.
+func saysPresented(inv inventory.Inventory) string {
+	switch r := inv.Presented; {
+	case !r.Asked:
+		return "not asked: -read-certificates was not given"
+	case r.Reason != "":
+		return "Not established: " + r.Reason
+	case r.Named == 0:
+		return "named none of them"
+	default:
+		return fmt.Sprintf("named %d of them, off the certificates they presented", r.Named)
 	}
 }
 
@@ -354,6 +438,13 @@ func printNamesLimits(w io.Writer, inv inventory.Inventory, probed bool) {
 		fmt.Fprintf(w, "    From the domain's own records, these are the hosts its mail, its\n")
 		fmt.Fprintf(w, "    sender policy and its delegation have to name. A host that takes no\n")
 		fmt.Fprintf(w, "    mail, sends none and answers for no zone is in none of them.\n")
+	}
+
+	if inv.Presented.Established() {
+		fmt.Fprintf(w, "    The hosts that answered were asked for their certificates, which is\n")
+		fmt.Fprintf(w, "    how a name a private authority issued is found: no public log holds\n")
+		fmt.Fprintf(w, "    one. A handshake was made and closed, nothing was requested over it,\n")
+		fmt.Fprintf(w, "    and the certificates were read rather than judged.\n")
 	}
 
 	if inv.Passive.Established() {

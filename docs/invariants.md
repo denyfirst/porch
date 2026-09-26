@@ -1576,6 +1576,48 @@ the resolver this installation already asks about every other target, so
 nothing leaves the deployment that was not already leaving it, and N12's
 disclosure argument is untouched by it.
 
+**The hosts' own certificates are a fourth source, and the only one that is the
+estate rather than a record of it.**
+
+Every other source is somebody's register. This one asks each name that
+answers for the certificate it presents and keeps the names written in it —
+which is how a name a **private authority** issued reaches an inventory at all:
+no public log holds such a certificate, because nothing submitted it and
+nothing would accept it, and no register saw a query for a host nobody outside
+resolves.
+
+It is the one part of the mode that opens a connection to the estate on
+purpose, so it is **off unless asked for** (`porch-scan -read-certificates`,
+`porchd -names-read-certificates`) and, on a service, behind the same proof of
+control as everything else (`TestNoCertificateIsReadForAnUnprovenDomain`). A
+handshake is made and closed; nothing is requested over it
+(`TestNothingIsSentToAHostAfterTheHandshake`). Only the names that answer are
+knocked on — asking one that does not resolve spends a timeout to learn what
+the report already says (`TestAnsweringAreTheNamesSomethingIsListeningOn`).
+
+**The certificate is read, not judged.** Verification would fail on exactly the
+certificates this exists to find, and the names on an untrusted certificate are
+still the names its operator put there
+(`TestACertificateNobodyTrustsIsStillRead`). Nothing is graded on it (R21) and
+no verdict is derived from it (R17); the TLS check is where a certificate is
+judged, against a named trust store, one host at a time.
+
+**A name that arrives late is still asked what it is doing.** This source runs
+after the probe, because it needs somewhere to knock, so the names it finds
+arrive after the first round of questions. They are merged in and probed too
+(`TestUnaskedAreTheNamesNothingHasAskedAboutYet`,
+`TestTheServiceReadsTheCertificatesTheHostsPresent`) — a report where the
+newest names are the ones with nothing beside them would be answering the easy
+half (R4). A wildcard on a certificate stays a wildcard and is never resolved
+(`TestWhatAHostPresentedIsItsOwnSource`), and a report that asked no host says
+so rather than leaving the line out: a reader who sees three sources and no
+fourth line does not know a fourth exists
+(`TestAReportThatAskedNoHostSaysSo`, `TestTheReportSaysWhatTheHostsPresented`,
+`TestTheNamesAHostPresents`, `TestAHostThatDoesNotAnswerIsCountedAndNotInvented`,
+`TestAskingNoHostsIsNotAFailure`,
+`TestANameFromACertificateBelongsToTheEstateOnlyOnALabelBoundary`,
+`TestWhatAHostSaysIsCleanedBeforeItIsKept`).
+
 **A passive register is a third source, and the only one that is not
 publication.**
 
@@ -1848,6 +1890,8 @@ loudly wrong.
 `internal/httpapi.handleNames`, `internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
 `internal/inventory.Inventory.WithLiveness`, `internal/inventory.Sources`,
 `internal/passivedns`, `internal/passivedns.SecurityTrails.Under`, `internal/passivedns.VirusTotal.Under`,
+`internal/certnames`, `internal/certnames.Reader.Under`, `internal/liveness.Answering`,
+`internal/inventory.Inventory.Unasked`, `internal/httpapi.Server.presented`,
 `internal/passivedns.looksLikeAName`, `cmd/porch-scan.registerNamed`, `cmd/porchd.namesRegister`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,

@@ -212,6 +212,19 @@ func run() int {
 		registerURL = flag.String("passive-url", "",
 			"the `address` of the register named by -passive, if not its own")
 
+		// The fourth source, and the only one that is the estate itself.
+		//
+		// Off unless asked for, because it is the one part of this mode that
+		// opens a connection to the hosts on purpose: a handshake with each
+		// name that answers, and the names on the certificate it presents.
+		// What that finds is what a private authority issued, which no public
+		// log holds and no register saw.
+		readCertificates = flag.Bool("read-certificates", false,
+			"ask each name that answers for the certificate it presents, and keep\n"+
+				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
+				"\tand the certificate is read rather than judged. It finds what a\n"+
+				"\tprivate authority issued, which no public log holds")
+
 		// Which resolver the CAA lookup asks. Empty reads this machine's own.
 		//
 		// It exists because the machine's own answer is assembled rather than
@@ -389,8 +402,16 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		return runNames(ctx, targets, *timeout, *monitor, *monitorURL, *resolver,
-			*register, *registerURL, *asJSON)
+		return runNames(ctx, targets, namesOptions{
+			Timeout:          *timeout,
+			Monitor:          *monitor,
+			MonitorURL:       *monitorURL,
+			Resolver:         *resolver,
+			Register:         *register,
+			RegisterURL:      *registerURL,
+			ReadCertificates: *readCertificates,
+			JSON:             *asJSON,
+		})
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)

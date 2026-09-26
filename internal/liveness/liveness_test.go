@@ -207,3 +207,24 @@ func TestAnEstatePastTheBoundIsCut(t *testing.T) {
 type fakeConn struct{ net.Conn }
 
 func (fakeConn) Close() error { return nil }
+
+// The names worth knocking on again are the ones something is listening on.
+//
+// A name that does not resolve has nothing to knock on, and one that resolves
+// and answers nothing has nothing to hand over. Asking either spends a timeout
+// to learn what the report already says.
+func TestAnsweringAreTheNamesSomethingIsListeningOn(t *testing.T) {
+	got := Answering([]Name{
+		{Name: "live.example.test", Status: Live},
+		{Name: "silent.example.test", Status: Silent},
+		{Name: "gone.example.test", Status: Gone},
+		{Name: "inside.example.test", Status: Internal},
+		{Name: "moved.example.test", Status: Dangling},
+		{Name: "unknown.example.test", Status: Unchecked},
+		{Name: "also-live.example.test", Status: Live},
+	})
+
+	if len(got) != 2 || got[0] != "live.example.test" || got[1] != "also-live.example.test" {
+		t.Errorf("the names to ask again are %v", got)
+	}
+}

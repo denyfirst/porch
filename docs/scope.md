@@ -173,6 +173,14 @@ this installation already uses for every other target — but it is read behind
 the same proof of control, because a lookup a stranger caused this installation
 to make is a lookup this installation made.
 
+**The hosts' own certificates are the one source that touches the estate, and
+they are off until an operator asks.** Each name that answers is asked for the
+certificate it presents — a handshake, closed as soon as it has been read, with
+nothing requested over it — and what that finds is the half no register holds:
+a certificate a private authority issued, which no public log will ever have.
+The certificate is read rather than judged; judging one is the TLS check's job,
+against a named trust store, one host at a time.
+
 **A passive register is a larger disclosure again, and it is off until an
 operator names one.** What it holds was not published by anybody: it is
 observation, collected by watching resolvers, which is why the report says a
