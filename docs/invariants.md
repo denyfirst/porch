@@ -1559,6 +1559,33 @@ the cost of seconds, and runs the demonstration's own command-line test under
 the same named-and-grepped pattern the service's half already used, because a
 `-run` pattern that matches nothing passes silently.
 
+**A source added after the gate was built goes behind it.**
+
+The service reads both sources now, and the proof requirement is what makes
+this endpoint something other than an anonymous reconnaissance service, so the
+second one is read only after proof — `TestNeitherSourceIsReadForAnUnprovenDomain`
+holds both halves. Three lookups of a stranger's domain, made by this
+installation because somebody asked it to, are three lookups this installation
+made; that the records are public changes what is disclosed and not who did the
+asking. The rule generalises: every future source belongs behind the same gate,
+and a test that names only the monitor is a test that will pass while the gate
+leaks.
+
+What the second source does **not** do is add a third party. It is read with
+the resolver this installation already asks about every other target, so
+nothing leaves the deployment that was not already leaving it, and N12's
+disclosure argument is untouched by it.
+
+**The monitor is still the switch.** An installation started without one
+refuses the endpoint, as it always has, even though the records half needs no
+configuration and would answer. Offering somebody a capability they turned off,
+because a second source happens to be free, is answering a question they
+already answered — and what this endpoint produces is the shape of an estate.
+Where a resolver is absent instead, the records are reported as not read rather
+than as naming nothing, and the half that was established is still answered
+with (`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`,
+`TestTheServiceReadsBothSourcesForAProvenDomain`).
+
 **Both faces say the same thing about what the inventory misses.**
 `TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses` compares the sentences
 the page carries against the ones the command line actually printed. Two
@@ -1691,6 +1718,7 @@ loudly wrong.
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`,
 `internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
 `cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`, `cmd/porch-scan.saysRecords`,
+`internal/httpapi.handleNames`, `internal/httpapi.Server.records`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
 `internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
@@ -1742,7 +1770,10 @@ loudly wrong.
 `TestWhatEachSourceDroppedIsKeptApart`,
 `TestEveryNameSaysWhatNamedIt`,
 `TestAnInventoryMissingASourceSaysWhichOne`,
-`TestASourceThatFailedIsANonZeroExit`
+`TestASourceThatFailedIsANonZeroExit`,
+`TestTheServiceReadsBothSourcesForAProvenDomain`,
+`TestNeitherSourceIsReadForAnUnprovenDomain`,
+`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

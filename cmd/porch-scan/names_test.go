@@ -264,19 +264,27 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 	}
 	page := string(script)
 
+	// Both sources answered, so every sentence either face can carry is in
+	// this one report. A fixture with one source would compare the shared
+	// paragraph against a report that never printed half of it.
 	var buf bytes.Buffer
-	printNames(&buf, fromLogs(ctsearch.Estate{
-		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1, Wildcards: 1,
-		Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}},
-	}), nil)
+	printNames(&buf, inventory.Merge("example.test",
+		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1, Wildcards: 1,
+			Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}}},
+		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
+		}}), nil)
 	printed := buf.String()
 
 	// Each is a sentence both faces have to carry. Compared against what the
 	// command line actually printed, so that a change to one and not the other
 	// fails here rather than in front of a reader.
 	for _, claim := range []string{
+		"Nothing here was guessed: no name was invented and no list of names was tried.",
 		"these names were published by whoever obtained a certificate for them",
 		"no publicly trusted certificate never appears",
+		"From the domain's own records, these are the hosts its mail, its sender policy and its delegation have to name.",
+		"A host that takes no mail, sends none and answers for no zone is in none of them.",
 		"nothing above is graded, because no",
 		"document says which names an estate ought to have",
 		"of the names above is a wildcard",

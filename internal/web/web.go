@@ -226,14 +226,14 @@ var pages = map[string]*page{
 	// paragraph about its own limits that would read as a disclaimer if it sat
 	// inside a graded report.
 	"/names": {
-		Title:       "Names in your certificates — Porch by denyfirst",
-		Description: "Lists the names under a domain that appear in publicly logged certificates. Nothing is sent to the domain, and nothing is graded.",
+		Title:       "The names under your domain — Porch by denyfirst",
+		Description: "Lists the names under a domain that appear in publicly logged certificates and in the domain's own records, says which named each one, and grades nothing.",
 		Fragment:    "assets/names.html",
 		Script:      true,
 	},
 	"/names/method": {
 		Title:       "What the name inventory reads, and what it cannot see — Porch by denyfirst",
-		Description: "Where the names come from, who is asked, why proof of control is required, and the three kinds of name that never appear.",
+		Description: "Where the two sources of names come from, who is asked, why proof of control is required, and the kinds of name that never appear.",
 		Fragment:    "assets/names-method.html",
 	},
 

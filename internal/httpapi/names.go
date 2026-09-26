@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
+	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
@@ -124,7 +127,30 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.proofSem.release()
 
-	found := s.names.SearchEstate(ctx, t.host)
+	// Two sources, merged, each name carrying which of them named it.
+	//
+	// The second costs three lookups to the resolver this installation already
+	// asks about every other target, and discloses nothing to anybody the
+	// first has not already been told: the monitor is asked for the domain
+	// either way. What it adds is the half of an estate a certificate log
+	// cannot see — a host on plain HTTP, one behind a private authority, and
+	// anything hidden by a wildcard, where the domain's own mail, sender
+	// policy or delegation names it.
+	//
+	// Where this installation has no resolver, the records are not read and
+	// the inventory says so rather than reporting an estate that publishes
+	// nothing (R4).
+	var estate ctsearch.Estate
+	if s.names != nil {
+		estate = s.names.SearchEstate(ctx, t.host)
+	}
+
+	var records dnsnames.Found
+	if s.records != nil {
+		records = s.records.Under(ctx, t.host)
+	}
+
+	found := inventory.Merge(t.host, estate, records)
 	if ctx.Err() != nil {
 		s.refuse(w, http.StatusGatewayTimeout, "timeout",
 			"The inventory did not finish within the time allowed.")
