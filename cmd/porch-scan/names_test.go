@@ -297,3 +297,44 @@ func addrsFor(t *testing.T, list ...string) []netip.Addr {
 	}
 	return out
 }
+
+// A name says what it is doing and when the register last had it, on one line.
+//
+// The finding that matters most in an old estate needs both halves: a name
+// whose newest certificate expired four years ago and which is still answering
+// on 443 is a service nobody has looked at since. A reader given only the
+// status would chase it as current; one given only the date would not know it
+// was still running.
+func TestANameSaysWhatItIsDoingAndWhenItWasLastCovered(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, ctsearch.Estate{
+		Asked: true, Domain: "example.test", Distinct: 3, Certificates: 3,
+		Names: []ctsearch.Name{
+			{Name: "forgotten.example.test", FirstSeen: day(2019, 3, 1), LastSeen: day(2021, 6, 1)},
+			{Name: "current.example.test", FirstSeen: day(2026, 1, 1), LastSeen: day(2026, 12, 1)},
+			{Name: "undated.example.test"},
+		},
+	}, []liveness.Name{
+		{Name: "forgotten.example.test", Status: liveness.Live,
+			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
+		{Name: "current.example.test", Status: liveness.Live,
+			Addresses: addrsFor(t, "93.184.216.35"), Answered: []string{"443"}},
+		{Name: "undated.example.test", Status: liveness.Gone},
+	})
+	out := buf.String()
+
+	// The one worth finding: still answering, last covered five years ago.
+	if !strings.Contains(out, "answering on 443; certificates to 2021-06-01") {
+		t.Errorf("a live name does not say when it was last covered:\n%s", out)
+	}
+	if !strings.Contains(out, "answering on 443; certificates to 2026-12-01") {
+		t.Errorf("a current name does not carry its date:\n%s", out)
+	}
+
+	// And where the register carried no dates, nothing is invented.
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "undated.example.test") && strings.Contains(line, "certificates to") {
+			t.Errorf("a name with no dates was given one: %q", line)
+		}
+	}
+}

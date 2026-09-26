@@ -1476,7 +1476,8 @@ only dishonest way to have one, which is to stop quietly, and
 `TestWhatEachNameIsDoingIsTheFirstThingOnTheLine`,
 `TestNamesSurviveAReportThatEstablishedNoStatus`,
 `TestAWildcardIsNeverAskedAboutAsAName`,
-`TestAResolverAddressWorksWithoutAPort` keys on the certificate hash rather
+`TestAResolverAddressWorksWithoutAPort`,
+`TestANameSaysWhatItIsDoingAndWhenItWasLastCovered` keys on the certificate hash rather
 than the monitor's own identifier — the identifier is not what a certificate is.
 `TestRateLimitingIsSaidPlainly` gives that answer its own sentence, because
 "did not answer the search" would send an operator looking for a fault in their
@@ -1558,7 +1559,7 @@ that quietly said something weaker would be the page somebody presents from.
 
 
 **A list of names is not an answer, so every name carries what it is doing
-now.**
+now — and when the register last had it.**
 
 Each source of names is a record of the past. A certificate log holds names
 that were covered once, a passive register holds names somebody once looked up,
@@ -1590,9 +1591,23 @@ outside. Reported as a timeout, that would be the office network printed as the
 state of the estate (R4). It is also why the resolver is the operator's to
 choose here: which resolver answered decides what the whole report means.
 
-Dangling is reported as what it is and no further.  Whether somebody else can
+Dangling is reported as what it is and no further. Whether somebody else can
 claim the target depends on what that target is and who runs it, which this has
 not established and will not guess at (R17).
+
+**Each line carries the date beside the state, because the finding needs both.**
+A name whose newest certificate expired four years ago and which is still
+answering on 443 is a service nobody has looked at since — and the two halves of
+that sentence come from two different places. A reader given only the state
+would chase it as current; one given only the date would not know it was still
+running. `TestANameSaysWhatItIsDoingAndWhenItWasLastCovered` holds both, and
+holds that a register carrying no dates produces no date rather than a guess.
+
+The expiry rather than the issue date: what an operator is looking for is a name
+nobody renewed, and the day a long-dead certificate was issued says that less
+directly. Nothing is graded on the age — no document says how old a name may be
+before it is a fault, and a threshold this project invented would be one nobody
+could argue with (R21). The date is shown; the reader judges.
 
 **And `-resolver` takes an address without a port.** It did not until
 2026-09-25: the resolvers read from this machine's own configuration have had
