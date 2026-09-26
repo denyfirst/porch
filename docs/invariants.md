@@ -1549,6 +1549,16 @@ visitor finds out only after typing somebody's domain into it.
 rather than trusting the endpoint to say no, and
 `TestTheDemonstrationInventoriesNoEstate` holds the command line's half.
 
+That last one held nothing for a day. The mode gained a `-resolver` flag on
+2026-09-25, the call in the demonstration test was not updated with it, and
+`go build -tags demo ./...` does not compile tests — so the only guard on the
+command line's half of the promise stopped being built and nothing said a word.
+A test that does not compile is indistinguishable, in a green log, from a test
+that passes. CI runs `go vet -tags demo ./...` now, which type-checks tests at
+the cost of seconds, and runs the demonstration's own command-line test under
+the same named-and-grepped pattern the service's half already used, because a
+`-run` pattern that matches nothing passes silently.
+
 **Both faces say the same thing about what the inventory misses.**
 `TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses` compares the sentences
 the page carries against the ones the command line actually printed. Two
@@ -1609,6 +1619,65 @@ directly. Nothing is graded on the age — no document says how old a name may b
 before it is a fault, and a threshold this project invented would be one nobody
 could argue with (R21). The date is shown; the reader judges.
 
+**Two sources, one list, and every name says which of them named it.**
+
+A certificate log and a domain's own records answer the same question from
+opposite ends, and neither answer is complete. A log holds the names somebody
+obtained a publicly trusted certificate for and nothing else: plain HTTP, a
+private authority and everything behind a wildcard are invisible to it. The
+records hold the hosts a domain's mail, its sender policy and its delegation
+have to name and nothing else: a web server that takes no mail is in none of
+them. `internal/dnsnames` reads the second, `internal/inventory` merges them,
+and the merge is worth more than either list alone only if the report says
+which source named what.
+
+Without that column a reader has forty lines and nothing to sort them by. With
+it, the three cases separate: a name only a log has is a host somebody obtained
+a certificate for, and if nothing answers it the certificate is the thing to
+look at; a name only the records have is a host the domain publishes itself; a
+name both have is the ordinary well-kept case, which is worth as much in a
+report as a finding is, because it is the line nobody has to spend time on.
+`TestEveryNameSaysWhatNamedIt` holds the column.
+
+The merge folds names before comparing them. A monitor writes a trailing dot or
+a capital where a resolver does not, and two spellings of one host would list as
+two hosts, each carrying half the evidence for itself
+(`TestTwoSpellingsOfOneHostAreOneHost`, `TestOneHostNamedTwiceIsOneName`). It
+never narrows what one source established either: the window a log gives a name
+survives a record naming the same host, and a name no certificate ever covered
+is given no date at all rather than borrowing the phrase a log would have used
+(`TestTheWindowSurvivesTheMerge`).
+
+**Each source answers for itself, and a source that failed is named.** Six names
+from two sources and six names from one that answered while the other timed out
+are the same six names, and only a line per source tells a reader which report
+they are holding. A monitor that is down and a domain that publishes nothing
+produce the same empty list, so the readings are kept apart and each says
+whether it was read, what it named, and why it established nothing where it
+established nothing (R4). `TestASourceThatFailedIsNotAnEmptyEstate` and
+`TestAnInventoryMissingASourceSaysWhichOne` hold it, and the exit status is 2
+wherever a source failed — including where the other answered and the report on
+the screen looks complete. This is the case the second source was added for:
+crt.sh was unreachable for a whole day while the mode was being written, and
+three lookups of the domain itself answered throughout.
+
+A source nobody read is not a source that found nothing, and is printed as
+unread. A short label this package does not know — a record type added to the
+reader and not here — carries the name through under the reader's own spelling
+rather than dropping it, because a name missing from a list somebody acts on,
+with nothing anywhere saying it was found, is the worst available way to learn
+that two spellings drifted apart (`TestARecordSourceWithNoShortLabelIsStillCarried`).
+
+**The paragraph saying what was sent had stopped being true.** Under every
+inventory stood *nothing here was guessed and nothing was asked of
+example.com*, and it survived the day each name started being resolved and
+connected to, and the day the domain's own records started being read. Both
+halves of that sentence were load-bearing and one of them had quietly become
+false. It is three claims now, each of which is checked against what the run
+actually did: no name was invented; each source describes its own blind spot and
+only where it answered; and where the statuses were established, the report says
+the resolution and the connection happened and that nothing was sent over it.
+
 **And `-resolver` takes an address without a port.** It did not until
 2026-09-25: the resolvers read from this machine's own configuration have had
 the port added since `resolverList` was written, and one an operator typed did
@@ -1619,6 +1688,9 @@ IPv6 literal, which is the case that would have been silently wrong rather than
 loudly wrong.
 *Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
 `internal/liveness`, `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
+`internal/dnsnames`, `internal/dnsnames.Reader.Under`,
+`internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
+`cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`, `cmd/porch-scan.saysRecords`,
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
 `internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
@@ -1660,7 +1732,17 @@ loudly wrong.
 `TestRateLimitingIsSaidPlainly`,
 `TestTheKeyIsSentAsACredentialAndNotWrittenDown`,
 `TestTheSecondMonitorKeepsOnlyThisEstate`,
-`TestOneCertificateUnderTwoIdentifiersIsOne`
+`TestOneCertificateUnderTwoIdentifiersIsOne`,
+`TestOneHostNamedTwiceIsOneName`,
+`TestTwoSpellingsOfOneHostAreOneHost`,
+`TestTheWindowSurvivesTheMerge`,
+`TestASourceThatFailedIsNotAnEmptyEstate`,
+`TestAWildcardIsNeverAHostToResolve`,
+`TestARecordSourceWithNoShortLabelIsStillCarried`,
+`TestWhatEachSourceDroppedIsKeptApart`,
+`TestEveryNameSaysWhatNamedIt`,
+`TestAnInventoryMissingASourceSaysWhichOne`,
+`TestASourceThatFailedIsANonZeroExit`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

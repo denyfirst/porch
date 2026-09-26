@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/ctsearch"
+	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
 )
 
@@ -16,18 +18,28 @@ func day(y int, m time.Month, d int) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
+// fromLogs is an inventory where only the certificate monitor was read.
+//
+// The older shape of this report, kept as a fixture because it is still a
+// shape the report takes: a resolver that answers nothing leaves the logs as
+// the only source there is.
+func fromLogs(e ctsearch.Estate) inventory.Inventory {
+	return inventory.Merge(e.Domain, e, dnsnames.Found{})
+}
+
 // The inventory prints what was found and, every time, what it cannot show.
 //
 // The second half is not decoration. A list of names read without it says "this
-// is your estate", which is not what a certificate log establishes for anybody:
-// a host with no publicly trusted certificate never appears, and a wildcard
-// covers hosts without naming them. Somebody who hands this to a security team
-// as an estate inventory, and is then shown more hosts by a port scan, loses
-// the argument — and the difference between the two methods was knowable in
-// advance and is printed here.
+// is your estate", which is not what either source establishes for anybody: a
+// host with no publicly trusted certificate never appears in a log, a wildcard
+// covers hosts without naming them, and a domain's own records name only the
+// hosts they have to. Somebody who hands this to a security team as an estate
+// inventory, and is then shown more hosts by a port scan, loses the argument —
+// and the difference between the methods was knowable in advance and is
+// printed here.
 func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test",
 		Distinct: 4, Certificates: 4, Wildcards: 1, Foreign: 1,
 		Names: []ctsearch.Name{
@@ -36,18 +48,19 @@ func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 			{Name: "old-portal.example.test", FirstSeen: day(2021, 3, 1), LastSeen: day(2022, 6, 1)},
 			{Name: "www.example.test", FirstSeen: day(2023, 2, 14), LastSeen: day(2025, 11, 1)},
 		},
-	}, nil)
+	}), nil)
 	out := buf.String()
 
 	for _, want := range []string{
-		"4 distinct names across 4 certificates",
+		"4 distinct names",
+		"named 4 of them, across 4 certificates",
 		"1, each covering hosts it does not name",
 		"and 1 of the names\n    above is a wildcard.",
 		"1 on the same certificates, under other domains, not listed",
 		"old-portal.example.test",
 		"from 2021-03-01, certificates to 2022-06-01",
 		"What this does not show",
-		"nothing was asked of example.test",
+		"no name was invented",
 		"no publicly trusted certificate never appears",
 		"nothing above is graded",
 	} {
@@ -63,6 +76,16 @@ func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 			t.Errorf("%s was found and is not in the printed inventory:\n%s", name, out)
 		}
 	}
+
+	// And it does not claim to have read a source nobody read. The records
+	// were not asked here, and a report that quietly spoke for them would be
+	// claiming coverage it never had (R4).
+	if !strings.Contains(out, "Records      not read") {
+		t.Errorf("a source that was never read is not reported as unread:\n%s", out)
+	}
+	if strings.Contains(out, "sender policy and its delegation have to name") {
+		t.Errorf("the report describes the limits of a source it never read:\n%s", out)
+	}
 }
 
 // A search that failed says so, and prints no inventory at all.
@@ -73,10 +96,10 @@ func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 // written, so this is the ordinary case rather than the rare one.
 func TestAFailedSearchPrintsNoInventory(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test",
 		Reason: "the certificate transparency monitor could not be reached",
-	}, nil)
+	}), nil)
 	out := buf.String()
 
 	if !strings.Contains(out, "Not established: the certificate transparency monitor could not be reached") {
@@ -87,15 +110,96 @@ func TestAFailedSearchPrintsNoInventory(t *testing.T) {
 	}
 }
 
+// One source down is a short inventory, and it says which half is missing.
+//
+// This is the case the second source was added for: the monitor was unreachable
+// for a whole day while this mode was being written, and the domain's own
+// records answered throughout. The report that comes out of that day must be
+// usable, and it must not read like a complete one — a list of three names with
+// nothing saying the logs went unread is a list somebody presents as the
+// estate.
+func TestAnInventoryMissingASourceSaysWhichOne(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test",
+		ctsearch.Estate{Asked: true, Domain: "example.test",
+			Reason: "the certificate transparency monitor could not be reached"},
+		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
+			{Name: "ns1.example.test", Sources: []dnsnames.Source{dnsnames.FromNS}},
+		}}), nil)
+	out := buf.String()
+
+	if !strings.Contains(out, "Certificates Not established: the certificate transparency monitor could not be reached") {
+		t.Errorf("the failed source is not named:\n%s", out)
+	}
+	if !strings.Contains(out, "named 2 of them, from MX and NS") {
+		t.Errorf("the source that answered is not credited:\n%s", out)
+	}
+	for _, name := range []string{"mail.example.test", "ns1.example.test"} {
+		if !strings.Contains(out, name) {
+			t.Errorf("%s was established and is not printed:\n%s", name, out)
+		}
+	}
+
+	// And the paragraph about what a certificate log misses is not printed
+	// under a report where no log was read: it would be describing the limits
+	// of something that did not happen.
+	if strings.Contains(out, "no publicly trusted certificate never appears") {
+		t.Errorf("the report describes a source it could not read:\n%s", out)
+	}
+	if !strings.Contains(out, "sender policy and its delegation have to name") {
+		t.Errorf("the source that did answer has no limits printed:\n%s", out)
+	}
+}
+
+// A source that failed is a non-zero exit, even where the other answered.
+//
+// The report says which half is missing, and a script does not read the
+// report. A run that exited zero with the certificate half missing would hand
+// a caller a list from two sources on the days both answered and from one on
+// the days they did not, with nothing in the status to tell those apart (R4).
+func TestASourceThatFailedIsANonZeroExit(t *testing.T) {
+	answered := inventory.Merge("example.test",
+		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test"}}},
+		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
+		}})
+	if shortInventory(answered) {
+		t.Error("an inventory both sources answered is reported as short")
+	}
+
+	for _, short := range []inventory.Inventory{
+		inventory.Merge("example.test",
+			ctsearch.Estate{Asked: true, Reason: "the certificate transparency monitor could not be reached"},
+			dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+				{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
+			}}),
+		inventory.Merge("example.test",
+			ctsearch.Estate{Asked: true, Certificates: 1,
+				Names: []ctsearch.Name{{Name: "www.example.test"}}},
+			dnsnames.Found{Asked: true, Reason: "the domain's own records could not be read"}),
+	} {
+		if !shortInventory(short) {
+			t.Errorf("an inventory missing a source is reported as whole: %+v", short)
+		}
+	}
+}
+
 // One name is not "1 names".
 func TestTheInventoryCountsInWords(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1,
 		Names: []ctsearch.Name{{Name: "example.test", LastSeen: day(2026, 1, 1)}},
-	}, nil)
-	if got := buf.String(); !strings.Contains(got, "1 distinct name across 1 certificate\n") {
-		t.Errorf("the count reads wrongly:\n%s", got)
+	}), nil)
+	out := buf.String()
+
+	if !strings.Contains(out, "1 distinct name\n") {
+		t.Errorf("the count reads wrongly:\n%s", out)
+	}
+	if !strings.Contains(out, "named 1 of them, across 1 certificate\n") {
+		t.Errorf("the source line reads wrongly:\n%s", out)
 	}
 }
 
@@ -120,13 +224,13 @@ func TestTheInventoryTakesADomainAndNotAnAddress(t *testing.T) {
 // list for the estate.
 func TestTheLimitsArePrintedEvenWhenNothingWasHidden(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 2, Certificates: 2,
 		Names: []ctsearch.Name{
 			{Name: "example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
 			{Name: "www.example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
 		},
-	}, nil)
+	}), nil)
 	out := buf.String()
 
 	if !strings.Contains(out, "What this does not show") {
@@ -148,6 +252,11 @@ func TestTheLimitsArePrintedEvenWhenNothingWasHidden(t *testing.T) {
 // (R16). It matters more here than anywhere: the paragraph these share is the
 // one that stops a list of names being read as an estate, so a page that
 // quietly said something weaker would be the page somebody presents from.
+//
+// Only the claims about the certificate logs are compared. The page reads that
+// one source; the command line reads two and asks each name what it is doing,
+// so each says more than the other about what it did — and neither may say less
+// about what they both did.
 func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 	script, err := os.ReadFile("../../internal/web/assets/app.js")
 	if err != nil {
@@ -156,10 +265,10 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 	page := string(script)
 
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1, Wildcards: 1,
 		Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}},
-	}, nil)
+	}), nil)
 	printed := buf.String()
 
 	// Each is a sentence both faces have to carry. Compared against what the
@@ -196,7 +305,7 @@ func flatten(s string) string {
 // evidence for itself: where the name points, or why nothing was established.
 func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 5, Certificates: 5, Wildcards: 1,
 		Names: []ctsearch.Name{
 			{Name: "*.example.test", Wildcard: true, FirstSeen: day(2025, 6, 1), LastSeen: day(2026, 9, 1)},
@@ -205,7 +314,7 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 			{Name: "inside.example.test", LastSeen: day(2026, 9, 1)},
 			{Name: "moved.example.test", LastSeen: day(2026, 9, 1)},
 		},
-	}, []liveness.Name{
+	}), []liveness.Name{
 		{Name: "api.example.test", Status: liveness.Live,
 			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
 		{Name: "old.example.test", Status: liveness.Gone},
@@ -217,10 +326,10 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 
 	for _, want := range []string{
 		"What each name is doing now",
-		"live      api.example.test    93.184.216.34, answering on 443",
-		"gone      old.example.test    does not resolve",
-		"internal  inside.example.test 172.23.0.11",
-		"dangling  moved.example.test  an alias to target.elsewhere.test, which does not resolve",
+		"live      api.example.test    certificate 93.184.216.34, answering on 443",
+		"gone      old.example.test    certificate does not resolve",
+		"internal  inside.example.test certificate 172.23.0.11",
+		"dangling  moved.example.test  certificate an alias to target.elsewhere.test, which does not resolve",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the report does not say %q:\n%s", want, out)
@@ -242,30 +351,97 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 		t.Errorf("a wildcard was given a status:\n%s", out)
 	}
 
-	// And the limits are still underneath all of it.
+	// And the limits are still underneath all of it, including what was sent
+	// to establish the statuses above.
 	if !strings.Contains(out, "What this does not show") {
 		t.Errorf("the limits are missing:\n%s", out)
 	}
+	if !strings.Contains(flatten(out), "opening a connection to each address it gave") {
+		t.Errorf("the report does not say what was sent:\n%s", out)
+	}
 }
 
-// Where nothing asked what the names are doing, the names are still drawn.
+// Every name says what named it, and a name only one source has is still a
+// name.
+//
+// The column is what a reader sorts by. A host in a certificate and in the
+// domain's own records is the well-kept case; a host in a certificate alone,
+// with nothing in the zone pointing at it, is the one worth the time. Without
+// the column those two are one line each and indistinguishable.
+func TestEveryNameSaysWhatNamedIt(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test",
+		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 3,
+			Names: []ctsearch.Name{
+				{Name: "api.example.test", LastSeen: day(2026, 9, 1)},
+				{Name: "mail.example.test", LastSeen: day(2026, 9, 1)},
+			}},
+		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX, dnsnames.FromSPF}},
+			{Name: "ns1.example.test", Sources: []dnsnames.Source{dnsnames.FromNS}},
+		}}),
+		[]liveness.Name{
+			{Name: "api.example.test", Status: liveness.Live,
+				Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
+			{Name: "mail.example.test", Status: liveness.Live,
+				Addresses: addrsFor(t, "93.184.216.35"), Answered: []string{"25"}},
+			{Name: "ns1.example.test", Status: liveness.Live,
+				Addresses: addrsFor(t, "93.184.216.36"), Answered: []string{"443"}},
+		})
+	out := buf.String()
+
+	for _, want := range []string{
+		"3 distinct names",
+		"named 2 of them, across 3 certificates",
+		"named 2 of them, from MX, SPF and NS",
+		"live      api.example.test  certificate          93.184.216.34",
+		"live      mail.example.test certificate, MX, SPF 93.184.216.35",
+		"live      ns1.example.test  NS                   93.184.216.36",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// A name only the records carried has no log date, and none is invented
+	// for it (R17).
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "ns1.example.test") && strings.Contains(line, "certificates to") {
+			t.Errorf("a name no certificate covered was given a certificate date: %q", line)
+		}
+	}
+}
+
+// Where nothing asked what the names are doing, the names are still drawn —
+// and they still say what named them.
 //
 // Dropping them would lose the half of the report that was established in
 // order to report the half that was not (R4). The heading says which question
 // went unanswered.
 func TestNamesSurviveAReportThatEstablishedNoStatus(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
-		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1,
-		Names: []ctsearch.Name{{Name: "api.example.test", LastSeen: day(2026, 9, 1)}},
-	}, nil)
+	printNames(&buf, inventory.Merge("example.test",
+		ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "api.example.test", LastSeen: day(2026, 9, 1)}}},
+		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
+			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
+		}}), nil)
 	out := buf.String()
 
-	if !strings.Contains(out, "api.example.test") {
+	if !strings.Contains(out, "api.example.test") || !strings.Contains(out, "mail.example.test") {
 		t.Errorf("the names were dropped when nothing established their status:\n%s", out)
 	}
 	if !strings.Contains(out, "none of them asked what it is doing now") {
 		t.Errorf("the report does not say the status went unasked:\n%s", out)
+	}
+	if !strings.Contains(out, "mail.example.test MX          in no logged certificate") {
+		t.Errorf("a name is missing what named it:\n%s", out)
+	}
+
+	// Nothing was resolved and nothing was dialled, so the report does not say
+	// that anything was.
+	if strings.Contains(flatten(out), "opening a connection to each address it gave") {
+		t.Errorf("a report that asked nothing says it opened connections:\n%s", out)
 	}
 }
 
@@ -275,11 +451,11 @@ func TestNamesSurviveAReportThatEstablishedNoStatus(t *testing.T) {
 // reads as a fault in the estate — and the estate would then be reported as
 // having a dead name that never existed.
 func TestAWildcardIsNeverAskedAboutAsAName(t *testing.T) {
-	got := hosts(ctsearch.Estate{Names: []ctsearch.Name{
+	got := fromLogs(ctsearch.Estate{Asked: true, Names: []ctsearch.Name{
 		{Name: "*.example.test", Wildcard: true},
 		{Name: "api.example.test"},
 		{Name: "*.staging.example.test", Wildcard: true},
-	}})
+	}}).Hosts()
 	if len(got) != 1 || got[0] != "api.example.test" {
 		t.Errorf("the names asked about are %v", got)
 	}
@@ -307,14 +483,14 @@ func addrsFor(t *testing.T, list ...string) []netip.Addr {
 // was still running.
 func TestANameSaysWhatItIsDoingAndWhenItWasLastCovered(t *testing.T) {
 	var buf bytes.Buffer
-	printNames(&buf, ctsearch.Estate{
+	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 3, Certificates: 3,
 		Names: []ctsearch.Name{
 			{Name: "forgotten.example.test", FirstSeen: day(2019, 3, 1), LastSeen: day(2021, 6, 1)},
 			{Name: "current.example.test", FirstSeen: day(2026, 1, 1), LastSeen: day(2026, 12, 1)},
 			{Name: "undated.example.test"},
 		},
-	}, []liveness.Name{
+	}), []liveness.Name{
 		{Name: "forgotten.example.test", Status: liveness.Live,
 			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
 		{Name: "current.example.test", Status: liveness.Live,

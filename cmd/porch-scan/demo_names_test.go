@@ -25,7 +25,7 @@ func TestTheDemonstrationInventoriesNoEstate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if code := runNames(ctx, []string{"example.test"}, time.Second, "", "", false); code == 0 {
+	if code := runNames(ctx, []string{"example.test"}, time.Second, "", "", "", false); code == 0 {
 		t.Error("a demonstration build ran an estate inventory and reported success")
 	}
 }

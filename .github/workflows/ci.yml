@@ -114,13 +114,25 @@ jobs:
       # own test is named and driven instead — and the grep is there because a
       # -run pattern that matches nothing passes silently, which would leave
       # the refusal untested and the log green.
+      #
+      # `go build` does not compile tests, so a demonstration test left behind
+      # by a change to the function it calls goes on passing by never being
+      # built. One did: the command line's inventory refusal stopped compiling
+      # when the mode gained a -resolver flag, and nothing here noticed for a
+      # day, because the only job that reads these files does not read the
+      # tests. `go vet` type-checks the tests too, which is the cheapest way to
+      # be told.
       - name: Build and test the demonstration deployment
         run: |
           go build -trimpath -tags demo ./...
+          go vet -tags demo ./...
           go test -race -shuffle=on -tags demo ./internal/demo/ ./internal/scan/ ./internal/webscan/ ./internal/mailscan/ ./internal/web/
           go test -race -shuffle=on -tags demo -run Demonstration -v ./internal/httpapi/ \
             | tee /tmp/demo-api.log
           grep -q 'PASS: TestTheDemonstrationRefusalIsAnsweredAndCounted' /tmp/demo-api.log
+          go test -race -shuffle=on -tags demo -run Demonstration -v ./cmd/porch-scan/ \
+            | tee /tmp/demo-scan.log
+          grep -q 'PASS: TestTheDemonstrationInventoriesNoEstate' /tmp/demo-scan.log
 
   vulncheck:
     name: Known vulnerabilities

@@ -159,8 +159,9 @@ func run() int {
 				"\tweb for how the site is reached over HTTP, mail for what the\n"+
 				"\tdomain's DNS says about its mail policy, dns for how the domain\n"+
 				"\titself is served, or names to list the names under a domain that\n"+
-				"\tappear in publicly logged certificates. names grades nothing, and\n"+
-				"\tasks a monitor this project does not run (N12)")
+				"\tappear in publicly logged certificates and in the domain's own\n"+
+				"\trecords, each saying which of them named it. names grades\n"+
+				"\tnothing, and asks a monitor this project does not run (N12)")
 
 		// Which transparency monitor is asked. Empty uses the default.
 		//
