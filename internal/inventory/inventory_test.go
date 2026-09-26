@@ -6,6 +6,7 @@ import (
 
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/liveness"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -252,5 +253,79 @@ func TestTwoSpellingsOfOneHostAreOneHost(t *testing.T) {
 	}
 	if len(got.Names[0].Sources) != 2 {
 		t.Errorf("the merged host was named by %v, want both sources", got.Names[0].Sources)
+	}
+}
+
+// What each name is doing goes beside the name, and a name nothing answered
+// for keeps its row.
+//
+// The alternative — a list of names and a parallel list of answers — is how a
+// name leaves a report without being mentioned. The probe bounds how many
+// names it will reach and gives up on the rest when the time runs out, so a
+// renderer walking the answers prints a shorter estate than the one that was
+// found, with nothing saying so (R4).
+func TestWhatEachNameIsDoingGoesBesideTheName(t *testing.T) {
+	got := Merge("example.test", ctsearch.Estate{
+		Asked: true,
+		Names: []ctsearch.Name{
+			{Name: "answered.example.test"},
+			{Name: "unreached.example.test"},
+		},
+	}, dnsnames.Found{}).WithLiveness([]liveness.Name{
+		{Name: "answered.example.test", Status: liveness.Live, Answered: []string{"443"}},
+	})
+
+	if !got.Probed {
+		t.Error("the names were asked and the inventory does not say so")
+	}
+	if len(got.Names) != 2 {
+		t.Fatalf("the inventory holds %d names: %+v", len(got.Names), got.Names)
+	}
+
+	for _, n := range got.Names {
+		switch n.Name {
+		case "answered.example.test":
+			if n.Now == nil || n.Now.Status != liveness.Live {
+				t.Errorf("the name that answered came back as %+v", n.Now)
+			}
+		case "unreached.example.test":
+			if n.Now != nil {
+				t.Errorf("a name nothing reached was given a state: %+v", n.Now)
+			}
+		}
+	}
+}
+
+// An answer is matched to its name however either was spelled.
+//
+// The probe is given the folded names this package produced, so this is belt
+// and braces — but a state attached to the wrong name is worse than no state,
+// and the cost of being sure is one call.
+func TestAnAnswerIsMatchedToItsNameWhateverTheSpelling(t *testing.T) {
+	got := Merge("example.test", ctsearch.Estate{
+		Asked: true,
+		Names: []ctsearch.Name{{Name: "mail.example.test"}},
+	}, dnsnames.Found{}).WithLiveness([]liveness.Name{
+		{Name: "Mail.Example.Test.", Status: liveness.Gone},
+	})
+
+	if got.Names[0].Now == nil || got.Names[0].Now.Status != liveness.Gone {
+		t.Errorf("the answer was not matched to the name: %+v", got.Names[0])
+	}
+}
+
+// Asking is what makes a report a probed one, not getting answers back.
+//
+// An estate where every name is gone answers nothing, and a report that read
+// that as "nobody asked" would leave the operator with the one thing they came
+// for unsaid.
+func TestAnEstateWhereNothingAnswersWasStillAsked(t *testing.T) {
+	got := Merge("example.test", ctsearch.Estate{
+		Asked: true,
+		Names: []ctsearch.Name{{Name: "gone.example.test"}},
+	}, dnsnames.Found{}).WithLiveness(nil)
+
+	if !got.Probed {
+		t.Error("an estate that answered nothing is reported as never having been asked")
 	}
 }

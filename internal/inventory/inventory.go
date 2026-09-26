@@ -40,6 +40,7 @@ import (
 
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/liveness"
 )
 
 // Source is what named a host.
@@ -88,6 +89,11 @@ type Name struct {
 	// report must not invent one for it (R17).
 	FirstSeen time.Time `json:"firstSeen,omitempty"`
 	LastSeen  time.Time `json:"lastSeen,omitempty"`
+
+	// Now is what the name is doing, where anything asked. Nil where nothing
+	// did, which is not the same as a name that answers nothing: the first is
+	// a question nobody put and the second is an answer (R4).
+	Now *liveness.Name `json:"now,omitempty"`
 }
 
 // Reading is what one source established.
@@ -142,6 +148,13 @@ type Inventory struct {
 	// Records what the domain's own MX, sender policy and delegation did.
 	Logs    Reading `json:"logs"`
 	Records Reading `json:"records"`
+
+	// Probed reports that the names were asked what they are doing now.
+	//
+	// A report where nothing was asked and a report where everything answered
+	// "gone" are the same list of names with nothing beside them, and only
+	// this says which happened.
+	Probed bool `json:"probed,omitempty"`
 }
 
 // Established reports that at least one source was read and answered.
@@ -230,6 +243,36 @@ func Merge(domain string, e ctsearch.Estate, d dnsnames.Found) Inventory {
 	out.Distinct = len(out.Names)
 	sort.Slice(out.Names, func(i, j int) bool { return out.Names[i].Name < out.Names[j].Name })
 	return out
+}
+
+// WithLiveness puts what each name is doing beside the name itself.
+//
+// One object rather than a list and a parallel slice beside it. The parallel
+// slice is how a name goes missing from a report: a renderer walking the
+// statuses prints the names that have one, and a name the check never reached
+// — because an estate is larger than the bound, or because the time ran out —
+// is then not in the report at all, with nothing saying it was dropped. Here a
+// name with no answer is a name with no answer, and it is still printed (R4).
+//
+// Probed is set by the act of asking, not by getting answers, so an estate
+// where every name is gone still reads as an estate that was asked.
+func (i Inventory) WithLiveness(live []liveness.Name) Inventory {
+	i.Probed = true
+
+	at := map[string]*liveness.Name{}
+	for n := range live {
+		at[fold(live[n].Name)] = &live[n]
+	}
+
+	names := make([]Name, len(i.Names))
+	copy(names, i.Names)
+	for n := range names {
+		if found, ok := at[names[n].Name]; ok {
+			names[n].Now = found
+		}
+	}
+	i.Names = names
+	return i
 }
 
 // Hosts are the names something could resolve.

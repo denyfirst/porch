@@ -48,7 +48,7 @@ func TestTheInventoryAlwaysSaysWhatItCannotShow(t *testing.T) {
 			{Name: "old-portal.example.test", FirstSeen: day(2021, 3, 1), LastSeen: day(2022, 6, 1)},
 			{Name: "www.example.test", FirstSeen: day(2023, 2, 14), LastSeen: day(2025, 11, 1)},
 		},
-	}), nil)
+	}))
 	out := buf.String()
 
 	for _, want := range []string{
@@ -99,7 +99,7 @@ func TestAFailedSearchPrintsNoInventory(t *testing.T) {
 	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test",
 		Reason: "the certificate transparency monitor could not be reached",
-	}), nil)
+	}))
 	out := buf.String()
 
 	if !strings.Contains(out, "Not established: the certificate transparency monitor could not be reached") {
@@ -126,7 +126,7 @@ func TestAnInventoryMissingASourceSaysWhichOne(t *testing.T) {
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
 			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
 			{Name: "ns1.example.test", Sources: []dnsnames.Source{dnsnames.FromNS}},
-		}}), nil)
+		}}))
 	out := buf.String()
 
 	if !strings.Contains(out, "Certificates Not established: the certificate transparency monitor could not be reached") {
@@ -192,7 +192,7 @@ func TestTheInventoryCountsInWords(t *testing.T) {
 	printNames(&buf, fromLogs(ctsearch.Estate{
 		Asked: true, Domain: "example.test", Distinct: 1, Certificates: 1,
 		Names: []ctsearch.Name{{Name: "example.test", LastSeen: day(2026, 1, 1)}},
-	}), nil)
+	}))
 	out := buf.String()
 
 	if !strings.Contains(out, "1 distinct name\n") {
@@ -230,7 +230,7 @@ func TestTheLimitsArePrintedEvenWhenNothingWasHidden(t *testing.T) {
 			{Name: "example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
 			{Name: "www.example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
 		},
-	}), nil)
+	}))
 	out := buf.String()
 
 	if !strings.Contains(out, "What this does not show") {
@@ -273,7 +273,10 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 			Names: []ctsearch.Name{{Name: "*.example.test", Wildcard: true, LastSeen: day(2026, 1, 1)}}},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
 			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
-		}}), nil)
+		}}).WithLiveness([]liveness.Name{
+		{Name: "mail.example.test", Status: liveness.Live,
+			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"25"}},
+	}))
 	printed := buf.String()
 
 	// Each is a sentence both faces have to carry. Compared against what the
@@ -288,6 +291,7 @@ func TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses(t *testing.T) {
 		"nothing above is graded, because no",
 		"document says which names an estate ought to have",
 		"of the names above is a wildcard",
+		"What each name is doing now was established by resolving it and opening a connection to each address it gave.",
 	} {
 		if !strings.Contains(page, claim) {
 			t.Errorf("the page does not say %q", claim)
@@ -322,14 +326,14 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 			{Name: "inside.example.test", LastSeen: day(2026, 9, 1)},
 			{Name: "moved.example.test", LastSeen: day(2026, 9, 1)},
 		},
-	}), []liveness.Name{
+	}).WithLiveness([]liveness.Name{
 		{Name: "api.example.test", Status: liveness.Live,
 			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
 		{Name: "old.example.test", Status: liveness.Gone},
 		{Name: "inside.example.test", Status: liveness.Internal,
 			Addresses: addrsFor(t, "172.23.0.11")},
 		{Name: "moved.example.test", Status: liveness.Dangling, Alias: "target.elsewhere.test"},
-	})
+	}))
 	out := buf.String()
 
 	for _, want := range []string{
@@ -387,7 +391,7 @@ func TestEveryNameSaysWhatNamedIt(t *testing.T) {
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
 			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX, dnsnames.FromSPF}},
 			{Name: "ns1.example.test", Sources: []dnsnames.Source{dnsnames.FromNS}},
-		}}),
+		}}).WithLiveness(
 		[]liveness.Name{
 			{Name: "api.example.test", Status: liveness.Live,
 				Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
@@ -395,7 +399,7 @@ func TestEveryNameSaysWhatNamedIt(t *testing.T) {
 				Addresses: addrsFor(t, "93.184.216.35"), Answered: []string{"25"}},
 			{Name: "ns1.example.test", Status: liveness.Live,
 				Addresses: addrsFor(t, "93.184.216.36"), Answered: []string{"443"}},
-		})
+		}))
 	out := buf.String()
 
 	for _, want := range []string{
@@ -433,7 +437,7 @@ func TestNamesSurviveAReportThatEstablishedNoStatus(t *testing.T) {
 			Names: []ctsearch.Name{{Name: "api.example.test", LastSeen: day(2026, 9, 1)}}},
 		dnsnames.Found{Asked: true, Names: []dnsnames.Name{
 			{Name: "mail.example.test", Sources: []dnsnames.Source{dnsnames.FromMX}},
-		}}), nil)
+		}}))
 	out := buf.String()
 
 	if !strings.Contains(out, "api.example.test") || !strings.Contains(out, "mail.example.test") {
@@ -498,13 +502,13 @@ func TestANameSaysWhatItIsDoingAndWhenItWasLastCovered(t *testing.T) {
 			{Name: "current.example.test", FirstSeen: day(2026, 1, 1), LastSeen: day(2026, 12, 1)},
 			{Name: "undated.example.test"},
 		},
-	}), []liveness.Name{
+	}).WithLiveness([]liveness.Name{
 		{Name: "forgotten.example.test", Status: liveness.Live,
 			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
 		{Name: "current.example.test", Status: liveness.Live,
 			Addresses: addrsFor(t, "93.184.216.35"), Answered: []string{"443"}},
 		{Name: "undated.example.test", Status: liveness.Gone},
-	})
+	}))
 	out := buf.String()
 
 	// The one worth finding: still answering, last covered five years ago.
@@ -520,5 +524,37 @@ func TestANameSaysWhatItIsDoingAndWhenItWasLastCovered(t *testing.T) {
 		if strings.Contains(line, "undated.example.test") && strings.Contains(line, "certificates to") {
 			t.Errorf("a name with no dates was given one: %q", line)
 		}
+	}
+}
+
+// A name the check never reached is still a row in the report.
+//
+// The rows are drawn from the inventory rather than from the answers, and the
+// difference is a name that vanishes. The liveness check bounds how many names
+// it will reach and gives up on the rest when the time runs out; a report
+// built by walking the answers prints what came back and silently drops
+// everything else, which is the one failure an inventory cannot survive (R4).
+func TestANameNothingReachedIsStillInTheReport(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 2,
+		Names: []ctsearch.Name{
+			{Name: "answered.example.test", LastSeen: day(2026, 9, 1)},
+			{Name: "unreached.example.test", LastSeen: day(2026, 9, 1)},
+		},
+	}).WithLiveness([]liveness.Name{
+		{Name: "answered.example.test", Status: liveness.Live,
+			Addresses: addrsFor(t, "93.184.216.34"), Answered: []string{"443"}},
+	}))
+	out := buf.String()
+
+	if !strings.Contains(out, "unreached.example.test") {
+		t.Errorf("a name with no answer was dropped from the report:\n%s", out)
+	}
+	if !strings.Contains(out, "unchecked unreached.example.test certificate nothing asked what this name is doing") {
+		t.Errorf("a name with no answer does not say so:\n%s", out)
+	}
+	if !strings.Contains(out, "live      answered.example.test  certificate 93.184.216.34") {
+		t.Errorf("the name that answered is not drawn as it was:\n%s", out)
 	}
 }

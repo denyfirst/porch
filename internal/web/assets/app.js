@@ -2658,7 +2658,10 @@ function buildNames(data) {
     // nobody's time.
     const table = el("table", "rows");
     const head = el("tr");
-    for (const label of ["Name", "Named by", "In the logs"]) {
+    const labels = data.probed
+      ? ["Name", "Named by", "Doing now", "In the logs"]
+      : ["Name", "Named by", "In the logs"];
+    for (const label of labels) {
       head.appendChild(el("th", null, label));
     }
     table.appendChild(el("thead")).appendChild(head);
@@ -2668,6 +2671,13 @@ function buildNames(data) {
       const tr = el("tr");
       tr.appendChild(el("td", null, name.name));
       tr.appendChild(el("td", null, namedBy(name)));
+
+      // Every name in the inventory gets a row, whether or not an answer came
+      // back for it. Drawing the rows from the answers instead is how a name
+      // leaves a report without being mentioned: the probe bounds how many
+      // names it reaches and gives up on the rest when the time runs out.
+      if (data.probed) tr.appendChild(el("td", null, doingNow(name)));
+
       tr.appendChild(el("td", null, covered(name)));
       rows.appendChild(tr);
     }
@@ -2770,6 +2780,43 @@ function namedBy(name) {
   return (name.sources || []).join(", ");
 }
 
+// doingNow is the state of one name and the evidence for it.
+//
+// The state first, because a reader runs an eye down the column and stops at
+// what is not "live", and the evidence beside it because a state with nothing
+// behind it is a claim rather than a measurement (R17).
+function doingNow(name) {
+  const now = name.now;
+  if (!now) return "unchecked — nothing asked what this name is doing";
+
+  const where = addressList(now);
+  switch (true) {
+    case Boolean(now.reason):
+      return now.status + " — " + now.reason;
+    case now.status === "dangling":
+      return "dangling — an alias to " + now.alias + ", which does not resolve";
+    case now.status === "gone":
+      return "gone — does not resolve";
+    case now.status === "internal":
+      return "internal — " + where +
+        ", which nothing here may dial, and a resolver elsewhere may answer differently";
+    case now.status === "live":
+      return "live — " + where + ", answering on " + (now.answered || []).join(" and ");
+    default:
+      return now.status + " — " + where + ", nothing answered";
+  }
+}
+
+// addressList is where a name points, bounded so that one name with forty
+// addresses does not become the report.
+function addressList(now) {
+  const show = 3;
+  const all = now.addresses || [];
+  const out = all.slice(0, show);
+  if (all.length > show) out.push("and " + (all.length - show) + " more");
+  return now.alias ? out.join(", ") + " via " + now.alias : out.join(", ");
+}
+
 // covered is the window the logs show one name in.
 //
 // The expiry is the useful end: a name whose newest certificate ran out two
@@ -2826,6 +2873,12 @@ function namesLimits(data) {
     item(
       "From the domain's own records, these are the hosts its mail, its sender policy and its delegation have to name. " +
         "A host that takes no mail, sends none and answers for no zone is in none of them."
+    );
+  }
+  if (data.probed) {
+    item(
+      "What each name is doing now was established by resolving it and opening a connection to each address it gave. " +
+        "Nothing was sent over that connection and no request was made."
     );
   }
   if (data.wildcards) {
