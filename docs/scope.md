@@ -139,17 +139,27 @@ making it for them.
 ## Reading a register is not scanning
 
 `porch-scan -check names` lists the names under a domain that appear in
-publicly logged certificates. It belongs in this document because it is the one
-thing here that produces a list of somebody's hosts, and it is worth being
-exact about what it is.
+publicly logged certificates and in the domain's own published records, says
+which of them named each one, and says what each name is doing now. It belongs
+in this document because it is the one thing here that produces a list of
+somebody's hosts, and it is worth being exact about what it is.
 
-**It sends nothing to the domain.** Not a packet, not a lookup of a name it
-made up. Every name it reports was published by whoever obtained a certificate
-for it, in a transparency log that exists to be read. A wordlist tried against
-DNS — `mail`, `dev`, `staging`, `old` — would be enumerating an estate, and
-that is a different instrument with a different argument for existing. N7 draws
-that line and this stays on the reading side of it, for the same reason
-`security.txt` does.
+**It invents no name.** Not one. Every name it reports was published by whoever
+obtained a certificate for it, in a transparency log that exists to be read, or
+by the domain itself in its MX, its sender policy or its delegation. A wordlist
+tried against DNS — `mail`, `dev`, `staging`, `old` — would be enumerating an
+estate, and that is a different instrument with a different argument for
+existing. N7 draws that line and this stays on the reading side of it, for the
+same reason `security.txt` does.
+
+**What it does send, it says.** Reading a domain's own records is three
+lookups of that domain, which is what those records are published for.
+Establishing what a name is doing now is one resolution of a name that already
+existed and, at most, one connection to each address it gave — opened, found
+open or not, and closed, carrying nothing. The report prints both under *What
+this does not show*, because a paragraph claiming nothing was sent would be
+false the moment either happened, and the earlier version of it said exactly
+that for a week after the statuses were added.
 
 **What it costs is a disclosure, and it is larger than the check's.** The
 question names the domain to a monitor this project does not run, and asking
@@ -161,10 +171,14 @@ somebody types rather than anything that runs by default.
 to have, so a verdict would be a threshold this project invented (R21).
 
 **It is not an estate inventory, and the report says that every time it runs.**
-A host with no publicly trusted certificate never appears. A wildcard covers
-hosts without naming them, which is what a wildcard is for. A name dropped from
-a monitor's history is gone. Somebody who hands the list to a security team as
-*the* inventory, and is then shown more hosts by a port scan, has lost an
+A host with no publicly trusted certificate never appears in a log. A wildcard
+covers hosts without naming them, which is what a wildcard is for. A name
+dropped from a monitor's history is gone. A domain's own records name only the
+hosts they have to, so a web server that takes no mail, sends none and answers
+for no zone is in none of them. Two incomplete sources make a longer list and
+not a complete one, which is why each name says which of them named it and each
+source says what it could not see. Somebody who hands the list to a security
+team as *the* inventory, and is then shown more hosts by a port scan, has lost an
 argument that was avoidable — so the limits are printed under every list,
 including the short clean ones where a reader is most inclined to believe them.
 
