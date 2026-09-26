@@ -165,7 +165,11 @@ that for a week after the statuses were added.
 question names the domain to a monitor this project does not run, and asking
 for everything under a domain says more than asking about one host. N12
 governs it: never on a demonstration build, and on the command line a mode
-somebody types rather than anything that runs by default.
+somebody types rather than anything that runs by default. The second source
+adds nothing to that cost — a domain's own records are read with the resolver
+this installation already uses for every other target — but it is read behind
+the same proof of control, because a lookup a stranger caused this installation
+to make is a lookup this installation made.
 
 **It grades nothing and says so.** No document says which names an estate ought
 to have, so a verdict would be a threshold this project invented (R21).

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/ctsearch"
+	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/inventory"
 )
 
 // stubMonitor answers without asking anybody, and records what it was asked.
@@ -200,5 +202,161 @@ func TestVerificationConfiguredIsEnforcedEvenOnLoopback(t *testing.T) {
 	}
 	if was := monitor.was(); was != "" {
 		t.Errorf("the monitor was asked about %q for an unproven domain", was)
+	}
+}
+
+// stubRecords answers for the domain's own records without asking anybody, and
+// records what it was asked.
+type stubRecords struct {
+	asked atomic.Value
+	found dnsnames.Found
+}
+
+func (r *stubRecords) Under(_ context.Context, domain string) dnsnames.Found {
+	r.asked.Store(domain)
+	return r.found
+}
+
+func (r *stubRecords) was() string {
+	if v, ok := r.asked.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// The service reads both sources, and every name says which of them named it.
+//
+// The page is the face most operators see, and until this it showed half an
+// estate: a certificate log cannot see a host on plain HTTP, one behind a
+// private authority, or anything hidden by a wildcard, and the domain's own
+// mail, sender policy and delegation name some of exactly those.
+func TestTheServiceReadsBothSourcesForAProvenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 2,
+		Names: []ctsearch.Name{
+			{Name: "www.proven.example"},
+			{Name: "mail.proven.example"},
+		},
+	}})
+	s.records = &stubRecords{found: dnsnames.Found{
+		Asked: true,
+		Names: []dnsnames.Name{
+			{Name: "mail.proven.example", Sources: []dnsnames.Source{dnsnames.FromMX}},
+			{Name: "ns1.proven.example", Sources: []dnsnames.Source{dnsnames.FromNS}},
+		},
+	}}
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.70:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if got.Distinct != 3 {
+		t.Errorf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+
+	want := map[string]int{"www.proven.example": 1, "mail.proven.example": 2, "ns1.proven.example": 1}
+	for _, n := range got.Names {
+		sources, known := want[n.Name]
+		if !known {
+			t.Errorf("%s is in the inventory and should not be", n.Name)
+			continue
+		}
+		if len(n.Sources) != sources {
+			t.Errorf("%s was named by %v", n.Name, n.Sources)
+		}
+	}
+
+	// And each source says how much of the list it is answerable for, so that
+	// a report missing half of itself cannot read like a whole one (R4).
+	if !got.Logs.Established() || got.Logs.Named != 2 {
+		t.Errorf("the log reading came back as %+v", got.Logs)
+	}
+	if !got.Records.Established() || got.Records.Named != 2 {
+		t.Errorf("the record reading came back as %+v", got.Records)
+	}
+}
+
+// Neither source is read for a domain nobody proved control of.
+//
+// The proof gate is the whole of what makes this endpoint something other than
+// an anonymous reconnaissance service, and a source added after the gate was
+// written must be behind it too. Three lookups of a stranger's domain, made by
+// this installation on request, are three lookups this installation made.
+func TestNeitherSourceIsReadForAnUnprovenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	monitor := &stubMonitor{estate: ctsearch.Estate{Asked: true}}
+	s.SearchNames(monitor)
+	records := &stubRecords{found: dnsnames.Found{Asked: true}}
+	s.records = records
+
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.71:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain was answered %q", got)
+	}
+	if was := records.was(); was != "" {
+		t.Errorf("the domain's own records were read for %q, which nobody proved", was)
+	}
+	if was := monitor.was(); was != "" {
+		t.Errorf("the monitor was asked about %q, which nobody proved", was)
+	}
+}
+
+// An installation with no resolver says the records were not read.
+//
+// Not that the domain publishes none. The two are the same empty list and only
+// one of them is true, so the reading carries which it is (R4) — and the half
+// that was established is still answered with, rather than thrown away to
+// report the half that was not.
+func TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}},
+	}})
+	if s.records != nil {
+		t.Fatal("this fixture was built with a resolver, which is not what it is for")
+	}
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.72:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if got.Records.Asked {
+		t.Errorf("an installation with no resolver reports that it read the records: %+v", got.Records)
+	}
+	if got.Distinct != 1 || !got.Logs.Established() {
+		t.Errorf("the half that was established was lost: %+v", got)
+	}
+}
+
+// An installation with a resolver reads the records without being told to.
+//
+// The other half of the rule above. A reader that had to be wired up by hand
+// would be wired up in porchd and not in a fixture, and the endpoint would
+// answer with half an inventory everywhere it was not — which is the failure
+// this whole pair exists to make impossible to ship quietly.
+func TestAnInstallationWithAResolverReadsTheRecords(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+	if s.records == nil {
+		t.Error("an installation with a resolver has nothing to read the domain's own records with")
 	}
 }

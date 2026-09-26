@@ -69,7 +69,7 @@ const CHECKS = {
   // came for it.
   names: {
     label: "Names",
-    says: "which names under the domain appear in publicly logged certificates",
+    says: "which names under the domain its certificates and its own records publish",
 
     endpoint: "/api/v1/names/scan",
     methodPage: "/names/method",
@@ -2603,14 +2603,18 @@ function buildNames(data) {
   const frag = document.createDocumentFragment();
   if (!data) return frag;
 
-  frag.appendChild(sectionTitle("Names in public certificates"));
+  frag.appendChild(sectionTitle("Names under this domain"));
 
-  if (data.reason) {
-    // Not established, and said so rather than drawn as an empty estate. The
-    // reassuring answer here is "none found", so a failure that rendered as an
-    // empty list would be the most comfortable wrong answer available.
-        frag.appendChild(el("p", null, "Not established: " + data.reason));
-    frag.appendChild(namesLimits(data));
+  const logs = data.logs || {};
+  const records = data.records || {};
+
+  if (!answered(logs) && !answered(records)) {
+    // Not one source answered, so there is no inventory. The reassuring
+    // answer here is "none found", so a failure that rendered as an empty
+    // list would be the most comfortable wrong answer available.
+    for (const reason of [logs.reason, records.reason]) {
+      if (reason) frag.appendChild(el("p", null, "Not established: " + reason));
+    }
     return frag;
   }
 
@@ -2623,28 +2627,65 @@ function buildNames(data) {
     body.appendChild(tr);
   };
 
-  const found = (data.distinct || 0) + (data.distinct === 1 ? " distinct name" : " distinct names");
-  const over = (data.certificates || 0) + (data.certificates === 1 ? " certificate" : " certificates");
-  row("Found", found + " across " + over);
+  const distinct = data.distinct || 0;
+  row("Found", distinct + (distinct === 1 ? " distinct name" : " distinct names"));
+
+  // Then one line per source, always, including the one that failed. Six
+  // names from two sources and six names from one that answered while the
+  // other timed out are the same six names, and only these two lines tell a
+  // reader which report they are holding.
+  row("Certificates", saysLogs(data));
+  row("Records", saysRecords(data));
 
   if (data.wildcards) {
     row("Wildcards", data.wildcards + ", each covering hosts it does not name");
   }
-  if (data.foreign) {
-    row("Other names", data.foreign + " on the same certificates, under other domains, not listed");
-  }
+  const other = otherNames(logs.foreign || 0, records.foreign || 0);
+  if (other) row("Other names", other);
   if (data.truncated) {
     row("Cut", "more names were found than are listed");
   }
   counts.appendChild(body);
   frag.appendChild(counts);
 
-  if (data.names && data.names.length) {
-    const table = el("table", "grid");
+  const names = data.names || [];
+  const hosts = names.filter((n) => !n.wildcard);
+  if (hosts.length) {
+    // Three columns rather than two, because what named a host decides what a
+    // reader does about it: one only a log has is a host somebody obtained a
+    // certificate for, one only the records have is a host the domain
+    // publishes itself, and one both have is the well-kept case that needs
+    // nobody's time.
+    const table = el("table", "rows");
+    const head = el("tr");
+    for (const label of ["Name", "Named by", "In the logs"]) {
+      head.appendChild(el("th", null, label));
+    }
+    table.appendChild(el("thead")).appendChild(head);
+
     const rows = el("tbody");
-    for (const name of data.names) {
+    for (const name of hosts) {
       const tr = el("tr");
-      tr.appendChild(el("th", null, name.name));
+      tr.appendChild(el("td", null, name.name));
+      tr.appendChild(el("td", null, namedBy(name)));
+      tr.appendChild(el("td", null, covered(name)));
+      rows.appendChild(tr);
+    }
+    table.appendChild(rows);
+    frag.appendChild(table);
+  }
+
+  // A wildcard is listed apart and without a source column: nothing but a
+  // certificate names one, and what it is doing is hiding however many hosts
+  // are behind it.
+  const wildcards = names.filter((n) => n.wildcard);
+  if (wildcards.length) {
+    frag.appendChild(sectionTitle("Wildcards, which name no host"));
+    const table = el("table", "rows");
+    const rows = el("tbody");
+    for (const name of wildcards) {
+      const tr = el("tr");
+      tr.appendChild(el("td", null, name.name));
       tr.appendChild(el("td", null, covered(name)));
       rows.appendChild(tr);
     }
@@ -2656,6 +2697,79 @@ function buildNames(data) {
   return frag;
 }
 
+// answered reports that one source was read and said something.
+//
+// Read and silent is an answer; unread is not, and neither is a monitor that
+// could not be reached. The three render differently for that reason.
+function answered(reading) {
+  return Boolean(reading && reading.asked) && !reading.reason;
+}
+
+// saysLogs is what the certificate monitor established, in one line.
+function saysLogs(data) {
+  const r = data.logs || {};
+  const certificates = data.certificates || 0;
+  const over = certificates + (certificates === 1 ? " certificate" : " certificates");
+
+  if (!r.asked) return "not read";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named && !certificates) {
+    return "named none of them: no publicly logged certificate covers a host here";
+  }
+  if (!r.named) return "named none of them, in " + over + " read";
+  return "named " + r.named + " of them, across " + over;
+}
+
+// saysRecords is what the domain's own records established, in one line.
+//
+// It names the record types that carried a name rather than the three that
+// were read, because the difference is the finding: a domain whose names all
+// came from its delegation publishes no mail and no sender policy.
+function saysRecords(data) {
+  const r = data.records || {};
+
+  if (!r.asked) return "not read";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) {
+    return "named none of them: its mail, sender policy and delegation name no host under it";
+  }
+  return "named " + r.named + " of them, from " + wordList(recordSources(data));
+}
+
+// recordSources are the record types that named something, in a fixed order.
+function recordSources(data) {
+  const out = [];
+  for (const want of ["MX", "SPF", "NS"]) {
+    if ((data.names || []).some((n) => (n.sources || []).indexOf(want) >= 0)) out.push(want);
+  }
+  return out;
+}
+
+// wordList joins names the way a sentence does.
+function wordList(list) {
+  if (!list.length) return "nothing";
+  if (list.length === 1) return list[0];
+  return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+}
+
+// otherNames is what each source returned and dropped for belonging to
+// somebody else, counted rather than listed.
+function otherNames(logs, records) {
+  if (logs && records) {
+    return (logs + records) + " under other domains, not listed: " + logs +
+      " on the same certificates, " + records + " in the records";
+  }
+  if (logs) return logs + " on the same certificates, under other domains, not listed";
+  if (records) return records + " in the domain's own records, under other domains, not listed";
+  return "";
+}
+
+// namedBy is the provenance column: everything that named one host, not the
+// first thing that did.
+function namedBy(name) {
+  return (name.sources || []).join(", ");
+}
+
 // covered is the window the logs show one name in.
 //
 // The expiry is the useful end: a name whose newest certificate ran out two
@@ -2663,7 +2777,14 @@ function buildNames(data) {
 // their own estate is usually looking for exactly those. Which of the two it
 // is, this does not say — nothing here asked the host anything.
 function covered(name) {
-  if (!name.lastSeen) return "no dates in the log";
+  if (!name.lastSeen) {
+    // A name only the domain's own records carried was never in a
+    // certificate, so it has no window rather than an empty one — and saying
+    // "no dates in the log" would suggest a log had it and lost them.
+    return (name.sources || []).indexOf("certificate") >= 0
+      ? "no dates in the log"
+      : "in no logged certificate";
+  }
   const to = "certificates to " + name.lastSeen.slice(0, 10);
   return name.firstSeen ? "from " + name.firstSeen.slice(0, 10) + ", " + to : to;
 }
@@ -2682,16 +2803,31 @@ function namesLimits(data) {
   const list = el("ul", "notes");
   const item = (text) => list.appendChild(el("li", null, text));
 
-  item(
-    "Nothing here was guessed and nothing was asked of " +
-      (data.domain || "the domain") +
-      ": these names were published by whoever obtained a certificate for them."
-  );
-  item(
-    "A host with no publicly trusted certificate never appears — plain HTTP, a " +
-      "service that is not HTTPS, or anything behind a private authority leaves " +
-      "no trace in a public log."
-  );
+  // Each source speaks for itself, and only where it answered. A paragraph
+  // about what a certificate log misses, printed under a report where the
+  // monitor was never reached, describes the limits of something that did not
+  // happen.
+  item("Nothing here was guessed: no name was invented and no list of names was tried.");
+
+  if (answered(data.logs)) {
+    // Each sentence is one string rather than a concatenation, because both
+    // faces of this report are compared for exactly these words and a claim
+    // split across a `+` is a claim a reader of the source cannot find (R16).
+    item(
+      "From the public logs, these names were published by whoever obtained a certificate for them."
+    );
+    item(
+      "A host with no publicly trusted certificate never appears — plain HTTP, a " +
+        "service that is not HTTPS, or anything behind a private authority leaves " +
+        "no trace in a public log."
+    );
+  }
+  if (answered(data.records)) {
+    item(
+      "From the domain's own records, these are the hosts its mail, its sender policy and its delegation have to name. " +
+        "A host that takes no mail, sends none and answers for no zone is in none of them."
+    );
+  }
   if (data.wildcards) {
     item(
       "A wildcard covers hosts without naming them, and " +

@@ -62,6 +62,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dkim"
+	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/mailscan"
@@ -208,6 +209,17 @@ type Server struct {
 	// answered with an empty inventory (R4).
 	names ctsearch.EstateSearcher
 
+	// records reads the second source of names: the hosts a domain's own MX,
+	// sender policy and delegation already name.
+	//
+	// Built from this installation's resolver, and nil where it has none. It
+	// is not a switch of its own: the monitor is what an operator turns the
+	// inventory on with, and this enriches the inventory that switch already
+	// offers. Turning an endpoint on for somebody because a second source
+	// happens to need no configuration would be answering a question they
+	// answered when they left the monitor unset.
+	records recordReader
+
 	// proofs and proofSem are the allowance and the slots for asking whether
 	// a domain is proven, apart from the scan ones for the same reason.
 	proofs   *limiter
@@ -351,6 +363,13 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 	if scanner.Resolver != nil {
 		s.mail.Resolver = scanner.Resolver
 		s.dns.Resolver = scanner.Resolver
+
+		// The same guard, for the same reason: a nil *dnsclient.Client in an
+		// interface field is a non-nil interface, and the first lookup would
+		// dereference nothing. The inventory's second source is read with the
+		// resolver this installation already asks about every other target,
+		// so nothing new is disclosed to anybody by reading it.
+		s.records = &dnsnames.Reader{Resolver: scanner.Resolver}
 	}
 
 	tls, web := s.tlsCheck(), s.webCheck()
@@ -935,6 +954,12 @@ func (s *Server) KeepResults(store *results.Store) {
 // which would report an estate as publishing nothing (R4).
 func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
 	s.names = searcher
+}
+
+// recordReader reads the names a domain's own records name.
+// internal/dnsnames.Reader is the one there is.
+type recordReader interface {
+	Under(ctx context.Context, domain string) dnsnames.Found
 }
 
 // Keeper keeps a report whole. internal/vault is the one there is.

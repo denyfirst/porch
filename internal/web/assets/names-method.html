@@ -4,20 +4,50 @@
 
     <p class="lede">
       This page lists the names under a domain that appear in publicly logged
-      certificates. It is the only part of this installation that produces a
-      list of hosts rather than a verdict about one, and the difference decides
-      how the list should be read.
+      certificates and in the domain's own published records, and says which of
+      the two named each one. It is the only part of this installation that
+      produces a list of hosts rather than a verdict about one, and the
+      difference decides how the list should be read.
+    </p>
+
+    <h2 id="sources">Where the names come from</h2>
+
+    <p>
+      <strong>Two sources, and neither is complete.</strong> A certificate
+      transparency monitor holds the names somebody obtained a publicly trusted
+      certificate for: every such certificate is submitted to append-only logs
+      before a browser will accept it, and the names it covers are written
+      inside it. Your domain's own records hold the hosts its mail, its sender
+      policy and its delegation have to name, because those records exist to be
+      read by strangers.
+    </p>
+
+    <p>
+      <strong>Every name says which of them named it</strong>, and that column
+      is the one to read first. A name only a log has is a host somebody
+      obtained a certificate for — if nothing answers there, the certificate is
+      the thing to look at. A name only your records have is a host you publish
+      yourself, which may be plain HTTP or a mail server that never needed a
+      certificate. A name both have is the ordinary, well-kept case, and it is
+      the line nobody needs to spend time on.
+    </p>
+
+    <p>
+      Each source also reports for itself. A monitor that is unreachable and a
+      domain that publishes nothing produce the same empty list, so the
+      inventory says, per source, what it named or why it established nothing.
+      A short inventory must never read like a complete one.
     </p>
 
     <h2 id="sent">What is sent to your domain</h2>
 
     <p>
-      <strong>Nothing.</strong> Not a packet, not a request, not a lookup of a
-      name this program made up. The names come from a certificate
-      transparency monitor: every publicly trusted certificate is submitted to
-      append-only logs before a browser will accept it, and the names a
-      certificate covers are written inside it. Whoever obtained the
-      certificate published those names, and this reads them back.
+      <strong>Three lookups, and not one invented name.</strong> The
+      certificate half sends your domain nothing at all: it is read out of a
+      public register. The other half asks your domain for the three records it
+      publishes for anybody — its mail exchangers, its sender policy and its
+      delegation — which is the same reading any mail server does before
+      delivering to you. Nothing is sent to the hosts those records name.
     </p>
 
     <p>
@@ -33,8 +63,11 @@
 
     <p>
       A monitor this project does not run: crt.sh, or SSLMate's index,
-      whichever this installation was started with. The question contains your
-      domain, so what that monitor learns is that somebody is looking at it.
+      whichever this installation was started with. Your own records are read
+      by this installation's resolver, which is the one it already uses for
+      every other check, so no third party is added by that half. The
+      monitor's question contains your domain, so what it learns is that
+      somebody is looking at it.
       The certificates themselves are already public — that is what
       transparency means — so nothing about the domain is disclosed by asking.
       What is disclosed is the asking.
@@ -79,7 +112,19 @@
         measure of how much it could not see.</li>
       <li><strong>A name dropped from a monitor's history</strong>, or logged
         before that monitor's records begin.</li>
+      <li><strong>A host your own records have no reason to name.</strong> They
+        name what they must: the machines that take your mail, the hosts
+        allowed to send as you, and the servers that answer for the zone. A web
+        server that takes no mail, sends none and answers for no zone is in
+        none of them.</li>
     </ul>
+
+    <p>
+      Two incomplete sources make a longer list, not a complete one. That is
+      why each name carries what named it and each source says what it could
+      not see, rather than both being poured into one list with a single number
+      at the top.
+    </p>
 
     <p>
       Every one of those is a name a port scan would find and this will not.
