@@ -46,11 +46,33 @@ func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 	}
 }
 
-// Without the flag nothing is set, so the mail check builds its own default
-// rather than receiving a nil pointer inside an interface.
-func TestNoResolverFlagLeavesTheScannerUnset(t *testing.T) {
-	if r := serviceScanner(nil, nil, "", false, time.Second).Resolver; r != nil {
-		t.Errorf("with no -resolver the scanner holds %+v", r)
+// Without the flag the scanner still holds a resolver, and it is never a nil
+// pointer inside an interface.
+//
+// This test said the opposite until 2026-09-28: nothing was set, so the mail
+// check would build its own default rather than receive a typed nil. The trap
+// is real and internal/mailscan refuses a typed nil of its own accord now —
+// but the condition that avoided it cost three of the inventory's four
+// sources, because the records, what each name is doing, and the certificates
+// its hosts present all hang off this field. A copy started without the flag
+// read one source while its page described four.
+//
+// An empty Server is this machine's own configuration, which is what the
+// default would have been. What matters is that it is a real client.
+func TestEveryInstallationHasAResolver(t *testing.T) {
+	r := serviceScanner(nil, nil, "", false, time.Second).Resolver
+	if r == nil {
+		t.Fatal("with no -resolver the scanner holds nothing, so three of the inventory's four sources are off")
+	}
+	if r.Server != "" {
+		t.Errorf("with no -resolver the scanner asks %q rather than this machine's own configuration", r.Server)
+	}
+
+	// And the flag still reaches it, so an operator who named one is asking
+	// the resolver they named.
+	named := serviceScanner(nil, nil, "192.0.2.53:53", false, time.Second).Resolver
+	if named == nil || named.Server != "192.0.2.53:53" {
+		t.Errorf("with -resolver the scanner holds %+v", named)
 	}
 }
 

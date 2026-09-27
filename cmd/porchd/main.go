@@ -1065,22 +1065,25 @@ func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, 
 		}
 	}
 
-	// Only when there is one. An empty Server already means the machine's own
-	// configuration, but a non-nil client where there was nil before is not the
-	// same thing to httpapi, which copies this into an interface field (see the
-	// comment there on a nil pointer inside an interface).
+	// Always, and never nil. An empty Server already means this machine's own
+	// configuration, which is what every check here falls back to anyway.
 	//
-	// The demonstration always has one, whatever its unit file says, and that
-	// is not a convenience. Three of the four sources the inventory reads hang
-	// off this field — the domain's own records, what each name is doing now,
-	// and the certificates the hosts present, which only runs where something
-	// answered. Without it the page describes four sources and the build reads
-	// one, which is the failure N14 had just been rewritten about, arriving
-	// through a flag nobody put in a unit file. What the build promises is not
-	// a thing for a unit file to decide.
-	if resolver != "" || demo.Enabled {
-		scanner.Resolver = &dnsclient.Client{Server: resolver}
-	}
+	// It was set only where -resolver was given, out of care for a real trap:
+	// a nil *dnsclient.Client copied into an interface field is not nil, so a
+	// package reading "nil means build a default" never builds one and
+	// dereferences nothing on first use. That trap needs a nil pointer, and
+	// this is not one — internal/mailscan also refuses a typed nil of its own
+	// accord now, which is where the guard belongs.
+	//
+	// What the condition cost was three of the inventory's four sources. The
+	// domain's own records, what each name is doing now, and the certificates
+	// its hosts present all hang off this field, and the certificates only run
+	// where something answered — so a copy started without the flag read one
+	// source and its page described four. The demonstration shipped that way
+	// and reached denyfirst.dev; every self-hosted copy had it too, and said
+	// "this installation has no resolver" to anybody who named an address
+	// range.
+	scanner.Resolver = &dnsclient.Client{Server: resolver}
 	return scanner
 }
 

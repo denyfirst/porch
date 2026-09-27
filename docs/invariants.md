@@ -1699,6 +1699,8 @@ form under `ip6.arpa` for IPv6, which is RFC 3596 §2.5
 `TestARangeTooWideIsRefusedByTheService`,
 `TestACheckRefusesAddressRanges`,
 `TestANameWithNoDateCarriesNoneInTheJSON`,
+`TestEveryInstallationHasAResolver`,
+`TestEveryInstallationIsWiredAResolver`,
 `TestNoServedPageLeaksATemplateAction`,
 `TestWhatAnAddressAnsweredToIsItsOwnSource`).
 
@@ -1830,6 +1832,24 @@ behind its wildcards (`TestAnInstallationWithNoRegisterSaysItAskedNone`,
 `TestWhatARegisterObservedIsItsOwnSource`,
 `TestARegisterThatWasCutSaysSoInTheInventory`,
 `TestWhatARegisterHasSeenUnderADomain`).
+
+**Three of the four sources need a resolver, so every installation has one.**
+The domain's own records, what each name is doing now, and the certificates its
+hosts present all hang off `scan.Scanner.Resolver`, and the certificates only
+run where something answered — so they go together. That field was set only
+where `-resolver` was given, out of care for a real trap: a nil
+`*dnsclient.Client` copied into an interface field is not nil, so a package
+reading "nil means build a default" never builds one. The trap needs a nil
+pointer; a client with an empty `Server` is not one, and it means this machine's
+own configuration, which is what the default would have been anyway.
+
+What the condition cost was three sources in four. A copy started without the
+flag read one and its page described four — the demonstration shipped that way
+and reached the live deployment, the fix that followed covered the
+demonstration alone, and the same defect was then found a second time by
+somebody naming an address range and being told this installation has no
+resolver. `TestEveryInstallationHasAResolver` holds the value and
+`TestEveryInstallationIsWiredAResolver` holds that no condition came back.
 
 **The service asks what the names are doing, and that is the part that touches
 the estate.** Everything else the inventory does is reading: a register somebody
@@ -3928,7 +3948,7 @@ a signature, and it is said as that.
 `TestTheResolverListIsBounded`,
 `TestTheResolverFlagReachesTheScanner`,
 `TestNoResolverFlagLeavesTheMachinesOwnConfiguration`,
-`TestTheResolverFlagReachesEveryLookup`, `TestNoResolverFlagLeavesTheScannerUnset`,
+`TestTheResolverFlagReachesEveryLookup`, `TestEveryInstallationHasAResolver`,
 `TestAResolverThatIsNotAnAddressAndPortIsRefused`,
 `TestAServiceResolverReachesTheMailCheck`,
 `TestEveryReleasedPlatformIsVetted`,
