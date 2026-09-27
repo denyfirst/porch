@@ -55,6 +55,10 @@ type target struct {
 	// that takes no port.
 	port string
 
+	// ranges are the address ranges the caller sent, unparsed. Only the
+	// inventory reads them, and it bounds them before it walks one.
+	ranges []string
+
 	// scope is the second dimension of the per-target budget.
 	//
 	// It is the port for the TLS check, so that scanning one host on two

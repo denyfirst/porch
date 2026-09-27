@@ -499,7 +499,8 @@ func run() int {
 	// their own estate is offered without proof. A copy nobody else can reach is
 	// the command line with a browser in front of it, and the command line has
 	// never asked the operator to prove they own their own domain.
-	api.ReachableByOthers(beyondLoopback(*listen) || *allowOpen)
+	exposed := beyondLoopback(*listen) || *allowOpen
+	api.ReachableByOthers(exposed)
 
 	// The monitor the inventory endpoint asks, if the operator named one.
 	//
@@ -601,6 +602,12 @@ func run() int {
 	// The pages are told what this installation is before any of them is
 	// served. The console says whether a boundary was configured, and an
 	// operator reading a report needs that to be true rather than plausible.
+	// A password in front of the service means its callers are people the
+	// operator let in, which is what decides whether an address range may be
+	// walked: no proof can establish that a range belongs to whoever asked, so
+	// it is read for whoever runs the installation and for nobody else.
+	api.BehindPassword(gate != nil)
+
 	web.Configure(web.Installation{
 		Verified:          scope != nil,
 		Keeps:             *resultsDir != "" || gate != nil,
@@ -609,6 +616,7 @@ func run() int {
 		Register:          *namesPassive,
 		ReadsCertificates: *namesReadCertificates,
 		AsksResponder:     *askResponder,
+		OperatorOnly:      !exposed || gate != nil,
 	})
 	root.Handle("/", web.Handler())
 

@@ -1640,14 +1640,39 @@ lookups to the resolver this installation already asks about everything else —
 and no name is invented, because a reverse record is a name somebody published
 for that address (N7).
 
-**No service offers it, and that is the invariant rather than an omission.**
-A domain can be proven with a record in its zone. An address range cannot be
-proven by anything this project can check, so a service answering this would
-be a reverse-scanner for whoever asked — the thing the inventory endpoint
-exists not to be. The ranges are typed by an operator on their own machine,
-and `porchd` has no flag for them.
+**It is read for the operator, and for nobody else.**
 
-**A range too wide to read is refused when the flag is read.** A /16 is
+A domain can be proven with a record in its zone. An address range cannot be
+proven by anything this project can check, so a service that walked one for
+whoever proved a domain would be a reverse-scanner for whoever proved a
+domain — the thing this endpoint exists not to be.
+
+That says who may not have it. It took a second pass to notice it does not say
+*nobody may*: this page said "no service offers it, and that is the invariant
+rather than an omission", which refused the person running the installation
+along with the stranger. They are not the same caller, and the project had
+already decided that once, for the inventory itself: **a service nobody else
+can reach is the command line with a browser in front of it** (A30, above).
+Refusing them is friction bought with no safety, and friction bought with no
+safety is how a rule comes to be turned off altogether.
+
+So the range is read where the caller is the operator — nobody else can reach
+the installation, or a password they set stands in front of it — and refused
+where it is not (`TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse`).
+`Server.operatorOnly` answers it, from the same two facts `cmd/porchd` already
+hands over, and `TestWhatCountsAsReachableByAnybodyElse` holds that they are
+worked out once rather than twice.
+
+The page draws the field only where the answer is yes, because an input that is
+always refused is worse than no input, and a check sent an address range
+refuses rather than dropping it: a field accepted and ignored is a caller
+believing something happened (`TestACheckRefusesAddressRanges`). The bounds are
+the command line's, in `internal/ptrnames`, so the two faces refuse the same
+range for the same reason rather than drifting into two answers
+(`TestARangeTooWideIsRefusedByTheService`), and the refusal names the rule and
+never the range (I6).
+
+**A range too wide to read is refused before anything is asked.** A /16 is
 sixty-five thousand questions to somebody's resolver, which is how an operator
 gets rate-limited off their own DNS; a /64 is not slow but impossible, and a
 tool that accepted the flag and then ran for a week would be lying about what
@@ -1670,6 +1695,11 @@ and the reverse name asked about is the one a resolver answers — the nibble
 form under `ip6.arpa` for IPv6, which is RFC 3596 §2.5
 (`TestTheReverseNameIsTheOneAResolverAnswers`,
 `TestTheNameAnAddressAnswersToIsRead`,
+`TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse`,
+`TestARangeTooWideIsRefusedByTheService`,
+`TestACheckRefusesAddressRanges`,
+`TestANameWithNoDateCarriesNoneInTheJSON`,
+`TestNoServedPageLeaksATemplateAction`,
 `TestWhatAnAddressAnsweredToIsItsOwnSource`).
 
 **The hosts' own certificates are a fourth source, and the only one that is the
@@ -1989,6 +2019,8 @@ loudly wrong.
 `internal/passivedns`, `internal/passivedns.SecurityTrails.Under`, `internal/passivedns.VirusTotal.Under`,
 `internal/certnames`, `internal/certnames.Reader.Under`, `internal/liveness.Answering`,
 `internal/ptrnames`, `internal/ptrnames.Reader.Under`, `internal/ptrnames.Addresses`,
+`internal/httpapi.Server.operatorOnly`, `internal/httpapi.parseRanges`,
+`internal/inventory.Name.MarshalJSON`, `internal/inventory.Inventory.MarshalJSON`,
 `internal/ptrnames.Reverse`, `internal/dnsclient.Client.LookupPTR`, `cmd/porch-scan.rangesNamed`,
 `internal/inventory.Inventory.Unasked`, `internal/httpapi.Server.presented`,
 `internal/passivedns.looksLikeAName`, `cmd/porch-scan.registerNamed`, `cmd/porchd.namesRegister`,

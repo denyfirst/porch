@@ -197,6 +197,11 @@
         was started with <code>-ask-responder</code>. That question names one
         certificate to its own authority, so it runs only for a domain this
         installation has been shown control of.</li>{{end}}
+      {{if .WalksRanges}}<li><strong>Nothing, for an address range you name.</strong>
+        Its reverse records are read through the resolver above, and not one
+        packet is sent to the addresses themselves. A range is read only for
+        whoever runs this installation, because no record can prove a range
+        belongs to anybody the way one can prove a domain does.</li>{{end}}
       {{if .AsksNobodyElse}}<li>No certificate transparency log, no passive
         register and no revocation responder is asked by this service.</li>{{end}}
     </ul>

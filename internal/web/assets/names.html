@@ -26,6 +26,37 @@
         <button class="submit" type="submit" id="submit">List</button>
       </div>
 
+      {{if .Ranges}}
+      <!--
+        The one source that starts from an address rather than from a name,
+        and the one no proof of control can grant: a domain is proven with a
+        record in its zone, an address range is not provable by anything this
+        program can check. So the field is here only where the person asking
+        is the person running this installation — nobody else can reach it, or
+        a password they set stands in front of it.
+      -->
+      <label class="field-label" for="ranges">Address ranges you own</label>
+      <div class="field-row">
+        <input
+          class="field"
+          type="text"
+          id="ranges"
+          name="ranges"
+          placeholder="203.0.113.0/24, 198.51.100.0/28"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
+          aria-describedby="ranges-help">
+      </div>
+      <p class="field-help" id="ranges-help">
+        Read for the names their reverse records answer to, which finds a host
+        from the other direction: one in no certificate, in no record this
+        domain publishes, and in no register. Nothing is sent to the addresses
+        themselves. A range wider than /20, or more than four thousand
+        addresses across all of them, is refused rather than cut short.
+      </p>
+      {{end}}
+
       {{if .Demo}}
       <p class="field-help" id="field-help">
         This demonstration lists <strong>{{.Target}}</strong> and nothing else.

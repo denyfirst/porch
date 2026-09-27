@@ -104,6 +104,19 @@ const DEMO_SITE = document.body.dataset.site === "demo";
 // about undefined rather than about anything a reader could act on.
 const CHECK = CHECKS[(form && form.dataset.check) || "tls"] || CHECKS.tls;
 
+// rangesAsked reads the address ranges typed beside the domain, where this
+// installation offers the field at all.
+//
+// Sent only when something was typed: an empty list would be a caller asking
+// for a walk of nothing, and the service would have to decide what that meant.
+function rangesAsked() {
+  const field = document.getElementById("ranges");
+  if (!field) return null;
+
+  const ranges = field.value.split(",").map(r => r.trim()).filter(Boolean);
+  return ranges.length ? { ranges: ranges } : null;
+}
+
 // ── Small builders ──────────────────────────────────────────────────────
 
 function el(tag, className, text) {
@@ -1632,7 +1645,7 @@ function domainOnly(target) {
   return at < 0 ? target : target.slice(at + 1);
 }
 
-async function check(target, spec) {
+async function check(target, spec, extra) {
   spec = spec || CHECK;
   target = domainOnly(target);
   // Addressed under the check it runs, like the page it is called from.
@@ -1644,7 +1657,7 @@ async function check(target, spec) {
   const response = await fetch(spec.endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ target: target }),
+    body: JSON.stringify(Object.assign({ target: target }, extra || {})),
     // The hostname is in the body rather than the URL so it stays out of
     // browser history and out of proxy logs. Sending no referrer keeps it out
     // of anything the page links to afterwards.
@@ -1693,7 +1706,7 @@ if (form) form.addEventListener("submit", async event => {
   show(el("p", "working", CHECK.working));
 
   try {
-    show(CHECK.build(await check(target)));
+    show(CHECK.build(await check(target, CHECK, rangesAsked())));
   } catch (err) {
     const hint = err.status === 429
       ? "Wait a moment before trying again."
@@ -2634,7 +2647,9 @@ function buildNames(data) {
   // A kept copy says when it was made. Without it the freshest thing here —
   // what each name is doing — reads as current whatever its age, which is the
   // one claim this whole mode exists to get right.
-  if (data.producedAt) row("Produced", producedAt(data.producedAt));
+  if (data.producedAt && !data.producedAt.startsWith("0001-01-01")) {
+    row("Produced", producedAt(data.producedAt));
+  }
 
   // Then one line per source, always, including the one that failed. Six
   // names from two sources and six names from one that answered while the
@@ -2882,7 +2897,12 @@ function addressList(now) {
 // their own estate is usually looking for exactly those. Which of the two it
 // is, this does not say — nothing here asked the host anything.
 function covered(name) {
-  if (!name.lastSeen) {
+  // A date the service does not have is absent, not the first day of year one.
+  // It was the latter until 2026-09-27, because `omitempty` does nothing for a
+  // time in Go — and this drew "certificates to 0001-01-01" beside a host a
+  // reverse record named. The guard stays on this side as well: a reader of
+  // this page cannot check what a service sent it.
+  if (!name.lastSeen || name.lastSeen.startsWith("0001-01-01")) {
     // A name only the domain's own records carried was never in a
     // certificate, so it has no window rather than an empty one — and saying
     // "no dates in the log" would suggest a log had it and lost them.

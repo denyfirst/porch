@@ -683,6 +683,12 @@ type Installation struct {
 	Monitor  string
 	Register string
 
+	// OperatorOnly says the only people who can call this installation are the
+	// one running it and whoever they let in: nobody else can reach it, or a
+	// password stands in front. It decides the one capability proof of control
+	// cannot grant — reading the reverse records of an address range.
+	OperatorOnly bool
+
 	// ReadsCertificates says each name that answers may be asked for the
 	// certificate it presents, and AsksResponder that a certificate's own
 	// authority may be asked whether it has been revoked.
@@ -764,6 +770,17 @@ var sectionHeadings = map[string]string{
 func renderWorkspace(verified, keeps bool, in Installation) {
 	rendered["/"] = renderConsole(verified, keeps)
 	rendered["/privacy"] = renderPrivacy(verified, keeps, in)
+
+	// The inventory page, because whether it offers a field for address ranges
+	// depends on who can call this installation.
+	if p, ok := pages["/names"]; ok && !demo.Enabled {
+		p.Data = namesPage{Ranges: in.OperatorOnly}
+		body, err := render(p)
+		if err != nil {
+			panic("rendering /names: " + err.Error())
+		}
+		rendered["/names"] = body
+	}
 	for _, part := range []struct{ path, section, fragment, description string }{
 		{"/domains", "domains", "assets/domains.html",
 			"The domains this installation may check, and the record that shows each one is yours."},
@@ -925,10 +942,15 @@ type privacyPage struct {
 	ReadsCertificates bool
 	AsksResponder     bool
 	AsksNobodyElse    bool
-	Verified          bool
-	ReadsPages        bool
-	Keeps             bool
-	Threshold         int
+
+	// WalksRanges says this installation will read the reverse records of an
+	// address range the person asking names, which it does only where that
+	// person is the one running it.
+	WalksRanges bool
+	Verified    bool
+	ReadsPages  bool
+	Keeps       bool
+	Threshold   int
 
 	// Guarded says a password is in front of the installation, which is when
 	// it sets its one cookie.
@@ -953,6 +975,7 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 			ReadsCertificates: in.ReadsCertificates,
 			AsksResponder:     in.AsksResponder,
 			AsksNobodyElse:    in.AsksNobodyElse(),
+			WalksRanges:       in.OperatorOnly,
 			Verified:          verified,
 			ReadsPages:        verified,
 			Keeps:             keeps,
@@ -976,6 +999,12 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 type namesPage struct {
 	Target string
 	Demo   bool
+
+	// Ranges says this installation will read the reverse records of an
+	// address range the person asking names, which it does only where that
+	// person is the one running it. The field is not drawn otherwise: an input
+	// that is always refused is worse than no input.
+	Ranges bool
 }
 
 // demoDomain is the estate a demonstration build lists, which is the first

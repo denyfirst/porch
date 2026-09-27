@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -572,5 +573,59 @@ func TestWhatAnAddressAnsweredToIsItsOwnSource(t *testing.T) {
 	})
 	if none.Reverse.Asked || none.Reverse.Reason != "" {
 		t.Errorf("a walk nobody asked for is reported as %+v", none.Reverse)
+	}
+}
+
+// A name no certificate covered carries no date, in the JSON as well as in
+// the report.
+//
+// `omitempty` does nothing for a time.Time, so both fields went out as
+// "0001-01-01T00:00:00Z" and every reader had to know that one date means no
+// date. The page did not: it printed "certificates to 0001-01-01" beside a
+// host found by a reverse record, which is a date invented for a fact nobody
+// has (R17).
+func TestANameWithNoDateCarriesNoneInTheJSON(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{
+			{Name: "dated.example.test", FirstSeen: day(2024, 1, 1), LastSeen: day(2026, 1, 1)},
+		}},
+		Reverse: ptrnames.Found{Asked: true, Names: []string{"undated.example.test"}},
+	})
+
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshalling the inventory: %v", err)
+	}
+	out := string(body)
+
+	if strings.Contains(out, "0001-01-01") {
+		t.Errorf("a name with no date carries the zero time:\n%s", out)
+	}
+	for _, want := range []string{
+		`"name":"undated.example.test"`,
+		`"firstSeen":"2024-01-01T00:00:00Z"`,
+		`"lastSeen":"2026-01-01T00:00:00Z"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the JSON does not carry %s:\n%s", want, out)
+		}
+	}
+
+	// And it decodes back to the same thing, so a kept report reads as it was
+	// written.
+	var back Inventory
+	if err := json.Unmarshal(body, &back); err != nil {
+		t.Fatalf("reading it back: %v", err)
+	}
+	if len(back.Names) != 2 {
+		t.Fatalf("the inventory came back as %+v", back.Names)
+	}
+	for _, n := range back.Names {
+		if n.Name == "undated.example.test" && !n.LastSeen.IsZero() {
+			t.Errorf("the undated name came back dated %s", n.LastSeen)
+		}
+		if n.Name == "dated.example.test" && n.LastSeen.IsZero() {
+			t.Errorf("the dated name came back without its date")
+		}
 	}
 }
