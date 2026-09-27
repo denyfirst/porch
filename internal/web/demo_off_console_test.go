@@ -40,7 +40,7 @@ func workspaceWith(t *testing.T, path string, verified, keeps bool) string {
 		}
 	})
 
-	Configure(verified, keeps, false)
+	Configure(Installation{Verified: verified, Keeps: keeps})
 	return flatten(get(t, path).Body.String())
 }
 

@@ -566,7 +566,7 @@ func init() {
 	// Rendered here at all so that every path in the table answers from the
 	// moment the package loads, including in a test that never calls Configure.
 	if !demo.Enabled {
-		renderWorkspace(false, false)
+		renderWorkspace(false, false, Installation{})
 	}
 }
 
@@ -647,7 +647,42 @@ func render(p *page) ([]byte, error) {
 // guarded says a password is in front of the installation. Every page is then
 // rendered again, because each carries a way to sign out, and the sign-in page
 // is added.
-func Configure(verified, keeps, guarded bool) {
+// Installation is what this copy of the service is, as its pages describe it.
+//
+// A struct rather than three booleans and then five: the privacy page has to
+// say which third parties this installation asks, and every one of those is a
+// flag somebody set. It said "no certificate transparency log and no
+// revocation responder is asked by this service" unconditionally, which stopped
+// being true the day -names-monitor and -ask-responder existed — a page telling
+// an operator something false about their own installation is the worst thing
+// on this site, because it is the page they would quote (N14).
+type Installation struct {
+	// Verified says a boundary was configured, Keeps that results are written
+	// to disk, and Guarded that a password is in front of the service.
+	Verified bool
+	Keeps    bool
+	Guarded  bool
+
+	// Monitor names the certificate transparency monitor the inventory asks,
+	// and Register the passive register. Empty means none was configured.
+	Monitor  string
+	Register string
+
+	// ReadsCertificates says each name that answers may be asked for the
+	// certificate it presents, and AsksResponder that a certificate's own
+	// authority may be asked whether it has been revoked.
+	ReadsCertificates bool
+	AsksResponder     bool
+}
+
+// AsksNobodyElse reports that nothing above was configured, which is the
+// ordinary installation and the one the old sentence described.
+func (i Installation) AsksNobodyElse() bool {
+	return i.Monitor == "" && i.Register == "" && !i.ReadsCertificates && !i.AsksResponder
+}
+
+func Configure(in Installation) {
+	verified, keeps, guarded := in.Verified, in.Keeps, in.Guarded
 	// The demonstration's root is its front page and its privacy page is its
 	// own; neither depends on how it was started.
 	if demo.Enabled {
@@ -661,7 +696,7 @@ func Configure(verified, keeps, guarded bool) {
 		}
 		rendered[path] = body
 	}
-	renderWorkspace(verified, keeps)
+	renderWorkspace(verified, keeps, in)
 	if guarded {
 		rendered["/login"] = renderSignIn()
 	} else {
@@ -711,9 +746,9 @@ var sectionHeadings = map[string]string{
 // renderWorkspace renders every page whose content depends on how this
 // installation was started: the four parts of the workspace, and the privacy
 // page, which says what this copy keeps.
-func renderWorkspace(verified, keeps bool) {
+func renderWorkspace(verified, keeps bool, in Installation) {
 	rendered["/"] = renderConsole(verified, keeps)
-	rendered["/privacy"] = renderPrivacy(verified, keeps)
+	rendered["/privacy"] = renderPrivacy(verified, keeps, in)
 	for _, part := range []struct{ path, section, fragment, description string }{
 		{"/domains", "domains", "assets/domains.html",
 			"The domains this installation may check, and the record that shows each one is yours."},
@@ -865,11 +900,20 @@ func setHeaders(w http.ResponseWriter, r *http.Request) {
 
 // privacyPage is what assets/privacy-selfhost.html reads.
 type privacyPage struct {
-	Tool       string
-	Verified   bool
-	ReadsPages bool
-	Keeps      bool
-	Threshold  int
+	Tool string
+
+	// Monitor, Register, ReadsCertificates and AsksResponder say which third
+	// parties this installation asks, and AsksNobodyElse that it asks none of
+	// them. The page said the last of those unconditionally until 2026-09-27.
+	Monitor           string
+	Register          string
+	ReadsCertificates bool
+	AsksResponder     bool
+	AsksNobodyElse    bool
+	Verified          bool
+	ReadsPages        bool
+	Keeps             bool
+	Threshold         int
 
 	// Guarded says a password is in front of the installation, which is when
 	// it sets its one cookie.
@@ -882,18 +926,23 @@ type privacyPage struct {
 // read on a self-hosted copy it promised things that copy does differently.
 // This one is filled in from how the installation was started, like the
 // console, and the demonstration keeps its own (audit A21).
-func renderPrivacy(verified, keeps bool) []byte {
+func renderPrivacy(verified, keeps bool, in Installation) []byte {
 	p := &page{
 		Title:       "Privacy, and what a scan does — " + ToolName,
 		Description: "What this installation keeps, what a scan sends, and who else is asked anything.",
 		Fragment:    "assets/privacy-selfhost.html",
 		Data: privacyPage{
-			Tool:       ToolName,
-			Verified:   verified,
-			ReadsPages: verified,
-			Keeps:      keeps,
-			Threshold:  httpapi.TargetThreshold(),
-			Guarded:    signedIn,
+			Tool:              ToolName,
+			Monitor:           in.Monitor,
+			Register:          in.Register,
+			ReadsCertificates: in.ReadsCertificates,
+			AsksResponder:     in.AsksResponder,
+			AsksNobodyElse:    in.AsksNobodyElse(),
+			Verified:          verified,
+			ReadsPages:        verified,
+			Keeps:             keeps,
+			Threshold:         httpapi.TargetThreshold(),
+			Guarded:           signedIn,
 		},
 	}
 

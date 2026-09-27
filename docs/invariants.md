@@ -2434,6 +2434,29 @@ The self-hosted build serves its own privacy page and the same organisation
 page. What the makers receive is the same question wherever a copy runs, and the
 answer is the same nothing.
 
+**A page says what *this* installation does, and a claim about configuration is
+rendered from the configuration.** The self-hosted privacy page carried one
+sentence — *no certificate transparency log and no revocation responder is
+asked by this service* — printed whatever the operator had started the service
+with. `-ask-responder` made the second half false when it was added, and
+`-names-monitor` the first half when the inventory arrived; the sentence went on
+being served for weeks on the page an operator would quote to the people they
+scan. Nothing lied: nobody passed the flags to the page, and a template cannot
+ask.
+
+So `web.Configure` takes an `Installation` rather than a list of booleans, and
+every third party this copy may ask is a field on it: the monitor, the passive
+register, reading the hosts' own certificates, and the responder. The page names
+each one that is on and says the old sentence only when none of them is
+(`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`). The wiring itself is pinned
+as text in `cmd/porchd`, because a flag connected to the scanner and not to the
+page produces exactly the page this fixed
+(`TestThePagesAreToldWhatThisInstallationAsks`).
+
+The general rule, which is what the next flag needs: **a capability that reaches
+a third party is not finished when it works. It is finished when the privacy
+page says it is there.**
+
 ### I1 — One implementation of target parsing
 
 The command line receives typos; the service receives whatever a stranger

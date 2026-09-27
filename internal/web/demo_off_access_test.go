@@ -27,7 +27,7 @@ func guardedAs(t *testing.T, path string) string {
 		}
 		signedIn = false
 	})
-	Configure(true, true, true)
+	Configure(Installation{Verified: true, Keeps: true, Guarded: true})
 	return get(t, path).Body.String()
 }
 

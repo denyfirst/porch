@@ -18,7 +18,7 @@ func privacyAs(t *testing.T, verified, keeps bool) string {
 	before, beforeConsole := rendered["/privacy"], rendered["/"]
 	t.Cleanup(func() { rendered["/privacy"], rendered["/"] = before, beforeConsole })
 
-	Configure(verified, keeps, false)
+	Configure(Installation{Verified: verified, Keeps: keeps})
 	return flatten(get(t, "/privacy").Body.String())
 }
 
@@ -116,6 +116,69 @@ func TestThePrivacyPageSaysWhatEachModeKeeps(t *testing.T) {
 	for name, page := range map[string]string{"a results directory": keeps, "nothing kept": open} {
 		if strings.Contains(page, "tries to sign in") {
 			t.Errorf("with %s the page talks about signing in", name)
+		}
+	}
+}
+
+// privacyOf renders the served privacy page for one whole installation.
+func privacyOf(t *testing.T, in Installation) string {
+	t.Helper()
+	before, beforeConsole := rendered["/privacy"], rendered["/"]
+	t.Cleanup(func() { rendered["/privacy"], rendered["/"] = before, beforeConsole })
+
+	Configure(in)
+	return flatten(get(t, "/privacy").Body.String())
+}
+
+// The page says which third parties this installation asks, and never claims
+// it asks none when it asks one.
+//
+// It claimed exactly that until 2026-09-27: "no certificate transparency log
+// and no revocation responder is asked by this service", printed whatever the
+// operator had configured. -names-monitor made the first half false in #259
+// and -ask-responder made the second half false before it, and the sentence
+// went on being served — on the page an operator would quote to the people
+// they scan. A page that tells somebody something untrue about their own
+// installation is worse than a page that says nothing (N14).
+func TestThePrivacyPageSaysWhichThirdPartiesAreAsked(t *testing.T) {
+	const none = "No certificate transparency log, no passive register and no revocation responder is asked"
+
+	// The ordinary installation, which is what that sentence was written for.
+	plain := privacyOf(t, Installation{Verified: true})
+	if !strings.Contains(plain, none) {
+		t.Errorf("an installation that asks nobody does not say so:\n%s", plain)
+	}
+
+	// And each thing an operator can turn on.
+	for _, tc := range []struct {
+		what string
+		in   Installation
+		says string
+	}{
+		{"a monitor", Installation{Verified: true, Monitor: "crtsh"},
+			"certificate transparency monitor"},
+		{"a register", Installation{Verified: true, Register: "securitytrails"},
+			"passive register"},
+		{"reading certificates", Installation{Verified: true, ReadsCertificates: true},
+			"asked for the certificate it presents"},
+		{"the responder", Installation{Verified: true, AsksResponder: true},
+			"whether a certificate has been revoked"},
+	} {
+		page := privacyOf(t, tc.in)
+		if strings.Contains(page, none) {
+			t.Errorf("with %s configured the page still says nobody is asked:\n%s", tc.what, page)
+		}
+		if !strings.Contains(page, tc.says) {
+			t.Errorf("with %s configured the page does not say %q:\n%s", tc.what, tc.says, page)
+		}
+	}
+
+	// The monitor and the register are named, because which company was asked
+	// is the part an operator has to be able to check.
+	named := privacyOf(t, Installation{Verified: true, Monitor: "certspotter", Register: "virustotal"})
+	for _, want := range []string{"certspotter", "virustotal"} {
+		if !strings.Contains(named, want) {
+			t.Errorf("the page does not name %q:\n%s", want, named)
 		}
 	}
 }
