@@ -174,6 +174,14 @@ type Inventory struct {
 	// to, where any were named.
 	Reverse Reading `json:"reverse"`
 
+	// ProducedAt is when this inventory was made, where whoever made it kept a
+	// copy rather than producing a new one for each reader.
+	//
+	// Empty means it was produced for this reader, now. A served copy without
+	// it would read as current whatever its age, and the age is the one thing
+	// a reader cannot get from the names themselves.
+	ProducedAt time.Time `json:"producedAt,omitempty"`
+
 	// Probed reports that the names were asked what they are doing now.
 	//
 	// A report where nothing was asked and a report where everything answered

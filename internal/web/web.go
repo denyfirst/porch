@@ -528,14 +528,23 @@ func init() {
 			Description: "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
 			Fragment:    "assets/home.html",
 		}
-		// And the name inventory does not exist here at all.
+		// The name inventory is here, and it lists this project's own estate.
 		//
-		// This deployment promises it queries no transparency log (N12), so the
-		// endpoint refuses every time. A page inviting a visitor to list an
-		// estate, which then refuses, is worse than no page: it advertises a
-		// capability this deployment has undertaken not to have.
-		delete(pages, "/names")
-		delete(pages, "/names/method")
+		// Both pages were deleted until 2026-09-27, on the ground that this
+		// deployment queries no transparency log. That promise was written
+		// when the demonstration scanned whatever it was given, and it
+		// protected a visitor's domain from being named to a monitor. The
+		// hosts this build may touch are compiled in, so there is no visitor's
+		// domain to protect any more — and what the deletion cost was the
+		// demonstration of the one mode that reads several sources and says
+		// which named what. A demonstration that shows less than the product
+		// misrepresents it downwards.
+		//
+		// The form is fixed to the estate this deployment owns rather than
+		// left open, because an open field on a page that then refuses is the
+		// thing the deletion was right about (N12).
+		pages["/names"].Data = namesPage{Target: demoDomain(), Demo: true}
+		pages["/names/method"].Data = namesPage{Target: demoDomain(), Demo: true}
 
 		pages["/porch"] = &page{
 			Title:       "Porch — TLS, web and mail checks that cite their sources — denyfirst",
@@ -951,6 +960,29 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 		panic("rendering the privacy page: " + err.Error())
 	}
 	return body
+}
+
+// namesPage is what assets/names.html and assets/names-method.html read.
+//
+// Target is the estate a demonstration lists, and Demo says this is one. An
+// installation somebody runs has neither: the person typing owns the domain
+// they type, and the page says so in its own words.
+type namesPage struct {
+	Target string
+	Demo   bool
+}
+
+// demoDomain is the estate a demonstration build lists, which is the first
+// domain in its compiled-in boundary.
+//
+// Read from the boundary rather than written again here: two lists that have
+// to agree are two lists that will not, and the one that decides what may be
+// reached is the one that must be right.
+func demoDomain() string {
+	if targets := demo.Targets(); len(targets) > 0 {
+		return targets[0]
+	}
+	return ""
 }
 
 // porchPage is what assets/porch.html reads.

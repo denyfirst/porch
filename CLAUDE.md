@@ -195,6 +195,14 @@ Nine `internal/httpapi` tests fail under that tag on every commit: they scan
 demonstration's own test there, deliberately. Do not bend forty tests to a
 deployment restriction.
 
+**Two `cmd/porchd` tests fail under it as well, and always have.**
+`TestAPublicServiceWithoutAPasswordIsRefused` and
+`TestAPasswordAndAPlainResultsDirectoryAreRefusedTogether` describe a
+self-hosted copy: the demonstration *is* a public service without a password,
+by design. Named here because a sabotage was once judged caught by those two
+failing, when they fail on an untouched tree — a red mark that is always red
+catches nothing.
+
 **The text gates**, which need no Go and catch what Go cannot:
 
 ```sh

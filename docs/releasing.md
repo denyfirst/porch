@@ -491,6 +491,28 @@ must print nothing. `install` does not carry capabilities across, so this
 holds unless somebody sets one by hand — which is exactly why it is checked
 rather than assumed.
 
+### Look at what the inventory now publishes about us
+
+The demonstration lists this project's own estate on `/names`, and it lists
+whatever the sources find — not a list anybody curated. Every name under
+`denyfirst.dev` that a certificate log, the zone's own records or a host's
+certificate names will appear there, and it will appear the hour after it
+exists.
+
+That is the arrangement rather than an oversight: a filtered inventory would be
+one that lies by omission, which is the thing this mode exists not to do. What
+it needs instead is a pair of eyes at the one moment the estate is known to
+have changed, which is a deploy.
+
+```sh
+curl -s https://denyfirst.dev/api/v1/names/scan \
+  -H 'content-type: application/json' \
+  -d '{"target":"denyfirst.dev"}' | grep -o '"name":"[^"]*"'
+```
+
+Anything there that should not be public does not belong under this domain.
+Move it, rather than teaching the report to hide it.
+
 ### Confirm the service, not the file
 
 ```sh

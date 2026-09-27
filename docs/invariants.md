@@ -1346,9 +1346,58 @@ the other party learn?*
 
 | | |
 |---|---|
-| the demonstration | never — it promises it queries no log, and the branch is compiled out |
+| the demonstration | the inventory, for the domain compiled into it and no other; the checks ask no log |
 | a service that required proof of control | runs, no switch: the name belongs to whoever asked |
 | the command line | `-check-logs`, because there the name may be somebody else's |
+
+**The first row said *never* until 2026-09-27, and the reason it said so had
+stopped applying.** The promise was written when the demonstration scanned
+whatever it was given: the domain named to a monitor would have been a
+visitor's, and not asking protected them. Since the boundary was compiled in
+(N6) a visitor cannot name a domain at all, so the only thing a monitor can
+learn from that deployment is that somebody is looking at *this project's* own
+estate — which is this project's own to disclose. The sentence had stopped
+protecting anybody and had started costing the demonstration: a visitor could
+not see the one mode that reads several sources and says which named what, so
+the strongest thing the tool does was a claim in a repository rather than
+something on a screen.
+
+Three things make that safe to offer, and none of them is the promise that was
+removed. The **boundary** decides the target, in `admit`, in the same words and
+the same counter as every other endpoint — not a second copy of the check
+inside the handler. The **field is fixed** on the page, because an open field
+that then refuses is what the old deletion was right about. And the answer is
+**kept for an hour and handed to everybody**, so a visit causes no request at
+all and a page anybody can refresh is not a way to make this installation
+hammer a third party (`keptInventories`). The copy carries the time it was made:
+a kept answer that read as current whatever its age would be the one claim this
+mode has to get right (R4).
+
+The privacy page says all of it, including what it used to say and why that
+changed, which is the rule N14 leaves: a capability that reaches a third party
+is finished when the page says it is there.
+
+`TestTheDemonstrationListsItsOwnEstate` holds the boundary and the fixed field;
+`TestTheDemonstrationKeepsTheInventoryItProduced` holds that two visits are one
+question; and `TestTheDemonstrationIsWiredToListItsOwnEstate` holds that the
+build wires both, because a sabotage removing either was caught only by two
+`cmd/porchd` tests that fail under the tag anyway — a red mark that is always
+red catches nothing.
+
+The keeping itself is held apart from the deployment that uses it:
+`TestAKeptInventoryIsProducedAgainWhenItAgesOut` for the interval and the date
+it carries, `TestAFailedSearchIsNotKept` because an unreachable monitor for one
+minute must not be an hour of telling everybody nothing was established,
+`TestVisitorsArrivingTogetherAskOneQuestion` for the per-domain lock that makes
+the promise true under load, and
+`TestKeepingNothingProducesAnInventoryForEveryCaller` for the ordinary
+installation, which keeps nothing and asks when it is asked.
+
+Both halves are compiled in rather than flagged — the monitor and the kept
+copy — because the page promises what the build does and a unit file is not the
+build. A flag left out of it would leave the demonstration showing half an
+inventory while the privacy page described a whole one, which is the defect
+this project had just finished fixing on the other privacy page.
 
 That table was written on 2026-09-08 and the middle row was not true until
 2026-09-24: `porchd` built its scanner without a monitor, so a service with a
@@ -1540,14 +1589,17 @@ the rule, and each checks that the monitor was never asked — a refusal that
 still made the request would have disclosed the domain to a third party on the
 way to saying no.
 
-**The demonstration does not serve the page either.** The endpoint refuses
-there, as everything that would query a log refuses there, but a page inviting a
-visitor to list an estate and then refusing every time is worse than no page: it
-advertises a capability this deployment has undertaken not to have, and the
-visitor finds out only after typing somebody's domain into it.
-`TestTheDemonstrationOffersNoNameInventory` deletes it from the page table
-rather than trusting the endpoint to say no, and
-`TestTheDemonstrationInventoriesNoEstate` holds the command line's half.
+**The demonstration serves the page for its own estate**, since 2026-09-27, and
+the field on it is fixed rather than open — the argument for that, and for what
+it replaced, is in the deployment table above.
+`TestTheDemonstrationListsItsOwnEstate` holds it on both sides: the page and
+the endpoint.
+
+**The command line's demonstration build still refuses the mode outright**, and
+that is stricter rather than inconsistent. That binary is not deployed
+anywhere, nothing compiles a boundary into the target it would be given, and
+the safe direction for an unshipped build to be wrong in is the one where it
+asks nobody anything. `TestTheDemonstrationInventoriesNoEstate` holds it.
 
 That last one held nothing for a day. The mode gained a `-resolver` flag on
 2026-09-25, the call in the demonstration test was not updated with it, and
@@ -1931,7 +1983,8 @@ loudly wrong.
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`,
 `internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
 `cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`, `cmd/porch-scan.saysRecords`,
-`internal/httpapi.handleNames`, `internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
+`internal/httpapi.handleNames`, `internal/httpapi.Server.inventory`, `internal/httpapi.keptInventories`,
+`internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
 `internal/inventory.Inventory.WithLiveness`, `internal/inventory.Sources`,
 `internal/passivedns`, `internal/passivedns.SecurityTrails.Under`, `internal/passivedns.VirusTotal.Under`,
 `internal/certnames`, `internal/certnames.Reader.Under`, `internal/liveness.Answering`,
