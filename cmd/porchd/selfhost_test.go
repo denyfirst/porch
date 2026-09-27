@@ -513,22 +513,32 @@ func TestTheDemonstrationIsWiredToListItsOwnEstate(t *testing.T) {
 	}
 }
 
-// The demonstration has a resolver whatever its unit file says.
+// Every installation has a resolver, and no condition stands in front of it.
 //
 // Three of the four sources the inventory reads hang off scanner.Resolver: the
 // domain's own records, what each name is doing now, and the certificates its
 // hosts present — which only runs where something answered. The field was set
-// only when -resolver was given, so a unit file without it left the page
-// describing four sources while the build read one. That is the defect N14 had
-// just been rewritten about, arriving through a flag nobody typed, and it
-// reached the live deployment before anybody saw it.
+// only when -resolver was given, so a copy started without it read one source
+// while its page described four.
+//
+// The demonstration shipped that way and reached the live deployment. The fix
+// that followed covered the demonstration alone and left every self-hosted copy
+// exactly where it was — which is how the same defect got found twice, the
+// second time by somebody naming an address range and being told this
+// installation has no resolver.
 //
 // Read as text, like the rest of the wiring here: what is being checked is that
-// the condition exists at all.
-func TestTheDemonstrationAlwaysHasAResolver(t *testing.T) {
+// no condition came back.
+func TestEveryInstallationIsWiredAResolver(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
-	if !strings.Contains(src, `if resolver != "" || demo.Enabled {`) {
-		t.Error("the demonstration's resolver depends on a flag, so three of the inventory's " +
-			"four sources depend on a unit file")
+
+	if !strings.Contains(src, "scanner.Resolver = &dnsclient.Client{Server: resolver}") {
+		t.Fatal("main.go no longer hands the scanner a resolver")
+	}
+	for _, condition := range []string{`if resolver != "" {`, `if resolver != "" || demo.Enabled {`} {
+		if strings.Contains(src, condition) {
+			t.Errorf("the resolver is behind %s again, so three of the inventory's four "+
+				"sources depend on a flag somebody remembered to type", condition)
+		}
 	}
 }
