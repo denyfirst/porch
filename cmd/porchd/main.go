@@ -1061,7 +1061,16 @@ func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, 
 	// configuration, but a non-nil client where there was nil before is not the
 	// same thing to httpapi, which copies this into an interface field (see the
 	// comment there on a nil pointer inside an interface).
-	if resolver != "" {
+	//
+	// The demonstration always has one, whatever its unit file says, and that
+	// is not a convenience. Three of the four sources the inventory reads hang
+	// off this field — the domain's own records, what each name is doing now,
+	// and the certificates the hosts present, which only runs where something
+	// answered. Without it the page describes four sources and the build reads
+	// one, which is the failure N14 had just been rewritten about, arriving
+	// through a flag nobody put in a unit file. What the build promises is not
+	// a thing for a unit file to decide.
+	if resolver != "" || demo.Enabled {
 		scanner.Resolver = &dnsclient.Client{Server: resolver}
 	}
 	return scanner
