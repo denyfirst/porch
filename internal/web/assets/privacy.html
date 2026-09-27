@@ -274,14 +274,39 @@
       None of it required asking for anything.
     </p>
 
-    <h3>Nothing is asked of third parties either</h3>
+    <h3>What is asked of third parties, and about whom</h3>
 
     <p>
       No certificate authority is asked anything. Enquiring whether a
       certificate is still valid would tell that authority somebody is looking
-      at it, and transparency logs are not queried for the same reason. A
-      certificate is described from what the server sent and from nothing
-      else, and every report says so.
+      at it, and a check here never does. A certificate is described from what
+      the server sent and from nothing else, and every report says so.
+    </p>
+
+    <p>
+      <strong>One question is asked of somebody else, and it is about us.</strong>
+      The name inventory asks a certificate transparency monitor which names
+      appear under <code>denyfirst.dev</code> &mdash; our own domain, and the
+      only one this deployment will list. What that monitor learns is that
+      somebody is looking at <em>us</em>, which is ours to disclose. Nothing you
+      type reaches it, because there is nothing to type: the field is fixed and
+      the hosts this build may touch are compiled into it.
+    </p>
+
+    <p>
+      The answer is produced at most once an hour and handed to everybody who
+      asks, so a visit causes no request at all, and the page says when the copy
+      was made rather than letting an old one read as new.
+    </p>
+
+    <p>
+      This page said <em>transparency logs are not queried</em> until
+      2026-09-27. That sentence was written when this deployment scanned
+      whatever it was given, and then it protected somebody: the domain named to
+      a monitor would have been yours. It protects nobody now, and what it cost
+      was the demonstration of the one thing this tool does that no single
+      source can. It is replaced rather than quietly dropped, which is what
+      these pages are for.
     </p>
 
     <p>

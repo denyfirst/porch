@@ -32,14 +32,20 @@ func TestTheDemonstrationAsksNoAuthorityAnything(t *testing.T) {
 	}
 }
 
-// And it queries no certificate transparency log either.
+// And a check queries no certificate transparency log either.
 //
-// The same promise, on the same page, about a different third party — and the
-// disclosure here is the larger one: a revocation list names no certificate,
-// while asking which certificates exist for a name contains the name. A
-// deployment that made that request while its privacy page said it made none
-// would be the worst of the failures this project guards against, and until
-// this test a sabotage removing the guard changed nothing anybody could see.
+// The same promise, about a different third party — and the disclosure here is
+// the larger one: a revocation list names no certificate, while asking which
+// certificates exist for a name contains the name. A check that made that
+// request while the page said it made none would be the worst of the failures
+// this project guards against, and until this test a sabotage removing the
+// guard changed nothing anybody could see.
+//
+// The name inventory does ask a monitor on this deployment, since 2026-09-27,
+// and only about this project's own domain — which is a mode a visitor types
+// rather than something a check does, and the privacy page says so in as many
+// words. A check is still a check: it describes what the server sent and asks
+// nobody anything.
 func TestTheDemonstrationQueriesNoTransparencyLog(t *testing.T) {
 	host, port := revocationServer(t, "http://lists.example/one.crl")
 

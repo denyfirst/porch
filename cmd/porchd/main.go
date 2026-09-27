@@ -517,6 +517,27 @@ func run() int {
 		api.SearchNames(searcher)
 	}
 
+	// The demonstration lists this project's own estate, and both halves of
+	// that are compiled in rather than flagged.
+	//
+	// A monitor, because the page promises what this build does and a unit
+	// file is not the build: a flag left out of it would leave the
+	// demonstration showing half an inventory while the privacy page described
+	// a whole one. And a kept copy, because every visitor asks the same
+	// question — producing it per visitor would spend crt.sh on an answer that
+	// has not changed, and a page anybody can refresh would be a way to make
+	// this installation hammer a third party.
+	//
+	// An hour: long enough that a monitor sees a handful of questions a day,
+	// short enough that what each name is doing is still worth reading. The
+	// answer carries the time it was made, so nobody has to take that on
+	// trust.
+	if demo.Enabled {
+		api.SearchNames(&ctsearch.CRTSh{Timeout: *requestTimeout})
+		api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})
+		api.KeepInventoryFor(time.Hour)
+	}
+
 	// The register, the same way: named or not asked. It is wired even where
 	// no monitor is, so that the endpoint's refusal stays the monitor's to
 	// decide — this adds a source to an inventory that is offered, and offers

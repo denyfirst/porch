@@ -40,21 +40,38 @@ import (
 // verification configured is one where nobody has been shown to own anything,
 // and "nobody has proven anything" must not mean "everybody may ask".
 //
-// # And never on the demonstration
+// # And on the demonstration, only this project's own estate
 //
-// That deployment promises it queries no transparency log (N12). This is the
-// largest question this project knows how to put to one.
+// That deployment refused this entirely until 2026-09-27, on the ground that it
+// promises it queries no transparency log. The promise was written when the
+// demonstration scanned whatever it was given, and then it protected somebody:
+// a visitor's domain would have been named to a monitor. It protects nobody
+// now. The hosts a demonstration build may touch are compiled in (N6), so a
+// visitor cannot name a domain, and the only thing a monitor can learn from it
+// is that somebody is looking at *this project's* domain — which is this
+// project's own information to give.
+//
+// What the refusal cost was the demonstration itself. A visitor could not see
+// the one mode that reads several sources and says which named what, so the
+// strongest thing the tool does was a claim in a repository rather than
+// something on the screen. A demonstration that shows less than the product is
+// a demonstration that misrepresents it downwards.
+//
+// So it runs here, for the hosts this project owns and nothing else, and the
+// privacy page says exactly that rather than the older, shorter sentence. The
+// answer is kept for an interval and handed to everyone, so a visit causes no
+// request at all — see keptInventories.
 func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	t, ok := s.admit(w, r, parseNamesTarget, s.proofs, "Too many inventories from this address. Try again shortly.")
 	if !ok {
 		return
 	}
 
-	if demo.Enabled {
-		s.refuse(w, http.StatusNotFound, "not_offered",
-			"This deployment reads no certificate transparency logs.")
-		return
-	}
+	// The compiled-in boundary is the whole of what makes this safe to offer
+	// on a demonstration, and it has already been applied: admit refuses a
+	// host outside the list, in the same words and with the same counter as
+	// every other endpoint here. A second copy of that check would be a second
+	// thing to keep in step with the first.
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.limits.RequestTimeout)
 	defer cancel()
@@ -78,6 +95,13 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// reconnaissance endpoint with the project's name on it.
 	scope := s.scanner.Verify
 	switch {
+	case demo.Enabled:
+		// A boundary compiled into the binary is a stronger answer to the same
+		// question than proof of control is, and it has already been applied
+		// above: the target is a host this project owns, whoever asked. Asking
+		// a visitor to prove control of our domain would be asking them to
+		// prove something that is not theirs and is not in question.
+
 	case scope != nil:
 		// Verification configured is an operator opting into enforcement, and
 		// it is then enforced wherever the service listens — exactly as it is
@@ -118,7 +142,6 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 			"This installation was not started with a certificate transparency monitor.")
 		return
 	}
-
 	// A slot of its own. One inventory is several requests to a monitor, and a
 	// queue of them must not hold the slots a scan needs.
 	if err := s.proofSem.acquire(ctx); err != nil {
@@ -129,36 +152,61 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.proofSem.release()
 
-	// Two sources, merged, each name carrying which of them named it.
+	// Produced here, or handed over from the last time somebody asked.
 	//
-	// The second costs three lookups to the resolver this installation already
-	// asks about every other target, and discloses nothing to anybody the
-	// first has not already been told: the monitor is asked for the domain
-	// either way. What it adds is the half of an estate a certificate log
-	// cannot see — a host on plain HTTP, one behind a private authority, and
-	// anything hidden by a wildcard, where the domain's own mail, sender
-	// policy or delegation names it.
+	// Where a copy is kept — a deployment that demonstrates the tool on one
+	// estate, where every visitor asks the same question — this whole closure
+	// runs at most once an interval and everybody else is served what it
+	// made. Where none is kept, which is every installation an operator runs
+	// for themselves, it runs for each caller as it always did.
+	found := s.kept.serve(t.host, func() inventory.Inventory {
+		return s.inventory(ctx, t.host)
+	})
+
+	if !found.Established() && ctx.Err() != nil {
+		s.refuse(w, http.StatusGatewayTimeout, "timeout",
+			"The inventory did not finish within the time allowed.")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, found)
+}
+
+// inventory reads every source this installation has and merges them.
+//
+// Split out of the handler because it is also what a kept copy is made from,
+// and because the handler above it is a list of refusals: what is produced and
+// what is allowed are two different subjects and were one function.
+func (s *Server) inventory(ctx context.Context, domain string) inventory.Inventory {
+	// Two registers and the domain's own records.
+	//
+	// The records cost three lookups to the resolver this installation already
+	// asks about every other target, and disclose nothing to anybody the
+	// monitor has not already been told. What they add is part of the half of
+	// an estate a certificate log cannot see — a host on plain HTTP, one
+	// behind a private authority, and anything hidden by a wildcard, where the
+	// domain's own mail, sender policy or delegation names it.
 	//
 	// Where this installation has no resolver, the records are not read and
 	// the inventory says so rather than reporting an estate that publishes
 	// nothing (R4).
 	var estate ctsearch.Estate
 	if s.names != nil {
-		estate = s.names.SearchEstate(ctx, t.host)
+		estate = s.names.SearchEstate(ctx, domain)
 	}
 
 	var records dnsnames.Found
 	if s.records != nil {
-		records = s.records.Under(ctx, t.host)
+		records = s.records.Under(ctx, domain)
 	}
 
-	// And the register, where an operator configured one. It is the only
-	// source that sees behind a wildcard certificate, and the only one whose
-	// names were observed rather than published — which is why the report
-	// keeps them apart rather than adding them to a total.
+	// The register, where an operator configured one. It is the only source
+	// that sees behind a wildcard certificate, and the only one whose names
+	// were observed rather than published — which is why the report keeps them
+	// apart rather than adding them to a total.
 	var observed passivedns.Found
 	if s.passive != nil {
-		observed = s.passive.Under(ctx, t.host)
+		observed = s.passive.Under(ctx, domain)
 	}
 
 	sources := inventory.Sources{
@@ -166,12 +214,7 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		Records: records,
 		Passive: observed,
 	}
-	found := inventory.Merge(t.host, sources)
-	if ctx.Err() != nil {
-		s.refuse(w, http.StatusGatewayTimeout, "timeout",
-			"The inventory did not finish within the time allowed.")
-		return
-	}
+	found := inventory.Merge(domain, sources)
 
 	// And what each name is doing now, which no register can answer. Every
 	// source of names is a record of the past, and an operator reading their
@@ -179,14 +222,13 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// a service shut down four years ago, is noise in a list somebody has to
 	// act on.
 	//
-	// After this there is no timeout refusal, and that is deliberate. The
-	// probe runs until the request's budget is spent and the names it did not
-	// reach come back unchecked, saying so beside themselves. Refusing the
-	// whole answer at that point would throw away an inventory that was
-	// established, in order to report the part that was not (R4).
+	// Nothing here refuses when the time runs out. The probe runs until the
+	// request's budget is spent and the names it did not reach come back
+	// unchecked, saying so beside themselves. Throwing the answer away at that
+	// point would lose an inventory that was established, to report the part
+	// that was not (R4).
 	if s.live == nil {
-		writeJSON(w, http.StatusOK, found)
-		return
+		return found
 	}
 	live := s.live.Check(ctx, found.Hosts())
 
@@ -199,13 +241,13 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// what it is doing like any other name, so the newest half of the
 	// inventory is not the half with nothing beside it (R4).
 	if s.presented != nil {
-		sources.Presented = s.presented.Under(ctx, t.host, liveness.Answering(live))
+		sources.Presented = s.presented.Under(ctx, domain, liveness.Answering(live))
 
-		found = inventory.Merge(t.host, sources)
+		found = inventory.Merge(domain, sources)
 		live = append(live, s.live.Check(ctx, found.Unasked(live))...)
 	}
 
-	writeJSON(w, http.StatusOK, found.WithLiveness(live))
+	return found.WithLiveness(live)
 }
 
 // parseNamesTarget takes a bare domain.

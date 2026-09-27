@@ -484,3 +484,31 @@ func TestTheSelfHostingPageExplainsKeepingResults(t *testing.T) {
 			"a permission denied with no shell in the image to diagnose it")
 	}
 }
+
+// The demonstration is wired to list its own estate, and to keep what it
+// produced.
+//
+// Both halves are compiled in rather than flagged, because the privacy page
+// promises what the build does and a unit file is not the build. A monitor
+// left out of the unit would leave the demonstration showing half an inventory
+// while the page described a whole one; a kept copy left out would make a page
+// anybody can refresh into a way of making this installation ask a third party
+// as often as they like.
+//
+// Read as text, for the reason the gate above is: what is being checked is
+// that the wiring exists at all, and a test that called the setters itself
+// would pass with main.go calling none of them.
+func TestTheDemonstrationIsWiredToListItsOwnEstate(t *testing.T) {
+	src := repoFile(t, "cmd/porchd/main.go")
+
+	for _, want := range []string{
+		"if demo.Enabled {",
+		"api.SearchNames(&ctsearch.CRTSh{Timeout: *requestTimeout})",
+		"api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})",
+		"api.KeepInventoryFor(time.Hour)",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("main.go does not wire the demonstration with %q", want)
+		}
+	}
+}

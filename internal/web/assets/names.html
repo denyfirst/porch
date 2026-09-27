@@ -5,7 +5,7 @@
       about one, and the difference is worth stating before anybody types a
       name.
     -->
-    <h1>The names<br>your certificates<br>have already published.</h1>
+    {{if .Demo}}<h1>Every name<br>under our own<br>domain.</h1>{{else}}<h1>The names<br>your certificates<br>have already published.</h1>{{end}}
 
     <form class="ask-form" id="scan-form" autocomplete="off" data-check="names">
       <label class="field-label" for="target">Domain</label>
@@ -20,10 +20,26 @@
           autocapitalize="off"
           autocorrect="off"
           enterkeyhint="go"
-          aria-describedby="field-help">
+          aria-describedby="field-help"{{if .Demo}}
+          value="{{.Target}}"
+          readonly{{end}}>
         <button class="submit" type="submit" id="submit">List</button>
       </div>
 
+      {{if .Demo}}
+      <p class="field-help" id="field-help">
+        This demonstration lists <strong>{{.Target}}</strong> and nothing else.
+        The hosts it may touch are compiled into the binary, so the field is
+        fixed rather than open: a page that took any domain and then refused it
+        would be advertising something this deployment does not do. Run the tool
+        yourself to list your own.
+        No name is invented. The names come from a public register of
+        certificates, from the records this domain publishes, and from the
+        certificates its own hosts present.
+        <a href="/names/method">What is asked, who is asked, and what it cannot
+        show</a> is written out in full.
+      </p>
+      {{else}}
       <p class="field-help" id="field-help">
         A bare domain. No name is invented and nothing is sent to your hosts:
         the names come from a public register of certificates, published by
@@ -36,6 +52,7 @@
         <a href="/names/method">What is asked, and what it cannot show</a> is
         written out in full.
       </p>
+      {{end}}
     </form>
 
     <noscript>

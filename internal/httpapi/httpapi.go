@@ -234,6 +234,15 @@ type Server struct {
 	// after proof of control.
 	presented certificateReader
 
+	// clock is what the limiters and the kept inventories read the time from.
+	// Nil is time.Now, and a test hands in its own.
+	clock func() time.Time
+
+	// kept holds the last inventory produced for a domain, where this
+	// installation keeps one. Nil produces a fresh inventory for every caller,
+	// which is what an operator running their own copy gets.
+	kept *keptInventories
+
 	// passive is the register the inventory asks what it has observed under a
 	// domain, or nil where none was configured.
 	//
@@ -364,6 +373,7 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		proofs:   newLimiter(limits.ProofBurst, limits.ProofRefill, limits.MaxTrackedIPs, now),
 		proofSem: newSemaphore(limits.MaxConcurrentProofs),
 		sem:      newSemaphore(limits.MaxConcurrent),
+		clock:    now,
 		counts:   newCounters(now),
 		targets:  newTargetLimiter(now),
 		mux:      http.NewServeMux(),
@@ -999,6 +1009,20 @@ func (s *Server) KeepResults(store *results.Store) {
 // which would report an estate as publishing nothing (R4).
 func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
 	s.names = searcher
+}
+
+// KeepInventoryFor tells this service to produce an inventory for a domain at
+// most once in the interval given, and to hand the copy to everybody else.
+//
+// Called before serving, like every other piece of configuration here. The
+// deployment that demonstrates the tool on one estate uses it: every visitor
+// asks the same question, so asking a monitor per visitor spends somebody
+// else's service on an answer that has not changed, and a page anybody can
+// refresh would be a way to make this installation hammer a third party.
+//
+// Zero, the default, keeps nothing.
+func (s *Server) KeepInventoryFor(interval time.Duration) {
+	s.kept = keepInventories(interval, s.clock)
 }
 
 // AskPassiveRegister gives the inventory endpoint a passive register to ask.

@@ -2631,6 +2631,11 @@ function buildNames(data) {
   const distinct = data.distinct || 0;
   row("Found", distinct + (distinct === 1 ? " distinct name" : " distinct names"));
 
+  // A kept copy says when it was made. Without it the freshest thing here —
+  // what each name is doing — reads as current whatever its age, which is the
+  // one claim this whole mode exists to get right.
+  if (data.producedAt) row("Produced", producedAt(data.producedAt));
+
   // Then one line per source, always, including the one that failed. Six
   // names from two sources and six names from one that answered while the
   // other timed out are the same six names, and only these two lines tell a
@@ -2708,6 +2713,26 @@ function buildNames(data) {
 
   frag.appendChild(namesLimits(data));
   return frag;
+}
+
+// producedAt says how old a kept inventory is, in the words somebody reads
+// rather than as a timestamp they have to subtract from now.
+//
+// The exact time as well, because "an hour ago" is a rounding and the reader
+// deciding whether to act on a dead name wants the real one.
+function producedAt(when) {
+  const at = new Date(when);
+  if (isNaN(at.getTime())) return "earlier";
+
+  const minutes = Math.floor((Date.now() - at.getTime()) / 60000);
+  const ago =
+    minutes < 1 ? "just now" :
+    minutes === 1 ? "a minute ago" :
+    minutes < 60 ? minutes + " minutes ago" :
+    minutes < 120 ? "an hour ago" :
+    Math.floor(minutes / 60) + " hours ago";
+
+  return ago + ", at " + at.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
 
 // answered reports that one source was read and said something.
