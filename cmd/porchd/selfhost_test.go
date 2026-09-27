@@ -512,3 +512,23 @@ func TestTheDemonstrationIsWiredToListItsOwnEstate(t *testing.T) {
 		}
 	}
 }
+
+// The demonstration has a resolver whatever its unit file says.
+//
+// Three of the four sources the inventory reads hang off scanner.Resolver: the
+// domain's own records, what each name is doing now, and the certificates its
+// hosts present — which only runs where something answered. The field was set
+// only when -resolver was given, so a unit file without it left the page
+// describing four sources while the build read one. That is the defect N14 had
+// just been rewritten about, arriving through a flag nobody typed, and it
+// reached the live deployment before anybody saw it.
+//
+// Read as text, like the rest of the wiring here: what is being checked is that
+// the condition exists at all.
+func TestTheDemonstrationAlwaysHasAResolver(t *testing.T) {
+	src := repoFile(t, "cmd/porchd/main.go")
+	if !strings.Contains(src, `if resolver != "" || demo.Enabled {`) {
+		t.Error("the demonstration's resolver depends on a flag, so three of the inventory's " +
+			"four sources depend on a unit file")
+	}
+}
