@@ -64,7 +64,9 @@ func TestTheGateIsInFrontOfEverything(t *testing.T) {
 	for _, want := range []string{
 		"handler = gate.Wrap(root)",
 		"Handler: handler,",
-		`web.Configure(scope != nil, *resultsDir != "" || gate != nil, gate != nil)`,
+		"web.Configure(web.Installation{",
+		"Verified:          scope != nil,",
+		"Guarded:           gate != nil,",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("main.go no longer contains %q", want)
@@ -244,6 +246,31 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 	for _, name := range sealed {
 		if !strings.Contains(src, `filepath.Join(filepath.Dir(*accessFile), "`+name+`")`) {
 			t.Errorf("%q is moved aside on a reset, and main keeps nothing under it", name)
+		}
+	}
+}
+
+// The pages are told everything this installation asks of a third party.
+//
+// The privacy page names them, and it can only name what it is handed. A flag
+// wired into the scanner and not into web.Installation produces a page that
+// says this service asks nobody while it asks crt.sh on every inventory —
+// which is the failure the page exists to prevent, arriving through the one
+// line nobody looks at (N14).
+//
+// Read as text, like the gate above, because what is being checked is that the
+// wiring exists at all: a test that called Configure itself would pass with
+// main.go passing nothing.
+func TestThePagesAreToldWhatThisInstallationAsks(t *testing.T) {
+	src := repoFile(t, "cmd/porchd/main.go")
+	for _, want := range []string{
+		"Monitor:           *namesMonitor,",
+		"Register:          *namesPassive,",
+		"ReadsCertificates: *namesReadCertificates,",
+		"AsksResponder:     *askResponder,",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("main.go does not hand the pages %q", want)
 		}
 	}
 }

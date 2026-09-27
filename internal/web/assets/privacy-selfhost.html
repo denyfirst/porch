@@ -179,8 +179,26 @@
       {{if .Verified}}<li><strong>The host itself</strong> may be asked for
         <code>/.well-known/porch-challenge</code> when its domain publishes no
         record, as the other way of proving a site is yours.</li>{{end}}
-      <li>No certificate transparency log and no revocation responder is
-        asked by this service.</li>
+      {{if .Monitor}}<li><strong>A certificate transparency monitor</strong>
+        (<code>{{.Monitor}}</code>) is asked which names under a domain appear
+        in publicly logged certificates. It learns that somebody is looking at
+        that domain. Only for a domain this installation has been shown control
+        of.</li>{{end}}
+      {{if .Register}}<li><strong>A passive register</strong>
+        (<code>{{.Register}}</code>) is asked what it has observed under a
+        domain, on this installation's own account with it, and only for a
+        domain it has been shown control of.</li>{{end}}
+      {{if .ReadsCertificates}}<li><strong>Each name that answers</strong> may
+        be asked for the certificate it presents: one handshake, closed as soon
+        as the certificate has been read, with nothing requested over it. Only
+        for a domain this installation has been shown control of.</li>{{end}}
+      {{if .AsksResponder}}<li><strong>The authority's responder</strong> is
+        asked whether a certificate has been revoked, because this installation
+        was started with <code>-ask-responder</code>. That question names one
+        certificate to its own authority, so it runs only for a domain this
+        installation has been shown control of.</li>{{end}}
+      {{if .AsksNobodyElse}}<li>No certificate transparency log, no passive
+        register and no revocation responder is asked by this service.</li>{{end}}
     </ul>
 
     <h2 id="stopping">Stopping a scan</h2>

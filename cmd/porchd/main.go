@@ -580,7 +580,15 @@ func run() int {
 	// The pages are told what this installation is before any of them is
 	// served. The console says whether a boundary was configured, and an
 	// operator reading a report needs that to be true rather than plausible.
-	web.Configure(scope != nil, *resultsDir != "" || gate != nil, gate != nil)
+	web.Configure(web.Installation{
+		Verified:          scope != nil,
+		Keeps:             *resultsDir != "" || gate != nil,
+		Guarded:           gate != nil,
+		Monitor:           *namesMonitor,
+		Register:          *namesPassive,
+		ReadsCertificates: *namesReadCertificates,
+		AsksResponder:     *askResponder,
+	})
 	root.Handle("/", web.Handler())
 
 	// The gate goes in front of everything, pages and API alike, so a route
