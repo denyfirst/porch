@@ -225,11 +225,17 @@ var pages = map[string]*page{
 	// nothing, it is about a domain rather than a host, and it carries a
 	// paragraph about its own limits that would read as a disclaimer if it sat
 	// inside a graded report.
+	// The data is here rather than only on the demonstration's branch, and
+	// that is not tidiness: render parses a fragment as a template only where
+	// there is data for it, so a page whose fragment gained a condition and
+	// whose entry did not gain a value serves `{{if .Demo}}` to a reader as
+	// text. Every self-hosted copy of v0.23.x did.
 	"/names": {
 		Title:       "The names under your domain — Porch by denyfirst",
 		Description: "Lists the names under a domain that appear in publicly logged certificates and in the domain's own records, says which named each one, and grades nothing.",
 		Fragment:    "assets/names.html",
 		Script:      true,
+		Data:        namesPage{},
 	},
 	"/names/method": {
 		Title:       "What the name inventory reads, and what it cannot see — Porch by denyfirst",
