@@ -200,6 +200,13 @@ git pull
 # Nothing may be waiting. A green pull request that was never merged is not in
 # this tag, and on 2026-08-23 that produced v0.3.1: released, signed,
 # reproduced and deployed without the one fix it existed to carry.
+#
+# Read this output rather than running the next line. On 2026-09-28 the whole
+# block below was typed out while one pull request was still green and open,
+# because the list of steps was written before it merged: v0.23.2 was cut one
+# merge early, and the two `rev-parse` lines agreed with each other because
+# both were read before main moved. A tag matching main proves nothing if main
+# is not finished.
 gh pr list --state open
 
 git log --oneline -1              # the commit this will release
@@ -222,6 +229,14 @@ git tag -s v0.2.0 -m "porch v0.2.0"
 # the commit before the change it was for. An existing tag means either that
 # this version is already released or that something older than you think is
 # about to be published. Both are a stop.
+#
+# It happened again on 2026-09-28, and this is what it costs now: the tag was
+# pushed, the ruleset "Released tags are immutable" refused to delete it, and
+# the version number was abandoned. There is no v0.23.2. The draft it produced
+# was deleted before anything was signed, so nothing was ever downloadable
+# under it — a mis-cut tag is a wasted number rather than a wrong release, and
+# that is the ruleset working rather than getting in the way. Do not turn the
+# rule off to tidy up after this; cut the next number.
 #
 # Quote the argument. Unquoted, PowerShell takes {commit} for a script block
 # and git is handed `v0.7.0^` — the tag's first parent, which on a merge
