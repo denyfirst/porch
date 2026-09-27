@@ -70,6 +70,7 @@ import (
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
@@ -207,6 +208,9 @@ type Server struct {
 	// established that.
 	exposed bool
 
+	// guarded says a password stands in front of this service.
+	guarded bool
+
 	// names is the certificate transparency monitor the inventory endpoint
 	// asks, or nil where none was configured. Nil is refused rather than
 	// answered with an empty inventory (R4).
@@ -242,6 +246,10 @@ type Server struct {
 	// installation keeps one. Nil produces a fresh inventory for every caller,
 	// which is what an operator running their own copy gets.
 	kept *keptInventories
+
+	// reverse walks the address ranges a caller named, where that caller is
+	// the operator. Nil where this installation has no resolver.
+	reverse reverseWalker
 
 	// passive is the register the inventory asks what it has observed under a
 	// domain, or nil where none was configured.
@@ -425,6 +433,12 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// pace, and raising it here would make an estate's own firewall see a
 		// burst it did not ask for.
 		s.live = &liveness.Checker{Resolver: scanner.Resolver, Timeout: 4 * time.Second}
+
+		// And the walk over an address range, where the caller is the person
+		// who runs this installation. The reader bounds the ranges itself and
+		// asks nothing of the addresses: the questions are reverse lookups to
+		// this resolver, which is already asked about every other target.
+		s.reverse = &ptrnames.Reader{Resolver: scanner.Resolver, Timeout: 4 * time.Second}
 	}
 
 	tls, web := s.tlsCheck(), s.webCheck()
@@ -519,6 +533,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // would hand that record to everyone else.
 type scanRequest struct {
 	Target string `json:"target"`
+
+	// Ranges are address ranges the caller says are theirs, read for the names
+	// their reverse records answer to. Only the inventory takes them, and only
+	// where the caller is the person who runs this installation: a check that
+	// was sent one refuses rather than dropping it, because a field accepted
+	// and ignored is a caller believing something happened.
+	Ranges []string `json:"ranges,omitempty"`
 }
 
 type scanResponse struct {
@@ -558,6 +579,16 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 	if !ok {
 		return
 	}
+
+	// A check measures a host. Address ranges belong to the inventory, and a
+	// field accepted here and dropped would be a caller believing something
+	// happened — the same reason the decoder refuses a key it does not know.
+	if len(t.ranges) > 0 {
+		s.refuse(w, http.StatusBadRequest, "bad_request",
+			"A check takes no address ranges. The name inventory reads them.")
+		return
+	}
+
 	host := t.host
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.limits.RequestTimeout)
@@ -684,6 +715,7 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string
 		s.refuse(w, refused.status, refused.code, refused.message)
 		return target{}, false
 	}
+	t.ranges = req.Ranges
 	host := t.host
 
 	// A short list of defence and intelligence names, plus anyone who asked
@@ -1040,6 +1072,12 @@ type recordReader interface {
 	Under(ctx context.Context, domain string) dnsnames.Found
 }
 
+// reverseWalker reads the names the addresses in a range answer to.
+// internal/ptrnames.Reader is the one there is.
+type reverseWalker interface {
+	Under(ctx context.Context, domain string, ranges []netip.Prefix) ptrnames.Found
+}
+
 // certificateReader reads the names the hosts themselves present.
 // internal/certnames.Reader is the one there is.
 type certificateReader interface {
@@ -1156,4 +1194,26 @@ func notKept(err error) string {
 // the only caller is the person who started the process.
 func (s *Server) ReachableByOthers(reachable bool) {
 	s.exposed = reachable
+}
+
+// BehindPassword says a password stands in front of this service, so the
+// callers are people the operator let in rather than whoever found the
+// address.
+//
+// False is the narrower claim and is the default, for the reason above: a
+// server nobody told treats its callers as strangers.
+func (s *Server) BehindPassword(guarded bool) {
+	s.guarded = guarded
+}
+
+// OperatorOnly reports that whoever is calling is the person who runs this
+// installation: nobody else can reach it, or a password they set stands in
+// front of it.
+//
+// It decides the one capability that cannot be granted by proof of control. A
+// domain can be proven with a record in its zone; an address range cannot be
+// proven by anything this project can check, so a range is walked for the
+// operator and for nobody else (N12).
+func (s *Server) operatorOnly() bool {
+	return !s.exposed || s.guarded
 }

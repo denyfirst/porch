@@ -182,3 +182,28 @@ func TestThePrivacyPageSaysWhichThirdPartiesAreAsked(t *testing.T) {
 		}
 	}
 }
+
+// An installation that reads an address range says what that sends.
+//
+// Which is: nothing to the addresses. The questions are reverse lookups to the
+// resolver the page already names, and the only new thing a reader learns is
+// that this copy will do it — for whoever runs it, because no record can prove
+// a range belongs to anybody the way one can prove a domain does.
+func TestThePrivacyPageSaysWhatAnAddressRangeSends(t *testing.T) {
+	page := privacyOf(t, Installation{Verified: true, OperatorOnly: true})
+	for _, want := range []string{
+		"for an address range you name",
+		"not one packet is sent to the addresses themselves",
+		"only for whoever runs this installation",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the page does not say %q:\n%s", want, page)
+		}
+	}
+
+	// And an installation that will refuse a range does not describe one.
+	reachable := privacyOf(t, Installation{Verified: true})
+	if strings.Contains(reachable, "for an address range you name") {
+		t.Errorf("a page that refuses ranges describes reading them:\n%s", reachable)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/denyfirst/porch/internal/ctsearch"
@@ -13,6 +14,7 @@ import (
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/passivedns"
+	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
 )
@@ -159,9 +161,53 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// runs at most once an interval and everybody else is served what it
 	// made. Where none is kept, which is every installation an operator runs
 	// for themselves, it runs for each caller as it always did.
-	found := s.kept.serve(t.host, func() inventory.Inventory {
-		return s.inventory(ctx, t.host)
-	})
+	// The address ranges the caller says are theirs, where the caller is the
+	// person who runs this installation.
+	//
+	// This is the one capability proof of control cannot grant. A domain is
+	// proven with a record in its zone; an address range cannot be proven by
+	// anything this project can check, so a service that walked one for
+	// whoever asked would be a reverse-scanner for whoever asked. Where
+	// nobody else can reach the installation, or a password the operator set
+	// stands in front of it, the caller is the operator — which is the same
+	// reasoning that decided proof for the inventory itself (A30, N12), and
+	// refusing them here would be friction bought with no safety.
+	//
+	// Bounded before anything is asked, by the same reader the command line
+	// uses: nothing wider than /20, four thousand addresses across all of
+	// them, and refused rather than cut short.
+	var walk []netip.Prefix
+	if len(t.ranges) > 0 {
+		if !s.operatorOnly() {
+			s.refuse(w, http.StatusForbidden, "not_your_range",
+				"An address range cannot be proven the way a domain can, so this "+
+					"installation reads one only for whoever runs it. Reach it from the "+
+					"machine it runs on, or put a password in front of it.")
+			return
+		}
+		if s.reverse == nil {
+			s.refuse(w, http.StatusNotFound, "not_offered",
+				"This installation has no resolver, so it cannot read a reverse record.")
+			return
+		}
+
+		var err error
+		if walk, err = parseRanges(t.ranges); err != nil {
+			s.refuse(w, http.StatusBadRequest, "invalid_range", err.Error())
+			return
+		}
+	}
+
+	// A kept copy is for the question everybody asks. Ranges make it somebody
+	// else's question, so it is produced for them and kept for nobody.
+	produce := func() inventory.Inventory { return s.inventory(ctx, t.host, walk) }
+
+	var found inventory.Inventory
+	if len(walk) > 0 {
+		found = produce()
+	} else {
+		found = s.kept.serve(t.host, produce)
+	}
 
 	if !found.Established() && ctx.Err() != nil {
 		s.refuse(w, http.StatusGatewayTimeout, "timeout",
@@ -177,7 +223,7 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 // Split out of the handler because it is also what a kept copy is made from,
 // and because the handler above it is a list of refusals: what is produced and
 // what is allowed are two different subjects and were one function.
-func (s *Server) inventory(ctx context.Context, domain string) inventory.Inventory {
+func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Prefix) inventory.Inventory {
 	// Two registers and the domain's own records.
 	//
 	// The records cost three lookups to the resolver this installation already
@@ -209,10 +255,20 @@ func (s *Server) inventory(ctx context.Context, domain string) inventory.Invento
 		observed = s.passive.Under(ctx, domain)
 	}
 
+	// And the addresses, where the caller named a range. Nothing is sent to
+	// them: the questions are reverse lookups to this installation's own
+	// resolver, and a name that comes back is one somebody published for that
+	// address.
+	var answered ptrnames.Found
+	if s.reverse != nil && len(walk) > 0 {
+		answered = s.reverse.Under(ctx, domain, walk)
+	}
+
 	sources := inventory.Sources{
 		Logs:    estate,
 		Records: records,
 		Passive: observed,
+		Reverse: answered,
 	}
 	found := inventory.Merge(domain, sources)
 
@@ -277,3 +333,36 @@ func parseNamesTarget(raw string) (target, *refusal) {
 	}
 	return target{host: strings.ToLower(host), scope: scan.DefaultPort}, nil
 }
+
+// parseRanges reads the address ranges a caller sent and bounds them before
+// anything is asked.
+//
+// The refusal names the rule and never the range: a message that echoed back
+// what was typed would put a caller's input into a log somewhere downstream
+// (I6). The bounds themselves belong to internal/ptrnames, so the service and
+// the command line refuse the same range for the same reason rather than
+// drifting into two answers.
+func parseRanges(raw []string) ([]netip.Prefix, error) {
+	if len(raw) > maxRangesPerRequest {
+		return nil, errors.New("that is more address ranges than this reads in one request")
+	}
+
+	var out []netip.Prefix
+	for _, r := range raw {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(r))
+		if err != nil {
+			return nil, errors.New("an address range looks like 203.0.113.0/24")
+		}
+		out = append(out, prefix)
+	}
+
+	if _, err := ptrnames.Addresses(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// maxRangesPerRequest bounds the list itself, before the addresses in it are
+// counted. A thousand /32s is four thousand addresses and a thousand parses,
+// and the second bound is the cheaper one to hit first.
+const maxRangesPerRequest = 32

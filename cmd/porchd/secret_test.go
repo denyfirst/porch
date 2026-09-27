@@ -149,10 +149,20 @@ func TestWhatCountsAsReachableByAnybodyElse(t *testing.T) {
 	}
 
 	// And the service tells the API the same answer it decided to start on,
-	// rather than working it out a second time somewhere else.
+	// rather than working it out a second time somewhere else. One answer,
+	// read once: the API refuses an address range to a caller who is not the
+	// operator, and the page draws the field for one, and both of those follow
+	// from this line.
 	source := repoFile(t, "cmd/porchd/main.go")
-	if !strings.Contains(source, "api.ReachableByOthers(beyondLoopback(*listen) || *allowOpen)") {
-		t.Error("the service does not tell the API whether anybody else can reach it, " +
-			"or works it out from something other than the address it listens on")
+	for _, want := range []string{
+		"exposed := beyondLoopback(*listen) || *allowOpen",
+		"api.ReachableByOthers(exposed)",
+		"api.BehindPassword(gate != nil)",
+		"OperatorOnly:      !exposed || gate != nil,",
+	} {
+		if !strings.Contains(source, want) {
+			t.Errorf("the service does not tell the API and the pages %q, so whether "+
+				"anybody else can reach it is worked out somewhere else", want)
+		}
 	}
 }

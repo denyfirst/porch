@@ -34,6 +34,7 @@
 package inventory
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 	"time"
@@ -493,4 +494,57 @@ func (i Inventory) Unasked(live []liveness.Name) []string {
 		}
 	}
 	return out
+}
+
+// MarshalJSON writes a name, and writes no date where there is none.
+//
+// `omitempty` does nothing for a time.Time: a struct is never empty to
+// encoding/json, so a name no certificate ever covered went out carrying
+// "0001-01-01T00:00:00Z" in both date fields. Every reader then had to know
+// that one particular date means "no date" — and the page did not: it printed
+// "certificates to 0001-01-01" beside a host whose name came from a reverse
+// record, which is a date this project invented for a fact it does not have
+// (R17).
+//
+// The zero value is written as absent instead, which is what it is.
+func (n Name) MarshalJSON() ([]byte, error) {
+	// A type without this method, so marshalling it does not call it again.
+	type plain Name
+
+	// The two dates are declared again at depth zero, where encoding/json
+	// prefers them over the embedded copies of the same JSON names.
+	out := struct {
+		plain
+		FirstSeen *time.Time `json:"firstSeen,omitempty"`
+		LastSeen  *time.Time `json:"lastSeen,omitempty"`
+	}{plain: plain(n)}
+
+	if !n.FirstSeen.IsZero() {
+		out.FirstSeen = &n.FirstSeen
+	}
+	if !n.LastSeen.IsZero() {
+		out.LastSeen = &n.LastSeen
+	}
+	return json.Marshal(out)
+}
+
+// MarshalJSON writes an inventory, and writes no production time where it was
+// produced for whoever is reading it.
+//
+// The same reason the names carry no zero date: a copy made for this caller
+// went out saying it was produced on the first day of year one, and a reader
+// deciding whether an answer is stale would have been handed the oldest date
+// there is.
+func (i Inventory) MarshalJSON() ([]byte, error) {
+	type plain Inventory
+
+	out := struct {
+		plain
+		ProducedAt *time.Time `json:"producedAt,omitempty"`
+	}{plain: plain(i)}
+
+	if !i.ProducedAt.IsZero() {
+		out.ProducedAt = &i.ProducedAt
+	}
+	return json.Marshal(out)
 }

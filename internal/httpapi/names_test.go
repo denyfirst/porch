@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
+	"github.com/denyfirst/porch/internal/ptrnames"
 )
 
 // stubMonitor answers without asking anybody, and records what it was asked.
@@ -687,5 +689,133 @@ func TestNoCertificateIsReadForAnUnprovenDomain(t *testing.T) {
 	}
 	if was := certificates.was(); was != "" {
 		t.Errorf("a host was asked for its certificate on a domain nobody proved: %q", was)
+	}
+}
+
+// stubReverse answers as a reverse walk would, and records what it walked.
+type stubReverse struct {
+	asked atomic.Value
+	found ptrnames.Found
+}
+
+func (r *stubReverse) Under(_ context.Context, _ string, ranges []netip.Prefix) ptrnames.Found {
+	var seen []string
+	for _, p := range ranges {
+		seen = append(seen, p.String())
+	}
+	r.asked.Store(strings.Join(seen, " "))
+	return r.found
+}
+
+func (r *stubReverse) was() string {
+	if v, ok := r.asked.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// An address range is walked for the operator, and for nobody else.
+//
+// This is the one capability proof of control cannot grant. A domain is proven
+// with a record in its zone; an address range is not provable by anything this
+// project can check. So a service that walked one for whoever proved a domain
+// would be a reverse-scanner for whoever proved a domain — while refusing the
+// person who runs the installation would be friction bought with no safety,
+// which is the reasoning that decided proof for the inventory itself.
+func TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+
+	walk := &stubReverse{found: ptrnames.Found{Asked: true, Addresses: 16, Answered: 1,
+		Names: []string{"build.proven.example"}}}
+	s.reverse = walk
+
+	body := `{"target":"proven.example","ranges":["203.0.113.0/28"]}`
+
+	// Reachable by anybody, with proof configured: the domain is proven and
+	// the range still is not, so the range is refused and nothing is walked.
+	s.ReachableByOthers(true)
+	s.BehindPassword(false)
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan", body, "203.0.113.120:5000")); got != "not_your_range" {
+		t.Errorf("a range on a reachable installation was answered %q", got)
+	}
+	if was := walk.was(); was != "" {
+		t.Errorf("a range was walked for somebody who only proved a domain: %q", was)
+	}
+
+	// Nobody else can reach it: the caller is the operator.
+	s.ReachableByOthers(false)
+	w := postTo(t, s, "/api/v1/names/scan", body, "203.0.113.121:5000")
+	if w.Code != 200 {
+		t.Fatalf("a range on a loopback installation answered %d: %s", w.Code, w.Body.String())
+	}
+	if walk.was() != "203.0.113.0/28" {
+		t.Errorf("the walk covered %q", walk.was())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.Reverse.Established() || got.Reverse.Named != 1 {
+		t.Errorf("the walk's reading came back as %+v", got.Reverse)
+	}
+
+	// Or a password the operator set stands in front of it, which is the same
+	// answer to the same question: the callers are people they let in.
+	s.ReachableByOthers(true)
+	s.BehindPassword(true)
+	if w := postTo(t, s, "/api/v1/names/scan", body, "203.0.113.122:5000"); w.Code != 200 {
+		t.Errorf("a range behind a password answered %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// A range too wide to read is refused before anything is asked, and the
+// refusal never repeats what was typed.
+func TestARangeTooWideIsRefusedByTheService(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+	s.ReachableByOthers(false)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
+	walk := &stubReverse{}
+	s.reverse = walk
+
+	for _, tc := range []struct{ body, says string }{
+		{`{"target":"example.test","ranges":["203.0.0.0/16"]}`, "narrower"},
+		{`{"target":"example.test","ranges":["not-a-range"]}`, "203.0.113.0/24"},
+	} {
+		w := postTo(t, s, "/api/v1/names/scan", tc.body, "203.0.113.123:5000")
+		if got := errorCode(t, w); got != "invalid_range" {
+			t.Errorf("%s was answered %q", tc.body, got)
+		}
+		if !strings.Contains(w.Body.String(), tc.says) {
+			t.Errorf("the refusal for %s does not say %q: %s", tc.body, tc.says, w.Body.String())
+		}
+	}
+	if was := walk.was(); was != "" {
+		t.Errorf("a refused range was walked anyway: %q", was)
+	}
+
+	// And the refusal for a malformed range does not echo it back (I6).
+	w := postTo(t, s, "/api/v1/names/scan",
+		`{"target":"example.test","ranges":["203.0.113.999/24"]}`, "203.0.113.124:5000")
+	if strings.Contains(w.Body.String(), "999") {
+		t.Errorf("the refusal repeats what was typed: %s", w.Body.String())
+	}
+}
+
+// A check takes no address ranges, and says so rather than dropping them.
+func TestACheckRefusesAddressRanges(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+
+	w := postTo(t, s, "/api/v1/tls/scan",
+		`{"target":"example.test","ranges":["203.0.113.0/28"]}`, "203.0.113.125:5000")
+	if got := errorCode(t, w); got != "bad_request" {
+		t.Errorf("a check sent ranges answered %q", got)
+	}
+	if !strings.Contains(w.Body.String(), "name inventory reads them") {
+		t.Errorf("the refusal does not say where ranges belong: %s", w.Body.String())
 	}
 }
