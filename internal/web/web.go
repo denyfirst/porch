@@ -236,6 +236,12 @@ var pages = map[string]*page{
 		Fragment:    "assets/names.html",
 		Script:      true,
 		Data:        namesPage{},
+
+		// Named, because render defaults a page with no section to the
+		// reference one — and the rail then drew the current-page mark on
+		// Docs while somebody stood on Names. A workspace page that says
+		// which part of the workspace it is cannot be marked as another.
+		Section: "names",
 	},
 	"/names/method": {
 		Title:       "What the name inventory reads, and what it cannot see — Porch by denyfirst",
@@ -761,6 +767,7 @@ var sectionHeadings = map[string]string{
 	"check":        "New check",
 	"domains":      "Domains",
 	"history":      "History",
+	"names":        "Names",
 	"installation": "This installation",
 }
 
