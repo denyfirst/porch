@@ -15,6 +15,7 @@ import (
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -840,5 +841,58 @@ func TestTheReportSaysWhatTheAddressesAnsweredTo(t *testing.T) {
 	}))
 	if !strings.Contains(buf.String(), "Reverse DNS  not walked: no address range was named") {
 		t.Errorf("the report does not say no range was walked:\n%s", buf.String())
+	}
+}
+
+// The report says what the zone handed over, and says a refusal plainly.
+//
+// A refusal is the ordinary answer and the correct one: a zone goes to the
+// secondaries its operator named. A reader has to be able to tell that apart
+// from a zone nobody asked for, and from one whose delegation could not be
+// read — three different states that all produce no names.
+func TestTheReportSaysWhatTheZoneHandedOver(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}}},
+		Zone: zonenames.Found{Asked: true, Servers: 2, Refused: 1, From: "ns2.example.test",
+			Names: []string{"www.example.test", "bitrix.example.test"}},
+	}))
+	out := buf.String()
+
+	for _, want := range []string{
+		"The zone     named 2 of them, handed over by the zone itself",
+		"bitrix.example.test",
+		"zone, certificate",
+		"The zone handed itself over, so the names above are every name in",
+		"host reached by address alone",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// A zone that refused: asked, answered, no names — and not a failure.
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test"}}},
+		Zone: zonenames.Found{Asked: true, Servers: 2, Refused: 2},
+	}))
+	if !strings.Contains(buf.String(), "every server refused the transfer, which is the ordinary answer") {
+		t.Errorf("a zone that refused is not reported plainly:\n%s", buf.String())
+	}
+	if strings.Contains(buf.String(), "handed itself over") {
+		t.Errorf("a zone that refused is described as having handed itself over:\n%s", buf.String())
+	}
+
+	// And a report that never asked says so, rather than leaving the line out.
+	buf.Reset()
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.example.test"}},
+	}))
+	if !strings.Contains(buf.String(), "The zone     not asked: -read-zone was not given") {
+		t.Errorf("the report does not say the zone went unasked:\n%s", buf.String())
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 // The inventory endpoint: which names under a domain appear in publicly logged
@@ -255,6 +256,15 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 		observed = s.passive.Under(ctx, domain)
 	}
 
+	// The zone itself, where this installation was told to ask for one. The
+	// only source that is complete when it works — and it runs here only for a
+	// domain this installation has been shown control of, which every source
+	// above it has already been held to.
+	var handed zonenames.Found
+	if s.zone != nil {
+		handed = s.zone.Under(ctx, domain)
+	}
+
 	// And the addresses, where the caller named a range. Nothing is sent to
 	// them: the questions are reverse lookups to this installation's own
 	// resolver, and a name that comes back is one somebody published for that
@@ -269,6 +279,7 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 		Records: records,
 		Passive: observed,
 		Reverse: answered,
+		Zone:    handed,
 	}
 	found := inventory.Merge(domain, sources)
 

@@ -54,6 +54,7 @@ import (
 	"github.com/denyfirst/porch/internal/vault"
 	"github.com/denyfirst/porch/internal/verify"
 	"github.com/denyfirst/porch/internal/web"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 // version is the release this binary was built from, set by scripts/build.sh
@@ -182,7 +183,20 @@ func run() int {
 		namesPassiveURL = flag.String("names-passive-url", "",
 			"the `address` of the register named by -names-passive, if not its own")
 
-		// The fourth source: the certificate each answering host presents.
+		// The zone itself, where an operator asked for it.
+		//
+		// The DNS check asks whether a zone transfers to anybody and reads
+		// none of it, because that zone belongs to whoever runs it. This reads
+		// one, and only for a domain this installation has been shown control
+		// of — which is what makes it the asker's own zone rather than
+		// somebody else's.
+		namesReadZone = flag.Bool("names-read-zone", false,
+			"ask a domain's own name servers to hand over the zone, and keep the\n"+
+				"\tnames in it. Only for a domain this installation has been shown\n"+
+				"\tcontrol of. Almost every server refuses, which is correct and is\n"+
+				"\treported as such")
+
+		// The fifth source: the certificate each answering host presents.
 		//
 		// Off unless asked for. It is the one part of the inventory that opens
 		// a connection to the estate on purpose, and what it finds is what a
@@ -556,6 +570,13 @@ func run() int {
 	// per name that answers, nothing requested over it, and the certificate
 	// read rather than judged — which is how a name a private authority issued
 	// reaches an inventory at all.
+	if *namesReadZone {
+		api.ReadZoneTransfers(&zonenames.Reader{
+			Resolver: &dnsclient.Client{Server: *resolver},
+			Timeout:  *requestTimeout,
+		})
+	}
+
 	if *namesReadCertificates {
 		api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})
 	}

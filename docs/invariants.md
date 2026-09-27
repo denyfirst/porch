@@ -1628,6 +1628,54 @@ the resolver this installation already asks about every other target, so
 nothing leaves the deployment that was not already leaving it, and N12's
 disclosure argument is untouched by it.
 
+**A zone that hands itself over is the source that is complete, and the one
+that usually refuses.**
+
+Every other source here is a sample: a log holds what was certified, a register
+what was observed, a record what had to be published, an address what its
+reverse record says. A transfer holds the zone — every name in it, from the
+server authoritative for them, with nothing guessed and nothing inferred. When
+it works it is the best answer this mode can give, and it works rarely, because
+a zone is handed to the secondaries its operator named and to nobody else.
+
+**Two callers ask the same question here for opposite reasons, and only one of
+them reads the answer.** `AskTransfer` asks whether a server will begin the
+transfer for anybody, reads the first reply's header and closes the connection:
+the records are the scanned party's own zone, and a scanner holding one would
+be the thing it is warning them about. `Transfer` reads the zone, and is asked
+only about an estate the asker owns — a domain a service has been shown control
+of (`TestTheZoneIsReadOnlyForAProvenDomain`), or one an operator named on their
+own machine with `-read-zone`. Reading your own zone is not holding somebody
+else's, and the flag is where somebody says which it is
+(`TestAnInstallationNotToldToReadAZoneDoesNot`).
+
+The reading is bounded at every turn, because a transfer is a stream somebody
+else controls: eight megabytes, two hundred thousand records, four thousand
+messages, and a deadline over all of it. A transfer that stops part way hands
+over what arrived and says it was cut, because reporting nothing would throw
+away names the server did send and reporting them whole would be the quiet
+shortening this mode cannot survive
+(`TestATransferThatStopsPartWayThroughSaysItWasCut`,
+`TestAZoneIsReadFromTheServerThatHandsItOver`). Every length in it is the
+server's and is checked rather than trusted
+(`TestATransferRecordCannotReachPastItsMessage`).
+
+**A refusal is an answer, not a failure**
+(`TestAServerThatRefusesATransferIsNotAFailure`,
+`TestEveryServerRefusingIsNotAFailure`). Three states produce no names and a
+reader must be able to tell them apart: nobody asked, every server refused, and
+the delegation could not be read
+(`TestADelegationThatCannotBeReadIsNotARefusal`,
+`TestTheReportSaysWhatTheZoneHandedOver`). One server is asked at a time and
+the first transfer wins: a zone in hand is the zone, and asking the other three
+is three transfers for one answer (`TestTheZoneHandsOverItsOwnList`,
+`TestWhatAServerSendsIsCleanedBeforeItIsKept`,
+`TestWhatAZoneHandedOverIsItsOwnSource`).
+
+And the DNS check's own note now says where to look: it reported that a zone
+hands itself to anybody and gave the operator no way to see what that exposes,
+which is a warning with nothing to do about it.
+
 **The reverse records of ranges the operator names are a fifth source, and the
 command line is the only place it exists.**
 
@@ -2047,6 +2095,10 @@ loudly wrong.
 `internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
 `internal/scan.sameSerial`, `internal/policy.LoggedLine`,
 `internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
+`internal/zonenames`, `internal/zonenames.Reader.Under`, `internal/zonenames.Found.keep`,
+`internal/dnsclient.Client.Transfer`, `internal/dnsclient.transferNames`,
+`internal/dnsclient.readTransferMessage`, `internal/httpapi.Server.ReadZoneTransfers`, `internal/httpapi.zoneReader`,
+`cmd/porch-scan.saysZone`,
 `cmd/porch-scan.runNames`, `cmd/porch-scan.printNamesLimits`
 *Guarded by:* `TestOneCertificateLoggedTwiceIsOneCertificate`,
 `TestTwoDifferentCertificatesAreTwo`,
@@ -2106,7 +2158,19 @@ loudly wrong.
 `TestANameNothingReachedIsStillInTheReport`,
 `TestWhatEachNameIsDoingGoesBesideTheName`,
 `TestAnAnswerIsMatchedToItsNameWhateverTheSpelling`,
-`TestAnEstateWhereNothingAnswersWasStillAsked`
+`TestAnEstateWhereNothingAnswersWasStillAsked`,
+`TestAZoneIsReadFromTheServerThatHandsItOver`,
+`TestAServerThatRefusesATransferIsNotAFailure`,
+`TestATransferThatStopsPartWayThroughSaysItWasCut`,
+`TestATransferRecordCannotReachPastItsMessage`,
+`TestTheZoneHandsOverItsOwnList`,
+`TestEveryServerRefusingIsNotAFailure`,
+`TestADelegationThatCannotBeReadIsNotARefusal`,
+`TestWhatAServerSendsIsCleanedBeforeItIsKept`,
+`TestWhatAZoneHandedOverIsItsOwnSource`,
+`TestTheReportSaysWhatTheZoneHandedOver`,
+`TestTheZoneIsReadOnlyForAProvenDomain`,
+`TestAnInstallationNotToldToReadAZoneDoesNot`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

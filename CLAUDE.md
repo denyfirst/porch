@@ -245,6 +245,7 @@ in it is there because it has already gone wrong once.
 | `internal/ptrnames` | the names the addresses in a range the operator names answer to; command line only, never a service (N12) |
 | `internal/certnames` | the names the hosts themselves present, read off the certificate each one serves; off unless asked for (N12) |
 | `internal/passivedns` | what a register observed under a domain — the only source that sees behind a wildcard, off unless an operator names one (N12) |
+| `internal/zonenames` | the names a zone hands over when asked for itself; the only complete source, read only for an estate the asker owns (N12) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
 | `internal/spf` | walks a sender policy and counts what evaluating it costs |

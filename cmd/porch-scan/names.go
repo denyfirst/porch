@@ -19,6 +19,7 @@ import (
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 // The inventory of names a domain's own records and its public certificates
@@ -73,6 +74,14 @@ type namesOptions struct {
 	// Ranges are the address ranges the operator says are theirs, walked for
 	// the names their reverse records answer to. Empty walks none.
 	Ranges []netip.Prefix
+
+	// ReadZone asks the domain's own name servers to hand over the zone.
+	//
+	// Off unless the operator says so, and the flag is the saying: the check
+	// that asks whether a zone transfers to anybody deliberately reads none of
+	// it, because a zone belongs to whoever runs it. Reading one is for an
+	// estate that is the reader's.
+	ReadZone bool
 
 	// ReadCertificates asks each live host for the certificate it presents.
 	// Off unless the operator says so: it is the one part of this mode that
@@ -135,6 +144,14 @@ func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 			Logs:    searcher.SearchEstate(ctx, domain),
 			Records: records.Under(ctx, domain),
 		}
+		// The zone itself, where the operator said it is theirs. The only
+		// source that is complete when it works, and the one that usually
+		// refuses — a zone is handed to the secondaries its operator named.
+		if opt.ReadZone {
+			zone := &zonenames.Reader{Resolver: client, Timeout: timeout}
+			sources.Zone = zone.Under(ctx, domain)
+		}
+
 		// The estate from its other half: an address the operator says is
 		// theirs, and the name its reverse record answers to. Nothing is sent
 		// to the address itself.
@@ -246,6 +263,7 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	// sources and six names from one that answered while the other timed out
 	// are the same six names, and only these two lines tell a reader which
 	// report they are holding.
+	fmt.Fprintf(w, "    The zone     %s\n", saysZone(inv))
 	fmt.Fprintf(w, "    Certificates %s\n", saysLogs(inv))
 	fmt.Fprintf(w, "    Records      %s\n", saysRecords(inv))
 	fmt.Fprintf(w, "    Passive DNS  %s\n", saysPassive(inv))
@@ -265,6 +283,25 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	printNamesNow(w, inv)
 	printWildcards(w, inv)
 	printNamesLimits(w, inv, inv.Probed)
+}
+
+// saysZone is what the zone handed over, in one line.
+//
+// The refusal is a first-class answer here rather than a failure: a zone is
+// handed to the secondaries its operator named and to nobody else, and a
+// reader seeing "every server refused" is reading their own DNS working as it
+// should.
+func saysZone(inv inventory.Inventory) string {
+	switch r := inv.Zone; {
+	case !r.Asked:
+		return "not asked: -read-zone was not given"
+	case r.Reason != "":
+		return "Not established: " + r.Reason
+	case r.Named == 0:
+		return "named none of them: every server refused the transfer, which is the ordinary answer"
+	default:
+		return fmt.Sprintf("named %d of them, handed over by the zone itself", r.Named)
+	}
 }
 
 // saysLogs is what the certificate monitor established, in one line.
@@ -473,6 +510,13 @@ func printNamesLimits(w io.Writer, inv inventory.Inventory, probed bool) {
 		fmt.Fprintf(w, "    From the domain's own records, these are the hosts its mail, its\n")
 		fmt.Fprintf(w, "    sender policy and its delegation have to name. A host that takes no\n")
 		fmt.Fprintf(w, "    mail, sends none and answers for no zone is in none of them.\n")
+	}
+
+	if inv.Zone.Established() && inv.Zone.Named > 0 {
+		fmt.Fprintf(w, "    The zone handed itself over, so the names above are every name in\n")
+		fmt.Fprintf(w, "    it rather than a sample. What is not in a zone is still not here: a\n")
+		fmt.Fprintf(w, "    host reached by address alone, and anything in a zone delegated away\n")
+		fmt.Fprintf(w, "    from this one.\n")
 	}
 
 	if inv.Reverse.Established() {

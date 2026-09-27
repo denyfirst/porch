@@ -148,7 +148,8 @@ somebody's hosts, and it is worth being exact about what it is.
 obtained a certificate for it, in a transparency log that exists to be read, or
 by the domain itself in its MX, its sender policy or its delegation, or was
 observed resolving by a passive register the operator named and holds the key
-for. A wordlist
+for, or was handed over by the zone's own server to an operator reading their
+own zone. A wordlist
 tried against DNS — `mail`, `dev`, `staging`, `old` — would be enumerating an
 estate, and that is a different instrument with a different argument for
 existing. N7 draws that line and this stays on the reading side of it, for the
@@ -198,6 +199,19 @@ register named a host rather than folding it into a total, and why it is the
 operator's own account and key that asks. It is also the only source that finds
 a name a wildcard certificate hides, so a report with no register read says
 that nothing looked behind the wildcards it found.
+
+**A zone that hands itself over is read only for the estate that owns it.**
+A transfer is the one source that is not a sample: it is the zone, every name
+in it, from the server authoritative for them. It is also the one source whose
+answer belongs to somebody else's server, so the rule is narrow and it is the
+same rule twice. The DNS check asks whether a server will transfer to anybody
+and reads nothing of what comes back — the finding is that the zone is open,
+and a scanner that kept the records would be doing the thing it is warning
+about. The names mode reads the zone, and only where the asker's own estate is
+established: a service asks only about a domain it has been shown control of,
+and the command line asks only when an operator passes `-read-zone` for a zone
+they say is theirs. Nearly every zone refuses, which is correct, and a refusal
+is reported as a refusal rather than as an empty list.
 
 **It grades nothing and says so.** No document says which names an estate ought
 to have, so a verdict would be a threshold this project invented (R21).
