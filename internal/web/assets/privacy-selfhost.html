@@ -126,7 +126,7 @@
       check page shows the record to publish.{{else}}<strong>This installation
       checks any public name it is given.</strong> Without proof, it listens
       beyond this machine's own loopback address only when its operator said so
-      with <code>-open</code>.{{end}}
+      with <code class="flag">-open</code>.{{end}}
       Private, loopback and reserved addresses are refused whatever is asked.
     </p>
 
@@ -216,7 +216,7 @@
         for a domain this installation has been shown control of.</li>{{end}}
       {{if .AsksResponder}}<li><strong>The authority's responder</strong> is
         asked whether a certificate has been revoked, because this installation
-        was started with <code>-ask-responder</code>. That question names one
+        was started with <code class="flag">-ask-responder</code>. That question names one
         certificate to its own authority, so it runs only for a domain this
         installation has been shown control of.</li>{{end}}
       {{if .WalksRanges}}<li><strong>Nothing, for an address range you name.</strong>

@@ -5,6 +5,44 @@ import (
 	"testing"
 )
 
+// An installation's pages line up where a browser found they did not.
+//
+// Walked page by page on 2026-09-28, at 1280 and 390 pixels, signed in and
+// not: the console's two text fields ended on different lines on different
+// grounds; a flag broke at its leading hyphen ("-" at the end of one line,
+// "verification-secret-file" at the start of the next); the sign-in card had
+// twice the room under its button that it had over its title, for an empty
+// status line; and History's empty panel kept a paragraph margin under its
+// last sentence because a hidden table followed it.
+func TestTheInstallationsPagesLineUp(t *testing.T) {
+	css := asset(t, "assets/style.css")
+	for want, why := range map[string]string{
+		".composer-field {\n  width: 100%;\n  max-width: var(--measure);": "the domain field ends short of the selector field under it",
+		".composer .field { background: var(--paper); }":                  "the composer's fields sit on different grounds",
+		"code.flag { white-space: nowrap; }":                              "a flag may break at its leading hyphen",
+		".signin-status:empty { position: absolute; }":                    "an empty status line holds room under the sign-in button",
+		".panel p:not(:has(~ :not([hidden]))) { margin-bottom: 0; }":      "a panel's last shown paragraph keeps its margin when a hidden element follows",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("style.css no longer has %q: %s", want, why)
+		}
+	}
+
+	// Every flag on every page is marked as one, so the rule above reaches it.
+	entries, err := assets.ReadDir("assets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".html") {
+			continue
+		}
+		if body := asset(t, "assets/"+e.Name()); strings.Contains(body, "<code>-") {
+			t.Errorf("%s shows a flag that is not marked as one, so it can break at its hyphen", e.Name())
+		}
+	}
+}
+
 // The rows of the Porch page's check list share their columns, so every name
 // and every sentence starts on one line.
 //

@@ -1008,6 +1008,16 @@ h1 {
 }
 
 /*
+  A command-line flag is one word.
+
+  A line may break after a hyphen, and the leading hyphen of a flag is one, so
+  "-verification-secret-file" broke into "-" at the end of one line and the
+  rest at the start of the next: two things that read as neither, and a reader
+  copying one line gets a flag this program does not have.
+*/
+code.flag { white-space: nowrap; }
+
+/*
   One page now answers what used to be three, so it needs a way in. The jump
   links matter most for the reader who arrived from a scanning notice and
   wants one section, not the whole document.
@@ -2612,12 +2622,22 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink-faint);
 }
 
+/*
+  The composer's two text fields are one column.
+
+  The domain field was held to 28rem and the selector field below it to the
+  measure, so the two inputs in one form ended on different lines, and the
+  selector field kept the page's sunk background where the domain field had
+  the paper one. Both now end at the measure and sit on the same ground.
+*/
 .composer-field {
   width: 100%;
-  max-width: 28rem;
+  max-width: var(--measure);
   font-size: 1.1rem;
   background: var(--paper);
 }
+
+.composer .field { background: var(--paper); }
 
 .composer-scope {
   display: flex;
@@ -2868,6 +2888,26 @@ main > .band:last-child { border-bottom: 0; }
   font-size: 0.88rem;
   color: var(--ink-soft);
 }
+
+/*
+  Empty, the status line takes no room.
+
+  It held a line and a grid gap under the button for a message that is not
+  there, so the card had twice the space below its button that it had above
+  its title. Out of the flow rather than hidden: it is the live region a
+  screen reader is listening to, and one that is not in the page when its
+  message arrives is one that announces nothing.
+*/
+.signin-status:empty { position: absolute; }
+
+/*
+  The last paragraph a panel shows ends it, whatever hidden element follows.
+
+  ".panel p:last-child" asked about the markup, and a panel whose empty-state
+  sentence is followed by a table it has not filled yet kept that sentence's
+  bottom margin: thirteen pixels more under the text than above it.
+*/
+.panel p:not(:has(~ :not([hidden]))) { margin-bottom: 0; }
 
 .password-form {
   max-width: 30rem;

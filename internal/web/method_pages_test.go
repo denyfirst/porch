@@ -66,7 +66,7 @@ func TestTheMailCheckHasAMethodPage(t *testing.T) {
 		}
 	}
 	// The question its reports raise most, answered where the report points.
-	for _, want := range []string{`<h2 id="exchangers">`, "reverse DNS name", "<code>-helo</code>"} {
+	for _, want := range []string{`<h2 id="exchangers">`, "reverse DNS name", "<code class=\"flag\">-helo</code>"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the mail method page does not say %q", want)
 		}
