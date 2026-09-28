@@ -2797,7 +2797,8 @@ function daneSummary(facts) {
 // sources there are, and every one of them was short by the time the sixth
 // arrived.
 function readings(data) {
-  return [data.zone, data.logs, data.records, data.passive, data.presented, data.reverse, data.known]
+  return [data.zone, data.nsec, data.logs, data.records, data.passive, data.presented,
+          data.reverse, data.known]
     .map((r) => r || {});
 }
 
@@ -2851,6 +2852,7 @@ function buildNames(data) {
   // other timed out are the same six names, and only these two lines tell a
   // reader which report they are holding.
   row("The zone", saysZone(data));
+  row("Its proofs", saysNsec(data));
   row("Certificates", saysLogs(data));
   row("Records", saysRecords(data));
   row("Passive DNS", saysPassive(data));
@@ -2971,7 +2973,24 @@ function answered(reading) {
   return Boolean(reading && reading.asked) && !reading.reason;
 }
 
+// saysNsec is what the zone's own absence proofs listed.
+//
+// Usually nothing, and that is the source rather than a fault in it: a zone
+// using NSEC3, or not signed at all, publishes no plain chain to follow. Where
+// there is one it lists the zone, out of records the zone serves to any
+// resolver — which is the thing the DNS check reports and, until this, could
+// not show.
+function saysNsec(data) {
+  const r = data.nsec || {};
+
+  if (!r.asked) return "not walked: this installation does not follow them";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) return "named none of them";
+  return "named " + r.named + " of them, out of the zone's own absence proofs";
+}
+
 // saysZone is what the zone handed over, in one line.
+
 //
 // A refusal is a first-class answer here rather than a failure: a zone is
 // handed to the secondaries its operator named and to nobody else, so "every

@@ -227,6 +227,18 @@ deployment does not use, and a copy you run yourself reads each of them. Four
 lines saying *not asked*, with nothing saying where they can be asked, describe
 a tool with four things it cannot do.
 
+**A signed zone lists itself through its own absence proofs, and that is read
+only for an estate the asker owns.** DNSSEC makes a zone prove that a name does
+not exist, and the plain way of doing it names the two names it lies between —
+so following those proofs from the apex reads the zone out of records it serves
+to any resolver. The DNS check has reported a zone in that state as walkable
+since it was written; this is what it exposes. The records being public does
+not make walking somebody else's estate with them anything but enumeration, so
+the rule is the transfer's: a service walks a domain it has been shown control
+of, and the command line walks one an operator names. It works only where a
+transfer usually does not — a signed zone that has not moved to NSEC3 — which
+is why both exist.
+
 **The list you already have is a source, and it is the one that answers what
 none of the others can.** DNS has no query that lists a domain's names: it
 answers questions about names you already know. Every source above is therefore

@@ -15,6 +15,7 @@ import (
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/scan"
@@ -288,6 +289,14 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 		handed = s.zone.Under(ctx, domain)
 	}
 
+	// And the zone's own absence proofs, where this installation was told to
+	// follow them. The other way a zone lists itself, on the zones a transfer
+	// is refused by — behind the same proof of control, for the same reason.
+	var walked nsecnames.Found
+	if s.absence != nil {
+		walked = s.absence.Under(ctx, domain)
+	}
+
 	// And the addresses, where the caller named a range. Nothing is sent to
 	// them: the questions are reverse lookups to this installation's own
 	// resolver, and a name that comes back is one somebody published for that
@@ -311,6 +320,7 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 		Passive: observed,
 		Reverse: answered,
 		Zone:    handed,
+		NSEC:    walked,
 		Known:   already,
 	}
 	found := inventory.Merge(domain, sources)

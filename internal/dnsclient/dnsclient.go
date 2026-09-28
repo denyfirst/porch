@@ -87,6 +87,16 @@ const (
 	// to list every name in the zone.
 	TypeNSEC3PARAM = 51
 
+	// TypeNSEC is the record a signed zone publishes to prove a name does not
+	// exist, by naming the two names it lies between (RFC 4034 §4).
+	//
+	// It is the plain kind NSEC3PARAM says a zone has replaced. Each record
+	// names the next name in the zone, so following them from the apex lists
+	// every name in it — which is what the DNS check already reports as a
+	// consequence of not using NSEC3, and what internal/nsecnames reads for an
+	// estate that is the asker's own.
+	TypeNSEC = 47
+
 	// TypeRRSIG is the signature over a record set (RFC 4034). Every query here
 	// already asks for DNSSEC data, so these arrive beside the records they
 	// cover and cost no extra question: what they carry that nothing else does
@@ -258,6 +268,20 @@ type DNSKEY struct {
 	// Key is the public key as published. Kept as bytes for the same reason a
 	// DS digest is.
 	Key []byte `json:"-"`
+}
+
+// NSEC is a plain absence proof: the name it is published at, and the next
+// name in the zone (RFC 4034 §4).
+//
+// Only the next name is kept. The record also carries a bitmap of the types
+// that exist at its owner, and nothing here asks that question — a caller
+// walking the zone wants the names, and a caller asking what a name serves
+// asks for the record itself.
+type NSEC struct {
+	// Next is the name that follows this one in the zone's own ordering. At
+	// the last name it is the apex, which is how a walk knows it has come
+	// round.
+	Next string
 }
 
 // NSEC3PARAM says how a zone hashes the names it proves absent (RFC 5155).
@@ -577,6 +601,7 @@ type reply struct {
 	keys      []DNSKEY
 	cname     []string
 	nsec3     []NSEC3PARAM
+	nsec      []NSEC
 
 	// signatures are the RRSIG records covering the type that was asked for.
 	// They arrive with the records because every query here asks for DNSSEC
@@ -1048,6 +1073,10 @@ type ZoneAnswer struct {
 	Keys  []DNSKEY
 	NSEC3 []NSEC3PARAM
 
+	// NSEC are the plain absence proofs at this name, each naming the next
+	// name in the zone.
+	NSEC []NSEC
+
 	// Alias is what a CNAME at the name points to, where the name is one. A
 	// name that is an alias has that record and no others, which is the whole
 	// of RFC 1034 §3.6.2.
@@ -1100,6 +1129,17 @@ func (c *Client) LookupDS(ctx context.Context, name string) (ZoneAnswer, error) 
 	return c.zone(ctx, name, TypeDS)
 }
 
+// LookupNSEC reads the plain absence proof at a name.
+//
+// One record, naming the next name in the zone. A signed zone that has not
+// moved to NSEC3 publishes one at every name it holds, so a caller following
+// them from the apex is reading a list the zone itself hands out to any
+// resolver — which is the property RFC 5155 was written to remove, and the
+// one the DNS check reports where it finds it.
+func (c *Client) LookupNSEC(ctx context.Context, name string) (ZoneAnswer, error) {
+	return c.zone(ctx, name, TypeNSEC)
+}
+
 // LookupDNSKEY reads the keys the zone signs with.
 func (c *Client) LookupDNSKEY(ctx context.Context, name string) (ZoneAnswer, error) {
 	return c.zone(ctx, name, TypeDNSKEY)
@@ -1126,6 +1166,7 @@ func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswe
 	out.Keys = reply.keys
 	out.Alias = reply.cname
 	out.NSEC3 = reply.nsec3
+	out.NSEC = reply.nsec
 	out.Signatures = reply.signatures
 	return out, nil
 }
