@@ -386,6 +386,25 @@ h1 {
 
 .field-help { margin: 0.6rem 0 0; }
 
+/*
+  A field that follows something other than another field.
+
+  The inventory's two extra inputs and the console's selectors each sat
+  directly under the block above them — a list of checks, a paragraph of help —
+  and read as part of it. The gap is the same everywhere rather than tuned per
+  field, because what makes a column of inputs legible is that the space
+  between them does not change.
+*/
+.field-group { margin-top: 1.6rem; }
+
+/*
+  And where a help paragraph is the last thing before the next field, it keeps
+  the field's own measure rather than running the width of the page. A line
+  somebody has to track back across is a line they read twice.
+*/
+.field-group .field-help { max-width: var(--measure); }
+
+
 .noscript {
   margin: 1.4rem 0 0;
   padding: 0.9rem 1rem;
@@ -907,19 +926,6 @@ h1 {
 */
 .colophon p:not(.colophon-links) { max-width: var(--measure); }
 .colophon p { margin: 0 0 0.9rem; }
-/*
-  The counter is set in the same monospace as the data above it, because it is
-  data: the only record this service keeps, shown rather than described.
-*/
-.tally {
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--rule);
-  margin-bottom: 1.1rem !important;
-}
-
 /* They still wrap on a phone, where wrapping is the right answer. */
 .colophon-links {
   display: flex;
@@ -2193,7 +2199,6 @@ main > .band:last-child { border-bottom: 0; }
 */
 .colophon-row { align-items: center; }
 .colophon .colophon-row p { margin: 0; }
-.colophon .tally { margin: 1.2rem 0 0; }
 
 /*
   The lens on the front page.

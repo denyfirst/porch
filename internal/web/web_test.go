@@ -76,11 +76,17 @@ func TestEveryPageCarriesTheSameShell(t *testing.T) {
 			}
 		}
 
-		// The scan counter is the operator's figure. On the demonstration it
-		// counted our own checks of our own domain, which tells a visitor
-		// nothing, so it is not drawn there.
-		if got := strings.Contains(body, `id="tally"`); got == demo.Enabled {
-			t.Errorf("%s: the counter is drawn = %v on a build where demo = %v", path, got, demo.Enabled)
+		// No page draws a total of the scans run.
+		//
+		// It was on every self-hosted page and it was the wrong argument in
+		// the wrong place. The figure was published to make a point to
+		// strangers — a number nobody can trace back to a person, shown rather
+		// than described — and a self-hosted installation has no strangers: it
+		// has an operator, who has the History page, where the scans are
+		// listed rather than counted. A running total under every page was a
+		// second, worse answer to a question already answered better.
+		if strings.Contains(body, `id="tally"`) {
+			t.Errorf("%s draws a total of the scans run; History is where they are", path)
 		}
 		if got := strings.Contains(body, `data-site="demo"`); got != demo.Enabled {
 			t.Errorf("%s: the page says it is the demonstration = %v, and it is %v", path, got, demo.Enabled)

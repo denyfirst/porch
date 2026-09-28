@@ -33,7 +33,6 @@ func TestTheDemonstrationOffersNoDownloadAndNoCounter(t *testing.T) {
 			"    const actions = el(\"p\", \"summary-actions\");\n" +
 			"    actions.appendChild(downloadLink(data));\n" +
 			"    actions.appendChild(printButton());",
-		`if (!tally || DEMO_SITE) return;`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("app.js no longer contains %q", want)

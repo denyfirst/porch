@@ -26,6 +26,27 @@
         <button class="submit" type="submit" id="submit">List</button>
       </div>
 
+      {{if .Demo}}
+      <p class="field-help" id="field-help">
+        This demonstration lists <strong>{{.Target}}</strong> and nothing else.
+        The hosts it may touch are compiled into the binary, so the field is
+        fixed rather than open: a page that took any domain and then refused it
+        would be advertising something this deployment does not do. Run the tool
+        yourself to list your own.
+        No name is invented. The names come from a public register of
+        certificates, from the records this domain publishes, and from the
+        certificates its own hosts present.
+        <a href="/names/method">What is asked, who is asked, and what it cannot
+        show</a> is written out in full.
+      </p>
+      {{else}}
+      <p class="field-help" id="field-help">
+        A bare domain. No name is invented: they come from records and
+        registers published to be read.
+        <a href="/names/method">What is asked, and what it cannot show.</a>
+      </p>
+      {{end}}
+
       {{if .Ranges}}
       <!--
         The one source that starts from an address rather than from a name,
@@ -35,26 +56,27 @@
         is the person running this installation — nobody else can reach it, or
         a password they set stands in front of it.
       -->
-      <label class="field-label" for="ranges">Address ranges you own</label>
-      <div class="field-row">
-        <input
-          class="field"
-          type="text"
-          id="ranges"
-          name="ranges"
-          placeholder="203.0.113.0/24, 198.51.100.0/28"
-          spellcheck="false"
-          autocapitalize="off"
-          autocorrect="off"
-          aria-describedby="ranges-help">
+      <div class="field-group">
+        <label class="field-label" for="ranges">Address ranges you own</label>
+        <div class="field-row">
+          <input
+            class="field"
+            type="text"
+            id="ranges"
+            name="ranges"
+            placeholder="203.0.113.0/24, 198.51.100.0/28"
+            spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
+            aria-describedby="ranges-help">
+        </div>
+        <p class="field-help" id="ranges-help">
+          Optional. Their reverse records find a host from the other direction:
+          one in no certificate, in no record this domain publishes, and in no
+          register. Nothing is sent to the addresses themselves.
+          <a href="/names/method">What is asked, and the limits on a range.</a>
+        </p>
       </div>
-      <p class="field-help" id="ranges-help">
-        Read for the names their reverse records answer to, which finds a host
-        from the other direction: one in no certificate, in no record this
-        domain publishes, and in no register. Nothing is sent to the addresses
-        themselves. A range wider than /20, or more than four thousand
-        addresses across all of them, is refused rather than cut short.
-      </p>
       {{end}}
 
       {{if not .Demo}}
@@ -73,63 +95,35 @@
         Not on the demonstration: the estate it lists is compiled in, so a field
         that took names would be offering something that deployment refuses.
       -->
-      <label class="field-label" for="known">Names you already have</label>
-      <textarea
-        class="field field-lines"
-        id="known"
-        name="known"
-        rows="4"
-        placeholder="bitrix.example.com&#10;vpn.example.com"
-        spellcheck="false"
-        autocapitalize="off"
-        autocorrect="off"
-        aria-describedby="known-help"></textarea>
-      <div class="field-row field-row-file">
-        <label class="button button-secondary button-file" for="known-file">
-          Add a .txt file
-          <input type="file" id="known-file" accept=".txt,.csv,text/plain" hidden>
-        </label>
-        <span class="field-note" id="known-file-note"></span>
+      <div class="field-group">
+        <label class="field-label" for="known">Names you already have</label>
+        <textarea
+          class="field field-lines"
+          id="known"
+          name="known"
+          rows="4"
+          placeholder="intranet.example.com&#10;vpn.example.com"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
+          aria-describedby="known-help"></textarea>
+        <div class="field-row field-row-file">
+          <label class="button button-secondary button-file" for="known-file">
+            Add a .txt file
+            <input type="file" id="known-file" accept=".txt,.csv,text/plain" hidden>
+          </label>
+          <span class="field-note" id="known-file-note"></span>
+        </div>
+        <p class="field-help" id="known-help">
+          Optional, one to a line. Nothing here invents a name: yours are taken
+          as given, then resolved and reported beside what the sources found —
+          so a host of yours that no public source names is a row you can see.
+          A file is read in this browser and never uploaded.
+          <a href="/names/method">What is asked, and why a list is not a wordlist.</a>
+        </p>
       </div>
-      <p class="field-help" id="known-help">
-        One to a line, or separated by commas. They are taken as given —
-        nothing here invents a name — then resolved and reported beside what
-        the sources found, so a host of yours that no public source names is a
-        row you can see. A file is read in this browser and never uploaded:
-        what leaves this page is the names themselves, in the same request as
-        the domain. Blank lines and lines beginning with # are skipped. Up to
-        a thousand names; a longer list is a wordlist rather than an estate,
-        and this mode does not try wordlists.
-      </p>
       {{end}}
 
-      {{if .Demo}}
-      <p class="field-help" id="field-help">
-        This demonstration lists <strong>{{.Target}}</strong> and nothing else.
-        The hosts it may touch are compiled into the binary, so the field is
-        fixed rather than open: a page that took any domain and then refused it
-        would be advertising something this deployment does not do. Run the tool
-        yourself to list your own.
-        No name is invented. The names come from a public register of
-        certificates, from the records this domain publishes, and from the
-        certificates its own hosts present.
-        <a href="/names/method">What is asked, who is asked, and what it cannot
-        show</a> is written out in full.
-      </p>
-      {{else}}
-      <p class="field-help" id="field-help">
-        A bare domain. No name is invented and nothing is sent to your hosts:
-        the names come from a public register of certificates, published by
-        whoever obtained them, and from the mail, sender policy and delegation
-        records your domain publishes for anybody to read.
-        Where this installation can be reached by anybody but you, it produces
-        an inventory only for a domain you have proven control of &mdash; it
-        lists an estate rather than measuring a host, and the party being listed
-        cannot see it happen.
-        <a href="/names/method">What is asked, and what it cannot show</a> is
-        written out in full.
-      </p>
-      {{end}}
     </form>
 
     <noscript>
