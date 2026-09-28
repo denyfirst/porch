@@ -39,7 +39,7 @@ two is where a boundary would be lost.
 | | who runs it | who chooses the target | what stops it |
 |---|---|---|---|
 | **the demonstration** — denyfirst.dev | this project | a stranger | a list compiled into the binary (N6) |
-| **a self-hosted service** — `porchd` | an organisation | anyone who can reach it | **nothing today** |
+| **a self-hosted service** — `porchd` | an organisation | whoever holds its password | proof of control of each domain, and the password — both required beyond loopback |
 | **the command line** — `porch-scan` | one person | that person | nothing, by design |
 
 The command line needs nothing. Whoever runs it already has the machine, the
@@ -51,17 +51,20 @@ The demonstration is settled. The list is compiled in, the gate is the build
 tag rather than the length of the list, and a binary says which hosts it will
 connect to so that a deploy can read it rather than trust a filename.
 
-**The middle row is the open one.** A `porchd` built without the tag has no
-restriction at all. It listens on loopback by default, which means an
-accidental start is not immediately public — but a default is a mitigation, not
-a boundary. An organisation that binds it to an interface has rebuilt, inside
-its own network, the arrangement this project dismantled: anyone who can reach
-the box can point it at anything, and now it is *their* address in the scanned
-party's logs.
+**The middle row was the open one**, and this document was written to close it.
+A `porchd` built without the tag had no restriction at all. It listened on
+loopback by default, which meant an accidental start was not immediately
+public — but a default is a mitigation, not a boundary. An organisation that
+bound it to an interface had rebuilt, inside its own network, the arrangement
+this project dismantled: anyone who could reach the box could point it at
+anything, and then it was *their* address in the scanned party's logs.
 
-That is not a hypothetical for somebody else. It is the arrangement a careless
+That was not a hypothetical for somebody else. It is the arrangement a careless
 colleague reaches by accident, a compromised CI job reaches on purpose, and an
-SSRF into the scanner reaches for free.
+SSRF into the scanner reaches for free. Since v0.18.0 `porchd` will not listen
+beyond loopback without `-verification-secret-file` and `-access-file`, unless
+`-open` and `-without-password` are said out loud; what follows is the design
+that made that possible.
 
 ---
 
@@ -459,21 +462,29 @@ of thing this is*, and no deployment model changes that.
 
 ---
 
-## Known gaps, as of 2026-09-10
+## Gaps this document listed, and how each closed
 
-Each is either scheduled or has a defect entry. None is silent.
+Written as a list of gaps on 2026-09-10 and kept as a record of how they
+closed, because a list of known gaps that silently empties is a list nobody can
+check.
 
-**A self-hosted service has no boundary at all.** The subject of this
-document; roadmap item 2. Until it lands, `docs/self-host.md` says that
-loopback is the default, and should say plainly that binding `porchd` to a
-reachable interface makes it an open scanner.
+**A self-hosted service had no boundary at all.** Closed. Proof of control is
+asked where every check connects (N9), a password stands in front of
+everything an installation serves (P6), and beyond loopback `porchd` refuses to
+start without both unless each is waived by name.
 
-**A binary says which hosts it will connect to, and a verified deployment has
-no answer yet.** `porchd -version` composes its reach line from the
-compiled-in list. A deployment whose scope is established at run time has to
-say so on that line too, or the property N6 relies on for deploys becomes
-false for the new mode. `porch-scan -version` prints no reach line at all,
-which is its own roadmap defect.
+**Loopback was the one place a service trusted its caller, and a browser could
+reach it for somebody else.** Closed on 2026-09-28. A page on another site can
+point its own name at 127.0.0.1 and call the service through its visitor's
+browser as same-origin, which made a loopback copy with no password — the
+operator's own, offered the inventory and the range walk without proof — an
+open scanner for whoever wrote the page. Over plain HTTP the service now
+answers only to an address or to `localhost` (N15).
+
+**A binary said which hosts it would connect to, and a verified deployment had
+no answer.** Closed. `porchd -version` says "scans only domains it has been
+shown control of" where a secret is configured, and `porch-scan -version`
+carries a reach line of its own.
 
 **Reading a response body is listed above as never re-scopable, and a check
 worth having needs it.** Mixed content, a missing subresource integrity

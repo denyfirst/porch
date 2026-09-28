@@ -1,7 +1,7 @@
 # porch
 
 A scanner that reads what a server already shows to anyone who asks, cites its
-sources for every verdict, and keeps no records.
+sources for every verdict, and keeps no records it was not told to keep.
 
 The name is the scope. A porch is the part of a building you can walk up to
 without going inside, and that is the whole of what this reads: the handshake a
@@ -10,14 +10,16 @@ publishes. It guesses at nothing, sends nothing malformed, and changes nothing.
 
 Published by **denyfirst**.
 
-Point it at a server and it opens a real handshake at every TLS version, works
-out which cipher suites the server will actually accept, and reads the
-certificate chain it presents. Every verdict comes from a written rule set
-with the document behind it attached, and every report states what it could
-not measure.
+Four checks, each with its own rule set. The TLS check opens a real handshake
+at every TLS version, works out which cipher suites the server will actually
+accept, and reads the certificate chain it presents. The web check reads how a
+site is reached over HTTP; the mail check, what a domain's DNS says about its
+mail; the DNS check, how the domain itself is served, down to its DNSSEC chain.
+Every verdict comes from a written rule set with the document behind it
+attached, and every report states what it could not measure.
 
-Nothing about a scan is recorded. Not the hostname, not your address, not the
-result.
+Nothing about a scan is recorded unless whoever runs the tool says where to
+keep it. Not the hostname, not your address, not the result.
 
 ---
 
@@ -35,15 +37,19 @@ graded by the same policy version gives the same answer next year.
 **Every report says what it did not check.** Go's TLS stack implements
 roughly twenty-seven of the three hundred suites in the IANA registry, and
 gives a client no way to choose among TLS 1.3 suites, so those are asked with
-a hand-written hello, one registry suite at a time. Revocation is checked
-only from what the server itself stapled. All of that is printed alongside the findings, because a short
-list of problems can mean a well-configured server or a scan that could not
-see very far, and a reader deserves to know which.
+a hand-written hello, one registry suite at a time. Revocation is read from
+what the server stapled and from the list the certificate names, and the
+certificate's own responder is asked only where an operator says so. All of
+that is printed alongside the findings, because a short list of problems can
+mean a well-configured server or a scan that could not see very far, and a
+reader deserves to know which.
 
-**Nothing is recorded.** There is no log of what was scanned, by whom, or
-when. This is enforced by there being no code that could write one, and a test
-fails if any appears. The only thing kept is a count of scans, which is
-published on the site precisely because it identifies nobody.
+**Nothing is recorded unless you say where.** There is no log of what was
+scanned, by whom, or when. The demonstration keeps a count of scans, which is
+published on the site precisely because it identifies nobody. A copy you run
+yourself keeps results only where you tell it to: `-results-dir` on your own
+disk, or, behind a password, a history sealed under a key only that password
+opens. Nobody else's data is on your machine, and none of yours is on ours.
 
 ---
 
@@ -78,15 +84,27 @@ go build ./cmd/porchd
 ```
 
 Then open `http://127.0.0.1:8080`. It listens on loopback by default so that
-an accidental start is not immediately public.
+an accidental start is not immediately public. Over plain HTTP it answers only
+to an address or to `localhost`, so a page on another site cannot point its own
+name at your machine and use the service through your browser.
+
+Anywhere else it needs two things, and refuses to start without them: a
+password in front of everything it serves, and proof of control of each domain
+before it checks one.
 
 ```sh
 ./porchd \
   -listen :443 \
   -tls-cert /etc/ssl/porch.pem \
   -tls-key /etc/ssl/porch.key \
-  -stats-file /var/lib/porch/stats.json
+  -verification-secret-file /var/lib/porch/secret \
+  -access-file /var/lib/porch/access
 ```
+
+Both files are created on the first start. The password is printed once;
+sign in and change it. Each domain is then checked only once it publishes the
+TXT record the page shows for it, and for as long as the record is there.
+[`docs/self-host.md`](docs/self-host.md) has the whole procedure.
 
 `porchd -h` lists every limit and its default.
 
@@ -140,14 +158,18 @@ Named rather than left to be discovered.
 no padding oracle. Only a standard client hello at each version. Everything
 reported is what any client receives on connecting.
 
-**No HTTP request.** The connection is closed as soon as the handshake
-finishes. No path is tried, no header is sent, and the target's home page is
-never fetched.
+**No path is invented.** The TLS check makes no HTTP request: the connection is
+closed as soon as the handshake finishes. The web check sends one `GET` of `/`
+over each scheme and follows only the addresses a `Location` header names; the
+only paths anything here constructs are the published `/.well-known` addresses
+a check exists to read. `docs/invariants.md` N7 lists every one.
 
-**Nothing is asked of a certificate authority.** Asking one whether a serial
-is still valid would tell it which certificate somebody is looking at, so this
-never does. Nothing here fetches anything: every byte a report rests on is a
-byte the server itself sent.
+**No certificate authority is asked which certificate you are looking at,
+unless you say so.** Asking a responder whether a serial is still valid tells
+it which certificate somebody is examining, so that question is behind
+`-ask-responder` and needs proof of control on a service. The revocation list a
+certificate names is fetched, because one list covers thousands of certificates
+and asking for it names none of them; the demonstration does not fetch it.
 
 What the server sends can include a stapled status response, and that is read.
 Until 2026-08-22 it was not: this reported that some bytes had arrived, which
@@ -168,12 +190,15 @@ What is still not checked is the responder certificate's own revocation
 status, which would need a second request over the network, and a chain with
 no revocation channel at all: `docs/invariants.md` says so under R3b.
 
-**No port scanning.** Only ports that speak TLS from the first byte: 443,
-8443, 465, 636, 990, 993, 995 and 5061.
+**No port scanning.** The TLS check dials only ports that speak TLS from the
+first byte: 443, 8443, 465, 636, 990, 993, 995 and 5061. The web check dials 80
+and 443, and the mail check port 25 on the exchangers a domain's own MX records
+name — never a port it chose.
 
 **No private addresses.** The dialler refuses private, loopback, link-local,
-multicast and reserved ranges, resolves each name once, and connects to the
-address it inspected rather than to the name.
+multicast and reserved ranges, resolves each name once per connection, and
+connects to the address it inspected rather than to the name. The command line
+has `-allow-private` for your own network; the service has no such switch.
 
 ---
 
@@ -187,10 +212,16 @@ internal/safedial      a dialler that refuses non-public addresses
 internal/tlsprobe      handshakes: versions, cipher suites, the chain
 internal/certinfo      what the certificate says, and whether it verifies
 internal/policy        the rules, and the documents behind them
-internal/scan          the pipeline both front ends share
+internal/scan          the TLS check; webscan, mailscan and dnsscan the others
+internal/verify        which domains an installation has been shown control of
+internal/access        the password in front of an installation
+internal/vault         what an installation keeps, sealed under that password
 internal/httpapi       the HTTP surface and its limits
 internal/web           the pages
 ```
+
+[`CLAUDE.md`](CLAUDE.md) has the whole map, one row per package, and CI fails
+when it misses one.
 
 Two principles run through it.
 

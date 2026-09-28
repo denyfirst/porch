@@ -152,9 +152,9 @@ somebody walks around by adding an entry point.
 
 This is the invariant a description of the service has to be measured against.
 The letter written to the hosting provider on 2026-09-01 said *port 443 and no
-other*, which was never what the code did — see
-`claude/denyfirst-accuracy-audit-2026-09-02.md`. A statement about this
-project is worth what the code says, and the code is here.
+other*, which was never what the code did, as the accuracy audit of 2026-09-02
+found. A statement about this project is worth what the code says, and the code
+is here.
 
 *Enforced in:* `internal/scan`, in `Scanner.Scan`, unless `AllowAnyPort`;
 `internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`

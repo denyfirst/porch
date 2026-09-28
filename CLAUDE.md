@@ -190,10 +190,11 @@ these files and runs tests in five other packages, so the one test holding the
 command line's half of "this build queries no log" was neither built nor run.
 A test that does not compile looks exactly like a test that passes.
 
-Nine `internal/httpapi` tests fail under that tag on every commit: they scan
-`example.test`, which a demonstration build refuses. CI runs only the
-demonstration's own test there, deliberately. Do not bend forty tests to a
-deployment restriction.
+Most `internal/httpapi` tests fail under that tag on every commit — sixty-seven
+on 2026-09-28, where this line said nine: they scan `example.test`, which a
+demonstration build refuses. Compare a change against the same run on `main`
+rather than against a number here. CI runs only the demonstration's own test
+there, deliberately. Do not bend sixty tests to a deployment restriction.
 
 **Two `cmd/porchd` tests fail under it as well, and always have.**
 `TestAPublicServiceWithoutAPasswordIsRefused` and

@@ -218,7 +218,7 @@ whole discipline.
 
 The four rule sets are separate and never comparable with each other:
 `porch-tls-v7` grades a handshake, `porch-web-v3` grades an HTTP response,
-`porch-mail-v2` grades what a domain's DNS says about its mail, and
+`porch-mail-v3` grades what a domain's DNS says about its mail, and
 `porch-dns-v2` grades how the domain itself is served — its name servers and
 its DNSSEC chain. `-version` prints them all, and every report names the one
 that produced it.
@@ -235,6 +235,15 @@ that produced it.
 
 Loopback by default, so an accidental start is not immediately public.
 `porchd -h` lists every limit and its default.
+
+**Over plain HTTP it answers only to an address or to `localhost`.** Open it as
+`http://127.0.0.1:8080` or `http://localhost:8080`; a name such as
+`http://scanner.corp:8080` is refused. The reason is the loopback copy with no
+password: it trusts whoever reaches it as its operator, and a page on another
+site can point its own name at your machine and call the service through your
+browser, as the same origin, reading every answer. The name that page sends is
+the one thing it cannot change, so a name is refused. Over HTTPS the
+certificate settles it and any name you serve it under is answered.
 
 The service takes `-resolver` too, for the lookups it makes itself — CAA, the
 mail records and the proof-of-control challenge — and for the same reason as
@@ -512,9 +521,10 @@ point it at. That is the arrangement working as intended, and it is also a
 responsibility that used to be ours.
 
 Scan what you own, what you administer, or what you have permission to scan.
-This tool sends nothing but a standard client hello at each TLS version and
-closes the connection when the handshake finishes — no exploit, no malformed
-packet, no HTTP request — but a scan is still a connection somebody else pays
+This tool sends nothing malformed and nothing a browser or a mail server would
+not send — standard client hellos, one `GET` of `/` over each scheme, the
+`/.well-known` files a check exists to read, and on port 25 a greeting that
+never becomes a message — but a scan is still a connection somebody else pays
 for, and thirteen to fifty of them is still thirteen to fifty.
 
 The licence is AGPL-3.0. Run a modified version and offer it to others, and
