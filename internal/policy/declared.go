@@ -210,6 +210,16 @@ type SecurityTxtFacts struct {
 	// Contacts is how many ways to report a fault the file names.
 	Contacts int
 
+	// ContactList is what those ways are, where the deployment was told to
+	// print them.
+	//
+	// Empty where they were withheld rather than where the file named nobody,
+	// which is why Contacts stays beside it: the count answers "is there a way
+	// to reach us" and the list answers "is it still the right one", and only
+	// the second is the question an operator reading their own file has. A
+	// report that showed an empty list for both would answer neither (R4).
+	ContactList []string
+
 	// Expires is the date the file gives for itself, zero where it gives none.
 	Expires time.Time
 
@@ -243,13 +253,30 @@ func securityTxtLine(f SecurityTxtFacts, now time.Time) string {
 	}
 
 	var parts []string
-	switch f.Contacts {
-	case 0:
+	switch {
+	case f.Contacts == 0:
 		// The one field RFC 9116 §2.5.3 requires. A file naming nobody has not
 		// done the thing the file is for, and saying "published" alone would
 		// read as though it had.
 		parts = append(parts, "published, naming no contact")
-	case 1:
+
+	case len(f.ContactList) > 0:
+		// The addresses, where the deployment was told to print them.
+		//
+		// This is the question a count could not answer. Two contacts and two
+		// contacts are the same number whether they reach the security team or
+		// somebody who left two years ago, and an operator reading their own
+		// file is checking the second. The count stays in front of the list
+		// because the list is bounded: a file naming twelve says twelve and
+		// shows the first eight.
+		line := "published, " + plainCount(f.Contacts, "contact") + ": " +
+			strings.Join(f.ContactList, ", ")
+		if len(f.ContactList) < f.Contacts {
+			line += ", and " + strconv.Itoa(f.Contacts-len(f.ContactList)) + " more"
+		}
+		parts = append(parts, line)
+
+	case f.Contacts == 1:
 		parts = append(parts, "published, 1 contact")
 	default:
 		parts = append(parts, "published, "+strconv.Itoa(f.Contacts)+" contacts")

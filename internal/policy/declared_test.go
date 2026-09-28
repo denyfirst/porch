@@ -200,6 +200,26 @@ func TestTheSecurityContactRowSaysWhichNothingItFound(t *testing.T) {
 			Asked: true, Served: true, Contacts: 1, Signed: true,
 			Expires: testNow.Add(24 * time.Hour),
 		}, "published, 1 contact; expires 2026-09-25; signed"},
+
+		// The addresses, where the deployment was told to print them. This is
+		// the question the count could not answer: two contacts and two
+		// contacts are the same number whether they reach the security team or
+		// somebody who left two years ago.
+		{"published and named", SecurityTxtFacts{
+			Asked: true, Served: true, Contacts: 2,
+			ContactList: []string{"mailto:security@example.test", "https://example.test/report"},
+			Expires:     testNow.Add(24 * time.Hour),
+		}, "published, 2 contacts: mailto:security@example.test, https://example.test/report; " +
+			"expires 2026-09-25"},
+
+		// A file naming more than the bound keeps the count in front of the
+		// list, so that a bounded list does not read as the whole file (R4).
+		{"more than are listed", SecurityTxtFacts{
+			Asked: true, Served: true, Contacts: 5,
+			ContactList: []string{"mailto:a@example.test", "mailto:b@example.test"},
+			Expires:     testNow.Add(24 * time.Hour),
+		}, "published, 5 contacts: mailto:a@example.test, mailto:b@example.test, and 3 more; " +
+			"expires 2026-09-25"},
 	} {
 		if got := securityTxtLine(c.facts, testNow); got != c.want {
 			t.Errorf("%s read as %q, not %q", c.name, got, c.want)

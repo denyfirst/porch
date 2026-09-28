@@ -47,6 +47,15 @@ const (
 	// contact lines is not a file this project is going to describe
 	// accurately, and the count is all that is kept.
 	maxFields = 1000
+
+	// maxContacts bounds how many addresses are kept, where they are kept at
+	// all. A file naming forty is not a file anybody is reading, and the count
+	// beside the list says how many there were.
+	maxContacts = 8
+
+	// maxContact bounds one of them. The value is written by whoever is being
+	// measured.
+	maxContact = 253
 )
 
 // Facts is what was learned, and how much of it was learned at all.
@@ -72,6 +81,23 @@ type Facts struct {
 	// requires at least one; a file with none names nobody, which is the
 	// whole thing it exists to do.
 	Contacts int `json:"contacts,omitempty"`
+
+	// ContactList is what those fields say, where the caller asked for it.
+	//
+	// Empty where it was withheld rather than where the file named nobody,
+	// which is why Contacts stays beside it: a reader must not have to tell
+	// "no contact" from "a contact this deployment does not print" by the
+	// emptiness of a field (R4).
+	//
+	// It is withheld by default, and that default is the property rather than
+	// caution. A contact is an address somebody published for strangers, but
+	// it is still a person's address, and a deployment scanning names nobody
+	// proved anything about would be carrying it into a report a stranger
+	// asked for. It is printed where the asker is the operator — their own
+	// terminal, or a domain they have been shown to control — because the
+	// question they have of it is the one a count cannot answer: is this
+	// still somebody who works here.
+	ContactList []string `json:"contactList,omitempty"`
 
 	// Expires is the date in the file's Expires field, which RFC 9116 §2.5.5
 	// requires. Zero where the file carries none, or carries one that is not
@@ -104,6 +130,10 @@ type Fetcher struct {
 
 	// Timeout bounds the whole fetch. Zero means the default below.
 	Timeout time.Duration
+
+	// KeepContacts asks for the addresses themselves and not only a count of
+	// them. See Facts.ContactList for why it is off by default.
+	KeepContacts bool
 }
 
 // Fetch asks one host for its security.txt.
@@ -154,11 +184,15 @@ func (f *Fetcher) Fetch(ctx context.Context, host string) Facts {
 		return Facts{Asked: true, Reason: "the file is longer than this reads"}
 	}
 
-	return parse(string(body))
+	return parse(string(body), f.KeepContacts)
 }
 
-// parse counts what the file says without keeping any of it.
-func parse(body string) Facts {
+// parse reads the file, keeping the addresses only where the caller asked.
+//
+// It counted and kept nothing until 2026-09-28, which answered "is there a way
+// to reach us" and not "is it still the right one" — and the second is the
+// question an operator reading their own file actually has.
+func parse(body string, keep bool) Facts {
 	out := Facts{Asked: true, Served: true}
 
 	var fields int
@@ -195,6 +229,9 @@ func parse(body string) Facts {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case "contact":
 			out.Contacts++
+			if keep && len(out.ContactList) < maxContacts {
+				out.ContactList = append(out.ContactList, clean(value))
+			}
 		case "expires":
 			// Only the first is read. RFC 9116 §2.5.5 allows exactly one, and
 			// a file with two has not said when it expires — taking the later
@@ -227,4 +264,25 @@ func (f *Fetcher) timeout() time.Duration {
 		return f.Timeout
 	}
 	return 10 * time.Second
+}
+
+// clean bounds one contact and strips what no address may carry.
+//
+// Control characters especially: a value written by whoever is being measured
+// reaches a terminal, and an escape sequence in it is a report that can move
+// the cursor.
+func clean(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > maxContact {
+		s = s[:maxContact]
+	}
+
+	var b strings.Builder
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

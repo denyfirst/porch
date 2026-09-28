@@ -425,8 +425,29 @@ built the list: the web check now fetches `/.well-known/security.txt` as well
 as the page, because RFC 9116 defines that file as the thing a site publishes
 so a stranger who finds a fault knows who to tell. It is the clearest case this
 rule allows — an address defined by a standard, served to everybody, and read
-for the only purpose it has. What is kept from it is a count of contacts and
-one date, never an address, and nothing about it is graded (R21).
+for the only purpose it has. Nothing about it is graded (R21).
+
+**What is kept from it was a count, and a count answered the wrong question.**
+*Is there a way to reach us* is what a number says; *does it still reach
+somebody* is what an operator reading their own file is checking, and two
+contacts and two contacts are the same number whether they are the security
+team or somebody who left two years ago. Since 2026-09-28 the addresses
+themselves are kept — where the asker is the operator
+(`TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestTheCommandLinePrintsTheSecurityContacts`,
+`TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof`).
+
+The condition is the one the DMARC report addresses take, and for the identical
+reason: a contact is published for strangers to read and is still a person's
+address. The command line prints it, because it runs on the operator's own
+machine and the report goes to whoever ran it; a service prints it where
+control of the domain has been proven, and otherwise prints the count it always
+printed. The count stays in front of the list either way, so that a list
+bounded at eight under a file naming forty cannot read as the whole file (R4,
+`TestTheContactsKeptAreBoundedAndTheCountIsNot`), and the value is stripped of
+what no address may carry before it reaches a terminal
+(`TestAContactIsCleanedBeforeItIsKept`).
+
 
 **And one `GET` of the root on the other form of the name.** `www.` added where
 there is none, removed where there is one, asked once over HTTPS, and not

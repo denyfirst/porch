@@ -203,6 +203,16 @@ type Prober struct {
 	//
 	// A demonstration build ignores this field entirely. See pageFacts(), and N7.
 	ReadMarkup bool
+
+	// ShowContacts asks for the addresses in a security.txt and not only a
+	// count of them.
+	//
+	// Off by default, and the default is the property rather than caution: a
+	// contact is published for strangers and is still a person's address, so
+	// a deployment scanning names nobody proved anything about does not carry
+	// one into a report a stranger asked for. The same two callers set it as
+	// set ReadMarkup, for the same argument.
+	ShowContacts bool
 }
 
 // DefaultUserAgent is what this client says it is when nothing else is set.
@@ -549,7 +559,10 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	// asked about, and following a redirect here would be reading one site's
 	// file and reporting it as another's.
 	if answered(report.Secure) {
-		f := &securitytxt.Fetcher{Client: client, UserAgent: p.userAgent(), Timeout: p.requestTimeout()}
+		f := &securitytxt.Fetcher{
+			Client: client, UserAgent: p.userAgent(), Timeout: p.requestTimeout(),
+			KeepContacts: p.ShowContacts,
+		}
 		report.SecurityTxt = f.Fetch(ctx, host)
 
 		// A failure after the deadline passed is this program's clock rather
