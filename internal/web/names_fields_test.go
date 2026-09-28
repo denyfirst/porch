@@ -232,3 +232,53 @@ func TestAClaimAboutTheDemonstrationIsGuardedByIt(t *testing.T) {
 		t.Errorf("the sentence is drawn again after the guard:\n%s", rest)
 	}
 }
+
+// Every field the inventory page offers is read, and every reader is called.
+//
+// A field on a page that nothing sends is the worst of the three ways this can
+// go wrong: the other two — a field that is not offered, a reader that is not
+// written — leave nothing on the screen, and this one leaves somebody typing
+// their estate into a box and pressing a button that ignores it.
+//
+// Both halves are taken from the files rather than from a list here. The
+// fields come out of the markup, so a field added and never wired fails; the
+// readers come out of the script, so a reader written and never called fails.
+// The second is not hypothetical: `knownAsked` was called from `asked` on the
+// day it was written, and a sabotage that removed it from there left every
+// other test in this package passing.
+func TestEveryFieldThePageOffersIsSent(t *testing.T) {
+	src := script(t)
+	form := asset(t, "assets/names.html")
+
+	// The fields, from the markup. The domain itself is read by the form's own
+	// handler and is not one of these.
+	fields := regexp.MustCompile(`(?s)<(?:input|textarea)\b[^>]*\bid="([a-z-]+)"`).FindAllStringSubmatch(form, -1)
+	if len(fields) < 3 {
+		t.Fatalf("the inventory page offers %d fields, which is fewer than the domain, the "+
+			"ranges and the list", len(fields))
+	}
+	for _, f := range fields {
+		if !strings.Contains(src, `getElementById("`+f[1]+`")`) {
+			t.Errorf("the page offers a %q field and nothing on the page reads it", f[1])
+		}
+	}
+
+	// The readers, from the script, and each one called where the request is
+	// built.
+	asked := functionBody(t, src, "asked")
+	readers := regexp.MustCompile(`function (\w+Asked)\(`).FindAllStringSubmatch(src, -1)
+	if len(readers) < 2 {
+		t.Fatalf("the script declares %d field readers", len(readers))
+	}
+	for _, r := range readers {
+		if !strings.Contains(asked, r[1]+"()") {
+			t.Errorf("%s reads a field and nothing sends what it read", r[1])
+		}
+	}
+
+	// And what asked() builds is what goes in the body, rather than a second
+	// object assembled beside it.
+	if !strings.Contains(src, "check(target, CHECK, asked())") {
+		t.Error("the page no longer sends what its fields were read into")
+	}
+}
