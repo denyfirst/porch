@@ -773,6 +773,18 @@ h1 {
   max-width: 42rem;
 }
 
+/*
+  And a note that follows a table or a list rather than a title.
+
+  The pull upward is for tucking a note under its heading. Under a table it
+  pulled the sentence four pixels into the last row — "Their addresses are in
+  four networks" sat on the name servers it was about — so a note after rows
+  of anything is given room instead.
+*/
+:is(table, .rows, .pairs, ul, ol, dl) + :is(.section-note, .group-note) {
+  margin-top: 0.75rem;
+}
+
 /* ── Certificate ──────────────────────────────────────────────────────── */
 
 .pairs {
@@ -994,6 +1006,16 @@ h1 {
   font-size: 0.88em;
   color: var(--ink);
 }
+
+/*
+  A command-line flag is one word.
+
+  A line may break after a hyphen, and the leading hyphen of a flag is one, so
+  "-verification-secret-file" broke into "-" at the end of one line and the
+  rest at the start of the next: two things that read as neither, and a reader
+  copying one line gets a flag this program does not have.
+*/
+code.flag { white-space: nowrap; }
 
 /*
   One page now answers what used to be three, so it needs a way in. The jump
@@ -1499,10 +1521,22 @@ h1 {
 
 .band[id] { scroll-margin-top: 1rem; }
 
+/*
+  The note beside a band's title is centred on the heading beside it.
+
+  It hung from the heading's bottom edge. A note of three short lines beside a
+  title of two large ones then began well below the title's first line and
+  ended below its last, and the pair read as the note having slipped down the
+  page. Sharing the last baseline instead moved it two pixels and did not
+  change that; centred on the heading — the eyebrow and the title together —
+  it sits beside the block it belongs to. Measured on every band on both
+  pages; where the two wrap onto separate lines on a narrow screen, this has
+  nothing to align.
+*/
 .band-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem 2.5rem;
   margin-bottom: 2.2rem;
@@ -1682,6 +1716,50 @@ a.card:hover { border-color: var(--link); }
 .check-panel .check { grid-template-columns: auto minmax(4.5rem, auto) 1fr; }
 
 .check-panel .check-policy { display: none; }
+
+/*
+  The rows share their columns.
+
+  Each row was a grid of its own, so each sized its name column to its own
+  name: "Transport" pushed its sentence two pixels right of the rest, and the
+  row that opens a page, with no box to put first, began a whole column early —
+  at a phone's width it did not even stack the way the others did. One grid
+  with a subgrid per row sizes the name column to the longest name and puts
+  every sentence on one line. A browser without subgrid keeps the fixed
+  columns declared first, which line up too.
+*/
+.check-panel .check-rows {
+  display: grid;
+  grid-template-columns: 1.1rem 6rem 1fr;
+  grid-template-columns: 1.1rem max-content 1fr;
+  column-gap: 0.7rem;
+}
+
+.check-panel .check-rows .check {
+  grid-column: 1 / -1;
+  grid-template-columns: 1.1rem 6rem 1fr;
+  grid-template-columns: subgrid;
+  column-gap: 0.7rem;
+}
+
+.check-panel .check-rows .check > input,
+.check-panel .check-door { justify-self: center; }
+
+.check-panel .check-door {
+  color: var(--ink-faint);
+  transition: transform 160ms ease-out;
+}
+
+.check-panel .check-elsewhere:hover .check-door { transform: translate(2px, -2px); }
+
+@media (max-width: 34rem) {
+  .check-panel .check-rows { grid-template-columns: 1.1rem 1fr; }
+  .check-panel .check-rows .check-says { grid-column: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .check-panel .check-door { transition: none; }
+}
 
 .submit-wide {
   width: 100%;
@@ -2111,12 +2189,41 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink-soft);
 }
 
-.steps pre {
+/*
+  A command and the button that copies it.
+
+  The box is the grid item, so the button sits in its corner however the step
+  is laid out, and the command keeps room on its right so a long line scrolls
+  under nothing.
+*/
+.steps .command {
+  position: relative;
   grid-column: 2;
   grid-row: 1 / 4;
   align-self: center;
+  min-width: 0;
+}
+
+.command-copy {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  min-height: 24px;
+  padding: 0.2rem 0.6rem;
+  color: var(--ink-soft);
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.command-copy:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.steps pre {
   margin: 0;
-  padding: 0.9rem 1rem;
+  padding: 0.9rem 5rem 0.9rem 1rem;
   overflow-x: auto;
   background: var(--paper);
   border: 1px solid var(--rule);
@@ -2139,7 +2246,13 @@ main > .band:last-child { border-bottom: 0; }
 
 @media (max-width: 52rem) {
   .steps li { grid-template-columns: minmax(0, 1fr); }
-  .steps pre { grid-column: 1; grid-row: auto; margin-top: 1rem; }
+  .steps .command { grid-column: 1; grid-row: auto; margin-top: 1rem; }
+
+  /* Narrow, a command's long lines scroll, and they scrolled under a button
+     sitting inside the box. It stands above the box's corner instead. */
+  .steps .command { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+  .steps .command pre { align-self: stretch; padding-right: 1rem; }
+  .command-copy { position: static; order: -1; }
 }
 
 /* A domain the page shows rather than offers: the field's box, no control. */
@@ -2509,12 +2622,22 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink-faint);
 }
 
+/*
+  The composer's two text fields are one column.
+
+  The domain field was held to 28rem and the selector field below it to the
+  measure, so the two inputs in one form ended on different lines, and the
+  selector field kept the page's sunk background where the domain field had
+  the paper one. Both now end at the measure and sit on the same ground.
+*/
 .composer-field {
   width: 100%;
-  max-width: 28rem;
+  max-width: var(--measure);
   font-size: 1.1rem;
   background: var(--paper);
 }
+
+.composer .field { background: var(--paper); }
 
 .composer-scope {
   display: flex;
@@ -2765,6 +2888,26 @@ main > .band:last-child { border-bottom: 0; }
   font-size: 0.88rem;
   color: var(--ink-soft);
 }
+
+/*
+  Empty, the status line takes no room.
+
+  It held a line and a grid gap under the button for a message that is not
+  there, so the card had twice the space below its button that it had above
+  its title. Out of the flow rather than hidden: it is the live region a
+  screen reader is listening to, and one that is not in the page when its
+  message arrives is one that announces nothing.
+*/
+.signin-status:empty { position: absolute; }
+
+/*
+  The last paragraph a panel shows ends it, whatever hidden element follows.
+
+  ".panel p:last-child" asked about the markup, and a panel whose empty-state
+  sentence is followed by a table it has not filled yet kept that sentence's
+  bottom margin: thirteen pixels more under the text than above it.
+*/
+.panel p:not(:has(~ :not([hidden]))) { margin-bottom: 0; }
 
 .password-form {
   max-width: 30rem;

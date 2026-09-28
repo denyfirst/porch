@@ -154,8 +154,9 @@ func TestTheReportIsOfferedInOneFormatOnly(t *testing.T) {
 		!strings.Contains(copier, "await navigator.clipboard.writeText(text);") {
 		t.Errorf("copyRecord writes something other than the record its button names:\n%s", copier)
 	}
-	if !strings.Contains(source, `for (const holder of [proofDialog, document.getElementById("domain-record")]) {`) {
-		t.Error("copyRecord is attached somewhere other than the two places a proof record is shown")
+	if !strings.Contains(source, `for (const holder of [proofDialog, document.getElementById("domain-record"), document.querySelector("#start .steps")]) {`) {
+		t.Error("copyRecord is attached somewhere other than the two places a proof record is shown " +
+			"and the install steps on the Porch page")
 	}
 	for _, page := range []string{"assets/console.html", "assets/domains.html"} {
 		body, err := assets.ReadFile(page)
@@ -166,6 +167,43 @@ func TestTheReportIsOfferedInOneFormatOnly(t *testing.T) {
 			if !strings.HasPrefix(id[1], "proof-") && !strings.HasPrefix(id[1], "domain-") {
 				t.Errorf("%s offers %q to the clipboard, which is not a proof record", page, id[1])
 			}
+		}
+	}
+
+	// The Porch page offers its install commands, and each is fixed text the
+	// page shows: an element whose id the button names, holding no template
+	// value, so what is copied is the same for every visitor and is what they
+	// read. A command built from anything a request carried is not this case.
+	porch, err := assets.ReadFile("assets/porch.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offered := regexp.MustCompile(`data-copy="([^"]+)"`).FindAllStringSubmatch(string(porch), -1)
+	if len(offered) == 0 {
+		t.Error("the Porch page no longer offers its commands; if that is intended, narrow the holder list above")
+	}
+	// And the demonstration's privacy page says so, as the installation's
+	// says where its own Copy writes.
+	if privacy, err := assets.ReadFile("assets/privacy.html"); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(privacy), "The clipboard is written in one place") ||
+		!strings.Contains(string(privacy), "A report is never put there.") {
+		t.Error("the Porch page writes install commands to the clipboard and the privacy page does not say so")
+	}
+	for _, id := range offered {
+		if !strings.HasPrefix(id[1], "command-") {
+			t.Errorf("the Porch page offers %q to the clipboard, which is not an install command", id[1])
+			continue
+		}
+		at := strings.Index(string(porch), `<code id="`+id[1]+`">`)
+		if at < 0 {
+			t.Errorf("the Porch page's button names %q and no command carries that id", id[1])
+			continue
+		}
+		block := string(porch)[at:]
+		block = block[:strings.Index(block, "</code>")]
+		if strings.Contains(block, "{{") {
+			t.Errorf("the command %q is built from a template value, so what is copied is not fixed text", id[1])
 		}
 	}
 	source = source[:start] + source[end:]

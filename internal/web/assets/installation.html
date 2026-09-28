@@ -38,7 +38,7 @@
       <dd>
         {{if .Guarded}}Kept whole and encrypted, to open again or delete under
         <a href="/history">History</a>.{{else if .Keeps}}Kept on this machine. Nothing about who asked is written
-        down.{{else}}Not kept. Start with <code>-results-dir</code> to keep them.{{end}}
+        down.{{else}}Not kept. Start with <code class="flag">-results-dir</code> to keep them.{{end}}
       </dd>
 
       <dt>Rule sets</dt>
@@ -51,7 +51,7 @@
         {{if .Guarded}}Behind a password. What is kept is encrypted under a
         key the password seals; a forgotten password cannot be recovered.{{else}}<strong>No
         password.</strong> Anyone who can reach this installation can use it. Start
-        with <code>-access-file</code> to put one in front of it.{{end}}
+        with <code class="flag">-access-file</code> to put one in front of it.{{end}}
       </dd>
 
       <dt>Sent to us</dt>

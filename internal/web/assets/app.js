@@ -2111,7 +2111,7 @@ function waitForProof(target, first) {
 }
 
 /*
-  Copying a proof record, and nothing else.
+  Copying a proof record or an install command, and nothing else.
 
   The one place this script writes to the clipboard. A report is never put
   there: it names a host and what was found on it, and the clipboard is shared
@@ -2120,6 +2120,12 @@ function waitForProof(target, first) {
   proves nothing until it is published in that domain's zone, and the person
   pressing the button is about to paste it. Where the browser refuses the
   write, the text is selected instead, so one keystroke still copies it.
+
+  The commands on the Porch page are the same case, and more so: fixed text,
+  the same for every visitor, naming no host anybody asked about. What is
+  copied is the text of the element on the screen, never a second string kept
+  beside it — a page that copies something other than what it shows is how a
+  command pasted into a terminal runs something its reader never saw.
 */
 async function copyRecord(button) {
   const source = document.getElementById(button.dataset.copy);
@@ -2139,7 +2145,7 @@ async function copyRecord(button) {
   setTimeout(() => { button.textContent = "Copy"; }, 1500);
 }
 
-for (const holder of [proofDialog, document.getElementById("domain-record")]) {
+for (const holder of [proofDialog, document.getElementById("domain-record"), document.querySelector("#start .steps")]) {
   if (!holder) continue;
   holder.addEventListener("click", event => {
     const button = event.target.closest("[data-copy]");

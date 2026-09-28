@@ -543,44 +543,26 @@ func TestEveryInstallationIsWiredAResolver(t *testing.T) {
 	}
 }
 
-// The service names the revocation addresses only alongside proof of control.
+// The service names the revocation addresses where the report is read by the
+// person it is about, and decides that in one place.
 //
 // The addresses are written by whoever issued the certificate, which on a name
 // nobody proved means they are written by the party being measured — and a
 // report a stranger asked for does not repeat a string that party wrote back
-// at its reader. For a domain somebody has shown is theirs the authority is
-// their own, and the sentence a count cannot write is the one they need: when
-// revocation could not be established, which address failed.
+// at its reader. For a domain somebody has shown is theirs, for the
+// demonstration's own estate, and on a copy only its operator can call, the
+// authority is their own, and the sentence a count cannot write is the one
+// they need: when revocation could not be established, which address failed.
 //
-// Read as text, for the reason the wiring above is: what is checked is that
-// the line exists in main.go at all, and inside the branch that requires a
-// scope. A test that set the field itself would pass with main.go setting
-// nothing.
-func TestTheRevocationAddressesFollowTheScope(t *testing.T) {
+// That is operatorView's question, and httpapi answers it for every part of a
+// report shown whole only to its owner. This was set here, inside the branch
+// for a scope, which left the demonstration and the operator's own copy
+// printing a count of their own addresses. main.go setting it again, anywhere,
+// is a second place for one decision; httpapi's tests check the answer.
+func TestTheRevocationAddressesFollowTheOperatorsView(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
-
-	const line = "scanner.ShowRevocationURLs = true"
-	if !strings.Contains(src, line) {
-		t.Fatalf("main.go never lets a report name where revocation is published (%q)", line)
-	}
-
-	// Inside the branch, not after it. Order is not enough and a sabotage
-	// proved it: moving the line past the closing brace still leaves it later
-	// in the file than the branch begins, and a test comparing positions
-	// passed while every deployment named the addresses. The branch's own body
-	// is what has to contain it.
-	scoped := strings.Index(src, "if scope != nil {\n\t\tscanner.Logs = ")
-	if scoped < 0 {
-		t.Fatal("the branch that requires a scope no longer has the shape this test reads")
-	}
-	body := src[scoped:]
-	end := strings.Index(body, "\n\t}\n")
-	if end < 0 {
-		t.Fatal("the branch that requires a scope is never closed")
-	}
-	if !strings.Contains(body[:end], line) {
-		t.Error("the revocation addresses are named outside the branch that requires a scope, so " +
-			"a service that proved nothing repeats the measured party's own strings back to a " +
-			"stranger")
+	if strings.Contains(src, "ShowRevocationURLs") {
+		t.Error("main.go decides whether the revocation addresses are named, which httpapi's " +
+			"operatorView decides for every part of a report shown whole only to its owner")
 	}
 }

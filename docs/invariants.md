@@ -475,10 +475,17 @@ is the one that issued it, and the question a count cannot answer is the one
 that comes up exactly when something went wrong: a revocation list that could
 not be fetched is reported already, and until 2026-09-28 the report would not
 say *from where*. The command line names it, because it runs on the operator's
-own machine; a service names it alongside proof of control and prints the count
-otherwise (`TestTheRevocationAddressesAreKeptOnlyWhereAskedFor`,
+own machine. A service names it where the report is read by the person it is
+about — alongside proof of control, on the demonstration's own estate, and on a
+copy only its operator can call — and prints the count otherwise. It decides
+that in the one place every other such part of a report is decided, httpapi's
+`operatorView`; it arrived following the scope alone, set in porchd, and for
+its first day the demonstration and the operator's own copy printed a count of
+their own certificate's addresses
+(`TestTheRevocationAddressesAreKeptOnlyWhereAskedFor`,
 `TestTheCommandLineNamesTheRevocationAddresses`,
-`TestTheRevocationAddressesFollowTheScope`).
+`TestTheRevocationAddressesFollowTheOperatorsView`,
+`TestTheOperatorsOwnCopyShowsTheWholeReport`).
 
 The counts stay beside the lists rather than being replaced by them, because an
 empty list means withheld or none and only the count says which (R4). One
