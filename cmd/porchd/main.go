@@ -44,6 +44,7 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/httpapi"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
@@ -195,6 +196,21 @@ func run() int {
 				"\tnames in it. Only for a domain this installation has been shown\n"+
 				"\tcontrol of. Almost every server refuses, which is correct and is\n"+
 				"\treported as such")
+
+		// The other way a zone lists itself, and the one that works where a
+		// transfer does not.
+		//
+		// A signed zone that has not moved to NSEC3 proves a name absent by
+		// naming the two it lies between, so following those proofs reads the
+		// zone out of records it serves to any resolver. Same condition as the
+		// transfer: only for a domain this installation has been shown control
+		// of, because the records being public does not make walking somebody
+		// else's estate with them anything but enumeration.
+		namesWalkProofs = flag.Bool("names-walk-proofs", false,
+			"follow a domain's own DNSSEC absence proofs to list the names in its\n"+
+				"\tzone. Only for a domain this installation has been shown control of.\n"+
+				"\tIt works on a signed zone that has not moved to NSEC3, which is the\n"+
+				"\tstate the DNS check reports as walkable")
 
 		// The fifth source: the certificate each answering host presents.
 		//
@@ -572,6 +588,13 @@ func run() int {
 	// reaches an inventory at all.
 	if *namesReadZone {
 		api.ReadZoneTransfers(&zonenames.Reader{
+			Resolver: &dnsclient.Client{Server: *resolver},
+			Timeout:  *requestTimeout,
+		})
+	}
+
+	if *namesWalkProofs {
+		api.WalkAbsenceProofs(&nsecnames.Reader{
 			Resolver: &dnsclient.Client{Server: *resolver},
 			Timeout:  *requestTimeout,
 		})

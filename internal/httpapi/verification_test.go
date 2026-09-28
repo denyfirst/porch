@@ -649,3 +649,28 @@ func TestOnlyTheMailCheckTakesSelectors(t *testing.T) {
 		t.Errorf("a list past the bound answered %q: %s", got, w.Body.String())
 	}
 }
+
+// The service prints the contacts a security.txt names only where it required
+// proof of control.
+//
+// The same rule as the report addresses in a DMARC record, and for the same
+// reason: a contact is published for strangers to read and is still a person's
+// address. A deployment scanning names nobody proved anything about says how
+// many there are; one that was shown the domain is the asker's says what they
+// are, because the question an operator has of their own file — does this
+// still reach somebody — is one a count cannot answer.
+func TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof(t *testing.T) {
+	scope := &verify.Scope{Secret: []byte("a deployment secret")}
+
+	withProof := New(&scan.Scanner{Verify: scope}, Limits{}, nil)
+	if !withProof.web.ShowContacts {
+		t.Error("a service that requires proof of control withholds the security contacts from " +
+			"the person who proved the domain is theirs, leaving them a count they cannot act on")
+	}
+
+	withoutProof := New(&scan.Scanner{}, Limits{}, nil)
+	if withoutProof.web.ShowContacts {
+		t.Error("a service configured with no scope prints the addresses published by names " +
+			"nobody proved anything about")
+	}
+}

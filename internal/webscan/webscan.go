@@ -72,6 +72,17 @@ type Scanner struct {
 	// remembered.
 	ReadMarkup bool
 
+	// ShowContacts asks for the addresses a security.txt names, and not only
+	// a count of them.
+	//
+	// False by default, for the reason ReadMarkup is. What a true here buys is
+	// the question a count cannot answer: a file naming two contacts and a
+	// file naming the address of somebody who left two years ago are the same
+	// number, and the second is the one an operator is looking for. What it
+	// costs is that a published address is in the report — so it is set where
+	// the asker is the operator, and nowhere else.
+	ShowContacts bool
+
 	// Now supplies the current time, so a duration is reproducible in tests.
 	// Nil means time.Now.
 	Now func() time.Time
@@ -207,6 +218,7 @@ func (s *Scanner) Scan(ctx context.Context, host string) (*Result, error) {
 	// in webprobe rather than here, so the promise on /web/method holds for
 	// every path into the prober rather than for this one.
 	p.ReadMarkup = s.ReadMarkup
+	p.ShowContacts = s.ShowContacts
 	prober = &p
 
 	// And again, for every host a redirect names.
@@ -703,6 +715,7 @@ func securityTxtFacts(r *webprobe.Report) policy.SecurityTxtFacts {
 		Served:            s.Served,
 		Reason:            s.Reason,
 		Contacts:          s.Contacts,
+		ContactList:       s.ContactList,
 		Expires:           s.Expires,
 		ExpiresUnreadable: s.ExpiresUnreadable,
 		Signed:            s.Signed,

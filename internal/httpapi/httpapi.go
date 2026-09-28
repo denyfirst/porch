@@ -69,6 +69,7 @@ import (
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/ptrnames"
@@ -273,6 +274,11 @@ type Server struct {
 	// operator asked for that. Nil is the ordinary state.
 	zone zoneReader
 
+	// absence follows the zone's own DNSSEC absence proofs, where an
+	// installation was told to. The other way a zone lists itself, and the
+	// one that works on the zones a transfer is refused by.
+	absence absenceWalker
+
 	// reverse walks the address ranges a caller named, where that caller is
 	// the operator. Nil where this installation has no resolver.
 	reverse reverseWalker
@@ -361,6 +367,12 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 			Verify:     scanner.Verify,
 			Roots:      scanner.Roots,
 			ReadMarkup: scanner.Verify != nil,
+
+			// The contacts a security.txt names follow the same proof. A
+			// domain somebody has shown is theirs is a file that is theirs;
+			// without a scope this is a report a stranger asked for about a
+			// name nobody proved, and a published address is still a person's.
+			ShowContacts: scanner.Verify != nil,
 		},
 
 		// The mail check carries the boundary, and now the trust store with it.
@@ -1176,6 +1188,27 @@ type zoneReader interface {
 // domain it has been shown control of.
 func (s *Server) ReadZoneTransfers(reader zoneReader) {
 	s.zone = reader
+}
+
+// absenceWalker follows a zone's own absence proofs to list it.
+// internal/nsecnames.Reader is the one there is.
+type absenceWalker interface {
+	Under(ctx context.Context, domain string) nsecnames.Found
+}
+
+// WalkAbsenceProofs tells this service to follow a zone's DNSSEC absence
+// proofs and keep the names they name.
+//
+// Off unless called, and on the same condition as a zone transfer: the records
+// are served to any resolver, and reading somebody else's estate out of them
+// is enumeration all the same. On a service that means a domain it has been
+// shown control of.
+//
+// It is the other half of the transfer rather than a repeat of it. A transfer
+// is refused by nearly every zone; this works on the zones that refuse one and
+// are signed without NSEC3, which is the state the DNS check already reports.
+func (s *Server) WalkAbsenceProofs(walker absenceWalker) {
+	s.absence = walker
 }
 
 // reverseWalker reads the names the addresses in a range answer to.

@@ -425,8 +425,29 @@ built the list: the web check now fetches `/.well-known/security.txt` as well
 as the page, because RFC 9116 defines that file as the thing a site publishes
 so a stranger who finds a fault knows who to tell. It is the clearest case this
 rule allows — an address defined by a standard, served to everybody, and read
-for the only purpose it has. What is kept from it is a count of contacts and
-one date, never an address, and nothing about it is graded (R21).
+for the only purpose it has. Nothing about it is graded (R21).
+
+**What is kept from it was a count, and a count answered the wrong question.**
+*Is there a way to reach us* is what a number says; *does it still reach
+somebody* is what an operator reading their own file is checking, and two
+contacts and two contacts are the same number whether they are the security
+team or somebody who left two years ago. Since 2026-09-28 the addresses
+themselves are kept — where the asker is the operator
+(`TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestTheCommandLinePrintsTheSecurityContacts`,
+`TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof`).
+
+The condition is the one the DMARC report addresses take, and for the identical
+reason: a contact is published for strangers to read and is still a person's
+address. The command line prints it, because it runs on the operator's own
+machine and the report goes to whoever ran it; a service prints it where
+control of the domain has been proven, and otherwise prints the count it always
+printed. The count stays in front of the list either way, so that a list
+bounded at eight under a file naming forty cannot read as the whole file (R4,
+`TestTheContactsKeptAreBoundedAndTheCountIsNot`), and the value is stripped of
+what no address may carry before it reaches a terminal
+(`TestAContactIsCleanedBeforeItIsKept`).
+
 
 
 **And the address a certificate names for checking its own revocation.** It was
@@ -2117,6 +2138,54 @@ and requires a line for each of them, and
 `TestThePageReadsTheNameFieldsTheAPISends` does the same for the fields of one
 name.
 
+**An eighth source, on the zones a transfer is refused by: the proofs the zone
+publishes that a name does not exist.** A zone signed with DNSSEC has to prove
+absence, and the plain way of doing it names two real hosts in order to do it —
+at every name the zone holds, a record naming the next one (RFC 4034 §4).
+Follow them from the apex and the zone lists itself, with nothing guessed and
+nothing tried: every name comes out of a record the zone publishes and serves
+to any resolver that asks.
+
+This is not a new observation. The DNS check has reported a signed zone with no
+`NSEC3PARAM` as walkable since it was written — and offered no way to see what
+that exposes, which is a warning with nothing to do about it. It is the gap the
+transfer note had before `internal/zonenames`, in the same shape and closed the
+same way.
+
+The two are halves rather than a repeat. A transfer is refused by nearly every
+zone; this works on the zones that refuse one *and* are signed without NSEC3.
+Both are complete where they answer, so both are labelled, and a reader can see
+which of the two their own zone actually allows
+(`TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
+`TestTheReportSaysWhatTheProofsListed`).
+
+**Whose zone may be walked is the transfer's rule again.** The records being
+public does not make reading somebody else's estate out of them anything but
+enumeration: a service walks a domain it has been shown control of, an
+installation walks one only where it was told to, and the command line walks
+one an operator names with `-walk-proofs`
+(`TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
+`TestAnInstallationNotToldToWalkProofsDoesNot`).
+
+**Three ways there is nothing, and they are not the same nothing.** A zone
+using NSEC3, an unsigned zone and a walk nobody asked for all produce no names
+and send an operator to three different places — one is a zone doing the right
+thing, one is a zone with no DNSSEC at all, and one is a flag that was not
+given (R4, `TestAZoneWithNoPlainProofsSaysSo`). A chain that loops, leaves the
+domain, or stops answering hands over what was read and says it was cut
+(`TestASignedZoneListsItself`, `TestAChainThatDoesNotComeRoundIsCut`,
+`TestAChainThatLeavesTheDomainStops`).
+
+**And one bound rather than two, which is the result of an investigation.** A
+second bound on the number of questions was written first, against a zone
+answering every query with a name already seen. A sabotage removing it changed
+nothing any test could see — because every turn of the walk either adds a name
+nobody has seen, which counts against the bound on names, or meets one that has
+and returns. There is no path that asks a question without doing one of the
+two. It is gone rather than kept for safety: a bound that cannot fire reads as
+protection, provides none, and is believed by whoever changes the loop next
+(`TestAZoneThatNeverComesRoundIsStopped`).
+
 **And a seventh source, which reads nothing: the list the operator already
 has.** It is here because of a property of the DNS that the six above are all
 working around. DNS answers questions and does not list — there is no query for
@@ -2253,6 +2322,9 @@ loudly wrong.
 `internal/dnsclient.Client.Transfer`, `internal/dnsclient.transferNames`,
 `internal/dnsclient.readTransferMessage`, `internal/httpapi.Server.ReadZoneTransfers`, `internal/httpapi.zoneReader`,
 `cmd/porch-scan.saysZone`,
+`internal/nsecnames`, `internal/nsecnames.Reader.Under`, `internal/dnsclient.Client.LookupNSEC`,
+`internal/inventory.FromNSEC`, `internal/httpapi.Server.WalkAbsenceProofs`,
+`internal/httpapi.absenceWalker`, `cmd/porch-scan.saysNsec`,
 `internal/knownnames`, `internal/knownnames.From`, `internal/knownnames.ReadFile`,
 `internal/knownnames.MaxNames`, `internal/inventory.FromOperator`,
 `cmd/porch-scan.namesGiven`, `cmd/porch-scan.saysKnown`, `cmd/porch-scan.onlyGiven`,
@@ -2349,7 +2421,16 @@ loudly wrong.
 `TestACheckRefusesAListOfNames`,
 `TestTheReportSaysWhatTheListContributed`,
 `TestTheNamesGivenComeFromTheFlagAndTheFile`,
-`TestEveryFieldThePageOffersIsSent`
+`TestEveryFieldThePageOffersIsSent`,
+`TestASignedZoneListsItself`,
+`TestAZoneWithNoPlainProofsSaysSo`,
+`TestAChainThatDoesNotComeRoundIsCut`,
+`TestAChainThatLeavesTheDomainStops`,
+`TestAZoneThatNeverComesRoundIsStopped`,
+`TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
+`TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
+`TestAnInstallationNotToldToWalkProofsDoesNot`,
+`TestTheReportSaysWhatTheProofsListed`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

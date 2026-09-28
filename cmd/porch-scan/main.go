@@ -276,6 +276,22 @@ func run() int {
 				"\tspace on a line is ignored, so an exported list with notes beside\n"+
 				"\tit needs no editing first")
 
+		// The other way a zone lists itself, and the one that works where a
+		// transfer does not.
+		//
+		// A signed zone that has not moved to NSEC3 proves a name absent by
+		// naming the two it lies between, so following those proofs from the
+		// apex reads the zone out of records it serves to any resolver. The
+		// DNS check already reports a zone in that state; this is what it
+		// exposes. Off unless asked for, and for an estate that is yours: the
+		// records are public, and walking somebody else's with them is
+		// enumeration all the same.
+		walkProofs = flag.Bool("walk-proofs", false,
+			"follow the zone's own DNSSEC absence proofs to list the names in it.\n"+
+				"\tOne query per name, to the same resolver as everything else. It works\n"+
+				"\tonly on a signed zone that has not moved to NSEC3, which is the state\n"+
+				"\tthe DNS check reports as walkable. Use it on a zone that is yours")
+
 		readCertificates = flag.Bool("read-certificates", false,
 			"ask each name that answers for the certificate it presents, and keep\n"+
 				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
@@ -488,6 +504,7 @@ func run() int {
 			Register:         *register,
 			RegisterURL:      *registerURL,
 			ReadZone:         *readZone,
+			WalkZoneProofs:   *walkProofs,
 			ReadCertificates: *readCertificates,
 			JSON:             *asJSON,
 		})

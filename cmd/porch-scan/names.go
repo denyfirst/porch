@@ -18,6 +18,7 @@ import (
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/zonenames"
@@ -83,6 +84,15 @@ type namesOptions struct {
 	// it, because a zone belongs to whoever runs it. Reading one is for an
 	// estate that is the reader's.
 	ReadZone bool
+
+	// WalkZoneProofs follows the zone's own absence proofs to list it.
+	//
+	// Off unless the operator says so, and the flag is the saying, for the
+	// reason ReadZone is: a signed zone that has not moved to NSEC3 hands its
+	// names to anybody who follows them, and reading somebody else's that way
+	// is enumeration however public each record is. It is for an estate that
+	// is the reader's.
+	WalkZoneProofs bool
 
 	// ReadCertificates asks each live host for the certificate it presents.
 	// Off unless the operator says so: it is the one part of this mode that
@@ -161,6 +171,17 @@ func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 		if opt.ReadZone {
 			zone := &zonenames.Reader{Resolver: client, Timeout: timeout}
 			sources.Zone = zone.Under(ctx, domain)
+		}
+
+		// And the zone's own absence proofs, where the operator said the zone
+		// is theirs. Where a transfer is refused — which is nearly always —
+		// this is the other way a zone lists itself, and it works on exactly
+		// the zones a transfer does not: signed ones that have not moved to
+		// NSEC3. Neither replaces the other and the report says which
+		// answered.
+		if opt.WalkZoneProofs {
+			proofs := &nsecnames.Reader{Resolver: client, Timeout: timeout}
+			sources.NSEC = proofs.Under(ctx, domain)
 		}
 
 		// The estate from its other half: an address the operator says is
@@ -289,6 +310,7 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	// are the same six names, and only these two lines tell a reader which
 	// report they are holding.
 	fmt.Fprintf(w, "    The zone     %s\n", saysZone(inv))
+	fmt.Fprintf(w, "    Its proofs   %s\n", saysNsec(inv))
 	fmt.Fprintf(w, "    Certificates %s\n", saysLogs(inv))
 	fmt.Fprintf(w, "    Records      %s\n", saysRecords(inv))
 	fmt.Fprintf(w, "    Passive DNS  %s\n", saysPassive(inv))
@@ -346,6 +368,24 @@ func onlyGiven(inv inventory.Inventory) int {
 		}
 	}
 	return alone
+}
+
+// saysNsec is what the zone's own absence proofs listed, in one line.
+//
+// The reason it usually says nothing is the reason it exists: a zone using
+// NSEC3, or not signed at all, has no plain chain to follow — and that is a
+// fact about the zone's own configuration rather than a failure of this walk.
+func saysNsec(inv inventory.Inventory) string {
+	switch r := inv.NSEC; {
+	case !r.Asked:
+		return "not walked: -walk-proofs was not given"
+	case r.Reason != "":
+		return "Not established: " + r.Reason
+	case r.Named == 0:
+		return "named none of them"
+	default:
+		return fmt.Sprintf("named %d of them, out of the zone's own absence proofs", r.Named)
+	}
 }
 
 // saysZone is what the zone handed over, in one line.

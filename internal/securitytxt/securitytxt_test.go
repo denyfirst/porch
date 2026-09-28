@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func TestWhatIsReadIsCountedAndNotKept(t *testing.T) {
 		"Expires: 2027-01-31T23:59:00.000Z",
 		"Preferred-Languages: en, az",
 		"",
-	}, "\n"))
+	}, "\n"), false)
 
 	if !got.Served || got.Contacts != 2 {
 		t.Errorf("two contacts were published and this read %d (served=%v)", got.Contacts, got.Served)
@@ -58,12 +59,12 @@ func TestWhatIsReadIsCountedAndNotKept(t *testing.T) {
 // that cannot be acted on — reporting either as "no expiry" would flatten a
 // fault into an absence, and reporting either as expired would invent one.
 func TestTheThreeThingsAnExpiryCanBe(t *testing.T) {
-	none := parse("Contact: mailto:a@example.test\n")
+	none := parse("Contact: mailto:a@example.test\n", false)
 	if !none.Expires.IsZero() || none.ExpiresUnreadable {
 		t.Errorf("a file with no expiry read as %+v", none)
 	}
 
-	junk := parse("Contact: mailto:a@example.test\nExpires: next Tuesday\n")
+	junk := parse("Contact: mailto:a@example.test\nExpires: next Tuesday\n", false)
 	if !junk.ExpiresUnreadable || !junk.Expires.IsZero() {
 		t.Errorf("an unreadable expiry read as %+v", junk)
 	}
@@ -71,7 +72,7 @@ func TestTheThreeThingsAnExpiryCanBe(t *testing.T) {
 	// Two expiry fields are not a later expiry. RFC 9116 allows exactly one,
 	// and taking the second would be this project choosing on the operator's
 	// behalf — always in the direction that flatters them.
-	two := parse("Expires: 2020-01-01T00:00:00Z\nExpires: 2099-01-01T00:00:00Z\n")
+	two := parse("Expires: 2020-01-01T00:00:00Z\nExpires: 2099-01-01T00:00:00Z\n", false)
 	if got := two.Expires.Year(); got != 2020 {
 		t.Errorf("with two expiry fields the year read as %d, so the later one won", got)
 	}
@@ -96,7 +97,7 @@ func TestASignatureIsNotReadAsFields(t *testing.T) {
 		"iQIzBAEBCgAdFiEE:not/a:field+at+all",
 		"-----END PGP SIGNATURE-----",
 		"",
-	}, "\n"))
+	}, "\n"), false)
 
 	if !got.Signed {
 		t.Error("a cleartext-signed file was not read as signed")
@@ -225,4 +226,82 @@ func serve(t *testing.T, h http.HandlerFunc) Facts {
 	}}
 	f := &Fetcher{Client: client, UserAgent: "porch-test", Timeout: 5 * time.Second}
 	return f.Fetch(context.Background(), host)
+}
+
+// The addresses are kept only where the caller asked, and the count is there
+// either way.
+//
+// A contact is published for strangers to read and is still a person's
+// address, so a deployment scanning names nobody proved anything about does
+// not carry one into a report a stranger asked for. What the operator gets in
+// return for asking is the question a count cannot answer: two contacts and
+// two contacts are the same number whether they reach the security team or
+// somebody who left, and that is what somebody reading their own file is
+// checking.
+func TestTheAddressesAreKeptOnlyWhereTheCallerAsked(t *testing.T) {
+	file := strings.Join([]string{
+		"Contact: mailto:security@example.test",
+		"Contact: https://example.test/report",
+		"Expires: 2027-01-31T23:59:00Z",
+		"",
+	}, "\n")
+
+	withheld := parse(file, false)
+	if withheld.Contacts != 2 {
+		t.Errorf("the count is %d whether or not the addresses are kept, want 2", withheld.Contacts)
+	}
+	if len(withheld.ContactList) != 0 {
+		t.Errorf("an address was kept by a caller that did not ask: %v", withheld.ContactList)
+	}
+
+	kept := parse(file, true)
+	if kept.Contacts != 2 || len(kept.ContactList) != 2 {
+		t.Fatalf("the file read as %+v", kept)
+	}
+	for i, want := range []string{"mailto:security@example.test", "https://example.test/report"} {
+		if kept.ContactList[i] != want {
+			t.Errorf("contact %d is %q, want %q", i, kept.ContactList[i], want)
+		}
+	}
+}
+
+// A file naming more contacts than anybody reads is bounded, and the count
+// still says how many there were.
+//
+// The count is what makes the bound honest: a list of eight under a count of
+// forty says both what was kept and what was not, where a bounded list alone
+// would read as the whole file (R4).
+func TestTheContactsKeptAreBoundedAndTheCountIsNot(t *testing.T) {
+	var lines []string
+	for i := 0; i < maxContacts+5; i++ {
+		lines = append(lines, fmt.Sprintf("Contact: mailto:a%d@example.test", i))
+	}
+
+	got := parse(strings.Join(lines, "\n"), true)
+	if got.Contacts != maxContacts+5 {
+		t.Errorf("%d contacts were counted, want %d", got.Contacts, maxContacts+5)
+	}
+	if len(got.ContactList) != maxContacts {
+		t.Errorf("%d addresses were kept, want %d", len(got.ContactList), maxContacts)
+	}
+}
+
+// What a contact carries is stripped before it is kept.
+//
+// The value is written by whoever is being measured and reaches a terminal. An
+// escape sequence in it is a report that can move the cursor, and a very long
+// one is a line nobody can read.
+func TestAContactIsCleanedBeforeItIsKept(t *testing.T) {
+	got := parse("Contact: mailto:a@example.test\x1b[2Jcleared\n", true)
+	if len(got.ContactList) != 1 {
+		t.Fatalf("the file read as %+v", got)
+	}
+	if strings.ContainsRune(got.ContactList[0], 0x1b) {
+		t.Errorf("an escape survived into the report: %q", got.ContactList[0])
+	}
+
+	long := parse("Contact: mailto:"+strings.Repeat("a", 400)+"@example.test\n", true)
+	if len(long.ContactList[0]) > maxContact {
+		t.Errorf("a contact of %d characters was kept", len(long.ContactList[0]))
+	}
 }

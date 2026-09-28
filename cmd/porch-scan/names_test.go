@@ -17,6 +17,7 @@ import (
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/zonenames"
@@ -1023,5 +1024,56 @@ func TestTheNamesGivenComeFromTheFlagAndTheFile(t *testing.T) {
 		t.Error("a flag and a file that together exceed the bound were accepted")
 	} else if strings.Contains(err.Error(), "host0.example.test") {
 		t.Errorf("the refusal echoes what was sent: %v", err)
+	}
+}
+
+// The report says what the zone's own absence proofs listed, and says the
+// three ways there is nothing apart.
+//
+// A zone using NSEC3, an unsigned zone and a walk nobody asked for all produce
+// no names, and they send an operator to three different places: one is the
+// zone doing the right thing, one is a zone with no DNSSEC at all, and one is
+// a flag that was not given (R4).
+func TestTheReportSaysWhatTheProofsListed(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}}},
+		NSEC: nsecnames.Found{Asked: true, Names: []string{
+			"www.example.test", "vpn.example.test",
+		}},
+	}))
+	out := buf.String()
+
+	for _, want := range []string{
+		"Its proofs   named 2 of them, out of the zone's own absence proofs",
+		"vpn.example.test",
+		"NSEC, certificate",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// A zone with no plain chain: asked, answered, and the reason is about the
+	// zone rather than about the walk.
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test"}}},
+		NSEC: nsecnames.Found{Asked: true, Reason: "this zone publishes no plain absence proofs"},
+	}))
+	if !strings.Contains(buf.String(), "no plain absence proofs") {
+		t.Errorf("a zone with nothing to follow is not reported plainly:\n%s", buf.String())
+	}
+
+	// And a run nobody asked for says so rather than leaving the line out.
+	buf.Reset()
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.example.test"}},
+	}))
+	if !strings.Contains(buf.String(), "Its proofs   not walked: -walk-proofs was not given") {
+		t.Errorf("the report does not say the proofs went unwalked:\n%s", buf.String())
 	}
 }

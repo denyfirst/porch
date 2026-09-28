@@ -44,6 +44,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/zonenames"
@@ -86,6 +87,12 @@ const (
 	// complete when it works, and the one that usually refuses.
 	FromZone Source = "zone"
 
+	// FromNSEC: the zone's own absence proofs named it. A signed zone that
+	// has not moved to NSEC3 lists itself to anybody who follows them, which
+	// is why RFC 5155 exists — and why this is read only for an estate the
+	// asker owns.
+	FromNSEC Source = "NSEC"
+
 	// FromOperator: whoever asked already had the name and handed it over.
 	//
 	// The only source that measured nothing, and the only one that can carry
@@ -101,7 +108,7 @@ const (
 // Fixed rather than the order they were read, so that two runs of the same
 // inventory read the same and a difference between two reports is a difference
 // in the estate.
-var order = []Source{FromZone, FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR, FromOperator}
+var order = []Source{FromZone, FromNSEC, FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR, FromOperator}
 
 // Name is one host, everything that named it, and the window a log covered it
 // in.
@@ -196,6 +203,12 @@ type Inventory struct {
 	// measurement — and it is a reading like the rest because the question a
 	// reader has of it is the same: was it given, how much of the list is it
 	// answerable for, and what did it carry that belongs elsewhere.
+	// NSEC is what the zone's own absence proofs listed, where they were
+	// walked. Complete like a transfer when it works, and possible only on a
+	// signed zone that has not moved to NSEC3 — which is most of the reason
+	// the answer is usually that there was nothing to follow.
+	NSEC Reading `json:"nsec"`
+
 	Known Reading `json:"known"`
 
 	// ProducedAt is when this inventory was made, where whoever made it kept a
@@ -243,7 +256,7 @@ func (i Inventory) Established() bool {
 // TestEverySourceIsAReadingAndEveryReadingIsListed rather than going quiet in
 // three places.
 func (i Inventory) Readings() []Reading {
-	return []Reading{i.Known, i.Zone, i.Logs, i.Records, i.Passive, i.Presented, i.Reverse}
+	return []Reading{i.Known, i.Zone, i.NSEC, i.Logs, i.Records, i.Passive, i.Presented, i.Reverse}
 }
 
 // Failures are the reasons the sources that could not be read gave, in the
@@ -299,6 +312,12 @@ type Sources struct {
 	// to transfer and is not signed, is reachable only through whoever runs
 	// it. It is a claim rather than a measurement, so it is labelled as one on
 	// every name it carries.
+	// NSEC is what the zone's own absence proofs listed. A signed zone that
+	// has not moved to NSEC3 hands out the next name in it with every proof
+	// that something does not exist, so following them lists the zone — with
+	// nothing guessed and nothing tried.
+	NSEC nsecnames.Found
+
 	Known knownnames.Found
 }
 
@@ -312,11 +331,12 @@ func Merge(domain string, from Sources) Inventory {
 	v := from.Reverse
 	z := from.Zone
 	k := from.Known
+	n := from.NSEC
 
 	out := Inventory{
 		Domain:       fold(domain),
 		Certificates: e.Certificates,
-		Truncated:    e.Truncated || p.Truncated || z.Truncated,
+		Truncated:    e.Truncated || p.Truncated || z.Truncated || from.NSEC.Truncated,
 		Logs:         Reading{Asked: e.Asked, Foreign: e.Foreign, Reason: e.Reason},
 		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason},
 		Passive:      Reading{Asked: p.Asked, Foreign: p.Foreign, Reason: p.Reason},
@@ -324,6 +344,7 @@ func Merge(domain string, from Sources) Inventory {
 		Reverse:      Reading{Asked: v.Asked, Foreign: v.Foreign, Reason: v.Reason},
 		Zone:         Reading{Asked: z.Asked, Foreign: z.Foreign, Reason: z.Reason},
 		Known:        Reading{Asked: k.Asked, Foreign: k.Foreign, Reason: k.Reason},
+		NSEC:         Reading{Asked: n.Asked, Foreign: n.Foreign, Reason: n.Reason},
 	}
 	if out.Domain == "" {
 		out.Domain = fold(e.Domain)
@@ -415,12 +436,24 @@ func Merge(domain string, from Sources) Inventory {
 	// that a host is in this list because it was handed over rather than
 	// because anything found it, and — more usefully — that a host they handed
 	// over is one nothing else named.
-	for _, n := range k.Names {
-		host := at(n)
+	for _, name := range k.Names {
+		host := at(name)
 		if host == nil {
 			continue
 		}
 		host.Sources = append(host.Sources, FromOperator)
+	}
+
+	// The names the zone's own absence proofs listed. Complete like a
+	// transfer where it works, and for the same reason it is labelled rather
+	// than folded in: a host only this source names is one the public sources
+	// could not see, and a reader has to be able to find that row.
+	for _, name := range n.Names {
+		host := at(name)
+		if host == nil {
+			continue
+		}
+		host.Sources = append(host.Sources, FromNSEC)
 	}
 
 	// A wildcard a host presented is a wildcard: nothing resolves it, and
@@ -472,6 +505,9 @@ func Merge(domain string, from Sources) Inventory {
 		}
 		if names(host, FromOperator) > 0 {
 			out.Known.Named++
+		}
+		if names(host, FromNSEC) > 0 {
+			out.NSEC.Named++
 		}
 		out.Names = append(out.Names, *host)
 	}
