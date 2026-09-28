@@ -48,8 +48,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode"
 
+	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/truststore"
 )
@@ -306,16 +306,12 @@ func clean(s string) string {
 
 	var b strings.Builder
 	for _, r := range s {
-		switch {
-		case r < 0x20 || r == 0x7f:
+		if r < 0x20 || r == 0x7f {
 			continue
-		case (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r):
-			b.WriteRune('\uFFFD')
-		default:
-			b.WriteRune(r)
 		}
+		b.WriteRune(r)
 	}
-	return b.String()
+	return display.Mark(b.String())
 }
 
 // stamp reads the monitor's timestamps, which carry no zone and are UTC.

@@ -1607,9 +1607,11 @@ function buildMail(data) {
 
 // zone draws what the three lookups established.
 //
-// Every value here is written by this program from booleans and counts, never
-// pasted from the zone: a record's text is chosen by whoever is being measured,
-// and the sentences a reader acts on should not be.
+// Every row a reader acts on is written by this program from booleans and
+// counts, never pasted from the zone: a record's text is chosen by whoever is
+// being measured, and the sentences a reader acts on should not be. The one
+// exception is labelled as what it is — the Record rows, which carry the zone's
+// own text to the person the zone belongs to and to nobody else.
 function zone(facts) {
   const frag = document.createDocumentFragment();
   if (!facts) return frag;
@@ -1642,6 +1644,10 @@ function zone(facts) {
       facts.spfLookupLimit ? "insecure" : null,
     );
   }
+  // The record itself, where the report is read by the person the domain
+  // belongs to. The service decides that and leaves the field empty otherwise,
+  // and the terminal prints the same field under the same row (R16).
+  if (facts.spfRecord) row("Record", facts.spfRecord);
 
   if (facts.dmarcReason) {
     row("DMARC", "not read: " + facts.dmarcReason);
@@ -1654,6 +1660,7 @@ function zone(facts) {
   } else {
     row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%");
   }
+  if (facts.dmarcRecord) row("Record", facts.dmarcRecord);
 
   // Where the aggregate reports go, under the policy that asks for them.
   //
@@ -1665,6 +1672,7 @@ function zone(facts) {
   if (reportTo) row("Reports to", reportTo);
 
   row("TLS-RPT", facts.tlsReporting ? "yes" : "no");
+  if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord);
 
   // Signing keys, and which names were looked under.
   //

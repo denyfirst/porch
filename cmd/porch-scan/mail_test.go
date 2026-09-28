@@ -501,3 +501,46 @@ func TestTheSelectorsAnOperatorNamesAreCheckedBeforeAnythingIsAsked(t *testing.T
 		t.Error("the selectors an operator names are not checked before the mail check runs")
 	}
 }
+
+// A record the report carries is printed under the row written from it, and
+// the page draws the same three fields (R16).
+func TestTheRecordsArePrintedUnderTheirRows(t *testing.T) {
+	facts := policy.MailFacts{
+		SPFRecords: 1, SPFAll: "-", SPFLookups: 1,
+		SPFRecord:    "v=spf1 include:_spf.provider.example -all",
+		DMARCRecords: 1, DMARCPolicy: "reject", DMARCPercent: 100,
+		DMARCRecord:  "v=DMARC1; p=reject",
+		TLSReporting: true,
+		TLSRPTRecord: "v=TLSRPTv1; rua=mailto:tls@example.com",
+	}
+	var buf bytes.Buffer
+	printMail(&buf, mailResult{Domain: "example.com", Result: &mailscan.Result{Observed: &facts}})
+	text := buf.String()
+
+	for row, record := range map[string]string{
+		"SPF": facts.SPFRecord, "DMARC": facts.DMARCRecord, "TLS-RPT": facts.TLSRPTRecord,
+	} {
+		at, under := strings.Index(text, "    "+row+" "), strings.Index(text, "Record     "+record)
+		if at < 0 || under < 0 || under < at {
+			t.Errorf("the %s record is not printed under its row:\n%s", row, text)
+		}
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"facts.spfRecord", "facts.dmarcRecord", "facts.tlsRptRecord"} {
+		if !strings.Contains(string(page), `row("Record", `+field+`)`) {
+			t.Errorf("the page does not draw %s", field)
+		}
+	}
+
+	// And a report without them prints no Record row at all.
+	buf.Reset()
+	bare := policy.MailFacts{SPFRecords: 1, SPFAll: "-"}
+	printMail(&buf, mailResult{Domain: "example.com", Result: &mailscan.Result{Observed: &bare}})
+	if strings.Contains(buf.String(), "Record") {
+		t.Errorf("a report carrying no record prints a Record row:\n%s", buf.String())
+	}
+}

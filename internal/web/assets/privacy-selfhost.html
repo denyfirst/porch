@@ -161,8 +161,10 @@
         forward mail for a domain it does not serve: an empty sender, one
         recipient under <code>.invalid</code>, which cannot exist, and a reset
         before any message. No message is ever composed. The mailboxes DMARC
-        reports are sent to are shown to you.{{else}}No mail server is
-        contacted, and where DMARC reports go is named by domain only.{{end}}
+        reports are sent to are shown to you, and so are the SPF, DMARC and
+        TLS-RPT records as the zone publishes them.{{else}}No mail server is
+        contacted, where DMARC reports go is named by domain only, and the
+        records themselves are not printed.{{end}}
         A mail address may be typed; everything before the <code>@</code> is
         dropped in the browser and again by the service.</li>
       <li><strong>DNS</strong>: lookups through the resolver for the domain's

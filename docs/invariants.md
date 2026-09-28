@@ -2733,8 +2733,10 @@ address before the scanner saw it until the 2026-09-16 audit (A32) — and the
 page, which cuts it off before a request is built, so it never leaves the
 browser at all.
 
-**And every report says no message was sent.** No sender, recipient or message
-was ever named, and a DANE binding's correctness was not checked. A DKIM key is
+**And every report says no message was sent.** No message was ever composed —
+the relay question names an empty sender and a recipient that cannot exist, and
+resets before any message (N3) — and a DANE binding's correctness was not
+checked. A DKIM key is
 read only under a selector the scan was told to look under — selectors cannot
 be listed from DNS — and the report names every one it tried, so "these names
 hold nothing" is never rendered as "this domain publishes no key" (R4). The
@@ -2744,10 +2746,29 @@ asked; each sentence went rather than being reworded, because what a scan
 contacted differs by deployment and a standing limit is the same sentence on
 every report.
 
+**What a count stood for is named, and the records reach their owner.** The
+void-lookup finding said how many of a policy's lookups answered nothing and
+not which, void lookups under the limit and policies that could not be read
+were counted or not said at all, and the fix in every case starts with the
+name. They are named now. A DMARC `sp=` weaker than `p=` is said and not
+graded (R21). And where the report is read by the person the domain belongs
+to — the command line, or a service with proof or only its operator in front of
+it — the SPF, DMARC and TLS-RPT records are carried as the zone publishes them,
+under the rows written from them; a stranger's report still prints only what
+this program wrote, because the text is the zone's and two of them carry
+mailboxes. Every name and record is the zone's own bytes, so each goes through
+`internal/display` first (R10): an SPF include name reached the notes with
+nothing in between, and a TXT record is bytes.
+
 *Enforced in:* `internal/mailscan`, `internal/spf`, `internal/mtasts`,
 `internal/policy.GradeMail`, `internal/policy.MailStandingLimits`,
-`internal/httpapi.New`, `cmd/porch-scan.mailScanner`, `cmd/porch-scan.runMail`
-*Guarded by:* `TestAnExchangerThatIsAnAliasIsGraded`,
+`internal/httpapi.New`, `cmd/porch-scan.mailScanner`, `cmd/porch-scan.runMail`,
+`internal/display.Mark`, `cmd/porch-scan.printRecord`
+*Guarded by:* `TestTheRecordsReachTheirOwnerAndNobodyElse`,
+`TestARecordCannotActOnTheDisplay`, `TestTheSPFLookupsThatFailAreNamed`,
+`TestAWeakerSubdomainPolicyIsSaid`, `TestTheRecordsArePrintedUnderTheirRows`,
+`TestTheVoidLookupFindingNamesThePolicies`, `TestNothingCanActOnTheDisplay`,
+`TestAnExchangerThatIsAnAliasIsGraded`,
 `TestAnAliasedExchangerReachesBothFacesOfTheReport`,
 `TestTheAliasQuestionIsBoundedLikeTheExchangers`,
 `TestTheScanAsksOnlyAboutTheDomainItWasGiven`,
@@ -5211,10 +5232,19 @@ through; now C1 and the format characters become the replacement mark, never
 dropped, because dropping a zero-width space turns the disguised name into the
 name it imitates.
 
+So did every other package that reads a string somebody else chose — the
+addresses in a DMARC record and a `security.txt`, the hosts a page links to —
+and an SPF include name had no cleaning at all. One rule now, in
+`internal/display`, applied where each package keeps what it read.
+
 *Enforced in:* `internal/certinfo.sanitise`, applied by `trimmer.text`;
 `internal/certinfo.mixedScriptNote`, `internal/certinfo.confusableScripts`;
-`internal/certinfo.distinguishedName`, `internal/ctsearch.clean`
-*Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`,
+`internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
+`internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
+`internal/markup`, `internal/spf`
+*Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`, `TestNothingCanActOnTheDisplay`,
+`TestAContactCannotActOnTheDisplay`, `TestAReportAddressCannotActOnTheDisplay`,
+`TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
 `TestControlCharactersInCertificateFieldsAreNeutralised`,
 `TestC1ControlsAreNeutralisedToo`, `TestTrimmingCutsOnARuneBoundary`,
 `TestNothingCanRewriteHowTheReportReads`, `TestANameInTwoAlphabetsIsSaid`,

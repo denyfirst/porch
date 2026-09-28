@@ -44,6 +44,10 @@ func mailScanner(timeout time.Duration, selectors []dkim.Selector, heloName stri
 		// asked for; nobody is a stranger to their own terminal.
 		ShowReportAddresses: true,
 
+		// And the records as the zone publishes them, for the same reason:
+		// the report goes to whoever ran it.
+		ShowRecords: true,
+
 		STS: &mtasts.Fetcher{Timeout: timeout},
 
 		// And asks the exchangers, for the same reason: the operator's own
@@ -147,6 +151,7 @@ func printMail(w io.Writer, r mailResult) {
 			fmt.Fprintf(w, "    SPF        ends in %sall, %s%d of the ten lookups allowed\n",
 				allOrNone(f.SPFAll), lowerBound(f.SPFLookupsAtLeast), f.SPFLookups)
 		}
+		printRecord(w, f.SPFRecord)
 
 		fmt.Fprintf(w, "\n  Authentication policy\n")
 		switch {
@@ -161,6 +166,7 @@ func printMail(w io.Writer, r mailResult) {
 		default:
 			fmt.Fprintf(w, "    DMARC      p=%s at %d%%\n", f.DMARCPolicy, f.DMARCPercent)
 		}
+		printRecord(w, f.DMARCRecord)
 
 		// Where the aggregate reports go, on the line under the policy that
 		// asks for them. A count would have answered the wrong question: what
@@ -175,12 +181,23 @@ func printMail(w io.Writer, r mailResult) {
 			reporting = "yes"
 		}
 		fmt.Fprintf(w, "    TLS-RPT    %s\n", reporting)
+		printRecord(w, f.TLSRPTRecord)
 
 		printMailPath(w, f)
 	}
 
 	printFindings(w, r.Findings)
 	printNotes(w, r.Notes, mailMethodPage)
+}
+
+// printRecord prints a record as the zone publishes it, under the row this
+// program wrote from it, where the report carries one. The page draws the same
+// field under the same row (R16).
+func printRecord(w io.Writer, record string) {
+	if record == "" {
+		return
+	}
+	fmt.Fprintf(w, "    Record     %s\n", wrap(record, 60, "               "))
 }
 
 // allOrNone writes the qualifier a record ends with, or says it has none.

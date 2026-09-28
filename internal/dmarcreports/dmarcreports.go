@@ -36,6 +36,8 @@ import (
 	"context"
 	"sort"
 	"strings"
+
+	"github.com/denyfirst/porch/internal/display"
 )
 
 const (
@@ -337,5 +339,7 @@ func clean(s string) string {
 		}
 		b.WriteRune(r)
 	}
-	return b.String()
+	// And what C0 does not cover: C1, which terminals read as CSI, and the
+	// format characters that make a reader misread (R10).
+	return display.Mark(b.String())
 }

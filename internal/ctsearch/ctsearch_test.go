@@ -346,12 +346,12 @@ func TestAnEmptyNameIsNotSearchedFor(t *testing.T) {
 // imitates.
 func TestAMonitorsAnswerCannotActOnTheDisplay(t *testing.T) {
 	for in, want := range map[string]string{
-		"ok.example":         "ok.example",
-		"goo​gle.example":    "goo�gle.example",
-		"safe‮moc.example":   "safe�moc.example",
-		"csi\u009b2Jhere":    "csi�2Jhere",
-		"bell\u0007.example": "bell.example",
-		"CN=Issuer‍ Inc":     "CN=Issuer� Inc",
+		"ok.example":            "ok.example",
+		"goo\u200bgle.example":  "goo\ufffdgle.example",
+		"safe\u202emoc.example": "safe\ufffdmoc.example",
+		"csi\u009b2Jhere":       "csi\ufffd2Jhere",
+		"bell\u0007.example":    "bell.example",
+		"CN=Issuer\u200d Inc":   "CN=Issuer\ufffd Inc",
 	} {
 		if got := clean(in); got != want {
 			t.Errorf("clean(%q) = %q, want %q", in, got, want)

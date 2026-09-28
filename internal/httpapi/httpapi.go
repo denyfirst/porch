@@ -413,6 +413,10 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 			// has agreed to receive reports is a question about domains, so
 			// the finding is the same either way.
 			ShowReportAddresses: scanner.Verify != nil,
+
+			// And the records themselves, on the same condition: a record's
+			// text is the zone's, and two of them carry mailboxes.
+			ShowRecords: scanner.Verify != nil,
 		},
 		// The delegation is asked about directly only where control of the
 		// domain has been proven, which is the condition the mail check's two
@@ -1406,5 +1410,6 @@ func (s *Server) applyView() {
 	s.mail.ReadSTSPolicy = view
 	s.mail.ReadExchangers = view
 	s.mail.ShowReportAddresses = view
+	s.mail.ShowRecords = view
 	s.dns.AskServers = view
 }

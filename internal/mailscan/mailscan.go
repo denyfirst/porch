@@ -81,6 +81,7 @@ import (
 
 	danecheck "github.com/denyfirst/porch/internal/dane"
 	"github.com/denyfirst/porch/internal/demo"
+	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/dkim"
 	"github.com/denyfirst/porch/internal/dmarcreports"
 	"github.com/denyfirst/porch/internal/dnsclient"
@@ -122,6 +123,11 @@ const (
 	// zone the scanned party controls, so they are chosen by whoever is being
 	// measured.
 	maxTagLength = 256
+
+	// maxRecordShown bounds a whole record carried into a report for its
+	// owner. Long enough for any SPF record a receiver would still evaluate,
+	// short enough that a zone cannot make a report of one row.
+	maxRecordShown = 1024
 )
 
 // Resolver is the lookup this check needs, and the only one.
@@ -264,6 +270,15 @@ type Scanner struct {
 	// argument, and the same two callers, as ReadSTSPolicy and ReadExchangers.
 	ShowReportAddresses bool
 
+	// ShowRecords carries the SPF, DMARC and TLS-RPT records as the zone
+	// publishes them, beside the rows this program writes from them.
+	//
+	// The same callers and the same condition as ShowReportAddresses: a
+	// report read by the person the domain belongs to. A record's text is
+	// chosen by whoever is being measured, and two of these carry mailboxes,
+	// so a stranger's report prints only what this program wrote from them.
+	ShowRecords bool
+
 	// Now supplies the current time, so a duration is reproducible in tests.
 	Now func() time.Time
 }
@@ -369,7 +384,12 @@ func (s *Scanner) readSPF(ctx context.Context, r Resolver, domain string, facts 
 	facts.SPFVoidLimit = got.VoidLimit
 	facts.SPFUsesPTR = got.UsesPTR
 	facts.SPFIncludes = got.Includes
+	facts.SPFVoidNames = got.VoidNames
+	facts.SPFUnreadNames = got.UnreadNames
 	facts.SPFReason = got.Reason
+	if s.ShowRecords {
+		facts.SPFRecord = display.Mark(boundRecord(got.Raw))
+	}
 }
 
 // readDMARC reads the policy at _dmarc, if there is one.
@@ -403,6 +423,9 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 	// carried no pct= would be reading this program's default rather than the
 	// domain's policy.
 	facts.DMARCPercent = 100
+	if s.ShowRecords {
+		facts.DMARCRecord = display.Mark(boundRecord(records[0]))
+	}
 
 	var rua string
 	for _, tag := range strings.Split(records[0], ";") {
@@ -420,6 +443,8 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 			if n, err := strconv.Atoi(value); err == nil && n >= 0 && n <= 100 {
 				facts.DMARCPercent = n
 			}
+		case "sp":
+			facts.DMARCSubdomainPolicy = display.Mark(strings.ToLower(value))
 		case "rua":
 			rua = value
 		}
@@ -470,6 +495,9 @@ func (s *Scanner) readTLSReporting(ctx context.Context, r Resolver, domain strin
 	for _, v := range answer.Values {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(v)), "v=tlsrptv1") {
 			facts.TLSReporting = true
+			if s.ShowRecords {
+				facts.TLSRPTRecord = display.Mark(boundRecord(v))
+			}
 			return
 		}
 	}
@@ -543,6 +571,15 @@ func CheckDomain(domain string) error {
 // behaviour on the far side of it to catch, so nothing is missing. What is
 // worth guarding is the other end, that an oversized value is shortened rather
 // than emptied, and TestAnEnormousTagDoesNotTravel does.
+// boundRecord truncates a whole record before it is shown.
+func boundRecord(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > maxRecordShown {
+		return s[:maxRecordShown]
+	}
+	return s
+}
+
 func bound(s string) string {
 	if len(s) > maxTagLength {
 		return s[:maxTagLength]

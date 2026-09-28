@@ -250,6 +250,7 @@ in it is there because it has already gone wrong once.
 | `internal/nsecnames` | the names a signed zone lists through its own DNSSEC absence proofs; works where a transfer is refused, read only for an estate the asker owns (N12) |
 | `internal/knownnames` | the names the operator already has, taken as given and never invented; the only source that reads nothing (N12) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
+| `internal/display` | makes a string somebody else chose safe to put in front of a person (R10) |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
 | `internal/spf` | walks a sender policy and counts what evaluating it costs |
 | `internal/dkim` | reads signing keys under selectors somebody named |

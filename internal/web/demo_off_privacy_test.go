@@ -88,6 +88,7 @@ func TestTheOperatorsOwnCopySaysItShowsTheWholeReport(t *testing.T) {
 		"The final page is read", "The contacts it names and its expiry date are shown to you",
 		"asks each mail exchanger on port 25", "The mailboxes DMARC reports are sent to are shown to you",
 		"Each of the zone's own name servers is also asked directly",
+		"TLS-RPT records as the zone publishes them",
 	} {
 		if !strings.Contains(own, want) {
 			t.Errorf("the operator's own copy does not say %q", want)

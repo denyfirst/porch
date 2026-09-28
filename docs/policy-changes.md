@@ -88,6 +88,17 @@ operator or the domain has been proven, and withheld otherwise: a domain is not
 a person and a mailbox is. Nothing about the finding depends on it, because the
 finding is about domains.
 
+### What a report now names, and grades no differently
+
+Nothing below moves a verdict. The void-lookup finding names the policies that
+answered nothing, where it counted them; void lookups under the limit, and
+policies that could not be read, are said with their names where they were
+counted or not said at all; and a DMARC record whose `sp=` asks less of
+subdomains than `p=` asks of the domain is said, not graded, because nothing
+here can see whether a subdomain sends mail. Where the report is read by the
+person the domain belongs to, the SPF, DMARC and TLS-RPT records are carried
+as the zone publishes them.
+
 ### An exchanger whose name is an alias is not asked whether it relays
 
 `mail.open-relay` can no longer be raised against an exchanger whose name is a

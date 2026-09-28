@@ -26,6 +26,7 @@ func TestTheOperatorsOwnCopyShowsTheWholeReport(t *testing.T) {
 			"MTA-STS policy":   s.mail.ReadSTSPolicy,
 			"exchangers":       s.mail.ReadExchangers,
 			"DMARC mailboxes":  s.mail.ShowReportAddresses,
+			"the records":      s.mail.ShowRecords,
 			"the zone servers": s.dns.AskServers,
 		}
 	}
