@@ -773,6 +773,18 @@ h1 {
   max-width: 42rem;
 }
 
+/*
+  And a note that follows a table or a list rather than a title.
+
+  The pull upward is for tucking a note under its heading. Under a table it
+  pulled the sentence four pixels into the last row — "Their addresses are in
+  four networks" sat on the name servers it was about — so a note after rows
+  of anything is given room instead.
+*/
+:is(table, .rows, .pairs, ul, ol, dl) + :is(.section-note, .group-note) {
+  margin-top: 0.75rem;
+}
+
 /* ── Certificate ──────────────────────────────────────────────────────── */
 
 .pairs {

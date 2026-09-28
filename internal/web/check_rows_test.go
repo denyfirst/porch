@@ -38,6 +38,15 @@ func TestTheCheckRowsShareTheirColumns(t *testing.T) {
 	}
 
 	css := asset(t, "assets/style.css")
+
+	// A note under rows of anything is given room. The section note is pulled
+	// up to sit under its heading, and under the DNS report's table of name
+	// servers that pull put "Their addresses are in 4 networks" four pixels
+	// into the last row; measured at -4px before, 12px after.
+	if !strings.Contains(css, ":is(table, .rows, .pairs, ul, ol, dl) + :is(.section-note, .group-note) {\n  margin-top: 0.75rem;") {
+		t.Error("a note that follows a table is pulled up into it again")
+	}
+
 	for _, want := range []string{
 		".check-panel .check-rows {\n  display: grid;",
 		".check-panel .check-rows .check {\n  grid-column: 1 / -1;",
