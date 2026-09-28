@@ -31,7 +31,7 @@ func TestTheRootsPassedInAreTheOnesThatDecide(t *testing.T) {
 	mine := x509.NewCertPool()
 	mine.AddCert(root.cert)
 
-	report, err := Analyse(chain, "example.test", refNow, mine)
+	report, err := Analyse(chain, "example.test", refNow, mine, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestTheRootsPassedInAreTheOnesThatDecide(t *testing.T) {
 	// Both directions, because a function that ignored its argument and
 	// answered "trusted" to everything would satisfy the half above.
 	empty := x509.NewCertPool()
-	report, err = Analyse(chain, "example.test", refNow, empty)
+	report, err = Analyse(chain, "example.test", refNow, empty, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestAnUnreadableStoreIsNotReportedAsAnUntrustedServer(t *testing.T) {
 	// which would be a finding about somebody else's certificate produced by
 	// this machine's problem.
 	leaf := newLeaf(t, sharedRoot, leafOpts{})
-	report, err := Analyse([]*x509.Certificate{leaf, sharedRoot.cert}, "example.test", refNow, nil)
+	report, err := Analyse([]*x509.Certificate{leaf, sharedRoot.cert}, "example.test", refNow, nil, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}

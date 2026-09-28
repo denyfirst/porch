@@ -281,6 +281,16 @@ type Scanner struct {
 	// report dressed as a choice.
 	Revocation *crl.Fetcher
 
+	// ShowRevocationURLs puts the addresses a certificate names for checking
+	// its own revocation into the report, beside the counts of them.
+	//
+	// False by default, for the reason every other field of this shape is: the
+	// addresses are written by whoever issued the certificate, and on a hostile
+	// target that is the target. What a true here buys is the sentence a count
+	// cannot write — when revocation could not be established, which address
+	// failed — and it is set where the asker is the operator.
+	ShowRevocationURLs bool
+
 	// Logs searches the public certificate logs for other certificates issued
 	// for the name being scanned.
 	//
@@ -380,7 +390,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	out.Verdict = tlsReport.Verdict
 
 	if len(tlsReport.Certificates) > 0 {
-		certReport, err := certinfo.Analyse(tlsReport.Certificates, host, s.now(), s.Roots)
+		certReport, err := certinfo.Analyse(tlsReport.Certificates, host, s.now(), s.Roots, s.certOptions())
 		if err != nil {
 			return nil, fmt.Errorf("analysing the certificate for %s: %w", out.Target, err)
 		}
@@ -397,7 +407,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// only when the leaf is a different certificate, so in the ordinary
 		// case the loop does not run.
 		for _, alt := range tlsReport.AlternateChains {
-			altReport, err := certinfo.Analyse(alt.Certificates, host, s.now(), s.Roots)
+			altReport, err := certinfo.Analyse(alt.Certificates, host, s.now(), s.Roots, s.certOptions())
 			if err != nil {
 				// Not fatal. The chain this report describes was analysed
 				// successfully, and refusing the whole scan because a second
@@ -434,6 +444,12 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 			MustStaple:   certReport.Revocation.MustStaple,
 			HasResponder: certReport.Revocation.ResponderCount > 0,
 			HasCRL:       certReport.Revocation.CRLCount > 0,
+
+			// The addresses behind those two counts, where this deployment
+			// carries them. certinfo decides whether they are there at all;
+			// this only passes on what it produced.
+			ResponderURLs: certReport.Revocation.Responders,
+			CRLURLs:       certReport.Revocation.CRLs,
 		}
 
 		// Reading the response, which is the difference between "the server
@@ -1282,4 +1298,13 @@ func sameSerial(hexSerial string, leaf *x509.Certificate) bool {
 // below is the same one the scan takes.
 func (s *Scanner) revocationFetched() bool {
 	return !demo.Enabled
+}
+
+// certOptions is what this scanner lets a certificate report carry.
+//
+// A method rather than a value built at each call site, because there are two
+// of them — the chain the server presented and each chain it serves elsewhere
+// — and a decision made twice is a decision that can be made differently.
+func (s *Scanner) certOptions() certinfo.Options {
+	return certinfo.Options{ShowRevocationURLs: s.ShowRevocationURLs}
 }

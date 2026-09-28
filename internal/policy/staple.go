@@ -105,6 +105,20 @@ type StapleFacts struct {
 	// published way to be checked at all.
 	HasCRL bool
 
+	// ResponderURLs and CRLURLs are the addresses those two flags count,
+	// where the deployment was told to carry them.
+	//
+	// Empty means withheld or none, and the two flags above say which — they
+	// are the reason both stay here rather than being replaced by the lists
+	// (R4).
+	//
+	// What they are for is the sentence a count cannot write. A revocation
+	// list that could not be fetched is reported already; which address could
+	// not be fetched is the part an operator acts on, and until 2026-09-28 the
+	// report would not say it.
+	ResponderURLs []string
+	CRLURLs       []string
+
 	// The fields below carry what a revocation list established, where one was
 	// fetched. They are the second source for the same question, and they
 	// exist because the first one dried up: the CA/Browser Forum made OCSP

@@ -99,6 +99,13 @@ func tlsScanner(timeout time.Duration, allowPrivate bool, resolver string, searc
 		// runs on their machine, from their address, so whatever they do is
 		// theirs rather than laundered through somebody else's service.
 		AllowIPTargets: true,
+
+		// And the report names the addresses a certificate gives for checking
+		// its own revocation. The same argument again: those strings are the
+		// issuing authority's, and on the operator's own terminal the
+		// authority is the one that issued their certificate. When revocation
+		// cannot be established, which address failed is the part they act on.
+		ShowRevocationURLs: true,
 	}
 
 	if resolver != "" {

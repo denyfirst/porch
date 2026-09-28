@@ -103,3 +103,24 @@ func TestTheResponderIsAskedOnlyWhenAskedFor(t *testing.T) {
 		t.Error("-check-logs switched on the responder too; the two disclosures are separate choices")
 	}
 }
+
+// The command line names the addresses a certificate gives for checking its
+// own revocation.
+//
+// It runs on the operator's own machine, from their own address, and the
+// report goes to whoever ran it — the argument AllowAnyPort and AllowIPTargets
+// rest on here. The addresses are the issuing authority's, and on the
+// operator's own terminal the authority is the one that issued their
+// certificate: when revocation cannot be established, which address failed is
+// the part they act on and a count cannot say it.
+//
+// Asserted because a field that is set, documented and handed to nothing has
+// happened twice in this repository.
+func TestTheCommandLineNamesTheRevocationAddresses(t *testing.T) {
+	s := tlsScanner(5*time.Second, false, "", false, false)
+
+	if !s.ShowRevocationURLs {
+		t.Error("the command line withholds the revocation addresses from the operator running " +
+			"it, so a list that could not be fetched is reported without saying from where")
+	}
+}

@@ -191,11 +191,9 @@ type Revocation struct {
 	// ResponderCount is how many OCSP responders the leaf names in its
 	// Authority Information Access extension.
 	//
-	// A count rather than the URLs. The URLs are chosen by whoever issued the
-	// certificate being examined, which on a hostile target means they are
-	// chosen by the target, and this report does not repeat attacker-supplied
-	// strings back to a reader when a number answers the question. What a
-	// reader needs to know is whether a responder exists at all.
+	// A count, and — where the caller asked for them — the addresses beside
+	// it. The count is what says a responder exists at all, and it is there
+	// whether or not the addresses are.
 	ResponderCount int `json:"responderCount"`
 
 	// CRLCount is the same for CRL distribution points. Since the
@@ -203,6 +201,23 @@ type Revocation struct {
 	// with no responder and no distribution point is the interesting case,
 	// and it cannot be told from one with a list without counting both.
 	CRLCount int `json:"crlCount"`
+
+	// Responders and CRLs are the addresses those counts count, where the
+	// caller asked for them.
+	//
+	// Withheld by default, and the reason has not changed: they are chosen by
+	// whoever issued the certificate being examined, which on a hostile target
+	// means they are chosen by the target, and a report a stranger asked for
+	// does not repeat a string that party wrote back at its reader.
+	//
+	// What did change is the case that reason was never about. On the
+	// operator's own machine, or for a domain somebody has been shown to
+	// control, the address in the certificate is their own authority's — and
+	// when revocation cannot be established, *which* address failed is the
+	// whole of what they need and the count cannot say it. Empty here means
+	// withheld or none; the count beside it says which (R4).
+	Responders []string `json:"responders,omitempty"`
+	CRLs       []string `json:"crls,omitempty"`
 }
 
 // Certificate is one parsed certificate, rendered for display.
@@ -460,11 +475,29 @@ func mixedScriptNote(leaf *x509.Certificate) string {
 // most likely to run on. Two tests in this package had failed there since they
 // were written, which was the symptom nobody read as one.
 //
+// Options are the decisions a caller makes about what a report may carry.
+//
+// A struct rather than a parameter, because the list grows and a positional
+// call that gained a fifth argument is a call every reader has to count the
+// commas in — the same reason internal/inventory.Sources is one.
+type Options struct {
+	// ShowRevocationURLs puts the addresses a certificate names for checking
+	// its own revocation into the report, beside the counts of them.
+	//
+	// False by default, which is the safe thing for an unset field to mean:
+	// the addresses are written by whoever issued the certificate, and on a
+	// hostile target that is the target. A caller sets it where the asker is
+	// the operator — their own machine, or a domain they have been shown to
+	// control — because the question they have when revocation cannot be
+	// established is which address failed, and no count answers it.
+	ShowRevocationURLs bool
+}
+
 // A non-nil Roots takes the pure-Go path on every platform, so the store that
 // was checked is the store that decides. Nil is still accepted and still means
 // the system pool, but it is loaded here and passed explicitly rather than
 // left for Verify to interpret.
-func Analyse(chain []*x509.Certificate, hostname string, now time.Time, roots *x509.CertPool) (*Report, error) {
+func Analyse(chain []*x509.Certificate, hostname string, now time.Time, roots *x509.CertPool, opt Options) (*Report, error) {
 	if len(chain) == 0 {
 		return nil, ErrNoChain
 	}
@@ -674,6 +707,10 @@ func Analyse(chain []*x509.Certificate, hostname string, now time.Time, roots *x
 		MustStaple:     required,
 		ResponderCount: len(leaf.OCSPServer),
 		CRLCount:       len(leaf.CRLDistributionPoints),
+	}
+	if opt.ShowRevocationURLs {
+		report.Revocation.Responders = addresses(leaf.OCSPServer)
+		report.Revocation.CRLs = addresses(leaf.CRLDistributionPoints)
 	}
 	if malformed {
 		// Stated rather than assumed either way. Reading it as absent would
@@ -1262,3 +1299,39 @@ func (r *Report) standing(l policy.StandingLimit) { r.Notes = append(r.Notes, l.
 // cannot be read, which is the machine no test runs on, and a test that skips
 // itself everywhere is the same silence A7 is about arriving in a test file.
 var resolveRoots = truststore.Resolve
+
+// addresses bounds and cleans the URLs a certificate names.
+//
+// Written by whoever issued the certificate and printed into a terminal, so
+// the same treatment every other value from a measured party gets: a bound on
+// how many, a bound on each, and nothing that can move a cursor.
+func addresses(from []string) []string {
+	const (
+		maxAddresses = 4
+		maxAddress   = 255
+	)
+
+	var out []string
+	for _, raw := range from {
+		if len(out) >= maxAddresses {
+			break
+		}
+
+		raw = strings.TrimSpace(raw)
+		if len(raw) > maxAddress {
+			raw = raw[:maxAddress]
+		}
+
+		var b strings.Builder
+		for _, r := range raw {
+			if r < 0x20 || r == 0x7f {
+				continue
+			}
+			b.WriteRune(r)
+		}
+		if cleaned := b.String(); cleaned != "" {
+			out = append(out, cleaned)
+		}
+	}
+	return out
+}

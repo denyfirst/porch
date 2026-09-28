@@ -245,3 +245,47 @@ func TestThePostQuantumNoteExplainsWithoutGrading(t *testing.T) {
 		t.Errorf("a question that was never asked is filed as %q", unmeasured.Kind)
 	}
 }
+
+// Where revocation is published, and where it could not be checked, is named
+// rather than counted.
+//
+// The sentence has to read correctly both ways: without the address it is what
+// a reader always got, and with it they know which address to go and look at.
+// The second is the whole point — a revocation list that could not be fetched
+// was already reported, and until 2026-09-28 the report would not say from
+// where.
+func TestWhereRevocationIsCheckedIsNamedWhenItIsKnown(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		facts StapleFacts
+		want  string
+	}{
+		{"a responder, not named", StapleFacts{HasResponder: true},
+			"not stapled; the certificate names a responder a client would have to ask"},
+		{"a responder, named", StapleFacts{
+			HasResponder: true, ResponderURLs: []string{"http://ocsp.example.test"},
+		}, "not stapled; the certificate names a responder a client would have to ask " +
+			"at http://ocsp.example.test"},
+	} {
+		if got := RevocationLine(c.facts); got != c.want {
+			t.Errorf("%s read as %q, not %q", c.name, got, c.want)
+		}
+	}
+
+	// One address is named and the rest counted: a certificate naming four has
+	// one that matters and four in a line is a sentence nobody reads.
+	for _, c := range []struct {
+		urls []string
+		want string
+	}{
+		{nil, ""},
+		{[]string{"http://a.example"}, " at http://a.example"},
+		{[]string{"http://a.example", "http://b.example"}, " at http://a.example and one other"},
+		{[]string{"http://a.example", "http://b.example", "http://c.example"},
+			" at http://a.example and 2 others"},
+	} {
+		if got := at(c.urls); got != c.want {
+			t.Errorf("%v read as %q, not %q", c.urls, got, c.want)
+		}
+	}
+}
