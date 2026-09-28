@@ -431,6 +431,15 @@ the password opens are kept, the oldest dropped first. A file in the history it
 does not open — kept under an earlier password, or damaged — is never dropped
 by that bound; History says how many there are and how much space they take.
 
+A report opened from History is set beside the one kept before it for the same
+check against the same host: the findings, by rule, that are in one and not the
+other, and the two verdicts. The verdicts are compared only when both were
+graded under the same rule set, since a verdict from one means nothing under
+another; and no finding is compared when either report measured nothing,
+because a finding that was not looked for has not gone away. The earlier report
+is read when you open the later one, through the same sign-in, and nothing about
+the comparison is kept.
+
 **The domains you add are kept too**, in `porch-data/domains.sealed`, sealed the
 same way: the names and the date each was added. Whether each is proven is not
 kept. **Domains** asks DNS again every time it opens, so a record taken out of a

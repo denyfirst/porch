@@ -2827,6 +2827,18 @@ main > .band:last-child { border-bottom: 0; }
 .history-delete:hover { color: var(--insecure); border-color: var(--insecure); }
 #history-report { margin-top: 1.5rem; }
 
+/* What changed since the report kept before the one opened. */
+.history-changes {
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.history-changes h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.history-changes p { margin: 0 0 0.5rem; }
+.history-changes ul { margin: 0 0 0.6rem; padding-left: 1.2rem; }
+.history-changes-title { color: var(--ink-soft); }
+
 /* The sign-in page's footer sits at the foot of the window, centred under the
    card like everything else on the page. It floated in the middle, flush
    left, because the page had no rail to stretch it. */
