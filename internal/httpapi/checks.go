@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/denyfirst/porch/internal/dkim"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
@@ -63,6 +64,11 @@ type target struct {
 	// inventory takes them, and it bounds them and holds them to the domain
 	// before one of them is resolved.
 	names []string
+
+	// selectors are the names to look for DKIM signing keys under. Only the
+	// mail check takes them; every other check refuses one rather than
+	// dropping it.
+	selectors []string
 
 	// scope is the second dimension of the per-target budget.
 	//
@@ -282,7 +288,7 @@ func (s *Server) mailCheck() check {
 		name:  checkMail,
 		parse: parseMailTarget,
 		run: func(ctx context.Context, t target) (outcome, error) {
-			result, err := s.mail.Scan(ctx, t.host)
+			result, err := s.mailFor(t).Scan(ctx, t.host)
 			if err != nil {
 				return outcome{}, err
 			}
@@ -415,4 +421,33 @@ func parseDNSTarget(raw string) (target, *refusal) {
 		return target{}, refused
 	}
 	return target{host: domain, scope: scan.DefaultPort}, nil
+}
+
+// mailFor is the mail scanner this request runs with.
+//
+// A copy where the caller named their own DKIM selectors, and the shared one
+// otherwise. The copy is a value copy of configuration: every field in it is
+// read during a scan and written by nobody, so two requests running at once
+// share the resolver, the trust store and the fetchers and disagree about
+// nothing but the list of names to look under.
+//
+// It exists because a signing key is the one thing in this check that cannot
+// be discovered. DNS does not list what is beneath a name, so looking only
+// under the selectors providers document answers about this project's list
+// rather than about the domain — and the person asking has already shown the
+// domain is theirs.
+//
+// Their own first, because the bound cuts from the end: a caller who named
+// three selectors and got the documented sixteen instead would have been
+// answered about names they did not ask about.
+func (s *Server) mailFor(t target) *mailscan.Scanner {
+	if len(t.selectors) == 0 {
+		return s.mail
+	}
+
+	named := dkim.Named(strings.Join(t.selectors, ","))
+
+	with := *s.mail
+	with.DKIMSelectors = append(named, s.mail.DKIMSelectors...)
+	return &with
 }

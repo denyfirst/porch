@@ -589,6 +589,22 @@ type scanRequest struct {
 	// proved are that person's own, and nothing here is resolved or connected
 	// to until they have proved it (N9).
 	Names []string `json:"names,omitempty"`
+
+	// Selectors are the names to look for DKIM signing keys under.
+	//
+	// The one record in the mail check that cannot be discovered. DNS does not
+	// list what is beneath a name, so a signing key is found only where
+	// somebody says to look — and until 2026-09-28 a service looked only under
+	// the selectors mail providers document, which meant a domain with a
+	// selector of its own was told that the names this project happens to know
+	// hold nothing. That is a sentence about our list, reported as a fact about
+	// their estate.
+	//
+	// It was left out on the argument that "a list of selectors in a request
+	// body is a field somebody else fills in". Behind proof of control it is
+	// not: the person filling it in has shown the domain is theirs, which is
+	// the same answer the name inventory's own list arrived at.
+	Selectors []string `json:"selectors,omitempty"`
 }
 
 type scanResponse struct {
@@ -641,6 +657,22 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 	if len(t.names) > 0 {
 		s.refuse(w, http.StatusBadRequest, "bad_request",
 			"A check measures one host. The name inventory takes a list of them.")
+		return
+	}
+
+	// Selectors belong to the mail check and to nothing else. Refused rather
+	// than dropped, for the reason the two above are: a field accepted and
+	// ignored is a caller believing something happened.
+	if len(t.selectors) > 0 && c.name != checkMail {
+		s.refuse(w, http.StatusBadRequest, "bad_request",
+			"Only the mail check looks for DKIM keys, so only it takes selectors.")
+		return
+	}
+	if len(t.selectors) > dkim.MaxSelectors {
+		s.refuse(w, http.StatusBadRequest, "too_many_selectors",
+			"A scan looks under at most "+strconv.Itoa(dkim.MaxSelectors)+" selectors. A longer "+
+				"list is refused rather than cut short, because a report that quietly skipped "+
+				"the rest would answer about names nobody was told were left out.")
 		return
 	}
 
@@ -772,6 +804,7 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string
 	}
 	t.ranges = req.Ranges
 	t.names = req.Names
+	t.selectors = req.Selectors
 	host := t.host
 
 	// A short list of defence and intelligence names, plus anyone who asked
