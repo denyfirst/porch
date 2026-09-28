@@ -1107,11 +1107,31 @@ last of them (D05) — `co.uk` for `www.shop.co.uk`, a zone its owner does not
 run, and a record that would speak for every name beneath it. They pick the
 first now, and say what choosing a parent gives away.
 
+**What a report carries follows who reads it, not only the scope.** Reading the
+page, the addresses a `security.txt` names, the MTA-STS policy, what each
+exchanger answers on port 25, the mailboxes DMARC reports go to, and what the
+zone's own servers say were all switched on by the scope alone — a rule from
+when a copy without one answered strangers. The command line has always shown
+all of them to the person who ran it. A copy of `porchd` only its operator can
+call, on this machine's loopback or behind their password, is that person with
+a browser in front of the command line, and it showed them a stranger's report
+of their own estate. `operatorView` now decides it: a scope, or a copy nobody
+but the operator can call. A copy started with `-open` and no password still
+answers strangers and still shows only what a visitor sees. The two questions
+that name the domain to somebody else — the transparency logs and the
+certificate's responder — stay with the scope, because without one the domain
+may be somebody else's, and the command line asks both only behind a flag for
+that reason. Every page that describes this says the same, rendered from the
+same two facts.
+
 *Enforced in:* `internal/verify`, `internal/challenge`,
 `internal/scan.Scanner.Scan`, `internal/webscan.Scanner.Scan`,
 `internal/httpapi.New`, `internal/httpapi.Server.UseWebScanner`, `internal/httpapi.Server.handleVerify`,
+`internal/httpapi.Server.operatorView`, `internal/web.Installation.Whole`,
 `cmd/porchd.verificationScope`
-*Guarded by:* `TestAPublishedTokenCoversTheZone`,
+*Guarded by:* `TestTheOperatorsOwnCopyShowsTheWholeReport`,
+`TestTheOperatorsOwnCopySaysItShowsTheWholeReport`,
+`TestAPublishedTokenCoversTheZone`,
 `TestADomainThatProvedNothingIsRefused`,
 `TestATokenFromOneDomainDoesNotProveAnother`,
 `TestATokenFromAnotherDeploymentIsNotAccepted`,
@@ -3013,7 +3033,11 @@ So `web.Configure` takes an `Installation` rather than a list of booleans, and
 every third party this copy may ask is a field on it: the monitor, the passive
 register, reading the hosts' own certificates, and the responder. The page names
 each one that is on and says the old sentence only when none of them is
-(`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`). The wiring itself is pinned
+(`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`). The scope is one of them:
+it turns on the TLS check's search of the transparency logs, and until
+2026-09-28 a proven copy with no monitor configured told its readers that no
+transparency log was asked while it named every checked name to crt.sh. The test
+asserted that sentence; it now asserts the opposite, and the page names crt.sh. The wiring itself is pinned
 as text in `cmd/porchd`, because a flag connected to the scanner and not to the
 page produces exactly the page this fixed
 (`TestThePagesAreToldWhatThisInstallationAsks`).

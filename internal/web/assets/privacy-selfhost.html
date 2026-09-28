@@ -137,8 +137,9 @@
       <li><strong>Reach</strong>: one <code>GET /</code> over HTTPS and one over
         HTTP, following redirects a bounded number of times, and one
         <code>GET</code> of <code>/.well-known/security.txt</code> over HTTPS —
-        the file RFC 9116 defines for exactly this, of which a count of
-        contacts and one date are kept, never an address. One TLS handshake is
+        the file RFC 9116 defines for exactly this. {{if .Whole}}The contacts it
+        names and its expiry date are shown to you.{{else}}A count of the
+        contacts and one date are kept, never an address.{{end}} One TLS handshake is
         also opened to an address the name publishes for IPv6, carrying no
         request at all, to see whether the site answers where it says it can
         be reached; where no such address is published, nothing is dialled.
@@ -146,20 +147,34 @@
         <code>www.</code> added where there is none and removed where there is —
         which is not followed further, and of which only the host it points at
         is kept. No other name is looked up, and none is searched for.
-        {{if .ReadsPages}}The final page is read, once, to one megabyte, and
+        {{if .Whole}}The final page is read, once, to one megabyte, and
         only a short list of facts is kept from it.{{else}}No page body is
         read.{{end}}
         Query values in a redirect address are not kept in the report.</li>
       <li><strong>Mail</strong>: DNS lookups for the sender policy, DMARC, TLS
-        reporting, MTA-STS, the mail exchangers, their DANE records and signing
-        keys under documented selectors.
-        {{if .Verified}}For a proven domain it also fetches the MTA-STS policy
-        file, and asks each mail exchanger on port 25 whether it offers
-        STARTTLS: greeting, EHLO, STARTTLS, handshake, QUIT. No sender,
-        recipient or message is ever named.{{else}}No mail server is
-        contacted.{{end}}
+        reporting, MTA-STS, the mail exchangers, their DANE records, and signing
+        keys under documented selectors and any you name.
+        {{if .Whole}}It also fetches the MTA-STS policy file, and asks each mail
+        exchanger on port 25 whether it offers STARTTLS: greeting, EHLO,
+        STARTTLS, handshake, QUIT. An exchanger inside the domain, whose name is
+        not an alias for somebody else's, is also asked whether it would
+        forward mail for a domain it does not serve: an empty sender, one
+        recipient under <code>.invalid</code>, which cannot exist, and a reset
+        before any message. No message is ever composed. The mailboxes DMARC
+        reports are sent to are shown to you.{{else}}No mail server is
+        contacted, and where DMARC reports go is named by domain only.{{end}}
         A mail address may be typed; everything before the <code>@</code> is
         dropped in the browser and again by the service.</li>
+      <li><strong>DNS</strong>: lookups through the resolver for the domain's
+        addresses, its name servers, the record at the top of its zone, and the
+        two ends of its DNSSEC chain.
+        {{if .Whole}}Each of the zone's own name servers is also asked directly,
+        over TCP, whether it answers for the zone and whether it would hand the
+        whole zone to anybody — the transfer is stopped before a record of it is
+        read — and one server of the zone above is asked who it says serves
+        this one. A name server inside the domain is asked whether it answers
+        questions about names that are not its own.{{else}}No name server is
+        asked directly.{{end}}</li>
     </ul>
 
     <p>
@@ -178,7 +193,12 @@
         certificate was being looked at, because one list covers thousands.</li>
       {{if .Verified}}<li><strong>The host itself</strong> may be asked for
         <code>/.well-known/porch-challenge</code> when its domain publishes no
-        record, as the other way of proving a site is yours.</li>{{end}}
+        record, as the other way of proving a site is yours.</li>
+      <li><strong>crt.sh</strong>, a certificate transparency monitor, is asked
+        which certificates exist for each name a TLS check reads, so that a
+        certificate somebody else obtained for it can be found. It learns that
+        somebody is looking at that name. Only for a domain this installation
+        has been shown control of.</li>{{end}}
       {{if .Monitor}}<li><strong>A certificate transparency monitor</strong>
         (<code>{{.Monitor}}</code>) is asked which names under a domain appear
         in publicly logged certificates. It learns that somebody is looking at

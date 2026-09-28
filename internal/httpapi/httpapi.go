@@ -359,10 +359,11 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// ReadMarkup follows the proof rather than the deployment's name. A
 		// service that requires proof of control is reading a page belonging to
 		// whoever asked about it; one configured without a scope is scanning
-		// names nobody proved anything about, which N9 says a service must not
-		// do — and until somebody fixes that, it does not also read their
-		// pages. The demonstration is refused at the response in webprobe, so
-		// this line is not what protects it.
+		// names nobody proved anything about, and reads their pages only where
+		// the caller can be nobody but the operator — see operatorView, which
+		// ReachableByOthers and BehindPassword apply. The demonstration is
+		// refused at the response in webprobe, so this line is not what
+		// protects it.
 		web: &webscan.Scanner{
 			Verify:     scanner.Verify,
 			Roots:      scanner.Roots,
@@ -385,11 +386,8 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// it is the third time this exact field has been the omission.
 		//
 		// ReadSTSPolicy follows the proof, exactly as ReadMarkup does above and
-		// for the argument written out there. A service configured with a scope
-		// fetches the policy of a domain somebody has shown is theirs; one
-		// configured without a scope is scanning names nobody proved anything
-		// about, which N9 says a service must not do — and until that is fixed,
-		// it does not also fetch their files.
+		// for the argument written out there: a domain somebody has shown is
+		// theirs, or a copy only its operator can call (operatorView).
 		//
 		// The resolver is set below rather than here, and that is not tidiness.
 		// Documented selectors by default. A caller's own arrive in the request
@@ -1349,6 +1347,7 @@ func notKept(err error) string {
 // the only caller is the person who started the process.
 func (s *Server) ReachableByOthers(reachable bool) {
 	s.exposed = reachable
+	s.applyView()
 }
 
 // BehindPassword says a password stands in front of this service, so the
@@ -1359,6 +1358,7 @@ func (s *Server) ReachableByOthers(reachable bool) {
 // server nobody told treats its callers as strangers.
 func (s *Server) BehindPassword(guarded bool) {
 	s.guarded = guarded
+	s.applyView()
 }
 
 // OperatorOnly reports that whoever is calling is the person who runs this
@@ -1371,4 +1371,40 @@ func (s *Server) BehindPassword(guarded bool) {
 // operator and for nobody else (N12).
 func (s *Server) operatorOnly() bool {
 	return !s.exposed || s.guarded
+}
+
+// operatorView reports that a report here is read by the person the estate
+// belongs to, or by the person running the machine it is read from: a scope
+// proved the domain is theirs, or nobody but the operator can call this copy.
+//
+// It decides what a report carries rather than what may be scanned. The page
+// itself, the addresses a security.txt names, the MTA-STS policy, what each
+// exchanger answers on port 25, the mailboxes DMARC reports go to, and what
+// the zone's own servers say — the command line has always shown all of it to
+// the person who ran it, because the report goes to them. A copy of porchd
+// nobody else can reach, or one behind the operator's password, is that same
+// person with a browser in front of the command line, and it showed them less:
+// every one of these followed the scope alone, a rule written when a service
+// without one answered strangers. A copy started with -open and no password
+// still answers strangers, and still shows them only what any visitor sees.
+//
+// The transparency logs and a certificate's own responder are not here. Both
+// name the domain to somebody else, and without a scope the domain may be
+// somebody else's; the command line asks both only behind a flag for that
+// reason, and the service asks them only for a proven domain.
+func (s *Server) operatorView() bool {
+	return s.scanner.Verify != nil || s.operatorOnly()
+}
+
+// applyView hands operatorView to every check that reads it. Called by the
+// two setters that change the answer, which porchd calls before it serves,
+// like every other piece of configuration here.
+func (s *Server) applyView() {
+	view := s.operatorView()
+	s.web.ReadMarkup = view
+	s.web.ShowContacts = view
+	s.mail.ReadSTSPolicy = view
+	s.mail.ReadExchangers = view
+	s.mail.ShowReportAddresses = view
+	s.dns.AskServers = view
 }

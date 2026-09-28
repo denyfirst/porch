@@ -61,8 +61,10 @@
       {{if .Demo}}This deployment makes neither connection: both are made
       only by an installation that has been shown control of the domain, and
       by the command line.{{else}}This installation makes them for the
-      domains it has been shown control of; one started without proof of
-      control makes neither.{{end}}
+      domains it has been shown control of, and, where it requires no proof,
+      only where nobody but its operator can call it — on this machine's own
+      loopback, or behind their password. One that answers strangers without
+      proof makes neither.{{end}}
     </p>
 
     <h2 id="relay">The one question that names a recipient</h2>

@@ -734,10 +734,25 @@ type Installation struct {
 	AsksResponder     bool
 }
 
-// AsksNobodyElse reports that nothing above was configured, which is the
-// ordinary installation and the one the old sentence described.
+// AsksNobodyElse reports that no third party is asked anything a scan does
+// not already send to the host: no monitor, no register, no responder, and no
+// certificate read for the inventory.
+//
+// Verified is on the list because a scope turns on the transparency search in
+// the TLS check (N12): every name a proven installation checks is also named to
+// crt.sh. The page said nobody was asked on exactly those installations until
+// 2026-09-28, because this list was written about the inventory's flags and
+// the TLS check's search was wired to the scope, not to a flag.
 func (i Installation) AsksNobodyElse() bool {
-	return i.Monitor == "" && i.Register == "" && !i.ReadsCertificates && !i.AsksResponder
+	return !i.Verified && i.Monitor == "" && i.Register == "" && !i.ReadsCertificates && !i.AsksResponder
+}
+
+// Whole reports that a report here is read by the person the estate belongs
+// to: a scope proved it, or nobody but the operator can call this copy. It is
+// httpapi's operatorView, told to the page, and it decides what the page says
+// a scan reads and shows.
+func (i Installation) Whole() bool {
+	return i.Verified || i.OperatorOnly
 }
 
 func Configure(in Installation) {
@@ -987,9 +1002,13 @@ type privacyPage struct {
 	// person is the one running it.
 	WalksRanges bool
 	Verified    bool
-	ReadsPages  bool
 	Keeps       bool
 	Threshold   int
+
+	// Whole says a report here shows the operator everything a scan read:
+	// the page, the security.txt contacts, the MTA-STS policy, the exchangers
+	// and the zone's own servers. See Installation.Whole.
+	Whole bool
 
 	// Guarded says a password is in front of the installation, which is when
 	// it sets its one cookie.
@@ -1016,7 +1035,7 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 			AsksNobodyElse:    in.AsksNobodyElse(),
 			WalksRanges:       in.OperatorOnly,
 			Verified:          verified,
-			ReadsPages:        verified,
+			Whole:             in.Whole(),
 			Keeps:             keeps,
 			Threshold:         httpapi.TargetThreshold(),
 			Guarded:           signedIn,
