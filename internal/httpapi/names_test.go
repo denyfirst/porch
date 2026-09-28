@@ -16,6 +16,7 @@ import (
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/zonenames"
@@ -1059,4 +1060,89 @@ func TestAListIsNeverKeptForTheNextCaller(t *testing.T) {
 			t.Errorf("one caller's own list reached another caller: %+v", without.Names)
 		}
 	}
+}
+
+// The zone's absence proofs are walked only for a proven domain, and only
+// where the installation was told to follow them.
+//
+// The same two conditions as a zone transfer, for the same reason. The records
+// are served to any resolver, which does not make walking somebody else's
+// estate with them anything but enumeration — so the estate has to be the
+// asker's — and an installation that was not told to follow them does not, so
+// a report says the walk was never made rather than that the zone had nothing.
+func TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+
+	walker := &stubProofs{found: nsecnames.Found{
+		Asked: true, Names: []string{"www.proven.example", "vpn.proven.example"},
+	}}
+	s.WalkAbsenceProofs(walker)
+
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.180:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain was answered %q", got)
+	}
+	if was := walker.was(); was != "" {
+		t.Errorf("the proofs of %q were walked, and nobody proved it", was)
+	}
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.181:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+	if walker.was() != "proven.example" {
+		t.Errorf("the walk was made for %q", walker.was())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.NSEC.Established() || got.NSEC.Named != 2 {
+		t.Errorf("the walk's reading came back as %+v", got.NSEC)
+	}
+}
+
+// An installation not told to follow them does not.
+func TestAnInstallationNotToldToWalkProofsDoesNot(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.182:5000")
+	if w.Code != 200 {
+		t.Fatalf("the inventory answered %d: %s", w.Code, w.Body.String())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if got.NSEC.Asked {
+		t.Errorf("an installation that follows no proofs reports a walk: %+v", got.NSEC)
+	}
+}
+
+// stubProofs walks nothing and records what it was asked.
+type stubProofs struct {
+	asked atomic.Value
+	found nsecnames.Found
+}
+
+func (p *stubProofs) Under(_ context.Context, domain string) nsecnames.Found {
+	p.asked.Store(domain)
+	return p.found
+}
+
+func (p *stubProofs) was() string {
+	if v, ok := p.asked.Load().(string); ok {
+		return v
+	}
+	return ""
 }

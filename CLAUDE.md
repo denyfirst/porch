@@ -246,6 +246,7 @@ in it is there because it has already gone wrong once.
 | `internal/certnames` | the names the hosts themselves present, read off the certificate each one serves; off unless asked for (N12) |
 | `internal/passivedns` | what a register observed under a domain — the only source that sees behind a wildcard, off unless an operator names one (N12) |
 | `internal/zonenames` | the names a zone hands over when asked for itself; the only complete source, read only for an estate the asker owns (N12) |
+| `internal/nsecnames` | the names a signed zone lists through its own DNSSEC absence proofs; works where a transfer is refused, read only for an estate the asker owns (N12) |
 | `internal/knownnames` | the names the operator already has, taken as given and never invented; the only source that reads nothing (N12) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |

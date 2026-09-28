@@ -133,6 +133,7 @@ func parseReplyWith(raw []byte, id uint16, question []byte, qtype uint16, author
 	out.keys = found.keys
 	out.cname = found.cname
 	out.nsec3 = found.nsec3
+	out.nsec = found.nsec
 	out.signatures = found.signatures
 
 	if authority {
@@ -333,6 +334,16 @@ func parseAnswers(raw []byte, offset, count int, qtype uint16, wantName []byte) 
 				return answerSet{}, 0, err
 			}
 			out.nsec3 = append(out.nsec3, record)
+		case TypeNSEC:
+			// The next name, read from the start of the record's data. RFC
+			// 4034 §6.2 says it is not compressed, and it is read with the
+			// reader that handles both anyway: a server that compressed it
+			// would otherwise cost a caller the answer over a rule it broke.
+			next, err := parseName(raw, rdataAt)
+			if err != nil {
+				return answerSet{}, 0, err
+			}
+			out.nsec = append(out.nsec, NSEC{Next: next})
 		case TypeCNAME:
 			target, err := parseName(raw, rdataAt)
 			if err != nil {
@@ -386,6 +397,7 @@ type answerSet struct {
 	keys      []DNSKEY
 	cname     []string
 	nsec3     []NSEC3PARAM
+	nsec      []NSEC
 
 	// signatures are the RRSIG records covering the type that was asked for.
 	signatures []RRSIG

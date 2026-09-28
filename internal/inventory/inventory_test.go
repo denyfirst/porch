@@ -12,6 +12,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
+	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
 	"github.com/denyfirst/porch/internal/zonenames"
@@ -819,4 +820,62 @@ func sameSources(got, want []Source) bool {
 		}
 	}
 	return true
+}
+
+// A name the zone's own absence proofs listed is its own source.
+//
+// The other half of a transfer rather than a repeat of it: a transfer is
+// refused by nearly every zone, and this works on the zones that refuse one
+// and are signed without NSEC3. Both are complete where they answer, so both
+// are labelled — a reader has to be able to see which one produced a name, and
+// which of the two their zone actually allows.
+func TestAWalkOfTheAbsenceProofsIsItsOwnSource(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{
+			{Name: "www.example.test"},
+			{Name: "shop.example.test"},
+		}},
+		NSEC: nsecnames.Found{Asked: true, Names: []string{
+			"www.example.test", // one the logs had too
+			"vpn.example.test", // and one nothing public holds
+		}},
+	})
+
+	if got.Distinct != 3 {
+		t.Fatalf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+	if got.NSEC.Named != 2 {
+		t.Errorf("the walk is credited with %d names, want 2", got.NSEC.Named)
+	}
+	if got.Logs.Named != 2 {
+		t.Errorf("the logs are credited with %d names, want 2", got.Logs.Named)
+	}
+
+	by := map[string][]Source{}
+	for _, n := range got.Names {
+		by[n.Name] = n.Sources
+	}
+	if want := []Source{FromNSEC, FromCertificate}; !sameSources(by["www.example.test"], want) {
+		t.Errorf("a name both found is named by %v, want %v", by["www.example.test"], want)
+	}
+	if want := []Source{FromNSEC}; !sameSources(by["vpn.example.test"], want) {
+		t.Errorf("a name only the proofs listed is named by %v, want %v", by["vpn.example.test"], want)
+	}
+
+	// A walk nobody made is not a zone with nothing in it (R4).
+	none := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{{Name: "www.example.test"}}},
+	})
+	if none.NSEC.Asked || none.NSEC.Reason != "" {
+		t.Errorf("a walk nobody made is reported as %+v", none.NSEC)
+	}
+
+	// And a walk that was cut says the inventory is short, because a chain
+	// that never came round listed some of a zone and not all of it.
+	cut := Merge("example.test", Sources{
+		NSEC: nsecnames.Found{Asked: true, Truncated: true, Names: []string{"a.example.test"}},
+	})
+	if !cut.Truncated {
+		t.Error("a walk that was cut leaves the inventory reading as complete")
+	}
 }
