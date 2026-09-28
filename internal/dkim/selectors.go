@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	"strings"
 )
 
@@ -64,6 +65,46 @@ func ProviderOf(selector string) string {
 	}
 	return ""
 }
+
+// maxSelectorLength bounds one selector. The key lives at
+// <selector>._domainkey.<domain> and a whole name is at most 253 bytes, so a
+// selector longer than this leaves no room for a domain worth asking about.
+const maxSelectorLength = 128
+
+// CheckSelector refuses a selector that is not a DNS name.
+//
+// RFC 6376 §3.1: a selector is one or more labels separated by dots. Letters,
+// digits and hyphens are what it allows; an underscore is accepted as well,
+// because DNS carries one and some operators use it, and refusing a record
+// somebody really published would answer about this parser rather than about
+// their domain.
+//
+// It exists because a selector that arrives in a request is appended to a
+// domain and asked of a resolver. A comma in one was a second selector the
+// bound had not counted, and a space or a control character is a name no
+// zone holds. The message states the rule and never the selector (I3).
+func CheckSelector(name string) error {
+	name = fold(name)
+	if name == "" || len(name) > maxSelectorLength {
+		return errBadSelector
+	}
+	for _, label := range strings.Split(name, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return errBadSelector
+		}
+		for _, r := range label {
+			switch {
+			case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+			default:
+				return errBadSelector
+			}
+		}
+	}
+	return nil
+}
+
+var errBadSelector = errors.New("a selector is one or more DNS labels separated by dots: " +
+	"letters, digits, hyphens and underscores, each label at most 63 characters")
 
 // Named turns what an operator typed into selectors to look under.
 //

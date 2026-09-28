@@ -190,10 +190,11 @@ these files and runs tests in five other packages, so the one test holding the
 command line's half of "this build queries no log" was neither built nor run.
 A test that does not compile looks exactly like a test that passes.
 
-Nine `internal/httpapi` tests fail under that tag on every commit: they scan
-`example.test`, which a demonstration build refuses. CI runs only the
-demonstration's own test there, deliberately. Do not bend forty tests to a
-deployment restriction.
+Most `internal/httpapi` tests fail under that tag on every commit — sixty-seven
+on 2026-09-28, where this line said nine: they scan `example.test`, which a
+demonstration build refuses. Compare a change against the same run on `main`
+rather than against a number here. CI runs only the demonstration's own test
+there, deliberately. Do not bend sixty tests to a deployment restriction.
 
 **Two `cmd/porchd` tests fail under it as well, and always have.**
 `TestAPublicServiceWithoutAPasswordIsRefused` and
@@ -249,6 +250,7 @@ in it is there because it has already gone wrong once.
 | `internal/nsecnames` | the names a signed zone lists through its own DNSSEC absence proofs; works where a transfer is refused, read only for an estate the asker owns (N12) |
 | `internal/knownnames` | the names the operator already has, taken as given and never invented; the only source that reads nothing (N12) |
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
+| `internal/display` | makes a string somebody else chose safe to put in front of a person (R10) |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
 | `internal/spf` | walks a sender policy and counts what evaluating it costs |
 | `internal/dkim` | reads signing keys under selectors somebody named |

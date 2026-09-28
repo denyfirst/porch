@@ -76,6 +76,38 @@ func TestTheSelfHostedPrivacyPageFollowsTheConfiguration(t *testing.T) {
 	}
 }
 
+// The operator's own copy says it shows the operator the whole report.
+//
+// A copy only its operator can call — nobody else can reach it, or a password
+// stands in front — reads what the command line reads, with or without a
+// scope (httpapi's operatorView), and its page has to say so rather than
+// describe the stranger's report it no longer serves.
+func TestTheOperatorsOwnCopySaysItShowsTheWholeReport(t *testing.T) {
+	own := privacyOf(t, Installation{OperatorOnly: true})
+	for _, want := range []string{
+		"The final page is read", "The contacts it names and its expiry date are shown to you",
+		"asks each mail exchanger on port 25", "The mailboxes DMARC reports are sent to are shown to you",
+		"Each of the zone's own name servers is also asked directly",
+		"TLS-RPT records as the zone publishes them",
+	} {
+		if !strings.Contains(own, want) {
+			t.Errorf("the operator's own copy does not say %q", want)
+		}
+	}
+	for _, never := range []string{"No page body is read", "never an address", "No mail server is contacted", "crt.sh"} {
+		if strings.Contains(own, never) {
+			t.Errorf("the operator's own copy says %q", never)
+		}
+	}
+
+	stranger := privacyOf(t, Installation{})
+	for _, want := range []string{"No page body is read", "never an address", "No mail server is contacted", "No name server is asked directly"} {
+		if !strings.Contains(stranger, want) {
+			t.Errorf("a copy that answers strangers does not say %q", want)
+		}
+	}
+}
+
 // The retention the page states is the one the code holds.
 func TestTheSelfHostedPageStatesTheRealRetentionPeriod(t *testing.T) {
 	if got := httpapi.DefaultRetentionPeriod().Round(time.Minute); got != 3*time.Minute {
@@ -143,10 +175,24 @@ func privacyOf(t *testing.T, in Installation) string {
 func TestThePrivacyPageSaysWhichThirdPartiesAreAsked(t *testing.T) {
 	const none = "No certificate transparency log, no passive register and no revocation responder is asked"
 
-	// The ordinary installation, which is what that sentence was written for.
-	plain := privacyOf(t, Installation{Verified: true})
+	// The installation that asks nobody: no scope, nothing configured.
+	plain := privacyOf(t, Installation{})
 	if !strings.Contains(plain, none) {
 		t.Errorf("an installation that asks nobody does not say so:\n%s", plain)
+	}
+
+	// And a scope alone is not that installation. It turns on the TLS check's
+	// search of the transparency logs (N12), so every name a proven copy checks
+	// is named to crt.sh — and this test asserted the opposite sentence for a
+	// proven copy until 2026-09-28, because the list of third parties was
+	// written about the inventory's flags.
+	proven := privacyOf(t, Installation{Verified: true})
+	if strings.Contains(proven, none) {
+		t.Errorf("a proven installation says no transparency log is asked, and the TLS check "+
+			"asks crt.sh about every name it reads:\n%s", proven)
+	}
+	if !strings.Contains(proven, "crt.sh") {
+		t.Errorf("a proven installation does not say crt.sh is asked:\n%s", proven)
 	}
 
 	// And each thing an operator can turn on.

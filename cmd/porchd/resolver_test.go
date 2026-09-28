@@ -90,7 +90,9 @@ func TestEveryInstallationHasAResolver(t *testing.T) {
 func TestWhatAServiceAsksBeyondTheHandshake(t *testing.T) {
 	scope := testScope(t)
 
-	if s := serviceScanner(nil, nil, "", false, time.Second); s.Logs != nil || s.Responder != nil {
+	// The demonstration is the exception for the logs, and only for them: its
+	// hosts are compiled in, so the name it asks about is only ever ours.
+	if s := serviceScanner(nil, nil, "", false, time.Second); (s.Logs != nil && !demoBuild()) || s.Responder != nil {
 		t.Errorf("a service with no proof of control holds %+v / %+v", s.Logs, s.Responder)
 	}
 	if s := serviceScanner(nil, nil, "", true, time.Second); s.Responder != nil {

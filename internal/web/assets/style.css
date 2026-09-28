@@ -315,9 +315,15 @@ h1 {
   somebody pastes in looks like what comes back out. It resizes vertically and
   not horizontally: a list of host names has no long lines, and a box somebody
   can drag over the page beside it is a layout they have to put back.
+
+  And it stops where the fields above it stop. A row of inputs is held to the
+  measure, and a box for names that ran on to the page's edge was the one
+  field in the column with its own right margin.
 */
 .field-lines {
+  display: block;
   width: 100%;
+  max-width: var(--measure);
   font-family: var(--mono);
   font-size: 0.86rem;
   line-height: 1.6;
@@ -2826,6 +2832,18 @@ main > .band:last-child { border-bottom: 0; }
 .history-open:hover { color: var(--ink); border-color: var(--ink-faint); }
 .history-delete:hover { color: var(--insecure); border-color: var(--insecure); }
 #history-report { margin-top: 1.5rem; }
+
+/* What changed since the report kept before the one opened. */
+.history-changes {
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.history-changes h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.history-changes p { margin: 0 0 0.5rem; }
+.history-changes ul { margin: 0 0 0.6rem; padding-left: 1.2rem; }
+.history-changes-title { color: var(--ink-soft); }
 
 /* The sign-in page's footer sits at the foot of the window, centred under the
    card like everything else on the page. It floated in the middle, flush

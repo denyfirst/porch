@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -14,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/ctsearch"
+	"github.com/denyfirst/porch/internal/dkim"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/tlsprobe"
@@ -218,6 +222,74 @@ func TestEveryRefusalCodeCanBeProduced(t *testing.T) {
 				"sees that people are asking about domains they have not published a record "+
 				"for, which no scan count can show", got)
 		}
+	}
+
+	// ── the inventory's refusals ──
+	//
+	// All of these were answered and none was counted until 2026-09-28: the
+	// codes were not in refusalCodes, so refuse dropped them on the way to the
+	// counter, and this test could not see it because it drove only the codes
+	// the list already held.
+	{
+		scope, _ := scopeProving("proven.example")
+		var a, b atomic.Bool
+		s := verifyingService(scope, &a, &b)
+
+		// Proven, and no monitor configured.
+		note(postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.100:5000"), "not_offered")
+
+		s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
+		note(postTo(t, s, "/api/v1/names/scan", `{"target":"unproven.example"}`, "203.0.113.101:5000"), "proof_required")
+
+		// Reachable by others and no password: a range is not the caller's to name.
+		s.ReachableByOthers(true)
+		s.BehindPassword(false)
+		note(postTo(t, s, "/api/v1/names/scan",
+			`{"target":"proven.example","ranges":["203.0.113.0/28"]}`, "203.0.113.102:5000"), "not_your_range")
+
+		names := make([]string, knownnames.MaxNames+1)
+		for i := range names {
+			names[i] = fmt.Sprintf("host%d.proven.example", i)
+		}
+		long, err := json.Marshal(map[string]any{"target": "proven.example", "names": names})
+		if err != nil {
+			t.Fatalf("marshalling: %v", err)
+		}
+		note(postTo(t, s, "/api/v1/names/scan", string(long), "203.0.113.103:5000"), "list_too_long")
+
+		// The operator's own copy, so the range is read, and it is too wide.
+		s.ReachableByOthers(false)
+		s.reverse = &stubReverse{}
+		note(postTo(t, s, "/api/v1/names/scan",
+			`{"target":"proven.example","ranges":["203.0.0.0/16"]}`, "203.0.113.104:5000"), "invalid_range")
+	}
+
+	// ── the mail check's selectors ──
+	{
+		s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+		many := make([]string, dkim.MaxSelectors+1)
+		for i := range many {
+			many[i] = fmt.Sprintf("s%d", i)
+		}
+		body, err := json.Marshal(map[string]any{"target": "example.test", "selectors": many})
+		if err != nil {
+			t.Fatalf("marshalling: %v", err)
+		}
+		note(postTo(t, s, "/api/v1/mail/scan", string(body), "203.0.113.105:5000"), "too_many_selectors")
+		note(postTo(t, s, "/api/v1/mail/scan",
+			`{"target":"example.test","selectors":["a,b"]}`, "203.0.113.106:5000"), "invalid_selector")
+	}
+
+	// ── a name this machine was never told is its own ──
+	{
+		s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+		r := httptest.NewRequest(http.MethodPost, "http://rebound.example:8080/api/v1/scan",
+			strings.NewReader(`{"target":"example.test"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.RemoteAddr = "127.0.0.1:5000"
+		w := httptest.NewRecorder()
+		s.GuardHost(s).ServeHTTP(w, r)
+		note(w, "host_not_served")
 	}
 
 	// Named so that silence is not mistaken for an oversight, which is the

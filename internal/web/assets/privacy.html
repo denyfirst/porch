@@ -6,9 +6,9 @@
       Counts, and nothing that points back to anybody. Not the hostname you
       asked about, not your address, not the time. Verdicts are counted &mdash;
       how many scans came back strong &mdash; and nothing ties one to who asked
-      or what they asked about. If you found this page because a scan from here
-      reached your server, the section on
-      <a href="#scans">what a scan does</a> is the one you want.
+      or what they asked about. This deployment scans only the hosts this
+      project owns; if you found this page because a scan reached your server,
+      the section on <a href="#stopping">stopping a scan</a> says whose it was.
     </p>
 
     <p>
@@ -48,10 +48,11 @@
 
     <p>
       <strong>Each check keeps its own block</strong> of those figures, naming
-      the rules that graded them. There are two checks now &mdash; the TLS
-      handshake, and how a site is reached over HTTP &mdash; and they answer
-      different questions over different evidence, so one number adding them
-      together would describe nothing anybody could check.
+      the rules that graded them. There are four checks &mdash; the TLS
+      handshake, how a site is reached over HTTP, what a domain&rsquo;s DNS
+      says about its mail, and how the domain itself is served &mdash; and they
+      answer different questions over different evidence, so one number adding
+      them together would describe nothing anybody could check.
     </p>
 
     <p>
@@ -62,6 +63,15 @@
       asked about is in any of them. They exist because an operator who cannot
       see a change in the shape of what arrives is asking you to trust somebody
       who is not watching, and that would be its own kind of carelessness.
+    </p>
+
+    <p>
+      <strong>The last report of each check</strong>, for each of our own
+      hosts, is held in memory for an hour and handed to everybody who asks in
+      that time. It is a report about our servers, and it says when it was
+      made; it is never written to disk, and nothing in it says who asked. A
+      report handed over from it is not counted as a scan, because it was not
+      one.
     </p>
 
     <p>
@@ -221,18 +231,58 @@
     <h2 id="scans">What a scan does</h2>
 
     <p>
-      To find out how a server negotiates TLS, this opens connections and
-      completes handshakes — the same exchange every browser performs before
-      loading a page. A modern server takes fewer than twenty over a few
-      seconds; one that still accepts every obsolete protocol version and
-      cipher suite takes rather more, because each one has to be offered
-      before it can be reported. One per protocol version, one per suite the
-      server turns out to accept, two more to see whether it imposes its own
-      ordering, and one to ask whether it will negotiate a key exchange that
-      resists a future quantum computer — that last one only where the
-      question exists, which is a server speaking TLS 1.3. That last one adds
-      exactly one connection and is not asked of a server that could not
-      answer it. Each connection is closed as soon as its handshake finishes.
+      <strong>This deployment scans only the hosts this project owns.</strong>
+      The list is compiled into the build it runs, so there is nothing to type
+      and no setting that widens it: every connection below goes to one of our
+      servers, or to a party answering a question about them. A report here is
+      shown whole &mdash; everything a copy you run yourself shows you about
+      your own domain, this shows about ours.
+    </p>
+
+    <p>
+      <strong>Each check runs at most once an hour for each host.</strong> The
+      report is kept and handed to everybody who asks during that hour, and it
+      says when it was made, so an old one does not read as new. A visit
+      between those causes no request at all.
+    </p>
+
+    <ul class="plain">
+      <li><strong>Transport</strong>: TLS handshakes &mdash; one per protocol
+        version, one per suite the server turns out to accept, two more to see
+        whether it imposes its own ordering, and one to ask whether it will
+        negotiate a key exchange that resists a future quantum computer, where
+        TLS 1.3 is spoken. Each is closed as soon as its handshake finishes, and
+        no application data is sent over any of them.</li>
+      <li><strong>Reach</strong>: one <code>GET /</code> over HTTPS and one over
+        HTTP, following redirects only to hosts this project owns, and one
+        <code>GET</code> of <code>/.well-known/security.txt</code>. The final
+        page is read once, to one megabyte, and only a short list of facts is
+        kept from it.</li>
+      <li><strong>Mail</strong>: DNS lookups for our sender policy, DMARC, TLS
+        reporting, MTA-STS, exchangers, DANE and signing keys; the MTA-STS
+        policy file; and each of our mail exchangers asked on port 25 whether it
+        offers STARTTLS &mdash; greeting, EHLO, STARTTLS, handshake, QUIT. No
+        message is ever composed.</li>
+      <li><strong>DNS</strong>: lookups for our addresses, name servers, the
+        record at the top of our zone and its DNSSEC chain, and each of our name
+        servers asked directly whether it answers for the zone and whether it
+        would hand the whole zone to anybody &mdash; stopped before a record of
+        it is read.</li>
+    </ul>
+
+    <p>
+      No authentication is attempted, no path is guessed, and no exploit or
+      malformed packet is sent. What a report contains is what any client
+      receives on connecting, and what our own zone publishes.
+    </p>
+
+    <p>
+      No private or internal addresses. Every connection resolves the name,
+      checks the address it was given, and then
+      connects to that address rather than to the name &mdash; so a name that
+      answers differently a moment later cannot redirect a connection that was
+      already checked. A scan opens many connections, so
+      the resolver is asked many times rather than once.
     </p>
 
     <p>
@@ -245,69 +295,29 @@
       and a terminal would read an escape sequence in one as an instruction.
     </p>
 
-    <p>
-      Nothing happens beyond the handshake. Not a single byte of application
-      data is sent. No page is requested, no path is tried, no header is sent.
-    </p>
-
-    <ul class="plain">
-      <li>No authentication is attempted; there are no credentials here to try.</li>
-      <li>No vulnerability is tested for and no exploit is sent — only a standard client hello.</li>
-      <li>No administrative path is probed, because no request of any kind is made.</li>
-      <li>No malformed packets are constructed.</li>
-      <li>Only ports that speak TLS from the first byte: 443, 8443, 465, 636, 990, 993, 995 and 5061. This cannot be used as a port scanner.</li>
-      <li>No private or internal addresses. Every connection resolves the name, checks the address it was given, and then connects to that address rather than to the name — so a name that answers differently a moment later cannot redirect a connection that was already checked. A scan opens many connections, so the resolver is asked many times rather than once.</li>
-    </ul>
-
-    <p>
-      One thing does happen away from the handshake. The same resolver that
-      turns the hostname into an address is also asked which certificate
-      authorities that name allows to issue for it — between one and four
-      further questions, about a name it has already been asked about, because
-      the answer is inherited from parent domains and the search stops at the
-      first one that carries it. The scanned host is not involved and learns
-      nothing from them.
-    </p>
-
-    <p>
-      Everything a report contains is what any client receives on connecting.
-      None of it required asking for anything.
-    </p>
-
     <h3>What is asked of third parties, and about whom</h3>
 
     <p>
-      No certificate authority is asked anything. Enquiring whether a
-      certificate is still valid would tell that authority somebody is looking
-      at it, and a check here never does. A certificate is described from what
-      the server sent and from nothing else, and every report says so.
+      Every question below is about us. Nothing you type reaches any of them,
+      because there is nothing to type: the hosts this build may touch are
+      compiled into it.
     </p>
 
-    <p>
-      <strong>One question is asked of somebody else, and it is about us.</strong>
-      The name inventory asks a certificate transparency monitor which names
-      appear under <code>denyfirst.dev</code> &mdash; our own domain, and the
-      only one this deployment will list. What that monitor learns is that
-      somebody is looking at <em>us</em>, which is ours to disclose. Nothing you
-      type reaches it, because there is nothing to type: the field is fixed and
-      the hosts this build may touch are compiled into it.
-    </p>
-
-    <p>
-      The answer is produced at most once an hour and handed to everybody who
-      asks, so a visit causes no request at all, and the page says when the copy
-      was made rather than letting an old one read as new.
-    </p>
-
-    <p>
-      This page said <em>transparency logs are not queried</em> until
-      2026-09-27. That sentence was written when this deployment scanned
-      whatever it was given, and then it protected somebody: the domain named to
-      a monitor would have been yours. It protects nobody now, and what it cost
-      was the demonstration of the one thing this tool does that no single
-      source can. It is replaced rather than quietly dropped, which is what
-      these pages are for.
-    </p>
+    <ul class="plain">
+      <li><strong>The authority that issued our certificate</strong> is asked
+        for its revocation list. One list covers thousands of certificates, so
+        the request names none of them.
+        <strong>No certificate authority is asked about one certificate</strong>:
+        the question that names a serial is never asked by this deployment.</li>
+      <li><strong>A certificate transparency monitor</strong>, crt.sh, is asked
+        which certificates exist for our names &mdash; by the TLS check, to find
+        one somebody else obtained, and by the name inventory. What it learns is
+        that somebody is looking at <em>us</em>, which is ours to disclose.</li>
+      <li><strong>The company that runs our mail</strong> sees a greeting and a
+        request for encryption on port 25, from this server.</li>
+      <li><strong>The registry for <code>.dev</code></strong> is asked which
+        servers it says serve our zone, which is what every resolver asks it.</li>
+    </ul>
 
     <p>
       That does not mean revocation goes unexamined. What a server sends can
@@ -321,27 +331,15 @@
     </p>
 
     <p>
-      <strong>A copy you run yourself does one thing this deployment does
-      not.</strong> Most certificates issued now name no responder at all
-      &mdash; the CA/Browser Forum made that machinery optional and revocation
-      lists mandatory &mdash; so there is nothing for a server to staple and
-      nothing here to read, and revocation goes unestablished for most of the
-      web. A self-hosted copy downloads the list instead. Doing so tells the
-      authority that somebody fetched a list; it does not say which certificate
-      was being looked at, because one list covers thousands. That is a
-      different question from the one this section refuses, and it is a
-      question about a certificate the operator usually owns.
-    </p>
-
-    <p>
-      Neither is done here, and the calls that would do them are compiled out of the
-      build this deployment runs. A self-hosted copy can also ask a public
-      monitor which certificates exist for a name, which finds one somebody
-      obtained without the owner knowing &mdash; the earliest warning there is,
-      and a question that does name the domain, unlike a revocation list. The
-      sentences above are kept true by there being nothing to switch on rather
-      than by a setting left off, which is the same reason the list of hosts
-      this deployment will connect to is compiled in.
+      This page said <em>no certificate authority is asked anything</em>,
+      <em>no page is requested</em> and <em>transparency logs are not queried</em>
+      until September 2026. Those sentences were written when this deployment
+      scanned whatever it was given, and then they protected somebody: the page
+      read, the list fetched and the name given to a monitor would have been
+      yours. They protect nobody now that the hosts are ours, and what they cost
+      was a demonstration showing less of our own domain than any copy you run
+      shows you of yours. They are replaced rather than quietly dropped, which is
+      what this page is for.
     </p>
 
     <h3>Why more than one connection</h3>
@@ -354,37 +352,44 @@
       connection.
     </p>
 
-    <h3>Load on the server being checked</h3>
+    <h3>Load on the servers asked</h3>
 
     <p>
-      Each host has its own budget, independent of who asks. Once a host has
-      been checked several times in a short window &mdash; the exact number is
-      varied per host and is described under
-      <a href="#kept">what is kept</a> &mdash; further requests for it are
-      refused for a while, even from different people. That limit exists so
-      this cannot be aimed at one server in bulk, by accident or otherwise.
+      Each check runs at most once an hour for each host, whoever asks, and the
+      answer is shared. Beneath that, each host also has its own budget, as
+      every installation does, described under <a href="#kept">what is kept</a>.
+      The parties above see this server at most once an hour for each check,
+      which is less than any one visitor refreshing a page would cause.
     </p>
 
     <h2 id="stopping">Stopping a scan</h2>
 
     <p>
-      Write to <a href="mailto:abuse@denyfirst.dev">abuse@denyfirst.dev</a>
-      from an address at the domain, or from one listed in its WHOIS or
-      <code>security.txt</code>, and it will be excluded. No explanation
-      needed. A reply within two working days, and the exclusion applied
-      before the reply.
-    </p>
-
-    <p>
-      The same address reaches a person for anything else: an unexpected
-      pattern, a question about what was sent, or a request for exact timings
-      to match against your own records.
+      This deployment connects to nothing but the hosts this project owns and
+      the parties above, about them. If a connection from here reached a server
+      that is not ours, that is a fault, and we want to hear about it.
     </p>
 
     <p>
       Connections come from addresses that resolve to
       <code>scanner.denyfirst.dev</code> in reverse DNS. A scanner that hides
       is a scanner nobody can ask about.
+    </p>
+
+    <p>
+      A scan from any other address was made by a copy somebody else runs, and
+      is theirs to stop; contact whoever answers for the address it came from.
+      What this project can do about those copies is one thing: a domain can be
+      excluded from every future release. Write to
+      <a href="mailto:abuse@denyfirst.dev">abuse@denyfirst.dev</a> from an
+      address at the domain, or from one listed in its WHOIS or
+      <code>security.txt</code>, and it will be excluded. No explanation
+      needed. A reply within two working days.
+    </p>
+
+    <p>
+      The same address reaches a person for anything else: an unexpected
+      pattern, or a question about what was sent.
     </p>
 
     <h2 id="promises">What is not promised</h2>

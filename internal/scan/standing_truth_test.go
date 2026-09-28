@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/policy"
 )
 
@@ -48,19 +47,13 @@ func TestTheRevocationLimitDescribesThisBuild(t *testing.T) {
 			"makes it a decision rather than an omission")
 	}
 
-	if demo.Enabled {
-		// This build compiles the fetch out. See scan.go: the branch is behind
-		// a constant, so there is nothing to switch on.
-		if !strings.Contains(text, "compiled out") {
-			t.Error("the demonstration's limit does not say the fetch is compiled out rather " +
-				"than merely not configured, which is the difference a reader is being asked " +
-				"to trust")
-		}
-		return
+	// Every build fetches a revocation list when a certificate names one, the
+	// demonstration included since 2026-09-28. A limit claiming otherwise is a
+	// report contradicting itself, and one saying the demonstration compiles
+	// the fetch out would be the same sentence going stale the other way.
+	if strings.Contains(text, "compiled out") {
+		t.Error("the limit says a fetch is compiled out of some build, and every build fetches it")
 	}
-
-	// An ordinary build fetches a revocation list when a certificate names
-	// one. A limit claiming otherwise is a report contradicting itself.
 	if !strings.Contains(text, "revocation list") {
 		t.Error("this build fetches the authority's revocation list and the limit does not " +
 			"mention one, so a report says the list was fetched and also that nothing was asked")
@@ -104,14 +97,8 @@ func TestTheRevocationLimitDescribesThisBuild(t *testing.T) {
 func TestThisBuildReallyFetchesWhatTheLimitDescribes(t *testing.T) {
 	s := &Scanner{}
 
-	if demo.Enabled {
-		if s.revocationFetched() {
-			t.Error("the demonstration fetches a revocation list, and its limit says the call is " +
-				"compiled out")
-		}
-		return
-	}
-
+	// Every build, the demonstration included since 2026-09-28: the limit says
+	// a named list is fetched, and says it of every report.
 	if !s.revocationFetched() {
 		t.Error("this build fetches no revocation list, and the limit on every report says it " +
 			"does. A limit claiming less than the truth is one nobody can check.")

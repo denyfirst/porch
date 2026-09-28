@@ -305,3 +305,18 @@ func TestAContactIsCleanedBeforeItIsKept(t *testing.T) {
 		t.Errorf("a contact of %d characters was kept", len(long.ContactList[0]))
 	}
 }
+
+// A contact a security.txt names cannot act on the display that shows it: C1
+// and the format characters are marked, as internal/display does for every
+// string somebody else chose (R10).
+func TestAContactCannotActOnTheDisplay(t *testing.T) {
+	for in, want := range map[string]string{
+		"mailto:sec\u009b2J@example.com": "mailto:sec\ufffd2J@example.com",
+		"mailto:\u202emoc.elpmaxe@x":     "mailto:\ufffdmoc.elpmaxe@x",
+		"mailto:ok@example.com":          "mailto:ok@example.com",
+	} {
+		if got := clean(in); got != want {
+			t.Errorf("clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

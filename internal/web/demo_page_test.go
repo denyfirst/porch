@@ -162,3 +162,14 @@ func TestTheCatalogueAndTheMenuNameTheSameProducts(t *testing.T) {
 		t.Error("the products menu does not name Rootwell as being built")
 	}
 }
+
+// A kept report says how old it is on the page, as a kept inventory does. The
+// demonstration hands each check's report to everybody for an hour, and a copy
+// without its age would read as a measurement of now.
+func TestTheDemonstrationSaysHowOldAKeptReportIs(t *testing.T) {
+	src := script(t)
+	body := functionBody(t, src, "summary")
+	if !strings.Contains(body, "data.producedAt") || !strings.Contains(body, "producedAt(data.producedAt)") {
+		t.Error("the summary does not say when a kept report was made")
+	}
+}

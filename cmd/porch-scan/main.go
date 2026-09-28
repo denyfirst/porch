@@ -455,6 +455,10 @@ func run() int {
 	case checkWeb:
 		return runWeb(ctx, targets, *timeout, *allowPrivate, *asJSON, store)
 	case checkMail:
+		if err := checkSelectors(*dkimSelectors); err != nil {
+			fmt.Fprintln(os.Stderr, "-dkim-selector: "+err.Error())
+			return 2
+		}
 		return runMail(ctx, targets, *timeout, *resolver, *asJSON, store,
 			selectorsFrom(*dkimSelectors, *dkimCommon), *heloName)
 	case checkDNS:
@@ -588,8 +592,8 @@ func outcomes(results []result) []outcome {
 // what a binary says it is happens to be the one thing an operator holding it
 // has to be able to check.
 func versionLine() string {
-	return fmt.Sprintf("porch-scan %s\npolicy %s\npolicy %s\npolicy %s\n%s\n",
-		version, policy.TLSVersion, policy.WebVersion, policy.MailVersion, reach())
+	return fmt.Sprintf("porch-scan %s\npolicy %s\npolicy %s\npolicy %s\npolicy %s\n%s\n",
+		version, policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion, reach())
 }
 
 // reach says which hosts this binary will connect to.
@@ -866,6 +870,12 @@ func printCertificate(w io.Writer, r result) {
 		{"Logged", r.LoggedLine, "not searched: the public logs were not asked what else exists for this name"},
 	} {
 		fmt.Fprintf(w, "    %-13s%s\n", line.label, wrap(orNone(line.value, line.absent), 60, "                 "))
+	}
+
+	// And the certificates the Logged line counts, because a count asking the
+	// reader to check a list is no use without the list.
+	for _, c := range r.LoggedUnaccounted {
+		fmt.Fprintf(w, "                 · %s\n", wrap(c, 58, "                   "))
 	}
 }
 

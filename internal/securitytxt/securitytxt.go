@@ -24,6 +24,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/denyfirst/porch/internal/display"
 )
 
 // Path is the one address RFC 9116 defines, and there is no other. A file
@@ -284,5 +286,7 @@ func clean(s string) string {
 		}
 		b.WriteRune(r)
 	}
-	return b.String()
+	// And what C0 does not cover: C1, which terminals read as CSI, and the
+	// format characters that make a reader misread (R10).
+	return display.Mark(b.String())
 }

@@ -113,15 +113,15 @@ var (
 		Title: "No authority is asked about this certificate",
 		Text: "No certificate authority is asked whether this particular certificate is still " +
 			"valid. That question carries the certificate's serial number, so it would tell the " +
-			"authority which certificate somebody is looking at, and no build asks it. " +
-			"Revocation is not therefore unexamined: a status response the server stapled into " +
-			"the handshake is read, because reading bytes already in hand asks nobody anything, " +
-			"and where a certificate names a revocation list an installation somebody runs " +
-			"themselves fetches it — one list covers thousands of certificates, so the request " +
-			"names none of them. The demonstration fetches no list, and that call is compiled out " +
-			"of its build rather than switched off. Where neither a staple nor a list settled it, " +
-			"a chain reported as trusted reaches a root and is in date, and may still have been " +
-			"withdrawn.",
+			"authority which certificate somebody is looking at, and no scan asks it unless " +
+			"whoever runs it says so — -ask-responder, which a service accepts only for a domain " +
+			"it has been shown control of, and where it was asked the report says so in place of " +
+			"this. Revocation is not therefore unexamined: a status response the server stapled " +
+			"into the handshake is read, because reading bytes already in hand asks nobody " +
+			"anything, and where a certificate names a revocation list it is fetched — one list " +
+			"covers thousands of certificates, so the request names none of them. Where neither a " +
+			"staple nor a list settled it, a chain reported as trusted reaches a root and is in " +
+			"date, and may still have been withdrawn.",
 	}
 
 	// "Transparency receipts are counted and not verified ... this service

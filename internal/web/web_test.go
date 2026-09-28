@@ -82,9 +82,12 @@ func TestEveryPageCarriesTheSameShell(t *testing.T) {
 		// the wrong place. The figure was published to make a point to
 		// strangers — a number nobody can trace back to a person, shown rather
 		// than described — and a self-hosted installation has no strangers: it
-		// has an operator, who has the History page, where the scans are
-		// listed rather than counted. A running total under every page was a
-		// second, worse answer to a question already answered better.
+		// has an operator, who has the reports themselves, listed under
+		// History behind a password rather than counted. A running total under
+		// every page was a second, worse answer to a question already answered
+		// better. And behind a password its sentence — "the only trace any of
+		// them left" — was false, because the reports are kept there. The
+		// figures stay at /api/v1/stats for whoever wants them.
 		if strings.Contains(body, `id="tally"`) {
 			t.Errorf("%s draws a total of the scans run; History is where they are", path)
 		}
@@ -364,7 +367,6 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		"handshake",
 		"excluded",
 		"scanner.denyfirst.dev",
-		"no page is requested",
 
 		// Somebody reading it as a privacy policy.
 		"three minutes",
@@ -385,8 +387,16 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		// authority is contacted. The claim that did change is checked
 		// against the code in TestThePagesDoNotDenyACheckThatNowHappens
 		// rather than against a sentence.
-		"no certificate authority is asked anything",
-		"transparency logs are not queried",
+		//
+		// And on 2026-09-28 the property changed as well: the demonstration
+		// fetches its own certificate's revocation list, reads its own pages
+		// and names its own domain to a monitor, because its hosts are ours.
+		// The three sentences that said otherwise are quoted on the page as
+		// retired, which a phrase match cannot tell from a claim — so what is
+		// required is what holds now.
+		"no certificate authority is asked about one certificate",
+		"scans only the hosts this project owns",
+		"each check runs at most once an hour",
 		"without warranty",
 	}
 

@@ -19,7 +19,9 @@ func TestEveryDocumentIsOnTheDocsPage(t *testing.T) {
 		"docs/self-host.md", "docs/verify.md", "docs/scope.md", "docs/policy-changes.md",
 		"docs/policy.md",
 		"docs/invariants.md", "SECURITY.md", `href="https://github.com/denyfirst/porch"`,
-		`href="/pgp-key.txt"`, `href="/.well-known/security.txt"`,
+		// Absolute, on both builds: denyfirst.dev is the one place these are
+		// served, and an installation's own address would answer with a 404.
+		`href="` + SiteURL + PGPKeyPath + `"`, `href="` + SiteURL + SecurityTxtPath + `"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/docs does not lead to %s", want)

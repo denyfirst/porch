@@ -26,25 +26,22 @@ import (
 // The inventory endpoint: which names under a domain appear in publicly logged
 // certificates.
 //
-// # Why this one is behind proof and the checks are not always
+// # Why this one is refused where the checks are not
 //
-// A check measures how a host answers. Anybody may point this tool at a host
-// they do not own and learn how it is reached, because that is what any visitor
-// learns and the scanned party can see them doing it.
+// On an installation with a scope, this and every check ask for the same
+// proof, and there is nothing to add. The difference is on a copy without one.
+// A check there measures how one host answers, which the host can see
+// happening; this produces a list of somebody's names — the shape of an estate
+// rather than the state of one host — and nobody on the other end sees it
+// happen, because nothing is asked of them. A copy that answered it for
+// whoever could reach it would be an anonymous reconnaissance endpoint, and the
+// fact that the data is public does not change what it would be doing:
+// assembling it, on request, for people who will not say who they are.
 //
-// This is different in both halves. What it produces is a list of somebody's
-// names — the shape of an estate rather than the state of one host — and the
-// scanned party cannot see it happen, because nothing is asked of them. A
-// service that answered it for anybody would be an anonymous reconnaissance
-// endpoint with this project's name on it, and the fact that the data is public
-// does not change what the service would be doing: assembling it, on request,
-// for people who will not say who they are.
-//
-// So it requires proof of control, always, on any deployment that has a scope
-// at all — and where there is no scope it is refused rather than opened, which
-// is the opposite of how the checks behave. An installation with no
-// verification configured is one where nobody has been shown to own anything,
-// and "nobody has proven anything" must not mean "everybody may ask".
+// So where there is no scope it is answered only by a copy nobody else can
+// reach, and refused everywhere else — the opposite of how the checks behave
+// on a copy started with -open. "Nobody has proven anything" must not mean
+// "everybody may ask".
 //
 // # And on the demonstration, only this project's own estate
 //
@@ -383,6 +380,15 @@ func parseNamesTarget(raw string) (target, *refusal) {
 			code:    "invalid_target",
 			message: "An inventory is of a domain rather than of a port. Give a name such as example.com.",
 		}
+	}
+
+	// An address is not a domain, and every other endpoint here says so in the
+	// same words. This one did not: an address went on to the proof walk, which
+	// asked a resolver about _porch-challenge under the address's last octets,
+	// and — on a copy nobody else can reach — to the monitor, named as though
+	// it were a domain. Refused here, where the other parsers refuse it.
+	if refused := refuseAnAddress(host); refused != nil {
+		return target{}, refused
 	}
 	return target{host: strings.ToLower(host), scope: scan.DefaultPort}, nil
 }

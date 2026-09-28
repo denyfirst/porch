@@ -41,6 +41,8 @@ import (
 	"io"
 	"slices"
 	"strings"
+
+	"github.com/denyfirst/porch/internal/display"
 )
 
 const (
@@ -496,12 +498,12 @@ func authority(rest string, plaintext bool) origin {
 	// A host is chosen by whoever wrote the page, so it is stripped before it
 	// travels (I5). A name carrying a newline would otherwise forge a line in
 	// a terminal report.
-	o.host = strings.Map(func(r rune) rune {
+	o.host = display.Mark(strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
 			return -1
 		}
 		return r
-	}, rest)
+	}, rest))
 	return o
 }
 

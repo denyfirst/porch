@@ -42,7 +42,12 @@ neighbour was in it. Each family needs a prefix of its own, and `2001::/23`
 covers several at once because IANA reserved that block for exactly this kind
 of assignment.
 
-That last family is not routed by a stock Linux stack, so nothing broke while
+`fec0::/10`, site-local unicast, joined the list on 2026-09-28. RFC 3879
+deprecated it and nothing public was ever assigned there, but networks set up
+before 2004 still route it inside, and `IsPrivate` knows only `fc00::/7`, its
+replacement.
+
+That RFC 2765 family is not routed by a stock Linux stack, so nothing broke while
 it was missing. It is listed because a deny list is worth exactly its
 completeness, and "not reachable on the kernel we happen to run" is a property
 of the kernel rather than of this code.
@@ -125,6 +130,14 @@ reads as a spam probe, and the address it came from is what gets listed for it.
 There is no flag that widens this, because the question a flag would answer —
 *may I probe somebody else's mail server?* — is not one this project asks.
 
+**Inside the domain is a reading of the name, and a name is not a server.** An
+exchanger whose name is an alias — `mail.example.com` pointed by a CNAME at a
+provider — is inside the domain and is the provider's machine, which is the
+case `docs/scope.md` says a verified zone does not cover. It is asked what any
+sender asks and not the relay question, and its relay line says why
+(`porch-mail-v3`). An address record pointing at a provider cannot be told
+apart from here, and nothing claims otherwise.
+
 A server that refused, one that refused the empty sender, and one that was
 never asked are each reported as themselves. Only a server that accepted the
 recipient is graded (R4), and the report never repeats what the server wrote:
@@ -139,9 +152,9 @@ somebody walks around by adding an entry point.
 
 This is the invariant a description of the service has to be measured against.
 The letter written to the hosting provider on 2026-09-01 said *port 443 and no
-other*, which was never what the code did — see
-`claude/denyfirst-accuracy-audit-2026-09-02.md`. A statement about this
-project is worth what the code says, and the code is here.
+other*, which was never what the code did, as the accuracy audit of 2026-09-02
+found. A statement about this project is worth what the code says, and the code
+is here.
 
 *Enforced in:* `internal/scan`, in `Scanner.Scan`, unless `AllowAnyPort`;
 `internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`
@@ -156,6 +169,7 @@ project is worth what the code says, and the code is here.
 `TestAnExchangerThatAcceptsTheRecipientIsReported`,
 `TestWhatTheRelayQuestionCouldNotEstablishIsSaidAsThat`,
 `TestTheRelayQuestionGoesOnlyToTheDomainsOwnExchangers`,
+`TestAnExchangerBehindAnAliasIsNotAskedAboutRelay`,
 `TestAnOpenRelayIsGradedAndSilenceIsNot`,
 `TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne`,
 `TestTheRelayAnswerReachesBothFacesOfTheReport`
@@ -689,17 +703,15 @@ about what may be read. So:
   another origin. Before the 2026-09-16 audit (A17) `http&#58;//host/` was a
   relative address, and a read that failed part way was reported as a page that
   ended there; `Incomplete` now says only its start was seen.
-- **Off unless asked, and refused outright in a demonstration build.**
-  `webprobe.Prober.ReadMarkup` is false in the zero value, so every caller
-  that has not been changed keeps the old behaviour. `demo.Enabled` is a
-  constant and is tested first, so the demonstration's branch is compiled out
-  and its promise is true by construction rather than by a field being left
-  unset. (The package is still linked; what is eliminated is the call.)
+- **Off unless asked.** `webprobe.Prober.ReadMarkup` is false in the zero
+  value, so every caller that has not been changed keeps the old behaviour.
+  The demonstration build refused it outright until 2026-09-28; it reads its
+  own pages now, because its own are the only ones it reaches (N6).
 
 **Which deployment reached a log reader is now part of the promise.** The user
 agent names `https://denyfirst.dev/web/method` from every installation, so that
-page describes both: the demonstration reads no body, and an installation
-somebody runs themselves may have read the page. A flat sentence there would
+page describes both: the demonstration reads only its own pages, and an
+installation somebody runs themselves may have read the page. A flat sentence there would
 have been true of one and false of the one in the reader's log, which is worse
 than no page — it is a scanning notice that misdescribes the scan.
 
@@ -771,8 +783,21 @@ reader: somebody who arrives from a log line did not choose to be here and
 wants one thing, which is what reached their server and the fact that there is
 nothing else to look for.
 
+**The demonstration reads its own page.** It read no body at all until
+2026-09-28, under a promise written when a visitor chose the host and the page
+read would have been somebody else's. Its hosts are compiled in now (N6), so a
+page it reads is ours, and the promise protected nobody while it kept the
+demonstration from showing the one thing a header check cannot see. The method
+page says so, and says the other half too: a request from the demonstration in
+somebody's log would mean their server is one of ours. The bound on what is
+carried is measured as what the client read, not what a handler handed to the
+kernel — on loopback the kernel buffers megabytes nobody reads, and the old
+measure failed one run in three under load on 2026-09-28, about bytes that never
+reached the prober.
+
 *Enforced in:* `internal/webprobe`, `internal/markup`,
-`internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`
+`internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
+`internal/httpapi.Server.operatorView`
 *Guarded by:* `TestOnlyTheRootIsRequestedUnlessTheServerSaysOtherwise`,
 `TestARedirectChainIsRecordedInOrder`,
 `TestTheRedirectLimitStopsTheChainAndSaysSo`,
@@ -793,8 +818,7 @@ nothing else to look for.
 `TestARedirectsBodyIsNotRead`,
 `TestAThreeHundredWithNowhereToGoIsAPage`,
 `TestALongPageIsBoundedAndSaysSo`,
-`TestTheDemonstrationReadsNoBodyEvenWhenAsked`,
-`TestTheDemonstrationIgnoresTheFieldOnAnOrdinaryPage`,
+`TestTheDemonstrationShowsItsOwnEstateWhole`,
 `TestTheScannerDecidesWhetherThePageIsRead`,
 `TestNoMarkupReachesTheResult`,
 `TestNothingButTheHostSurvives`,
@@ -1093,11 +1117,31 @@ last of them (D05) — `co.uk` for `www.shop.co.uk`, a zone its owner does not
 run, and a record that would speak for every name beneath it. They pick the
 first now, and say what choosing a parent gives away.
 
+**What a report carries follows who reads it, not only the scope.** Reading the
+page, the addresses a `security.txt` names, the MTA-STS policy, what each
+exchanger answers on port 25, the mailboxes DMARC reports go to, and what the
+zone's own servers say were all switched on by the scope alone — a rule from
+when a copy without one answered strangers. The command line has always shown
+all of them to the person who ran it. A copy of `porchd` only its operator can
+call, on this machine's loopback or behind their password, is that person with
+a browser in front of the command line, and it showed them a stranger's report
+of their own estate. `operatorView` now decides it: a scope, or a copy nobody
+but the operator can call. A copy started with `-open` and no password still
+answers strangers and still shows only what a visitor sees. The two questions
+that name the domain to somebody else — the transparency logs and the
+certificate's responder — stay with the scope, because without one the domain
+may be somebody else's, and the command line asks both only behind a flag for
+that reason. Every page that describes this says the same, rendered from the
+same two facts.
+
 *Enforced in:* `internal/verify`, `internal/challenge`,
 `internal/scan.Scanner.Scan`, `internal/webscan.Scanner.Scan`,
 `internal/httpapi.New`, `internal/httpapi.Server.UseWebScanner`, `internal/httpapi.Server.handleVerify`,
+`internal/httpapi.Server.operatorView`, `internal/web.Installation.Whole`,
 `cmd/porchd.verificationScope`
-*Guarded by:* `TestAPublishedTokenCoversTheZone`,
+*Guarded by:* `TestTheOperatorsOwnCopyShowsTheWholeReport`,
+`TestTheOperatorsOwnCopySaysItShowsTheWholeReport`,
+`TestAPublishedTokenCoversTheZone`,
 `TestADomainThatProvedNothingIsRefused`,
 `TestATokenFromOneDomainDoesNotProveAnother`,
 `TestATokenFromAnotherDeploymentIsNotAccepted`,
@@ -1300,19 +1344,30 @@ a network error that would name a resolver or an address (I6).
 what it discloses.** Fetching a list tells an authority that somebody downloaded
 a list; it does not say which certificate, because one list covers thousands.
 That is a smaller disclosure than OCSP, which names the serial in the question,
-and it is why this is done where OCSP is not. The demonstration deployment
-promises on its privacy page that it asks no authority anything, so the call is
-compiled out of that build — `demo.Enabled` is a constant and the branch is
-eliminated, which keeps the promise true by construction rather than by a
-setting. Everywhere else it runs with no switch: on a deployment that requires
-proof of control the certificate belongs to whoever asked, and a switch they had
-to find first would be a gap in a report dressed as a choice.
+and it is why this is done where OCSP is not. It runs on every build with no
+switch: on a deployment that requires proof of control the certificate belongs
+to whoever asked, and a switch they had to find first would be a gap in a report
+dressed as a choice.
 
-Both directions are driven. A test under the tag fails if the demonstration
-fetches, and a test without it fails if the ordinary build does not — a guard
-that refuses everywhere is as wrong as one that refuses nowhere, and the second
+The demonstration included, since 2026-09-28. It was compiled out of that build
+to keep a promise that it asked no authority anything, written when a visitor
+chose the host. Its hosts are compiled in now (N6), so the list it fetches is
+the one our certificate names, and leaving it out made the demonstration say
+"revocation not established" about a certificate every copy somebody runs would
+have checked. The privacy page says what it asks and about whom, and that each
+check runs at most once an hour, the report kept and handed to everybody with
+its age.
+
+Both builds are driven. A test under the tag fails if the demonstration stops
+fetching, and a test without it fails if the ordinary build does — the second
 failure would be silent, since "revocation was not checked" is a sentence this
 project prints honestly in so many other places that nobody would look twice.
+
+**The standing sentence is true of the report it is on.** It said *no build
+asks* the question that names a serial, and `-ask-responder` asks exactly that;
+a report that asked it carried the sentence beside the finding quoting the
+answer. Where the responder was asked, the report now says so instead
+(`TestAReportThatAskedTheResponderDoesNotSayNobodyDid`).
 
 *Enforced in:* `internal/crl`, `internal/scan.Scanner.Scan`,
 `internal/scan.listStatus`, `internal/policy.GradeStapling`,
@@ -1336,7 +1391,9 @@ project prints honestly in so many other places that nobody would look twice.
 `TestTheDefaultDiallerRefusesPrivateAddresses`,
 `TestAnUnknownListStatusIsNotAnAnswer`,
 `TestTheOrdinaryBuildReadsTheRevocationList`,
-`TestTheDemonstrationAsksNoAuthorityAnything`,
+`TestTheDemonstrationReadsItsOwnRevocationList`,
+`TestAReportThatAskedTheResponderDoesNotSayNobodyDid`,
+`TestTheRevocationLimitDescribesThisBuild`,
 `TestAListThatNamesTheCertificateIsReported`,
 `TestAListThatDoesNotNameTheCertificateSaysAsOfWhen`,
 `TestAListThatCouldNotBeReadSaysWhy`,
@@ -1488,8 +1545,11 @@ the difference between reading and guessing.
 What it costs is the disclosure this invariant is about, unchanged and now
 larger: the question names the domain to a monitor this project does not run,
 and asking for everything under it says more about the estate than asking about
-one host. So it is never on a demonstration build, which promises it queries no
-log, and on the command line it is typed deliberately.
+one host. So on the command line it is typed deliberately, and a service asks it
+only for a domain it has been shown control of. The demonstration asks it about
+its own domain and no other, since 2026-09-27 for the inventory and 2026-09-28
+for the TLS check: its hosts are compiled in, so the only thing a monitor
+learns from it is that somebody is looking at us.
 
 **The inventory says what it cannot show, every time, under every list.** Three
 kinds of name are missing from it and no amount of searching will produce them:
@@ -1848,7 +1908,7 @@ the report carries all three:
 
 So it is **off unless an operator names one**, on both faces — `porch-scan
 -passive`, `porchd -names-passive` — and never on the demonstration, which
-refuses the whole mode. Every register worth reading wants an account: the key
+configures none. Every register worth reading wants an account: the key
 is the operator's own, the question names their domain to a company they chose,
 and the answer is billed to them. Nothing picks one for them and nothing falls
 back to one.
@@ -2274,7 +2334,29 @@ being unresolvable. A statement about somebody's estate, arrived at from a
 missing colon. `TestAResolverAddressWorksWithoutAPort` holds it, including the
 IPv6 literal, which is the case that would have been silently wrong rather than
 loudly wrong.
-*Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
+
+**And a monitor or register the operator points elsewhere is asked over HTTPS
+or not at all.** `-monitor-url`, `-passive-url` and their `porchd` twins took
+any address, and the dialler behind them allows port 80, so `http://` sent the
+domain — and, for a register or CertSpotter, the operator's key — across every
+network on the way in the clear. Refused at start now, on both programs, with
+credentials in the address refused too: a key belongs in the environment, and
+an address is something an error message prints. The `%s` a monitor's address
+carries is read as the name it will become, so an address with the name in its
+path is not refused for the placeholder
+(`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`).
+
+**And the list the TLS check's Logged line asks for is shown.** The line ends
+on *N of which are valid today and were not the one presented here*, which
+asks the reader to check a list, and the entries sat in the JSON and on no
+face of the report: a count nobody can check against what they ordered. Each
+one is now a sentence composed in `internal/policy` — serial, issuer, validity,
+names — and printed under the line by both faces
+(`TestTheCertificatesTheLoggedLineCountsAreListed`,
+`TestTheCertificatesTheLoggedLineCountsArePrinted`).
+*Enforced in:* `cmd/porch-scan.httpsEndpoint`, `cmd/porchd.httpsEndpoint`,
+`internal/policy.UnaccountedLine`, `internal/scan.Scanner.searchLogs`,
+`internal/ctsearch`, `internal/ctsearch.SearchEstate`,
 `internal/liveness`, `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`,
 `internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
@@ -2319,7 +2401,10 @@ loudly wrong.
 `TestAnOversizedAnswerIsRefusedRatherThanTruncated`,
 `TestAnEmptyNameIsNotSearchedFor`,
 `TestASerialFromAMonitorIsComparedAsANumber`,
-`TestTheDemonstrationQueriesNoTransparencyLog`,
+`TestTheDemonstrationSearchesTheLogsForItsOwnName`,
+`TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports`,
+`TestAKeptReportIsScannedOnceAnIntervalAndSaysItsAge`,
+`TestOnlyAnAnsweredReportIsKept`, `TestWithoutAnIntervalEveryCallerIsScanned`,
 `TestTheOrdinaryBuildSearchesTheLogsWhenAsked`,
 `TestNoSearcherMeansNoSearch`,
 `TestTheLogSearchIsOffUntilItIsAskedFor`,
@@ -2405,7 +2490,9 @@ loudly wrong.
 `TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
 `TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
 `TestAnInstallationNotToldToWalkProofsDoesNot`,
-`TestTheReportSaysWhatTheProofsListed`
+`TestTheReportSaysWhatTheProofsListed`,
+`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`,
+`TestAnInventoryIsNotOfAnAddress`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 
@@ -2675,8 +2762,10 @@ address before the scanner saw it until the 2026-09-16 audit (A32) — and the
 page, which cuts it off before a request is built, so it never leaves the
 browser at all.
 
-**And every report says no message was sent.** No sender, recipient or message
-was ever named, and a DANE binding's correctness was not checked. A DKIM key is
+**And every report says no message was sent.** No message was ever composed —
+the relay question names an empty sender and a recipient that cannot exist, and
+resets before any message (N3) — and a DANE binding's correctness was not
+checked. A DKIM key is
 read only under a selector the scan was told to look under — selectors cannot
 be listed from DNS — and the report names every one it tried, so "these names
 hold nothing" is never rendered as "this domain publishes no key" (R4). The
@@ -2686,10 +2775,29 @@ asked; each sentence went rather than being reworded, because what a scan
 contacted differs by deployment and a standing limit is the same sentence on
 every report.
 
+**What a count stood for is named, and the records reach their owner.** The
+void-lookup finding said how many of a policy's lookups answered nothing and
+not which, void lookups under the limit and policies that could not be read
+were counted or not said at all, and the fix in every case starts with the
+name. They are named now. A DMARC `sp=` weaker than `p=` is said and not
+graded (R21). And where the report is read by the person the domain belongs
+to — the command line, or a service with proof or only its operator in front of
+it — the SPF, DMARC and TLS-RPT records are carried as the zone publishes them,
+under the rows written from them; a stranger's report still prints only what
+this program wrote, because the text is the zone's and two of them carry
+mailboxes. Every name and record is the zone's own bytes, so each goes through
+`internal/display` first (R10): an SPF include name reached the notes with
+nothing in between, and a TXT record is bytes.
+
 *Enforced in:* `internal/mailscan`, `internal/spf`, `internal/mtasts`,
 `internal/policy.GradeMail`, `internal/policy.MailStandingLimits`,
-`internal/httpapi.New`, `cmd/porch-scan.mailScanner`, `cmd/porch-scan.runMail`
-*Guarded by:* `TestAnExchangerThatIsAnAliasIsGraded`,
+`internal/httpapi.New`, `cmd/porch-scan.mailScanner`, `cmd/porch-scan.runMail`,
+`internal/display.Mark`, `cmd/porch-scan.printRecord`
+*Guarded by:* `TestTheRecordsReachTheirOwnerAndNobodyElse`,
+`TestARecordCannotActOnTheDisplay`, `TestTheSPFLookupsThatFailAreNamed`,
+`TestAWeakerSubdomainPolicyIsSaid`, `TestTheRecordsArePrintedUnderTheirRows`,
+`TestTheVoidLookupFindingNamesThePolicies`, `TestNothingCanActOnTheDisplay`,
+`TestAnExchangerThatIsAnAliasIsGraded`,
 `TestAnAliasedExchangerReachesBothFacesOfTheReport`,
 `TestTheAliasQuestionIsBoundedLikeTheExchangers`,
 `TestTheScanAsksOnlyAboutTheDomainItWasGiven`,
@@ -2852,6 +2960,42 @@ every report.
 `TestTheCommandLineAsksTheExchangersWithItsName`,
 `TestEveryFlagIsReadSomewhere`
 
+### N15 — Over plain HTTP the service answers only to an address or to localhost
+
+A copy of `porchd` on loopback with no password is offered to its operator on
+the argument that nobody else can reach it: the name inventory runs there
+without proof, an address range is walked, and with no scope every check scans
+whatever it is given (N12). A browser can reach it for somebody else. A page on
+another site points its own name at 127.0.0.1 once it has loaded, and its
+script then calls "its own" server — the browser sends the request to this
+service as same-origin and reads the answer. Every guard the API had was
+satisfied, because `Sec-Fetch-Site` said `same-origin` and it was. What the
+page got was an open scanner leaving from the operator's address, the
+operator's inventory, and the operator's reverse records.
+
+The `Host` header is the one thing that attack cannot change: the browser sends
+the page's own name. So over plain HTTP a request is answered only when it
+names this machine by an address — which cannot be rebound, because the origin
+is then the address itself — or as `localhost`, which a browser resolves
+without asking anybody. Every other name is refused with 421 and a sentence
+stating the rule, never the name, and counted as `host_not_served`.
+
+Over TLS it is not asked. A browser that rebinds a name to this machine still
+expects that name's certificate and cannot get it, so no request is ever made.
+An operator who serves the installation under a name uses HTTPS, which is what
+P6 already requires of a password.
+
+It wraps everything the service answers, outside the gate: the pages carry the
+script that calls the API, and a guard in one of them is a guard the other
+walks around (N6). A copy behind a password was already safe from this — the
+gate refuses a session on plain HTTP to any name but this machine's — and the
+guard costs it nothing; a copy without one had nothing at all.
+
+*Enforced in:* `internal/httpapi.Server.GuardHost`, `internal/httpapi.servedHost`,
+`cmd/porchd.run`
+*Guarded by:* `TestARebindingPageIsNotAnswered`,
+`TestTheHostGuardIsInFrontOfEverything`, `TestEveryRefusalCodeCanBeProduced`
+
 ## Input
 
 
@@ -2949,7 +3093,11 @@ So `web.Configure` takes an `Installation` rather than a list of booleans, and
 every third party this copy may ask is a field on it: the monitor, the passive
 register, reading the hosts' own certificates, and the responder. The page names
 each one that is on and says the old sentence only when none of them is
-(`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`). The wiring itself is pinned
+(`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`). The scope is one of them:
+it turns on the TLS check's search of the transparency logs, and until
+2026-09-28 a proven copy with no monitor configured told its readers that no
+transparency log was asked while it named every checked name to crt.sh. The test
+asserted that sentence; it now asserts the opposite, and the page names crt.sh. The wiring itself is pinned
 as text in `cmd/porchd`, because a flag connected to the scanner and not to the
 page produces exactly the page this fixed
 (`TestThePagesAreToldWhatThisInstallationAsks`).
@@ -3078,6 +3226,28 @@ than folded.
 `TestHostWithATrailingEmptyLabelIsRefused`, `TestFoldingIsStable`,
 `TestTargetLimiterIgnoresSpelling`,
 `TestSpellingCannotBuyExtraScansOfOneHost`, `FuzzSplitTarget`
+
+### I8 — A DKIM selector is a DNS name, and a bound counts what it bounds
+
+A selector is joined to `._domainkey.` and the domain and asked of a resolver,
+so it is input that reaches a query, and it had no syntax at all. The service
+bounded the list by counting entries and the scanner split each entry on
+commas: one entry holding forty names passed the bound as one and was looked
+under as forty, cut to sixteen without a word — the list the bound says is
+refused rather than cut short. Spaces and control characters went through the
+same way, as names no zone can hold.
+
+Each selector is now checked to be what RFC 6376 §3.1 says it is — labels of
+letters, digits and hyphens separated by dots, with an underscore allowed
+because DNS carries one — and refused otherwise, in a sentence stating the rule
+and never the selector (I3). The command line holds `-dkim-selector` to the same
+rule and the same bound before anything is asked, and the page splits what is
+typed on spaces as well as commas, because `s1 google` means two names.
+
+*Enforced in:* `internal/dkim.CheckSelector`, `internal/httpapi.handleScan`,
+`cmd/porch-scan.checkSelectors`, `internal/web/assets/app.js`
+*Guarded by:* `TestASelectorIsADNSName`, `TestASelectorIsADNSNameAndCountsAsOne`,
+`TestTheSelectorsAnOperatorNamesAreCheckedBeforeAnythingIsAsked`
 
 ---
 
@@ -3235,10 +3405,22 @@ It is true only where every hop was refused. A name reached on one port and
 declined on the other has been measured, and answering that with a refusal
 would hide the half that succeeded.
 
+**And the first half had a hole the test could not see.** Six refusals were
+answered through `refuse` with codes the list did not hold — every refusal the
+name inventory makes, and the bound on DKIM selectors — so each was dropped on
+its way to the counter. The inventory had refused unproven domains, strangers'
+address ranges and wordlist-length lists since it existed, and the figures said
+nothing had ever been turned away there. `TestEveryRefusalCodeCanBeProduced`
+drives the codes the list holds, so a code the list did not hold was not in its
+loop. `TestEveryCodeThisPackageRefusesWithIsCounted` reads the codes out of the
+source instead, from every place one is written, and each is now in the list
+and driven.
+
 *Enforced in:* `internal/httpapi.Server.refuse`,
 `internal/tlsprobe.Report.BlockedDestination`,
 `internal/webprobe.Report.BlockedDestination`
 *Guarded by:* `TestEveryRefusalCodeCanBeProduced`,
+`TestEveryCodeThisPackageRefusesWithIsCounted`,
 `TestOnlyKnownRefusalCodesAreCounted`,
 `TestANameThatResolvesOnlyWhereWeWillNotGoIsRecordedAsBlocked`,
 `TestTheWebEndpointCountsABlockedDestination`,
@@ -5070,10 +5252,29 @@ empty `Names` field and never exercises the path where the two could diverge,
 which is how the first version of that check passed a change that printed
 `CN`, `O` and `C` twice.
 
+**A monitor's answer is held to the same rule.** What a transparency monitor
+says about a certificate — its issuer and the names on it — is chosen by
+whoever obtained the certificate, and it reaches a person: the certificates a
+TLS report counts are listed under it, and the inventory prints names.
+`internal/ctsearch` dropped C0 and nothing else, so 0x9b and U+202E went
+through; now C1 and the format characters become the replacement mark, never
+dropped, because dropping a zero-width space turns the disguised name into the
+name it imitates.
+
+So did every other package that reads a string somebody else chose — the
+addresses in a DMARC record and a `security.txt`, the hosts a page links to —
+and an SPF include name had no cleaning at all. One rule now, in
+`internal/display`, applied where each package keeps what it read.
+
 *Enforced in:* `internal/certinfo.sanitise`, applied by `trimmer.text`;
 `internal/certinfo.mixedScriptNote`, `internal/certinfo.confusableScripts`;
-`internal/certinfo.distinguishedName`
-*Guarded by:* `TestControlCharactersInCertificateFieldsAreNeutralised`,
+`internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
+`internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
+`internal/markup`, `internal/spf`
+*Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`, `TestNothingCanActOnTheDisplay`,
+`TestAContactCannotActOnTheDisplay`, `TestAReportAddressCannotActOnTheDisplay`,
+`TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
+`TestControlCharactersInCertificateFieldsAreNeutralised`,
 `TestC1ControlsAreNeutralisedToo`, `TestTrimmingCutsOnARuneBoundary`,
 `TestNothingCanRewriteHowTheReportReads`, `TestANameInTwoAlphabetsIsSaid`,
 `TestALookalikeNameIsNotRewritten`,
@@ -5896,6 +6097,24 @@ meant has never existed under that name.
 format RFC 9116 defines. `/security.txt` redirects there rather than serving a
 second copy, so the canonical URL in the file stays true.
 
+**Only denyfirst.dev serves it, and the key beside it.** Every build did until
+2026-09-28, and on an installation somebody else runs each part of the file
+was wrong. Its `Canonical` named denyfirst.dev, so by RFC 9116 it was not
+authoritative for the host serving it. It sent whoever found a fault in that
+host — somebody else's machine — to us, who cannot fix it and should not be
+told about it. Its `Expires` date is fixed in the binary, so an installation
+left on one release would one day serve a lapsed file, which this entry calls
+worse than none. And it answered anyone who could reach an installation with
+our name, a way to find copies of this tool their operators never agreed to.
+An installation now answers all three addresses with a 404, and an operator
+who wants a `security.txt` publishes their own, naming themselves. On an
+installation the tests below read the embedded file rather than the served
+one, so the expiry reminder still fails on every build.
+
+The file ends with a line break. RFC 9116's grammar ends every line with one,
+the last included; most parsers forgive the omission and a strict one does
+not, and it was missing.
+
 The `Expires` date in that file is the only copy of it, and a test parses the
 served bytes rather than a constant beside them. The test fails sixty days
 before the date passes.
@@ -5944,6 +6163,7 @@ key it points at, which answers nothing a forger could not arrange.
 
 *Enforced in:* `internal/web`, the route table and `assets/security.txt`
 *Guarded by:* `TestSecurityTxtIsServedAtTheWellKnownPath`,
+`TestAnInstallationPublishesNoContactOfOurs`,
 `TestLegacySecurityTxtPathRedirects`, `TestSecurityTxtHasTheRequiredFields`,
 `TestSecurityTxtExpiryIsMovedByAPerson`,
 `TestSecurityTxtDoesNotSendExclusionRequestsToSecurity`,
@@ -6345,11 +6565,17 @@ Determinism is unaffected: the value is the tag, both callers pass the same
 one, and two builds of a tag remain byte-identical. Measured on 2026-08-22,
 twice, all ten artifacts.
 
+Every rule set, not three of four. Both programs printed the TLS, web and mail
+rule sets and never the DNS check's, so a reader holding a DNS report could not
+learn from the binary which rules had produced it. The reach line stays last,
+where the deploy check reads it.
+
 *Enforced in:* `scripts/build.sh`, `cmd/porch-scan.version`,
-`cmd/porchd.version`
+`cmd/porchd.version`, `cmd/porch-scan.versionLine`, `cmd/porchd.versionLines`
 *Guarded by:* `TestTheBuildScriptStampsTheVersionSymbolThisProgramDefines`,
 `TestAnUnstampedBinaryDoesNotClaimAVersion`,
-`TestThePolicyVersionIsNotTheReleaseVersion`
+`TestThePolicyVersionIsNotTheReleaseVersion`,
+`TestTheVersionNamesEveryRuleSet`, `TestTheServiceVersionNamesEveryRuleSet`
 
 ### S11 — A rule set that changes says what changed
 

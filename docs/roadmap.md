@@ -89,9 +89,9 @@ on the page or a test fails.
 
 ### 2. Scope: prove control of a domain before scanning it
 
-**The boundary is built and is opt-in**, since 2026-09-10: `internal/verify`,
-asked in both scanners beside the demonstration list, and
-`-verification-secret-file` on the service. Both challenge methods are there —
+**The boundary is built**, since 2026-09-10, **and on by default** since
+v0.18.0: `internal/verify`, asked in every scanner beside the demonstration
+list, and `-verification-secret-file` on the service. Both challenge methods are there —
 a TXT record for the zone, a file for one hostname — and a file does not open a
 check that leaves the ports a browser uses. N9 has the reasoning.
 
@@ -190,11 +190,13 @@ that survives the move to a machine somebody runs themselves, so the sentence is
 now the one that is actually true: **this installation holds nothing about
 anyone but you.**
 
-Never served over HTTP, and that is the part to keep. A browsable history of an
-estate's weaknesses is a thing worth attacking and `porchd` has no
-authentication at all. Offering it over HTTP is a separate decision with an
-authentication system attached, made deliberately rather than as a side effect
-of being able to write files.
+The plain store is never served over HTTP, and that is the part to keep. A
+browsable history of an estate's weaknesses is a thing worth attacking. Serving
+one was a separate decision with an authentication system attached, and it was
+made that way: behind `-access-file` every report is kept whole in a history
+sealed under the password's key and read back only through the gate (P6), and
+`-results-dir` beside a password is refused, because it would keep a second
+copy in the clear.
 
 ### Later
 

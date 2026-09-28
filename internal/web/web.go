@@ -83,7 +83,9 @@ const contentSecurityPolicy = "default-src 'none'; " +
 // pages are copies of ours.
 const SiteURL = "https://denyfirst.dev"
 
-// SecurityTxtPath is where RFC 9116 requires the file to be served.
+// SecurityTxtPath is where RFC 9116 requires the file to be served, and where
+// the demonstration serves ours. An installation serves nothing there; see
+// denyfirstFiles.
 //
 // Exported because the test parses the same file the handler serves, and a
 // second copy of this string is a second thing to keep in step.
@@ -497,9 +499,8 @@ type methodPage struct {
 // that with a 404 costs a report. Redirecting rather than serving two copies
 // keeps the canonical URL in the file true.
 var moved = map[string]string{
-	"/scanning":     "/privacy#scans",
-	"/about":        "/privacy",
-	"/security.txt": SecurityTxtPath,
+	"/scanning": "/privacy#scans",
+	"/about":    "/privacy",
 
 	// The method page moved under the service it describes. Permanent: it is
 	// not coming back to the root, and the address is printed in reports that
@@ -536,17 +537,37 @@ var moved = map[string]string{
 // read by people and by intermediaries that ignore the header.
 var standingIn = map[string]string{}
 
-// files are the assets served as they are.
-var files = map[string]struct {
+// servedFile is an asset served as it is.
+type servedFile struct {
 	name        string
 	contentType string
-}{
-	"/style.css":    {"assets/style.css", "text/css; charset=utf-8"},
-	"/app.js":       {"assets/app.js", "text/javascript; charset=utf-8"},
-	"/theme.js":     {"assets/theme.js", "text/javascript; charset=utf-8"},
-	"/session.js":   {"assets/session.js", "text/javascript; charset=utf-8"},
-	"/hero.js":      {"assets/hero.js", "text/javascript; charset=utf-8"},
-	"/favicon.svg":  {"assets/favicon.svg", "image/svg+xml"},
+}
+
+// files are the assets served as they are.
+var files = map[string]servedFile{
+	"/style.css":   {"assets/style.css", "text/css; charset=utf-8"},
+	"/app.js":      {"assets/app.js", "text/javascript; charset=utf-8"},
+	"/theme.js":    {"assets/theme.js", "text/javascript; charset=utf-8"},
+	"/session.js":  {"assets/session.js", "text/javascript; charset=utf-8"},
+	"/hero.js":     {"assets/hero.js", "text/javascript; charset=utf-8"},
+	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
+}
+
+// denyfirstFiles are this project's own contacts: where to report a security
+// problem in it, and the key to encrypt the report to. The demonstration
+// serves them, because it is denyfirst.dev. Nothing else does.
+//
+// Every build served them until 2026-09-28, and on an installation each one
+// was wrong. Its Canonical named denyfirst.dev, so by RFC 9116 the file was
+// not authoritative for the host serving it. It sent somebody who found a
+// fault in that host — somebody else's machine — to us, who cannot fix it and
+// should not be told about it. Its Expires date was fixed in the binary, so an
+// installation left on one release would one day serve a lapsed file, which
+// D1 calls worse than none. And it answered anyone who could reach an
+// installation with our name, which is a way to find installations of this
+// tool that their operators never agreed to. An operator who wants a
+// security.txt publishes their own, naming themselves.
+var denyfirstFiles = map[string]servedFile{
 	SecurityTxtPath: {"assets/security.txt", "text/plain; charset=utf-8"},
 
 	// text/plain rather than application/pgp-keys, so a browser shows it
@@ -563,6 +584,15 @@ var files = map[string]struct {
 var rendered = map[string][]byte{}
 
 func init() {
+	// Our contacts, and the short path to them, on the one deployment that is
+	// ours to answer for.
+	if demo.Enabled {
+		for path, file := range denyfirstFiles {
+			files[path] = file
+		}
+		moved["/security.txt"] = SecurityTxtPath
+	}
+
 	// The denyfirst front page and the Porch page exist on the demonstration
 	// only. An installation somebody runs is the tool at "/" and needs
 	// neither: nobody there needs the product explained to them.
@@ -734,10 +764,25 @@ type Installation struct {
 	AsksResponder     bool
 }
 
-// AsksNobodyElse reports that nothing above was configured, which is the
-// ordinary installation and the one the old sentence described.
+// AsksNobodyElse reports that no third party is asked anything a scan does
+// not already send to the host: no monitor, no register, no responder, and no
+// certificate read for the inventory.
+//
+// Verified is on the list because a scope turns on the transparency search in
+// the TLS check (N12): every name a proven installation checks is also named to
+// crt.sh. The page said nobody was asked on exactly those installations until
+// 2026-09-28, because this list was written about the inventory's flags and
+// the TLS check's search was wired to the scope, not to a flag.
 func (i Installation) AsksNobodyElse() bool {
-	return i.Monitor == "" && i.Register == "" && !i.ReadsCertificates && !i.AsksResponder
+	return !i.Verified && i.Monitor == "" && i.Register == "" && !i.ReadsCertificates && !i.AsksResponder
+}
+
+// Whole reports that a report here is read by the person the estate belongs
+// to: a scope proved it, or nobody but the operator can call this copy. It is
+// httpapi's operatorView, told to the page, and it decides what the page says
+// a scan reads and shows.
+func (i Installation) Whole() bool {
+	return i.Verified || i.OperatorOnly
 }
 
 func Configure(in Installation) {
@@ -987,9 +1032,13 @@ type privacyPage struct {
 	// person is the one running it.
 	WalksRanges bool
 	Verified    bool
-	ReadsPages  bool
 	Keeps       bool
 	Threshold   int
+
+	// Whole says a report here shows the operator everything a scan read:
+	// the page, the security.txt contacts, the MTA-STS policy, the exchangers
+	// and the zone's own servers. See Installation.Whole.
+	Whole bool
 
 	// Guarded says a password is in front of the installation, which is when
 	// it sets its one cookie.
@@ -1016,7 +1065,7 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 			AsksNobodyElse:    in.AsksNobodyElse(),
 			WalksRanges:       in.OperatorOnly,
 			Verified:          verified,
-			ReadsPages:        verified,
+			Whole:             in.Whole(),
 			Keeps:             keeps,
 			Threshold:         httpapi.TargetThreshold(),
 			Guarded:           signedIn,

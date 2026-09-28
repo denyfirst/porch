@@ -28,7 +28,7 @@ import (
 // packet's length as two bytes, and the packet body, which is sixty lines of
 // standard library and no dependency at all.
 func TestTheServedKeyIsTheKeyWePublish(t *testing.T) {
-	served := get(t, PGPKeyPath).Body.String()
+	served := denyfirstFile(t, PGPKeyPath)
 
 	packets := armoredBody(t, served)
 	got := primaryKeyFingerprint(t, packets)
@@ -228,7 +228,7 @@ func primaryKeyFingerprint(t *testing.T, packets []byte) string {
 // A private key in the served file is the worst outcome available here, and
 // the packet tag says so without any string matching.
 func TestTheServedPacketIsAPublicKeyPacket(t *testing.T) {
-	packets := armoredBody(t, get(t, PGPKeyPath).Body.String())
+	packets := armoredBody(t, denyfirstFile(t, PGPKeyPath))
 
 	if tag := int(packets[0]>>2) & 0x0F; tag == 5 || tag == 7 {
 		t.Fatalf("the served file begins with packet tag %d, which is a secret key", tag)

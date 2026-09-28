@@ -57,8 +57,9 @@
 //     kept. Until 2026-09-11 this said "the body is never read", and that
 //     sentence is what the change has to be measured against. What is read now
 //     is the final HTML response, to a bound, streamed, and only where
-//     ReadMarkup is set — never in a demonstration build, where the call is
-//     compiled out. What survives is internal/markup.Facts: hosts and
+//     ReadMarkup is set — which the demonstration does only for this
+//     project's own hosts, the only ones it reaches. What survives is
+//     internal/markup.Facts: hosts and
 //     booleans. There is no field anywhere on the way out that could hold
 //     markup, which is the same arrangement that keeps a cookie's value out of
 //     a report.
@@ -98,7 +99,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/markup"
 	"github.com/denyfirst/porch/internal/securitytxt"
 	"github.com/denyfirst/porch/internal/truststore"
@@ -708,11 +708,9 @@ func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) 
 // Three conditions, and each is a separate refusal rather than one combined
 // test, because they are refusing different things:
 //
-// A demonstration build never reads a body. demo.Enabled is a constant, so this
-// returns before anything else is considered and the compiler removes the rest
-// of the branch — the promise on /web/method is true by construction for that
-// deployment rather than true because a field was left unset. (The package is
-// still linked; what is eliminated is the call.)
+// A caller that did not ask for the page does not get it. The demonstration
+// asks since 2026-09-28: it read no body while a visitor chose the host, and it
+// reaches only this project's own hosts now (N6), so the page it reads is ours.
 //
 // A redirect's body is not the page. A browser does not render it and nothing
 // in it was served to a visitor, so reading it would cost the server bytes for
@@ -727,7 +725,7 @@ func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) 
 // fetched, so a chain that redirected ends up asking about the origin serving
 // the page rather than the one that pointed at it.
 func (p *Prober) pageFacts(resp *http.Response, host string) *markup.Facts {
-	if demo.Enabled || !p.ReadMarkup {
+	if !p.ReadMarkup {
 		return nil
 	}
 	if resp.StatusCode >= 300 && resp.StatusCode <= 399 && resp.Header.Get("Location") != "" {

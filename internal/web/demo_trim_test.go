@@ -38,6 +38,10 @@ func TestTheDemonstrationOffersNoDownloadAndNoCounter(t *testing.T) {
 			t.Errorf("app.js no longer contains %q", want)
 		}
 	}
+	// Nothing on a page asks for the counters, so nothing can draw them.
+	if strings.Contains(src, "/api/v1/stats") {
+		t.Error("app.js asks for the counters, which no page draws")
+	}
 	if n := strings.Count(src, "appendChild(downloadLink("); n != 1 {
 		t.Errorf("app.js offers the download in %d places; the one above is the only one gated", n)
 	}
