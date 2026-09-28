@@ -36,7 +36,7 @@ func FuzzAnalyse(f *testing.F) {
 			return // not a certificate; the parser's own fuzzing covers that
 		}
 
-		report, err := Analyse([]*x509.Certificate{cert}, hostname, now, testRoots)
+		report, err := Analyse([]*x509.Certificate{cert}, hostname, now, testRoots, Options{})
 		if err != nil {
 			return
 		}

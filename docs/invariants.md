@@ -463,6 +463,31 @@ what no address may carry before it reaches a terminal
 (`TestAContactIsCleanedBeforeItIsKept`).
 
 
+
+**And the address a certificate names for checking its own revocation.** It was
+a count, on the argument that the URLs are chosen by whoever issued the
+certificate — which on a hostile target means they are chosen by the target,
+and a report a stranger asked for does not repeat a string that party wrote
+back at its reader. That argument is right and it is kept.
+
+What it was never about is the operator's own certificate. There the authority
+is the one that issued it, and the question a count cannot answer is the one
+that comes up exactly when something went wrong: a revocation list that could
+not be fetched is reported already, and until 2026-09-28 the report would not
+say *from where*. The command line names it, because it runs on the operator's
+own machine; a service names it alongside proof of control and prints the count
+otherwise (`TestTheRevocationAddressesAreKeptOnlyWhereAskedFor`,
+`TestTheCommandLineNamesTheRevocationAddresses`,
+`TestTheRevocationAddressesFollowTheScope`).
+
+The counts stay beside the lists rather than being replaced by them, because an
+empty list means withheld or none and only the count says which (R4). One
+address is named and the rest counted: a certificate naming four distribution
+points has one that mattered — whichever a client reached for — and four in a
+line is a sentence nobody reads (`TestWhereRevocationIsCheckedIsNamedWhenItIsKnown`).
+The value is bounded and stripped before it reaches a terminal, like every
+other string a measured party writes (`TestARevocationAddressIsCleanedBeforeItIsKept`).
+
 **And one `GET` of the root on the other form of the name.** `www.` added where
 there is none, removed where there is one, asked once over HTTPS, and not
 followed: a redirect names where it is sending a visitor in its own header, so

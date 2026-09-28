@@ -81,7 +81,8 @@ func RevocationLine(f StapleFacts) string {
 	}
 
 	if f.HasResponder {
-		return "not stapled; the certificate names a responder a client would have to ask"
+		return "not stapled; the certificate names a responder a client would have to ask" +
+			at(f.ResponderURLs)
 	}
 
 	return "not stapled; the certificate names no responder, so there is none to send"
@@ -145,9 +146,37 @@ func listLine(f StapleFacts) string {
 	// the reason is this project's own sentence, and a reader who is told the
 	// check did not happen can act on it, while silence reads as a pass (R4).
 	if f.ListReason != "" && f.HasCRL {
-		return "not stapled, and revocation was not established from a list: " + f.ListReason
+		return "not stapled, and revocation was not established from a list" + at(f.CRLURLs) +
+			": " + f.ListReason
 	}
 	return ""
+}
+
+// at names where a thing is, in the middle of a sentence, and says nothing
+// where the deployment does not carry the address.
+//
+// The sentence has to read correctly both ways. "revocation was not
+// established from a list: the list could not be fetched" is what a reader
+// without the address gets and it is what they always got; the same sentence
+// with " at http://crl.example/ca.crl" in it is the one they can act on, and
+// it is the difference between knowing a check failed and knowing which
+// address to go and look at.
+//
+// One address is named and the rest are counted. A certificate naming four
+// distribution points has one that matters — whichever a client reached for —
+// and four in a line makes the sentence unreadable for a fact nobody uses.
+func at(urls []string) string {
+	switch len(urls) {
+	case 0:
+		return ""
+	case 1:
+		return " at " + urls[0]
+	default:
+		if len(urls) == 2 {
+			return " at " + urls[0] + " and one other"
+		}
+		return " at " + urls[0] + " and " + strconv.Itoa(len(urls)-1) + " others"
+	}
 }
 
 // TransparencyLine describes the receipts in one sentence.

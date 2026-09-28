@@ -142,7 +142,7 @@ func TestTheTestRootIsTheStoreAnalyseUses(t *testing.T) {
 	// The outcome rather than the mechanism: a chain to the test root is
 	// trusted when Analyse is given that pool.
 	leaf := newLeaf(t, sharedRoot, leafOpts{})
-	report, err := Analyse([]*x509.Certificate{leaf, sharedRoot.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, sharedRoot.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}

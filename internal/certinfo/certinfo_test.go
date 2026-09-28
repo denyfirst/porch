@@ -69,6 +69,11 @@ type leafOpts struct {
 	// policies are the certificate policy identifiers to carry, for the cases
 	// about what an issuer says it checked.
 	policies []x509.OID
+
+	// ocspServers and crlPoints are the addresses an authority writes into a
+	// certificate for checking its own revocation.
+	ocspServers []string
+	crlPoints   []string
 }
 
 // constraintOpts are the limits an intermediate carries, for the cases about
@@ -115,6 +120,8 @@ func newLeaf(t *testing.T, root issuer, o leafOpts) *x509.Certificate {
 		BasicConstraintsValid: true,
 		IsCA:                  o.isCA,
 		Policies:              o.policies,
+		OCSPServer:            o.ocspServers,
+		CRLDistributionPoints: o.crlPoints,
 	}
 	if o.keyUsage != 0 {
 		tmpl.KeyUsage = o.keyUsage
@@ -170,7 +177,7 @@ func ruleIDs(r *Report) []string {
 }
 
 func TestAnalyseRejectsEmptyChain(t *testing.T) {
-	if _, err := Analyse(nil, "example.test", refNow, testRoots); err == nil {
+	if _, err := Analyse(nil, "example.test", refNow, testRoots, Options{}); err == nil {
 		t.Error("Analyse accepted an empty chain")
 	}
 }
@@ -182,7 +189,7 @@ func TestDescribesTheLeaf(t *testing.T) {
 		ips:      []net.IP{net.ParseIP("192.0.2.1")},
 	})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -228,7 +235,7 @@ func TestUnknownRootIsUntrusted(t *testing.T) {
 	root := newUntrustedRoot(t)
 	leaf := newLeaf(t, root, leafOpts{})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -250,7 +257,7 @@ func TestPresentIssuerIsNotAnIncompleteChain(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -266,7 +273,7 @@ func TestMissingIssuerIsAnIncompleteChain(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{})
 
-	report, err := Analyse([]*x509.Certificate{leaf}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -283,7 +290,7 @@ func TestSelfSignedIsDetected(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{selfSign: true})
 
-	report, err := Analyse([]*x509.Certificate{leaf}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -304,7 +311,7 @@ func TestHostnameMismatch(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{dnsNames: []string{"example.test"}})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "other.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "other.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -320,7 +327,7 @@ func TestNoHostnameIsNoted(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -347,7 +354,7 @@ func TestExpiredCertificate(t *testing.T) {
 		notAfter:  refNow.AddDate(0, 0, -5),
 	})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -364,7 +371,7 @@ func TestSmallRSAKey(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{rsaBits: 1024})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -383,7 +390,7 @@ func TestNoSubjectAlternativeName(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{dnsNames: []string{}, ips: []net.IP{}})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -397,7 +404,7 @@ func TestSummaryIsReadable(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -438,7 +445,7 @@ func TestThisPackageClaimsNothingAboutRevocation(t *testing.T) {
 	root := newRoot(t)
 	leaf := newLeaf(t, root, leafOpts{})
 
-	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+	report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -515,7 +522,7 @@ func TestTheReportSaysWhetherTheNameAndTheDatesHold(t *testing.T) {
 	for _, c := range cases {
 		leaf := newLeaf(t, root, c.leaf)
 
-		report, err := Analyse([]*x509.Certificate{leaf, root.cert}, c.hostname, refNow, testRoots)
+		report, err := Analyse([]*x509.Certificate{leaf, root.cert}, c.hostname, refNow, testRoots, Options{})
 		if err != nil {
 			t.Fatalf("%s: Analyse: %v", c.name, err)
 		}
@@ -566,7 +573,7 @@ func TestWhatACertificateMayBeReachesTheReport(t *testing.T) {
 	for _, c := range cases {
 		leaf := newLeaf(t, root, c.leaf)
 
-		report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots)
+		report, err := Analyse([]*x509.Certificate{leaf, root.cert}, "example.test", refNow, testRoots, Options{})
 		if err != nil {
 			t.Fatalf("%s: Analyse: %v", c.name, err)
 		}
@@ -585,7 +592,7 @@ func TestWhatACertificateMayBeReachesTheReport(t *testing.T) {
 	// And the ordinary certificate every other test in this file uses is
 	// accused of none of them, or the wiring is reading the wrong bit.
 	report, err := Analyse([]*x509.Certificate{newLeaf(t, root, leafOpts{}), root.cert},
-		"example.test", refNow, testRoots)
+		"example.test", refNow, testRoots, Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
@@ -594,5 +601,76 @@ func TestWhatACertificateMayBeReachesTheReport(t *testing.T) {
 		case "cert.leaf-is-ca", "cert.key-usage-cert-sign", "cert.no-digital-signature":
 			t.Errorf("an ordinary certificate is accused by %s", finding.RuleID)
 		}
+	}
+}
+
+// The addresses a certificate names for its own revocation are kept only where
+// the caller asked, and the counts are there either way.
+//
+// The counts answer "is there a way to check this at all", which is the
+// question that decides whether a server not stapling is a fault. The
+// addresses answer the one that comes next, and only when something went
+// wrong: which address could not be reached. A report a stranger asked for
+// gets the first and not the second, because the strings are written by
+// whoever issued the certificate — and on a hostile target that is the target.
+func TestTheRevocationAddressesAreKeptOnlyWhereAskedFor(t *testing.T) {
+	root := newRoot(t)
+	leaf := newLeaf(t, root, leafOpts{
+		ocspServers: []string{"http://ocsp.example.test"},
+		crlPoints:   []string{"http://crl.example.test/ca.crl", "http://crl2.example.test/ca.crl"},
+	})
+	chain := []*x509.Certificate{leaf, root.cert}
+
+	withheld, err := Analyse(chain, "example.test", refNow, testRoots, Options{})
+	if err != nil {
+		t.Fatalf("Analyse: %v", err)
+	}
+	if withheld.Revocation.ResponderCount != 1 || withheld.Revocation.CRLCount != 2 {
+		t.Errorf("the counts are %+v whether or not the addresses are kept", withheld.Revocation)
+	}
+	if len(withheld.Revocation.Responders) != 0 || len(withheld.Revocation.CRLs) != 0 {
+		t.Errorf("an address was kept by a caller that did not ask: %+v", withheld.Revocation)
+	}
+
+	shown, err := Analyse(chain, "example.test", refNow, testRoots, Options{ShowRevocationURLs: true})
+	if err != nil {
+		t.Fatalf("Analyse: %v", err)
+	}
+	if len(shown.Revocation.Responders) != 1 || shown.Revocation.Responders[0] != "http://ocsp.example.test" {
+		t.Errorf("the responders came back as %v", shown.Revocation.Responders)
+	}
+	if len(shown.Revocation.CRLs) != 2 {
+		t.Fatalf("the distribution points came back as %v", shown.Revocation.CRLs)
+	}
+	if shown.Revocation.CRLCount != 2 {
+		t.Errorf("the count changed when the addresses were kept: %+v", shown.Revocation)
+	}
+}
+
+// What an authority wrote into a certificate is cleaned before it is printed.
+//
+// A report goes to a terminal, and an escape sequence in an address is a
+// report that can move the cursor. The number kept is bounded for the same
+// reason every list here is: a certificate naming forty distribution points is
+// a line nobody reads.
+func TestARevocationAddressIsCleanedBeforeItIsKept(t *testing.T) {
+	got := addresses([]string{
+		"http://ocsp.example.test\x1b[2Jcleared",
+		"  http://crl.example.test/ca.crl  ",
+		strings.Repeat("h", 400),
+		"", "a", "b", "c", "d", "e",
+	})
+
+	if len(got) > 4 {
+		t.Errorf("%d addresses were kept: %v", len(got), got)
+	}
+	if strings.ContainsRune(got[0], 0x1b) {
+		t.Errorf("an escape survived into the report: %q", got[0])
+	}
+	if got[1] != "http://crl.example.test/ca.crl" {
+		t.Errorf("an address kept its surrounding space: %q", got[1])
+	}
+	if len(got[2]) > 255 {
+		t.Errorf("an address of %d characters was kept", len(got[2]))
 	}
 }

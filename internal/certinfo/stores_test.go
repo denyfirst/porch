@@ -29,7 +29,7 @@ func TestAnalyseNamesWhatEachStoreMakesOfTheChain(t *testing.T) {
 	leaf := chain[0]
 	at := leaf.NotBefore.Add(leaf.NotAfter.Sub(leaf.NotBefore) / 2)
 
-	report, err := Analyse(chain, "denyfirst.dev", at, x509.NewCertPool())
+	report, err := Analyse(chain, "denyfirst.dev", at, x509.NewCertPool(), Options{})
 	if err != nil {
 		t.Fatalf("Analyse: %v", err)
 	}
