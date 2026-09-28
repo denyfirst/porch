@@ -82,9 +82,12 @@ func TestEveryPageCarriesTheSameShell(t *testing.T) {
 		// the wrong place. The figure was published to make a point to
 		// strangers — a number nobody can trace back to a person, shown rather
 		// than described — and a self-hosted installation has no strangers: it
-		// has an operator, who has the History page, where the scans are
-		// listed rather than counted. A running total under every page was a
-		// second, worse answer to a question already answered better.
+		// has an operator, who has the reports themselves, listed under
+		// History behind a password rather than counted. A running total under
+		// every page was a second, worse answer to a question already answered
+		// better. And behind a password its sentence — "the only trace any of
+		// them left" — was false, because the reports are kept there. The
+		// figures stay at /api/v1/stats for whoever wants them.
 		if strings.Contains(body, `id="tally"`) {
 			t.Errorf("%s draws a total of the scans run; History is where they are", path)
 		}
