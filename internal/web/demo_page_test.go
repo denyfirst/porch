@@ -104,6 +104,16 @@ func TestThePorchPageRunsEveryCheckOnTheHostsItOffers(t *testing.T) {
 		t.Error("the Porch page offers a free-text field the deployment cannot answer")
 	}
 	for _, c := range consoleChecks() {
+		// A row that opens a page of its own is drawn as that link rather than
+		// as a box: the name inventory takes inputs this form does not have,
+		// and a ticked box that ran two thirds of it is what the link replaced.
+		if c.Page != "" {
+			if !strings.Contains(page, `href="`+c.Page+`"`) {
+				t.Errorf("the Porch page does not reach %s, so %s is offered and cannot be opened",
+					c.Page, c.Label)
+			}
+			continue
+		}
 		if !strings.Contains(page, `value="`+c.ID+`" checked`) {
 			t.Errorf("the Porch page does not offer the %s check", c.Label)
 		}

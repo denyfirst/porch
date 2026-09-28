@@ -2092,27 +2092,36 @@ and requires a line for each of them, and
 `TestThePageReadsTheNameFieldsTheAPISends` does the same for the fields of one
 name.
 
-**The console offers the inventory, unticked, and the column that carries a
-rule set carries a word instead.** It was reachable only from its own page until
-2026-09-28, which meant somebody had to know it existed to find it — the worst
-way to offer the one mode that answers *what have I got*. Three decisions hold
-it in place and each is the subject of
-`TestTheConsoleOffersTheInventoryUntickedAndUngraded`. It is on the list, beside
-the checks, because that is where somebody looks. Its box is off on an
-installation somebody runs, because it is the one entry that may ask somebody
-other than the host and a list of an estate's names is a thing to ask for rather
-than a thing that arrives because a default said so (N12 again, one level up).
-And `policy.Informational` sits where the four checks carry their version,
-because a version there is a promise that two reports carrying it are
-comparable, and nothing here was graded (R21) — a blank would read as a pass.
+**The console offers the inventory as a door rather than as a box, and the
+column that carries a rule set carries a word instead.** It was reachable only
+from its own page until 2026-09-28, which meant somebody had to know it existed
+to find it — the worst way to offer the one mode that answers *what have I got*.
+So it is on the list, beside the checks, because that is where somebody looks.
 
-The demonstration ticks it, and that is not an inconsistency
-(`TestTheDemonstrationTicksTheInventory`). The rule an installation follows
-protects somebody whose estate would be named to a monitor; the demonstration's
-estate is this project's own and compiled in (N6), so there is nobody to
-protect and a demonstration that hides the mode it exists to demonstrate shows
-nothing. What makes it affordable is that the answer is kept for an hour, so a
-hundred visitors in an hour are one question to a monitor rather than a hundred.
+A checkbox was tried first and was worse than either thing it sat between. The
+console runs its checks against one name and has no field for an address range,
+so a run started from there reported the reverse walk as never asked, every
+time, with nothing on the page to do about it — a control that visibly
+half-runs what it offers, in the one place a user actually looks. The row opens
+the page that runs all of it instead, which costs a click and hides nothing.
+`TestTheConsoleOffersTheInventoryAsADoorNotABox` holds the three parts of that:
+the row exists, it is a link with no box for the form to submit, and the page
+it names is one this build serves.
+
+`policy.Informational` sits where the four checks carry their version, because
+a version there is a promise that two reports carrying it are comparable, and
+nothing here was graded (R21) — while a blank would read as a pass.
+
+**The demonstration draws the same door, and then says where the sources it
+does not use can be used** (`TestTheDemonstrationOffersTheInventoryAsADoor`).
+It reaches hosts compiled into it (N6) and configures two of the six sources,
+so a visitor reads four lines saying *not asked* with no way to change any of
+them, which reads as four things the tool cannot do rather than four it was not
+asked to do here. One sentence under the report points at those lines and says
+a copy you run yourself reads each of them. It points rather than lists: a list
+would be a second place to keep in step with what is actually configured, and
+the day it drifted it would be this page telling somebody something false about
+the tool (N14).
 
 **And the column a reader runs an eye down holds a state rather than a
 sentence.** *live — 192.0.2.1, 192.0.2.2, answering on 443 and 80* is two lines
@@ -2232,8 +2241,8 @@ loudly wrong.
 `TestEverySourceIsAReadingAndEveryReadingIsListed`,
 `TestThePageDrawsALineForEverySourceTheInventorySends`,
 `TestThePageReadsTheNameFieldsTheAPISends`,
-`TestTheConsoleOffersTheInventoryUntickedAndUngraded`,
-`TestTheDemonstrationTicksTheInventory`
+`TestTheConsoleOffersTheInventoryAsADoorNotABox`,
+`TestTheDemonstrationOffersTheInventoryAsADoor`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

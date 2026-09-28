@@ -281,6 +281,10 @@ func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
 	src := script(t)
 	docs := asset(t, "assets/docs.html")
 
+	// Every row, run here or opened elsewhere, is something the script can
+	// draw and something the documents explain. A row on the list that no
+	// page describes is a row a reader cannot act on.
+	run := 0
 	for _, c := range consoleChecks() {
 		for _, want := range []string{
 			`  ` + c.ID + `: {`,
@@ -291,9 +295,6 @@ func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
 				t.Errorf("the script has no %q for the %s check", want, c.ID)
 			}
 		}
-		if !strings.Contains(src, `"`+c.ID+`"`) {
-			t.Errorf("the script never names the %s check", c.ID)
-		}
 		if _, served := pages["/"+c.ID+"/method"]; !served {
 			t.Errorf("the %s check has no method page", c.ID)
 		}
@@ -303,70 +304,95 @@ func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
 		if !strings.Contains(docs, c.Policy) && !strings.Contains(docs, "{{.") {
 			t.Errorf("the documents do not name %s", c.Policy)
 		}
+
+		if c.Page != "" {
+			// A door, not a box. It is not in the order the console runs,
+			// deliberately: the console has no field for the input its page
+			// takes, and a row that ran two thirds of itself here is what this
+			// replaced.
+			continue
+		}
+		run++
+		if !strings.Contains(src, `"`+c.ID+`"`) {
+			t.Errorf("the script never names the %s check", c.ID)
+		}
 	}
 
-	// The order the console runs them in covers every check and invents none.
+	// The order the console runs them in covers every box and invents none.
 	order := strings.Index(src, "const CHECK_ORDER = [")
 	if order < 0 {
 		t.Fatal("the script no longer declares the order it runs checks in")
 	}
 	line := src[order : strings.Index(src[order:], "]")+order]
 	for _, c := range consoleChecks() {
+		if c.Page != "" {
+			if strings.Contains(line, `"`+c.ID+`"`) {
+				t.Errorf("CHECK_ORDER runs %s, which the console offers as a page of its own "+
+					"because it cannot be fully run from here", c.ID)
+			}
+			continue
+		}
 		if !strings.Contains(line, `"`+c.ID+`"`) {
 			t.Errorf("CHECK_ORDER leaves out %s, so the console offers a check it never runs", c.ID)
 		}
 	}
-	if strings.Count(line, `"`) != 2*len(consoleChecks()) {
+	if strings.Count(line, `"`) != 2*run {
 		t.Errorf("CHECK_ORDER names something the console does not offer: %s", line)
 	}
 }
 
-// The console offers the inventory, unticked, and says nothing grades it.
+// The console offers the inventory as a door, not as a box.
 //
 // Three things in one test because they are one decision. It is on the list at
 // all, so somebody who came to find out what they have got does not have to
-// know a page exists. Its box is off, because it is the one entry that may ask
-// somebody other than the host and a list of an estate's names is a thing to
-// ask for. And the column where the four checks carry a rule set carries a
-// word instead, because a version there would promise two reports are
-// comparable when nothing here was graded (R21).
-func TestTheConsoleOffersTheInventoryUntickedAndUngraded(t *testing.T) {
+// know a page exists. It is a link rather than a checkbox, because the console
+// has no field for an address range: a box ran two thirds of the mode and
+// reported the reverse walk as never asked, every time, with nothing on the
+// page to do about it. And the column where the four checks carry a rule set
+// carries a word instead, because a version there would promise two reports
+// are comparable when nothing here was graded (R21).
+func TestTheConsoleOffersTheInventoryAsADoorNotABox(t *testing.T) {
 	var names *consoleCheck
-	for i, c := range consoleChecks() {
-		if c.ID == "names" {
-			names = &consoleChecks()[i]
+	offered := consoleChecks()
+	for i := range offered {
+		if offered[i].ID == "names" {
+			names = &offered[i]
 		}
 	}
 	if names == nil {
 		t.Fatal("the console offers no way to list the names under a domain")
 	}
-	if names.Checked {
-		t.Error("an installation ticks the inventory for somebody who did not ask for it")
+	if names.Page == "" {
+		t.Error("the inventory is offered as a check, and the console has no field for a range")
+	}
+	if _, served := pages[names.Page]; !served {
+		t.Errorf("the inventory row opens %q, which this build does not serve", names.Page)
 	}
 	if names.Policy != policy.Informational {
 		t.Errorf("the inventory row carries %q where it should say it grades nothing", names.Policy)
 	}
 
-	// And the box that is drawn is the box the list describes. The template
-	// wrote `checked` into every row until 2026-09-28, so a list saying off
-	// and a page saying on is the shape this has already had.
+	// And the row that is drawn is the row the list describes: a link, with no
+	// box in it for the form to submit.
 	page := consoleAs(t, false)
-	row := page[strings.Index(page, `value="names"`):]
-	if end := strings.Index(row, "</label>"); end > 0 {
-		row = row[:end]
+	if !strings.Contains(page, `href="`+names.Page+`"`) {
+		t.Errorf("the console draws no way to reach %s:\n%s", names.Page, page)
 	}
-	if strings.Contains(row, "checked") {
-		t.Errorf("the console draws the inventory ticked:\n%s", row)
+	if strings.Contains(page, `value="names"`) {
+		t.Error("the console still draws a checkbox for the inventory, which it cannot fully run")
 	}
 	if !strings.Contains(page, policy.Informational) {
 		t.Errorf("the console never says the inventory is not graded:\n%s", page)
 	}
 
-	// The four that do grade are still ticked, because somebody who typed a
-	// name into a scanner wants it scanned.
-	for _, c := range consoleChecks() {
-		if c.Policy != policy.Informational && !c.Checked {
-			t.Errorf("the %s check is offered unticked", c.Label)
+	// And every row that is a check is still a box, because somebody who typed
+	// a name into a scanner wants it scanned.
+	for _, c := range offered {
+		if c.Page != "" {
+			continue
+		}
+		if !strings.Contains(page, `value="`+c.ID+`" checked`) {
+			t.Errorf("the %s check is not offered ticked", c.Label)
 		}
 	}
 }

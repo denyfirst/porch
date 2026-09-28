@@ -213,13 +213,19 @@ and the command line asks only when an operator passes `-read-zone` for a zone
 they say is theirs. Nearly every zone refuses, which is correct, and a refusal
 is reported as a refusal rather than as an empty list.
 
-**It is offered where somebody looks, and it is not ticked.** The console lists
-it under the four checks, because a mode reachable only from a page you have to
-know about is a mode nobody runs. Its box is off on an installation somebody
-runs — it is the one entry that may ask somebody other than the host, and a
-list of an estate's names is a thing to ask for. The column where the checks
-carry a rule set says `informational` instead, so nothing on that row suggests
-a verdict is coming.
+**It is offered where somebody looks, and it opens its own page.** The console
+lists it under the four checks, because a mode reachable only from a page you
+have to know about is a mode nobody runs — but as a link rather than a box. The
+console runs its checks against one name and has no field for an address range,
+so a box there ran two thirds of this and reported the rest as never asked. The
+column where the checks carry a rule set says `informational` instead, so
+nothing on that row suggests a verdict is coming.
+
+On the demonstration the same row opens the same page, and the report under it
+carries one more sentence: every source marked *not asked* is one that
+deployment does not use, and a copy you run yourself reads each of them. Four
+lines saying *not asked*, with nothing saying where they can be asked, describe
+a tool with four things it cannot do.
 
 **It grades nothing and says so.** No document says which names an estate ought
 to have, so a verdict would be a threshold this project invented (R21).
