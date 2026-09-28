@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/denyfirst/porch/internal/dmarcreports"
 )
 
 // The rules for a domain's mail policy.
@@ -31,7 +33,13 @@ import (
 // the TLS name carries its check: "denyfirst-v1" over a mail report and over a
 // TLS report would be one name for two rule sets, which is exactly the
 // confusion the naming exists to prevent.
-const MailVersion = "porch-mail-v2"
+// v3, 2026-09-28. One new way to reach an existing verdict: a DMARC record
+// whose reports are addressed to a domain that has not agreed to receive them
+// is now a finding, because RFC 7489 §7.1 says a receiver must not send them
+// and the domain therefore gets none. No rule changed its meaning and no
+// threshold moved — but a domain that graded clean yesterday can grade worse
+// today on an unchanged configuration, and that is a version change.
+const MailVersion = "porch-mail-v3"
 
 var (
 	rfc7208 = Reference{
@@ -135,6 +143,18 @@ type MailFacts struct {
 	// reports. Without one an operator cannot see what their policy is doing,
 	// which is what makes moving off p=none unsafe.
 	DMARCReporting bool `json:"dmarcReporting"`
+
+	// DMARCReportTo is where those reports go, and whether the places outside
+	// this domain have agreed to receive them.
+	//
+	// The tag was reduced to the boolean above until 2026-09-28, and that
+	// threw away a measurement rather than a detail. RFC 7489 §7.1 forbids a
+	// receiver from sending reports to a destination outside the domain being
+	// reported on until that destination publishes a record agreeing to it. A
+	// domain that points rua= at a vendor with no such record receives nothing
+	// while its own DNS looks correct — the exact shape of fault this project
+	// exists to find, and one nothing in the domain's own records reveals.
+	DMARCReportTo dmarcreports.Found `json:"dmarcReportTo,omitzero"`
 
 	// DMARCReason says why the policy could not be read.
 	DMARCReason string `json:"dmarcReason,omitempty"`
@@ -425,6 +445,36 @@ func GradeMail(f MailFacts) MailFinding {
 			"The domain publishes more than one DMARC record",
 			"RFC 7489 says a receiver finding more than one applies no policy at all. The domain "+
 				"appears to have DMARC and does not.",
+			rfc7489)
+	}
+
+	// Reports addressed to somewhere that has not agreed to receive them.
+	//
+	// RFC 7489 §7.1: where a report destination is outside the domain being
+	// reported on, a receiver must not send anything there until the
+	// destination publishes a DMARC record at
+	// <domain>._report._dmarc.<destination>. Without it the receiver is
+	// required to discard the address, so the reports are not sent, not
+	// delayed and not bounced — they do not happen.
+	//
+	// Graded, and it belongs with the two above rather than among the
+	// observations, for the same reason they are graded: a document says what
+	// a receiver does, the receiver does it, and the domain is left believing
+	// something that is not true. Nothing in the domain's own DNS looks wrong,
+	// which is what makes it worth a finding rather than a note — an operator
+	// reading their own record cannot see this.
+	//
+	// Only where the authorisation was actually read. A resolver that would
+	// not answer leaves Unread rather than Unauthorised, and that is a note
+	// below (R4).
+	if refused := f.DMARCReportTo.Unauthorised(); len(refused) > 0 {
+		add("mail.dmarc-reports-unauthorised", Weak,
+			"The aggregate reports are addressed to a domain that has not agreed to receive them",
+			"RFC 7489 §7.1 requires "+namedHosts(refused)+" to publish a record authorising reports "+
+				"about this domain, and "+wasWere(len(refused))+" not. A receiver that follows the "+
+				"specification therefore sends nothing there. The record asks for reports and the "+
+				"reports do not arrive, which is the position of a domain that believes it is "+
+				"watching its own mail and is not.",
 			rfc7489)
 	}
 
@@ -741,6 +791,8 @@ func describeMail(f MailFacts) []Note {
 			"Those reports are how a domain finds out who is sending as it, and without them "+
 			"moving to a stricter policy is done blind."))
 	}
+
+	out = append(out, describeReporting(f)...)
 
 	if !f.TLSReporting {
 		out = append(out, Observed("The domain publishes no TLS-RPT record, so it receives no "+
@@ -1270,6 +1322,92 @@ type DKIMKey struct {
 	// Weak is true for an RSA key under the floor RFC 8301 sets, which is a
 	// key a verifier is entitled to treat as insecure.
 	Weak bool `json:"weak,omitempty"`
+}
+
+// describeReporting says where the aggregate reports go, and what was
+// established about the places outside this domain.
+//
+// The destinations are named rather than counted for the same reason the mail
+// exchangers are: a reader's next action depends on which vendor it is. The
+// mailbox beside each domain is printed only where the caller asked for it —
+// see mailscan.Scanner.ShowReportAddresses — and its absence changes nothing
+// here, because everything below is about domains.
+func describeReporting(f MailFacts) []Note {
+	var out []Note
+
+	dest := f.DMARCReportTo
+	if !dest.Asked || len(dest.Destinations) == 0 {
+		return nil
+	}
+
+	inside, outside := reportDestinations(dest)
+	switch {
+	case len(outside) == 0:
+		out = append(out, Observed("Aggregate reports go to "+namedHosts(inside)+
+			", inside this domain. RFC 7489 §7.1 asks nothing of a destination the domain "+
+			"owns, so nothing else had to agree for these to arrive."))
+	default:
+		line := "Aggregate reports go to " + namedHosts(outside) + ", outside this domain"
+		if len(inside) > 0 {
+			line += ", and to " + namedHosts(inside) + " inside it"
+		}
+		out = append(out, Observed(line+". RFC 7489 §7.1 requires each destination outside "+
+			"the domain to publish a record accepting them, and this check asked for one at "+
+			"each. A destination under this domain is treated as inside it, which is the "+
+			"reading receivers differ on and the one that reports fewer faults rather than "+
+			"more."))
+	}
+
+	// A destination nothing could be established about is not a destination
+	// that refused, and the two send an operator to opposite places (R4).
+	if unread := dest.Unread(); len(unread) > 0 {
+		out = append(out, Unsettled("Whether "+namedHosts(unread)+" accepts reports about this "+
+			"domain could not be read, so nothing above says whether those reports arrive. "+
+			"That is a fact about the lookup rather than about the destination."))
+	}
+
+	if dest.Dropped > 0 {
+		out = append(out, Observed("The record names "+count(dest.Dropped, "further report address")+
+			" that this check did not read: either more than it follows, or written in a form "+
+			"that is not a URI. Nothing above covers "+themIt(dest.Dropped)+"."))
+	}
+	return out
+}
+
+// reportDestinations splits the places named into the ones this domain owns
+// and the ones it does not.
+func reportDestinations(f dmarcreports.Found) (inside, outside []string) {
+	seenIn, seenOut := map[string]bool{}, map[string]bool{}
+	for _, d := range f.Destinations {
+		switch {
+		case d.External && !seenOut[d.Domain]:
+			seenOut[d.Domain] = true
+			outside = append(outside, d.Domain)
+		case !d.External && !seenIn[d.Domain]:
+			seenIn[d.Domain] = true
+			inside = append(inside, d.Domain)
+		}
+	}
+	slices.Sort(inside)
+	slices.Sort(outside)
+	return inside, outside
+}
+
+// wasWere agrees with a count, so a sentence naming one domain does not read
+// as a sentence naming three.
+func wasWere(n int) string {
+	if n == 1 {
+		return "it has"
+	}
+	return "they have"
+}
+
+// themIt is the same agreement for what a sentence points back at.
+func themIt(n int) string {
+	if n == 1 {
+		return "it"
+	}
+	return "them"
 }
 
 // describeDKIM says what looking under a set of selectors found, and — the part

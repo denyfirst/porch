@@ -81,6 +81,7 @@ import (
 	danecheck "github.com/denyfirst/porch/internal/dane"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dkim"
+	"github.com/denyfirst/porch/internal/dmarcreports"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/mtasts"
@@ -244,6 +245,24 @@ type Scanner struct {
 	// has to say. See internal/dkim.
 	DKIMSelectors []dkim.Selector
 
+	// ShowReportAddresses prints the mailboxes a DMARC record asks for reports
+	// at, rather than only the domains they are at.
+	//
+	// False by default, which is the safe thing for an unset field to mean. A
+	// domain is not a person and a mailbox is: a deployment that scans names
+	// nobody proved anything about would otherwise carry somebody's address
+	// into a report a stranger asked for.
+	//
+	// Nothing about the finding depends on it. Whether an external destination
+	// has agreed to receive reports (RFC 7489 §7.1) is a question about
+	// domains, so it is answered and reported either way — this decides only
+	// whether the address beside the domain is printed.
+	//
+	// The command line sets it, because it runs on the operator's own machine;
+	// a service sets it where control of the domain has been proven. The same
+	// argument, and the same two callers, as ReadSTSPolicy and ReadExchangers.
+	ShowReportAddresses bool
+
 	// Now supplies the current time, so a duration is reproducible in tests.
 	Now func() time.Time
 }
@@ -384,6 +403,7 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 	// domain's policy.
 	facts.DMARCPercent = 100
 
+	var rua string
 	for _, tag := range strings.Split(records[0], ";") {
 		name, value, ok := strings.Cut(strings.TrimSpace(tag), "=")
 		if !ok {
@@ -400,9 +420,38 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 				facts.DMARCPercent = n
 			}
 		case "rua":
-			facts.DMARCReporting = value != ""
+			rua = value
 		}
 	}
+
+	// Where the reports go, and whether the places named have agreed to
+	// receive them.
+	//
+	// Read rather than reduced to a boolean, which is what this was until
+	// 2026-09-28. The boolean answered "are reports asked for" and threw away
+	// the question underneath it: RFC 7489 §7.1 forbids a receiver from
+	// sending reports to a destination outside the domain until that
+	// destination publishes a record agreeing to it, so a domain pointing at a
+	// vendor with no such record gets nothing while its own DNS looks correct.
+	facts.DMARCReporting = rua != ""
+	if rua != "" {
+		found := dmarcreports.Verify(ctx, txtOnly{r}, domain, dmarcreports.Read(domain, rua))
+		if !s.ShowReportAddresses {
+			found = found.WithoutMailboxes()
+		}
+		facts.DMARCReportTo = found
+	}
+}
+
+// txtOnly gives internal/dmarcreports the one lookup it asks for.
+type txtOnly struct{ r Resolver }
+
+func (t txtOnly) LookupTXT(ctx context.Context, name string) ([]string, error) {
+	answer, err := t.r.LookupTXT(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return answer.Values, nil
 }
 
 // readTLSReporting asks whether the domain wants to hear about failed delivery

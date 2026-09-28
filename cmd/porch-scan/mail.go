@@ -39,6 +39,11 @@ func mailScanner(timeout time.Duration, selectors []dkim.Selector, heloName stri
 		// reason the service instead ties this to proof of control.
 		ReadSTSPolicy: true,
 
+		// And prints the addresses a DMARC record asks for reports at, on the
+		// same argument. The mailbox is withheld from a report a stranger
+		// asked for; nobody is a stranger to their own terminal.
+		ShowReportAddresses: true,
+
 		STS: &mtasts.Fetcher{Timeout: timeout},
 
 		// And asks the exchangers, for the same reason: the operator's own
@@ -155,6 +160,14 @@ func printMail(w io.Writer, r mailResult) {
 			fmt.Fprintf(w, "    DMARC      published, and names no policy\n")
 		default:
 			fmt.Fprintf(w, "    DMARC      p=%s at %d%%\n", f.DMARCPolicy, f.DMARCPercent)
+		}
+
+		// Where the aggregate reports go, on the line under the policy that
+		// asks for them. A count would have answered the wrong question: what
+		// an operator is checking is whether the destination is still one they
+		// use, and whether it agreed to receive them (RFC 7489 §7.1).
+		if line := saysReportTo(f); line != "" {
+			fmt.Fprintf(w, "    Reports to %s\n", line)
 		}
 
 		reporting := "no"
@@ -320,4 +333,47 @@ func daneSummary(f *policy.MailFacts) string {
 		return strconv.Itoa(len(f.DANEHosts)) + " of the " + strconv.Itoa(len(f.MXHosts)) +
 			": " + strings.Join(f.DANEHosts, ", ")
 	}
+}
+
+// saysReportTo is where a DMARC record asks for its aggregate reports, in one
+// line, with what was established about each destination outside the domain.
+//
+// Each destination carries its own state rather than the line carrying a
+// total, because the three are different things to do about: one that agreed,
+// one that has published nothing and will therefore receive nothing, and one
+// whose authorisation could not be read at all (R4).
+//
+// The mailbox is printed where the scanner was told to print it, and the
+// domain always. A command line run by an operator prints both; a service
+// scanning a domain nobody proved prints the destination without the address
+// at it.
+func saysReportTo(f *policy.MailFacts) string {
+	dest := f.DMARCReportTo
+	if !dest.Asked || len(dest.Destinations) == 0 {
+		return ""
+	}
+
+	var out []string
+	for _, d := range dest.Destinations {
+		at := d.Domain
+		if d.Mailbox != "" {
+			at = d.Mailbox
+		}
+		switch {
+		case !d.External:
+			out = append(out, at+" (inside this domain)")
+		case d.Reason != "":
+			out = append(out, at+" (not established: "+d.Reason+")")
+		case d.Authorised:
+			out = append(out, at+" (agreed)")
+		default:
+			out = append(out, at+" (HAS NOT AGREED, so it receives none)")
+		}
+	}
+
+	line := strings.Join(out, ", ")
+	if dest.Dropped > 0 {
+		line += fmt.Sprintf(", and %d more this check did not read", dest.Dropped)
+	}
+	return line
 }

@@ -16,7 +16,7 @@ session identifier, and nothing about who is working on it.
 A scanner that measures how a host is reached and grades what it finds. Four
 checks so far: the TLS handshake and the certificate behind it
 (`porch-tls-v7`), how a website is reached over HTTP (`porch-web-v3`),
-what a domain's DNS says about its mail (`porch-mail-v2`), and how the domain
+what a domain's DNS says about its mail (`porch-mail-v3`), and how the domain
 itself is served, down to its DNSSEC chain (`porch-dns-v2`).
 
 Each carries its own rule-set name and its own version, and they move
@@ -254,6 +254,7 @@ in it is there because it has already gone wrong once.
 | `internal/mtasts` | fetches the MTA-STS policy a zone announces, behind proof (N13) |
 | `internal/smtptls` | asks each MX for STARTTLS on port 25, and a domain's own MX whether it relays; no message is ever composed (N3, N13) |
 | `internal/dane` | checks an exchanger's DANE records against the certificate it presented, as RFC 7672 has a sender do (N13) |
+| `internal/dmarcreports` | where a DMARC record asks for its reports, and whether the places outside the domain agreed to receive them, as RFC 7489 §7.1 has a receiver check (N13) |
 | `internal/demo` | which hosts this deployment may reach, compiled in |
 | `internal/verify` | which domains a deployment has been shown control of (N9) |
 | `internal/challenge` | fetches the file half of that proof, and nothing else |

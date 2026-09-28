@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/dmarcreports"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
 )
@@ -186,6 +187,15 @@ func TestTheCommandLineReadsTheSTSPolicy(t *testing.T) {
 	if s.STS == nil {
 		t.Error("no fetcher was installed, so the flag above is set and nothing acts on it")
 	}
+
+	// And prints the addresses a DMARC record asks for reports at, on the same
+	// argument. The mailbox is withheld from a report a stranger asked for;
+	// nobody is a stranger to their own terminal, and an operator who cannot
+	// see which vendor their reports go to has been handed the boolean this
+	// replaced.
+	if !s.ShowReportAddresses {
+		t.Error("the command line withholds the report addresses from the operator running it")
+	}
 }
 
 // Four states on the MTA-STS row, not two.
@@ -345,5 +355,110 @@ func TestAnAliasedExchangerReachesBothFacesOfTheReport(t *testing.T) {
 	printMail(&buf, r)
 	if strings.Contains(buf.String(), "MX alias") {
 		t.Errorf("a domain with plain names has an alias row:\n%s", buf.String())
+	}
+}
+
+// Where the aggregate reports go reaches both faces of the report, in the same
+// words (R16).
+//
+// Four states and each is a different thing to do about: a destination inside
+// the domain, one outside that agreed, one outside that has published nothing
+// and therefore receives nothing, and one whose authorisation could not be
+// read at all. A row that collapsed any two of them would be the boolean this
+// replaced, wearing more words.
+func TestWhereTheReportsGoReachesBothFacesOfTheReport(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	src := string(page)
+
+	// The fields, and then the four sentences they are read into.
+	//
+	// The field names alone are not enough and a sabotage proved it twice on
+	// 2026-09-28: one collapsed "could not be read" into "has not agreed" and
+	// left `d.reason` in the file, and one wrapped the row in `if (false)` and
+	// left the call in the file. What has to be pinned is the distinct thing
+	// each state says, and that the row is drawn when there is something to
+	// draw.
+	for _, want := range []string{
+		`facts.dmarcReportTo`,
+		`d.external`,
+		`d.authorised`,
+		`d.reason`,
+		`d.mailbox`,
+		`dest.dropped`,
+		`if (reportTo) row("Reports to", reportTo);`,
+		`" (inside this domain)"`,
+		`" (agreed)"`,
+		`" (has not agreed, so it receives none)"`,
+		`" (not established: " + d.reason + ")"`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree about the reports", want)
+		}
+	}
+
+	r := mailSample()
+	r.Observed.DMARCReporting = true
+	r.Observed.DMARCReportTo = dmarcreports.Found{
+		Asked:   true,
+		Dropped: 1,
+		Destinations: []dmarcreports.Destination{
+			{Domain: "example.com", Mailbox: "dmarc@example.com", Kind: "mailto"},
+			{Domain: "agreed.example", Mailbox: "a@agreed.example", Kind: "mailto",
+				External: true, Checked: true, Authorised: true},
+			{Domain: "silent.example", Mailbox: "b@silent.example", Kind: "mailto",
+				External: true, Checked: true},
+			{Domain: "unread.example", Mailbox: "c@unread.example", Kind: "mailto",
+				External: true, Checked: true, Reason: "the authorisation record could not be read"},
+		},
+	}
+
+	var buf bytes.Buffer
+	printMail(&buf, r)
+	out := buf.String()
+
+	for _, want := range []string{
+		"Reports to ",
+		"dmarc@example.com (inside this domain)",
+		"a@agreed.example (agreed)",
+		"b@silent.example (HAS NOT AGREED, so it receives none)",
+		"c@unread.example (not established: the authorisation record could not be read)",
+		"and 1 more this check did not read",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// A record that names nowhere draws no row, rather than an empty one.
+	r.Observed.DMARCReportTo = dmarcreports.Found{}
+	buf.Reset()
+	printMail(&buf, r)
+	if strings.Contains(buf.String(), "Reports to") {
+		t.Errorf("a record that names nowhere draws a row anyway:\n%s", buf.String())
+	}
+}
+
+// A destination whose address was withheld still says where the reports go.
+//
+// The finding is about domains, so a deployment that prints no mailbox prints
+// the domain and reads the same. A row that fell back to nothing would hide
+// the fault along with the address.
+func TestADestinationWithNoAddressStillNamesItsDomain(t *testing.T) {
+	r := mailSample()
+	r.Observed.DMARCReporting = true
+	r.Observed.DMARCReportTo = dmarcreports.Found{
+		Asked: true,
+		Destinations: []dmarcreports.Destination{
+			{Domain: "silent.example", Kind: "mailto", External: true, Checked: true},
+		},
+	}
+
+	var buf bytes.Buffer
+	printMail(&buf, r)
+	if !strings.Contains(buf.String(), "silent.example (HAS NOT AGREED, so it receives none)") {
+		t.Errorf("a destination with no address printed does not name its domain:\n%s", buf.String())
 	}
 }

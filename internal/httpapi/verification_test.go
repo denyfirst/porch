@@ -538,3 +538,31 @@ func TestTheServiceAsksExchangersOnlyWhereItRequiredProof(t *testing.T) {
 			"names nobody proved anything about")
 	}
 }
+
+// The service prints the addresses a DMARC record asks for reports at only
+// where it required proof of control.
+//
+// A domain is not a person and a mailbox is. The destination's domain is in
+// every report, because the finding underneath it — whether that domain has
+// agreed to receive reports, which RFC 7489 §7.1 requires — is a question
+// about domains. The address at it is carried only where somebody has shown
+// the estate is theirs.
+//
+// A sabotage turning this on unconditionally is the one to watch for: every
+// other test in this package passes while a deployment that proved nothing
+// hands a stranger somebody's mailbox.
+func TestTheServicePrintsReportAddressesOnlyWhereItRequiredProof(t *testing.T) {
+	scope := &verify.Scope{Secret: []byte("a deployment secret")}
+
+	withProof := New(&scan.Scanner{Verify: scope}, Limits{}, nil)
+	if !withProof.mail.ShowReportAddresses {
+		t.Error("a service that requires proof of control withholds the report addresses from " +
+			"the person who proved the domain is theirs")
+	}
+
+	withoutProof := New(&scan.Scanner{}, Limits{}, nil)
+	if withoutProof.mail.ShowReportAddresses {
+		t.Error("a service configured with no scope prints the mailboxes published by names " +
+			"nobody proved anything about")
+	}
+}
