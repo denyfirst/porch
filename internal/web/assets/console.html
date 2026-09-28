@@ -104,12 +104,16 @@
           aria-describedby="selectors-help">
       </div>
       <p class="field-help" id="selectors-help">
-        Comma separated. A signing key lives under a name only its operator
-        knows, and nothing can list them: without these the check looks under
-        the names mail providers document for their own service and can say
-        nothing about a selector of your own. Each is one lookup, to the same
-        resolver as everything else. Up to sixteen; a longer list is refused
-        rather than cut short.
+        Comma separated, and you can leave it empty: the check already looks
+        under the names mail providers document for their own service, which
+        covers most domains. Fill it in when yours is not one of those.
+        <strong>Your selector is the <code>s=</code> tag in the
+        <code>DKIM-Signature</code> header of any message this domain sent</strong>
+        — open one and read it there. It is also the first label of the record
+        itself, in <code>&lt;selector&gt;._domainkey</code> under the domain.
+        Nothing can list them, which is why this field exists. Each is one
+        lookup, to the same resolver as everything else. Up to sixteen; a
+        longer list is refused rather than cut short.
       </p>
 
       <div class="composer-run">

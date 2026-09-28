@@ -316,6 +316,16 @@ func TestTheSelectorFieldGoesOnlyToTheMailCheck(t *testing.T) {
 			"filling it in cannot tell what it does")
 	}
 
+	// And the field says where a selector is found, because somebody who does
+	// not know what one is cannot fill it in. The s= tag is the answer that
+	// does not depend on a provider's documentation being right.
+	for _, want := range []string{"s=", "DKIM-Signature", "_domainkey"} {
+		if !strings.Contains(form, want) {
+			t.Errorf("the field asks for a selector and never says %q, so a reader is told to "+
+				"supply something they have no way to find", want)
+		}
+	}
+
 	body := functionBody(t, src, "selectorsAsked")
 	if !strings.Contains(body, `name !== "mail"`) {
 		t.Error("the selectors are read without asking which check is running, so they are sent " +

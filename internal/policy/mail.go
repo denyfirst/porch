@@ -1410,6 +1410,27 @@ func themIt(n int) string {
 	return "them"
 }
 
+// whereSelectorsAre is the sentence that turns "name your selectors" into
+// something a reader can act on.
+//
+// Both notes that ask for them used to stop at asking, which is advice nobody
+// can follow: a selector is not a thing most operators have heard of, and the
+// report was telling them to supply one without saying what one is or where
+// theirs lives. A scanner that names a gap and not the way to close it has
+// described a problem and left it there.
+//
+// The s= tag is the reliable answer and it is the one nobody thinks of. Every
+// message the domain signs carries the selector it was signed under, in the
+// header, in plain text — so an operator with a sent message has their own
+// answer in front of them whatever their provider's documentation says. The
+// zone is named second because somebody who published the record may still
+// have it, and the provider third because it is the one that is wrong when a
+// domain has moved.
+const whereSelectorsAre = " A selector is the s= tag in the DKIM-Signature header of any message " +
+	"this domain sent — open one and read it there. It is also the first label of the record " +
+	"itself, in <selector>._domainkey under the domain, and your mail provider's setup page " +
+	"names the ones it uses."
+
 // describeDKIM says what looking under a set of selectors found, and — the part
 // that matters most — what it did not look under.
 //
@@ -1424,7 +1445,7 @@ func describeDKIM(f MailFacts) []Note {
 		out = append(out, Unsettled("DKIM was not checked. A signing key lives under a selector "+
 			"and DNS cannot list what is beneath a name, so a scan has to be told where to look. "+
 			"Name your selectors to have them read; there is no way to discover them, and this "+
-			"report says nothing about whether the domain signs its mail."))
+			"report says nothing about whether the domain signs its mail."+whereSelectorsAre))
 		return out
 	}
 
@@ -1463,7 +1484,7 @@ func describeDKIM(f MailFacts) []Note {
 			namedHosts(missing)+". These are names mail providers document for their own service, "+
 			"not names this domain has to use, so this establishes that these particular names "+
 			"hold nothing and not that the domain publishes no key. Name your own selectors to "+
-			"settle it."))
+			"settle it."+whereSelectorsAre))
 	}
 
 	if unread > 0 {

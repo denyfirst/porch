@@ -2375,6 +2375,16 @@ The field sits beside the checks rather than in a section of its own, says
 which check it belongs to, and is sent only when that check is running
 (`TestTheSelectorFieldGoesOnlyToTheMailCheck`).
 
+**And it says where a selector is found, because "name your selectors" is
+advice nobody can follow.** A selector is not a thing most operators have heard
+of, and both notes that ask for one stopped at asking — describing a gap and
+leaving it there. The `s=` tag in the `DKIM-Signature` header of any message
+the domain sent is the reliable answer and the one nobody thinks of: it is in
+front of anybody with a sent message, whatever their provider's documentation
+says. The record's own first label comes second, and the provider's setup page
+third, because that is the one that is wrong when a domain has moved
+(`TestANoteThatAsksForASelectorSaysWhereToFindOne`).
+
 **A report destination outside the domain is asked whether it agreed, and the
 address it points at is a separate question from the domain it is at.** RFC
 7489 §7.1 forbids a receiver from sending aggregate reports to a destination
