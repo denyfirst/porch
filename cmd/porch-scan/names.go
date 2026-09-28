@@ -233,8 +233,15 @@ func certificatesFrom(opt namesOptions) *certnames.Reader {
 // the script would then be taking a list of names from two sources on the days
 // both answered and from one on the days they did not, with nothing in the
 // status to tell the two apart (R4).
+//
+// Every source, not the two this mode was born with. It read the logs and the
+// records while six sources could fail, so a run whose zone transfer or whose
+// reverse walk failed exited zero — the exact case this was written to catch,
+// missed because the list of sources lived here as well as in the report. It
+// is asked of the inventory now, which is the only thing that knows how many
+// there are.
 func shortInventory(inv inventory.Inventory) bool {
-	return inv.Logs.Reason != "" || inv.Records.Reason != ""
+	return len(inv.Failures()) > 0
 }
 
 // printNames writes one domain's inventory.
@@ -246,10 +253,8 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 		// Not one source answered, so there is no inventory — and an empty
 		// list under the usual heading would be the most comfortable wrong
 		// answer available (R4).
-		for _, reason := range []string{inv.Logs.Reason, inv.Records.Reason} {
-			if reason != "" {
-				fmt.Fprintf(w, "    Not established: %s\n", reason)
-			}
+		for _, reason := range inv.Failures() {
+			fmt.Fprintf(w, "    Not established: %s\n", reason)
 		}
 		return
 	}

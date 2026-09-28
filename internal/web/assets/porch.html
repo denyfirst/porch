@@ -41,7 +41,7 @@
         <legend class="field-label">Checks</legend>
         {{range .Checks}}
         <label class="check">
-          <input type="checkbox" name="check" value="{{.ID}}" checked>
+          <input type="checkbox" name="check" value="{{.ID}}"{{if .Checked}} checked{{end}}>
           <span class="check-name">{{.Label}}</span>
           <span class="check-says">{{.Says}}</span>
           <span class="check-policy">{{.Policy}}</span>

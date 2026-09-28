@@ -66,6 +66,20 @@ import (
 // which is a version change.
 const TLSVersion = "porch-tls-v7"
 
+// Informational is what the name inventory carries where a check carries a
+// rule-set name, and it is a word rather than a version deliberately.
+//
+// The inventory grades nothing. No document says which names an estate ought
+// to have, so a verdict would be a threshold this project invented (R21), and
+// a version number beside it would be worse than none: a version is a promise
+// that two reports carrying it are comparable, and there is nothing here to
+// compare. Somebody reading a console that offers four rule sets and one of
+// these knows immediately which of the five is being graded.
+//
+// It lives here, beside the versions it stands in for, so that the console,
+// the command line and the pages cannot each invent their own word for it.
+const Informational = "informational"
+
 // ReviewBy is when these rules should next be read against their sources.
 //
 // Standards move on their own schedule. RFC 8996 appeared while TLS 1.0 was

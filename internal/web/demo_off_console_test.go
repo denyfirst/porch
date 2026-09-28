@@ -4,6 +4,7 @@ package web
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -95,15 +96,28 @@ func TestTheConsoleSaysWhetherPagesAreRead(t *testing.T) {
 // fourth check arrives with a fourth rule set, and the console has to grow a
 // row for it or this fails. A check nobody can run from the page that exists to
 // run them is a check nobody runs.
+//
+// A row that grades nothing is allowed, and it is held to saying so. The name
+// inventory is one, and the only thing keeping a reader from mistaking it for
+// a graded check is the word in the column where the others carry a version —
+// so a row carrying neither a rule set in force nor that word fails here
+// rather than reaching somebody who would read the blank as a pass (R4).
 func TestTheConsoleOffersEveryCheckThisBinaryHas(t *testing.T) {
 	page := consoleAs(t, false)
 
 	inForce := []string{policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion}
 	offered := consoleChecks()
 
-	if len(offered) != len(inForce) {
-		t.Fatalf("the console offers %d checks and this binary carries %d rule sets",
-			len(offered), len(inForce))
+	graded := 0
+	for _, c := range offered {
+		if c.Policy == policy.Informational {
+			continue
+		}
+		graded++
+	}
+	if graded != len(inForce) {
+		t.Fatalf("the console offers %d graded checks and this binary carries %d rule sets",
+			graded, len(inForce))
 	}
 
 	for _, version := range inForce {
@@ -123,10 +137,15 @@ func TestTheConsoleOffersEveryCheckThisBinaryHas(t *testing.T) {
 	}
 
 	// Each row carries what the box means, because "Mail" alone does not say
-	// what will be read.
+	// what will be read — and each says either which rule set grades it or
+	// that nothing does.
 	for _, c := range offered {
 		if c.ID == "" || c.Label == "" || c.Says == "" || c.Policy == "" {
 			t.Errorf("the %q row is incomplete: %+v", c.Label, c)
+		}
+		if c.Policy != policy.Informational && !slices.Contains(inForce, c.Policy) {
+			t.Errorf("the %s row carries %q, which is neither a rule set this binary grades by "+
+				"nor a word saying it grades nothing", c.Label, c.Policy)
 		}
 		if !strings.Contains(page, c.Label) {
 			t.Errorf("the console does not show the %s check", c.Label)
@@ -299,5 +318,55 @@ func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
 	}
 	if strings.Count(line, `"`) != 2*len(consoleChecks()) {
 		t.Errorf("CHECK_ORDER names something the console does not offer: %s", line)
+	}
+}
+
+// The console offers the inventory, unticked, and says nothing grades it.
+//
+// Three things in one test because they are one decision. It is on the list at
+// all, so somebody who came to find out what they have got does not have to
+// know a page exists. Its box is off, because it is the one entry that may ask
+// somebody other than the host and a list of an estate's names is a thing to
+// ask for. And the column where the four checks carry a rule set carries a
+// word instead, because a version there would promise two reports are
+// comparable when nothing here was graded (R21).
+func TestTheConsoleOffersTheInventoryUntickedAndUngraded(t *testing.T) {
+	var names *consoleCheck
+	for i, c := range consoleChecks() {
+		if c.ID == "names" {
+			names = &consoleChecks()[i]
+		}
+	}
+	if names == nil {
+		t.Fatal("the console offers no way to list the names under a domain")
+	}
+	if names.Checked {
+		t.Error("an installation ticks the inventory for somebody who did not ask for it")
+	}
+	if names.Policy != policy.Informational {
+		t.Errorf("the inventory row carries %q where it should say it grades nothing", names.Policy)
+	}
+
+	// And the box that is drawn is the box the list describes. The template
+	// wrote `checked` into every row until 2026-09-28, so a list saying off
+	// and a page saying on is the shape this has already had.
+	page := consoleAs(t, false)
+	row := page[strings.Index(page, `value="names"`):]
+	if end := strings.Index(row, "</label>"); end > 0 {
+		row = row[:end]
+	}
+	if strings.Contains(row, "checked") {
+		t.Errorf("the console draws the inventory ticked:\n%s", row)
+	}
+	if !strings.Contains(page, policy.Informational) {
+		t.Errorf("the console never says the inventory is not graded:\n%s", page)
+	}
+
+	// The four that do grade are still ticked, because somebody who typed a
+	// name into a scanner wants it scanned.
+	for _, c := range consoleChecks() {
+		if c.Policy != policy.Informational && !c.Checked {
+			t.Errorf("the %s check is offered unticked", c.Label)
+		}
 	}
 }
