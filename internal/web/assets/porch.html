@@ -40,12 +40,20 @@
       <fieldset class="checks">
         <legend class="field-label">Checks</legend>
         {{range .Checks}}
+        {{if .Page}}
+        <a class="check check-elsewhere" href="{{.Page}}">
+          <span class="check-name arrow-ne">{{.Label}}</span>
+          <span class="check-says">{{.Says}}</span>
+          <span class="check-policy">{{.Policy}}</span>
+        </a>
+        {{else}}
         <label class="check">
-          <input type="checkbox" name="check" value="{{.ID}}"{{if .Checked}} checked{{end}}>
+          <input type="checkbox" name="check" value="{{.ID}}" checked>
           <span class="check-name">{{.Label}}</span>
           <span class="check-says">{{.Says}}</span>
           <span class="check-policy">{{.Policy}}</span>
         </label>
+        {{end}}
         {{end}}
       </fieldset>
 

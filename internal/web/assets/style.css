@@ -2619,6 +2619,36 @@ main > .band:last-child { border-bottom: 0; }
   border-color: color-mix(in srgb, var(--brand) 45%, var(--rule));
 }
 
+/*
+  One row in the list is a door rather than a box.
+
+  The name inventory is on the list because that is where somebody looks, and
+  it is not a check: it asks about a whole domain rather than one host, it
+  grades nothing, and it takes an address range this form has no field for. A
+  box here ran two thirds of it and reported the rest as never asked, with
+  nothing on the page to do about that, so the row opens the page that runs all
+  of it instead.
+
+  It keeps the card it would have had, minus the column the checkbox sat in,
+  so the list still reads as one list.
+*/
+.check-grid .check-elsewhere,
+.checks .check-elsewhere {
+  text-decoration: none;
+  color: inherit;
+}
+
+.check-grid .check-elsewhere { grid-template-columns: 1fr; }
+.check-grid .check-elsewhere .check-says,
+.check-grid .check-elsewhere .check-policy { grid-column: 1; }
+
+.checks .check-elsewhere { grid-template-columns: minmax(5.5rem, auto) 1fr auto; }
+
+.check-grid .check-elsewhere:hover,
+.checks .check-elsewhere:hover {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--rule));
+}
+
 /* A phone: four across and nothing else. The documents are in the footer,
    the colour switch sits beside the name, and a button repeating a rail item
    is left out. */

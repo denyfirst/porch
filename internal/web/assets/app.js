@@ -62,17 +62,18 @@ const CHECKS = {
     working: "Reading the delegation, the records at the name and the DNSSEC chain.",
     build: (data) => buildDNS(data),
   },
-  // Last in CHECK_ORDER, and the console draws its box unticked.
+  // Not in CHECK_ORDER: the console runs every check it is given against one
+  // name, and this is not a check.
   //
-  // It was left out of the list for a year, on the argument that the console
-  // runs checks and this is not one: it grades nothing and it is about a
-  // domain rather than a host. Both are still true, and neither was a reason
-  // to hide it. Somebody who came to look at their own estate had to know the
-  // page existed to find it, which is the worst possible way to offer the one
-  // mode that answers "what have I got" — so it is on the list, its rule-set
-  // column says informational rather than a version nobody may compare, and
-  // the box is off until somebody ticks it, because this is the one entry that
-  // may ask somebody other than the host.
+  // It is on the console's list all the same — hiding it meant somebody had to
+  // know the page existed to find it, which is the worst way to offer the one
+  // mode that answers "what have I got" — but as a link to its own page rather
+  // than as a box. The page has a field for an address range and this form has
+  // none, so a box here ran two thirds of the mode and reported the reverse
+  // walk as never asked, every time, with nothing on the page to do about it.
+  //
+  // The entry stays in CHECKS because the page itself runs from it: the label,
+  // the endpoint, the working line and the builder are all read there.
   names: {
     label: "Names",
     says: "which names under the domain its certificates, its own records and its zone publish",
@@ -98,7 +99,7 @@ const CHECKS = {
 // Fixed rather than taken from the object, because a report whose sections
 // move between two scans of an unchanged estate is a diff a reader has to work
 // out is not a change.
-const CHECK_ORDER = ["tls", "web", "mail", "dns", "names"];
+const CHECK_ORDER = ["tls", "web", "mail", "dns"];
 
 // The demonstration says so on its body. A few things an installation offers
 // its operator mean nothing there: a download of a report about our own
@@ -3098,6 +3099,25 @@ function namesLimits(data) {
     "This is an inventory, not a verdict: nothing above is graded, because no " +
       "document says which names an estate ought to have."
   );
+
+  // And, on the demonstration, where the sources it does not use can be used.
+  //
+  // This deployment reaches hosts compiled into it (N6) and configures two of
+  // the six sources, so a visitor sees four lines saying "not asked" with no
+  // way to change any of them — which reads as four things the tool cannot do
+  // rather than four it was not asked to do here. It points at the lines the
+  // report already drew rather than listing them again: a second list would be
+  // a second thing to keep in step with what is actually configured, and the
+  // day it drifted it would be this page telling somebody something false
+  // about the tool (N14).
+  if (DEMO_SITE) {
+    item(
+      "Every source above marked not asked is one this demonstration does not use: it reaches " +
+        "only hosts compiled into it, so there is no field here for a zone, a register, or an " +
+        "address range. A copy you run yourself reads each of them, for domains you have shown " +
+        "control of."
+    );
+  }
 
   wrap.appendChild(list);
   return wrap;

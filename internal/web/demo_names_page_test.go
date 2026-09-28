@@ -53,41 +53,51 @@ func TestTheDemonstrationListsItsOwnEstate(t *testing.T) {
 	}
 }
 
-// The demonstration ticks the inventory, because it is what it demonstrates.
+// The demonstration offers the inventory the same way, and says what a copy
+// somebody runs adds.
 //
-// The opposite of the rule an installation follows, for the reason that rule
-// exists: off there protects somebody whose estate would be named to a
-// monitor, and here the estate is this project's own and compiled in. A
-// demonstration that hides the one mode reading several sources demonstrates
-// nothing.
-//
-// What makes it affordable is that the answer is kept for an hour, so a
-// hundred visitors in an hour are one question rather than a hundred.
-func TestTheDemonstrationTicksTheInventory(t *testing.T) {
-	var found bool
-	for _, c := range consoleChecks() {
-		if c.ID != "names" {
-			continue
-		}
-		found = true
-		if !c.Checked {
-			t.Error("the demonstration offers the inventory unticked, so nothing demonstrates it")
-		}
-		if c.Policy != policy.Informational {
-			t.Errorf("the inventory row carries %q where it should say it grades nothing", c.Policy)
+// The same door, for a different reason than the installation's. There the
+// console has no field for an address range; here there is no field at all —
+// the estate is compiled in (N6) — and every source beyond the two this
+// deployment configures is one a visitor cannot switch on from a web page.
+// Hiding that would be the version of this page that oversells: a report with
+// four sources marked "not asked" and nothing saying where they can be asked
+// reads as a tool that has four things it cannot do (N14).
+func TestTheDemonstrationOffersTheInventoryAsADoor(t *testing.T) {
+	var names *consoleCheck
+	offered := consoleChecks()
+	for i := range offered {
+		if offered[i].ID == "names" {
+			names = &offered[i]
 		}
 	}
-	if !found {
+	if names == nil {
 		t.Fatal("the demonstration's check list has no inventory row")
 	}
-
-	// And the page draws it that way.
-	page := get(t, "/porch").Body.String()
-	row := page[strings.Index(page, `value="names"`):]
-	if end := strings.Index(row, "</label>"); end > 0 {
-		row = row[:end]
+	if names.Page == "" {
+		t.Error("the demonstration offers the inventory as a box, and its form has no target field")
 	}
-	if !strings.Contains(row, "checked") {
-		t.Errorf("the demonstration draws the inventory unticked:\n%s", row)
+	if names.Policy != policy.Informational {
+		t.Errorf("the inventory row carries %q where it should say it grades nothing", names.Policy)
+	}
+
+	page := get(t, "/porch").Body.String()
+	if !strings.Contains(page, `href="`+names.Page+`"`) {
+		t.Errorf("the demonstration draws no way to reach %s", names.Page)
+	}
+	if strings.Contains(page, `value="names"`) {
+		t.Error("the demonstration draws a checkbox for the inventory beside a fixed host list")
+	}
+
+	// And the report says where the sources it does not use can be used. Not a
+	// list of them, which would be a second place to keep in step with what is
+	// configured — a sentence pointing at the lines the report already draws.
+	src := script(t)
+	if !strings.Contains(src, "DEMO_SITE") {
+		t.Fatal("the script no longer knows which deployment it is on")
+	}
+	limits := functionBody(t, src, "namesLimits")
+	if !strings.Contains(limits, "DEMO_SITE") {
+		t.Error("the demonstration's inventory never says that a copy you run reads more sources")
 	}
 }

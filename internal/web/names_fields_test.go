@@ -187,3 +187,48 @@ func TestTheTablesOfNamesCanBeRead(t *testing.T) {
 		t.Error("a name nothing asked about is not drawn faint, so unmeasured reads as measured")
 	}
 }
+
+// A sentence about the demonstration is written only by the demonstration.
+//
+// The script is one file and both builds serve it, so a claim drawn without
+// reading DEMO_SITE is a claim every installation makes about itself. The one
+// here — that every source marked "not asked" is one this deployment does not
+// use, and a copy you run yourself reads each of them — is false on a copy
+// somebody runs: those sources are theirs to switch on, and several may
+// already be on. A page telling an operator something false about their own
+// installation is the worst thing on this site, because it is the page they
+// would quote (N14).
+//
+// Checked by the guard rather than by the words, because the words are in the
+// file on both builds and a test that only looked for them would pass while
+// every installation printed them.
+func TestAClaimAboutTheDemonstrationIsGuardedByIt(t *testing.T) {
+	limits := functionBody(t, script(t), "namesLimits")
+
+	const claim = "this demonstration does not use"
+	if !strings.Contains(limits, claim) {
+		t.Fatalf("the inventory's limits no longer say what a copy you run yourself adds")
+	}
+
+	const guard = "if (DEMO_SITE) {"
+	before, after, found := strings.Cut(limits, guard)
+	if !found {
+		t.Fatalf("the limits say %q without asking which deployment this is", claim)
+	}
+	if strings.Contains(before, claim) {
+		t.Errorf("an installation somebody runs claims to be the demonstration:\n%s", before)
+	}
+
+	// And the guard closes before the end, so the claim is inside it rather
+	// than merely after it.
+	guarded, rest, closed := strings.Cut(after, "\n  }")
+	if !closed {
+		t.Fatal("the guard around the demonstration's sentence is never closed")
+	}
+	if !strings.Contains(guarded, claim) {
+		t.Errorf("the demonstration's sentence sits outside the guard:\n%s", guarded)
+	}
+	if strings.Contains(rest, claim) {
+		t.Errorf("the sentence is drawn again after the guard:\n%s", rest)
+	}
+}

@@ -47,20 +47,32 @@
       do.
 
       Every check is ticked: somebody who typed a name into a scanner wants it
-      scanned. The inventory is not, and the list decides that rather than this
-      markup — it is the one entry that may ask somebody other than the host,
-      so it is asked for rather than arriving because a default said so.
+      scanned.
+
+      One row is a door rather than a box, and the list decides which — this
+      markup only draws what it is told. The name inventory is about a whole
+      domain rather than one host and takes an address range no field here
+      offers, so a box would have run two thirds of it and said the rest was
+      never asked.
     -->
     <fieldset class="composer-part checks">
       <legend class="composer-step">02 / Checks</legend>
       <div class="check-grid">
         {{range .Checks}}
+        {{if .Page}}
+        <a class="check check-elsewhere" href="{{.Page}}">
+          <span class="check-name arrow-ne">{{.Label}}</span>
+          <span class="check-says">{{.Says}}</span>
+          <span class="check-policy">{{.Policy}}</span>
+        </a>
+        {{else}}
         <label class="check">
-          <input type="checkbox" name="check" value="{{.ID}}"{{if .Checked}} checked{{end}}>
+          <input type="checkbox" name="check" value="{{.ID}}" checked>
           <span class="check-name">{{.Label}}</span>
           <span class="check-says">{{.Says}}</span>
           <span class="check-policy">{{.Policy}}</span>
         </label>
+        {{end}}
         {{end}}
       </div>
       <div class="composer-run">
