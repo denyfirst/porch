@@ -2068,6 +2068,61 @@ actually did: no name was invented; each source describes its own blind spot and
 only where it answered; and where the statuses were established, the report says
 the resolution and the connection happened and that nothing was sent over it.
 
+**How many sources there are is asked of the inventory, because three places
+had each decided for themselves and all three were wrong.** `Established` named
+all six. The command line's exit status looked at the logs and the records, so
+a run whose zone transfer failed exited zero with the inventory short — the
+exact case that status exists to catch. The page's *not established* paragraph
+printed three reasons, so an installation whose only configured source was the
+zone drew the heading and then nothing at all, which is worse than the empty
+list it was written to avoid (R4, I6). `Inventory.Readings` is the one list now,
+`Inventory.Failures` reads it, and
+`TestEverySourceIsAReadingAndEveryReadingIsListed` takes the count from the
+struct itself: a seventh source is one failing test rather than three silent
+shortenings.
+
+**A source that is sent and never drawn is the same defect on the page.**
+Reverse DNS was read by the service, printed by the command line and absent
+from the web report for three weeks, while the page offered the field that asks
+for it — so an operator who typed an address range had its names folded into
+the list with nothing saying the walk had happened, how wide it was, or that it
+had failed, and the total above could not be accounted for from the lines under
+it. `TestThePageDrawsALineForEverySourceTheInventorySends` reads the Go struct
+and requires a line for each of them, and
+`TestThePageReadsTheNameFieldsTheAPISends` does the same for the fields of one
+name.
+
+**The console offers the inventory, unticked, and the column that carries a
+rule set carries a word instead.** It was reachable only from its own page until
+2026-09-28, which meant somebody had to know it existed to find it — the worst
+way to offer the one mode that answers *what have I got*. Three decisions hold
+it in place and each is the subject of
+`TestTheConsoleOffersTheInventoryUntickedAndUngraded`. It is on the list, beside
+the checks, because that is where somebody looks. Its box is off on an
+installation somebody runs, because it is the one entry that may ask somebody
+other than the host and a list of an estate's names is a thing to ask for rather
+than a thing that arrives because a default said so (N12 again, one level up).
+And `policy.Informational` sits where the four checks carry their version,
+because a version there is a promise that two reports carrying it are
+comparable, and nothing here was graded (R21) — a blank would read as a pass.
+
+The demonstration ticks it, and that is not an inconsistency
+(`TestTheDemonstrationTicksTheInventory`). The rule an installation follows
+protects somebody whose estate would be named to a monitor; the demonstration's
+estate is this project's own and compiled in (N6), so there is nobody to
+protect and a demonstration that hides the mode it exists to demonstrate shows
+nothing. What makes it affordable is that the answer is kept for an hour, so a
+hundred visitors in an hour are one question to a monitor rather than a hundred.
+
+**And the column a reader runs an eye down holds a state rather than a
+sentence.** *live — 192.0.2.1, 192.0.2.2, answering on 443 and 80* is two lines
+of prose in a table cell, and a column of them cannot be scanned at all. The
+state is the cell and the evidence is the note under it, which is what every
+other table here does with a qualification. Only *unchecked* is drawn faint,
+because faint on this site means nothing was measured: greying *gone* or
+*dangling* would put a reading of an estate into a colour, and those two are the
+last states an operator should have to hunt for.
+
 **And `-resolver` takes an address without a port.** It did not until
 2026-09-25: the resolvers read from this machine's own configuration have had
 the port added since `resolverList` was written, and one an operator typed did
@@ -2099,6 +2154,9 @@ loudly wrong.
 `internal/dnsclient.Client.Transfer`, `internal/dnsclient.transferNames`,
 `internal/dnsclient.readTransferMessage`, `internal/httpapi.Server.ReadZoneTransfers`, `internal/httpapi.zoneReader`,
 `cmd/porch-scan.saysZone`,
+`internal/inventory.Inventory.Readings`, `internal/inventory.Inventory.Failures`,
+`internal/web.consoleChecks`, `internal/web.consoleCheck`, `internal/policy.Informational`,
+`cmd/porch-scan.shortInventory`,
 `cmd/porch-scan.runNames`, `cmd/porch-scan.printNamesLimits`
 *Guarded by:* `TestOneCertificateLoggedTwiceIsOneCertificate`,
 `TestTwoDifferentCertificatesAreTwo`,
@@ -2170,7 +2228,12 @@ loudly wrong.
 `TestWhatAZoneHandedOverIsItsOwnSource`,
 `TestTheReportSaysWhatTheZoneHandedOver`,
 `TestTheZoneIsReadOnlyForAProvenDomain`,
-`TestAnInstallationNotToldToReadAZoneDoesNot`
+`TestAnInstallationNotToldToReadAZoneDoesNot`,
+`TestEverySourceIsAReadingAndEveryReadingIsListed`,
+`TestThePageDrawsALineForEverySourceTheInventorySends`,
+`TestThePageReadsTheNameFieldsTheAPISends`,
+`TestTheConsoleOffersTheInventoryUntickedAndUngraded`,
+`TestTheDemonstrationTicksTheInventory`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

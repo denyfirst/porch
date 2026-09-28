@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -695,5 +696,54 @@ func TestWhatAZoneHandedOverIsItsOwnSource(t *testing.T) {
 	})
 	if !refused.Zone.Established() || refused.Zone.Named != 0 {
 		t.Errorf("a zone that refused came back as %+v", refused.Zone)
+	}
+}
+
+// Every source on the report is a Reading, and every Reading is on the list.
+//
+// Taken from the struct, because three separate places had each decided for
+// themselves how many sources there are and all three were wrong by the time
+// the sixth arrived: the exit status looked at two, the page's failure
+// paragraph printed three, and only Established named all six. A seventh
+// source is a seventh field, and it fails here until the list has it — which
+// is one failing test rather than three silent shortenings (R4).
+func TestEverySourceIsAReadingAndEveryReadingIsListed(t *testing.T) {
+	report := reflect.TypeOf(Inventory{})
+	reading := reflect.TypeOf(Reading{})
+
+	var fields []string
+	for i := range report.NumField() {
+		if report.Field(i).Type == reading {
+			fields = append(fields, report.Field(i).Name)
+		}
+	}
+	if len(fields) < 6 {
+		t.Fatalf("the inventory carries %d sources: %v", len(fields), fields)
+	}
+
+	if got := len(Inventory{}.Readings()); got != len(fields) {
+		t.Fatalf("Readings returns %d of the %d sources on the report: %v", got, len(fields), fields)
+	}
+
+	// And each one is the field it claims to be, rather than one field listed
+	// twice. Set one source at a time and check exactly one reading changes.
+	for _, name := range fields {
+		var inv Inventory
+		reflect.ValueOf(&inv).Elem().FieldByName(name).
+			Set(reflect.ValueOf(Reading{Asked: true, Reason: name}))
+
+		var seen int
+		for _, r := range inv.Readings() {
+			if r.Reason == name {
+				seen++
+			}
+		}
+		if seen != 1 {
+			t.Errorf("%s appears %d times in Readings, so a source is listed twice or not at all",
+				name, seen)
+		}
+		if failures := inv.Failures(); len(failures) != 1 || failures[0] != name {
+			t.Errorf("a failed %s reads as %v", name, failures)
+		}
 	}
 }

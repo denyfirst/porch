@@ -533,6 +533,27 @@ h1 {
   word-break: break-all;
 }
 
+/*
+  A host name breaks, but not on purpose.
+
+  The identifier column above is cipher suite names: long, unspaced, and
+  nothing is lost by breaking one badly, so break-all is right there. A host
+  name is a word somebody reads and then goes and looks at, and break-all split
+  "denyfirst.dev" into two lines in a column with room for it — which reads as
+  two names.
+
+  `anywhere` without break-all is the trade this takes. It leaves the break
+  available, so a two-hundred-and-fifty-character name cannot set the width of
+  the table and push the columns beside it off the screen; it also lets the
+  column be squeezed below a short name when the three columns beside it want
+  the room, which is what a narrow window does. A broken name on a narrow
+  window is recoverable. A table wider than the screen, with the column saying
+  what each name is doing pushed off the right of it, is not.
+*/
+.rows td.hostname {
+  overflow-wrap: anywhere;
+}
+
 .rows td:last-child, .rows th:last-child { padding-right: 0; }
 
 /*

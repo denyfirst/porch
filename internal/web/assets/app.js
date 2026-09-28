@@ -62,18 +62,24 @@ const CHECKS = {
     working: "Reading the delegation, the records at the name and the DNSSEC chain.",
     build: (data) => buildDNS(data),
   },
-  // Not in CHECK_ORDER: the console runs every check against one name, and
-  // this is not a check. It grades nothing, it asks a third party rather than
-  // the host, and it is produced only for a domain this installation has been
-  // shown control of — so it is reached from its own page, by somebody who
-  // came for it.
+  // Last in CHECK_ORDER, and the console draws its box unticked.
+  //
+  // It was left out of the list for a year, on the argument that the console
+  // runs checks and this is not one: it grades nothing and it is about a
+  // domain rather than a host. Both are still true, and neither was a reason
+  // to hide it. Somebody who came to look at their own estate had to know the
+  // page existed to find it, which is the worst possible way to offer the one
+  // mode that answers "what have I got" — so it is on the list, its rule-set
+  // column says informational rather than a version nobody may compare, and
+  // the box is off until somebody ticks it, because this is the one entry that
+  // may ask somebody other than the host.
   names: {
     label: "Names",
-    says: "which names under the domain its certificates and its own records publish",
+    says: "which names under the domain its certificates, its own records and its zone publish",
 
     endpoint: "/api/v1/names/scan",
     methodPage: "/names/method",
-    working: "Asking a transparency monitor what has been logged under this domain.",
+    working: "Asking what has been published under this domain, and what each name is doing now.",
     build: (data) => buildNames(data),
   },
   mail: {
@@ -92,7 +98,7 @@ const CHECKS = {
 // Fixed rather than taken from the object, because a report whose sections
 // move between two scans of an unchanged estate is a diff a reader has to work
 // out is not a change.
-const CHECK_ORDER = ["tls", "web", "mail", "dns"];
+const CHECK_ORDER = ["tls", "web", "mail", "dns", "names"];
 
 // The demonstration says so on its body. A few things an installation offers
 // its operator mean nothing there: a download of a report about our own
@@ -2612,22 +2618,39 @@ function daneSummary(facts) {
 // That paragraph is not a footnote to be collapsed. A list of forty names read
 // without it says "this estate has forty hosts", which is not what a
 // certificate log establishes for anybody.
+// readings is every source the service sends, in the order the report prints
+// them, and it is the only place that list lives.
+//
+// internal/inventory.Inventory.Readings is its other half, for the same
+// reason: three separate places had each decided for themselves how many
+// sources there are, and every one of them was short by the time the sixth
+// arrived.
+function readings(data) {
+  return [data.zone, data.logs, data.records, data.passive, data.presented, data.reverse]
+    .map((r) => r || {});
+}
+
 function buildNames(data) {
   const frag = document.createDocumentFragment();
   if (!data) return frag;
 
   frag.appendChild(sectionTitle("Names under this domain"));
 
-  const logs = data.logs || {};
-  const records = data.records || {};
-  const passive = data.passive || {};
-
-  if (!answered(logs) && !answered(records) && !answered(passive) &&
-      !answered(data.presented) && !answered(data.zone)) {
+  if (!readings(data).some(answered)) {
     // Not one source answered, so there is no inventory. The reassuring
     // answer here is "none found", so a failure that rendered as an empty
     // list would be the most comfortable wrong answer available.
-    for (const reason of [logs.reason, records.reason, passive.reason]) {
+    //
+    // Both halves of this read a list of five and a list of three while six
+    // sources could fail. An installation whose only answering source was the
+    // reverse walk was told nothing had been established; one whose only
+    // configured source was the zone was told that and then given no reason
+    // for it. A page that says a thing could not be established and will not
+    // say what or why is worse than the empty list this was written to avoid
+    // (R4, I6). There is one list now, and it is the list every other part of
+    // this report reads.
+    for (const reading of readings(data)) {
+      const reason = reading && reading.reason;
       if (reason) frag.appendChild(el("p", null, "Not established: " + reason));
     }
     return frag;
@@ -2661,11 +2684,12 @@ function buildNames(data) {
   row("Records", saysRecords(data));
   row("Passive DNS", saysPassive(data));
   row("The hosts", saysPresented(data));
+  row("Reverse DNS", saysReverse(data));
 
   if (data.wildcards) {
     row("Wildcards", data.wildcards + ", each covering hosts it does not name");
   }
-  const other = otherNames(logs.foreign || 0, records.foreign || 0);
+  const other = otherNames((data.logs || {}).foreign || 0, (data.records || {}).foreign || 0);
   if (other) row("Other names", other);
   if (data.truncated) {
     row("Cut", "more names were found than are listed");
@@ -2694,16 +2718,20 @@ function buildNames(data) {
     const rows = el("tbody");
     for (const name of hosts) {
       const tr = el("tr");
-      tr.appendChild(el("td", null, name.name));
+
+      // hostname rather than identifier: a name is a word somebody reads and
+      // then goes and looks at, so it is not broken mid-word where there is
+      // room for it. The class is in style.css with the trade written out.
+      tr.appendChild(el("td", "hostname", name.name));
       tr.appendChild(el("td", null, namedBy(name)));
 
       // Every name in the inventory gets a row, whether or not an answer came
       // back for it. Drawing the rows from the answers instead is how a name
       // leaves a report without being mentioned: the probe bounds how many
       // names it reaches and gives up on the rest when the time runs out.
-      if (data.probed) tr.appendChild(el("td", null, doingNow(name)));
+      if (data.probed) tr.appendChild(doingCell(name));
 
-      tr.appendChild(el("td", null, covered(name)));
+      tr.appendChild(el("td", loggedWindow(name) ? null : "mark-faint", covered(name)));
       rows.appendChild(tr);
     }
     table.appendChild(rows);
@@ -2717,10 +2745,21 @@ function buildNames(data) {
   if (wildcards.length) {
     frag.appendChild(sectionTitle("Wildcards, which name no host"));
     const table = el("table", "rows");
+
+    // Headed, like the table above it. Two unlabelled columns of dates and
+    // names left a reader to work out which was which, and the second one is
+    // a sentence about certificates that reads as a note until it is under a
+    // heading saying it is the same column as the one above.
+    const head = el("tr");
+    for (const label of ["Wildcard", "In the logs"]) {
+      head.appendChild(el("th", null, label));
+    }
+    table.appendChild(el("thead")).appendChild(head);
+
     const rows = el("tbody");
     for (const name of wildcards) {
       const tr = el("tr");
-      tr.appendChild(el("td", null, name.name));
+      tr.appendChild(el("td", "hostname", name.name));
       tr.appendChild(el("td", null, covered(name)));
       rows.appendChild(tr);
     }
@@ -2821,6 +2860,26 @@ function saysPassive(data) {
   return "named " + r.named + " of them, observed by the register";
 }
 
+// saysReverse is what the addresses in the ranges somebody named answered to.
+//
+// It was the one source with no line here, while the page offers the field
+// that asks for it: an operator who typed a range got its names folded into
+// the list with nothing saying the walk had happened, how wide it was, or that
+// it had failed. Every other source says what it could not see, and a report
+// where one of six is silent is a report whose totals cannot be read (R4).
+//
+// The count carries what was asked as well as what answered, because the
+// difference is the shape of the range: a /24 with four answers is four
+// machines and two hundred and fifty-two addresses nobody has named.
+function saysReverse(data) {
+  const r = data.reverse || {};
+
+  if (!r.asked) return "not walked: no address range was named";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) return "named none of them";
+  return "named " + r.named + " of them, off the reverse records in the ranges named";
+}
+
 // saysPresented is what the hosts themselves said, in one line.
 //
 // It carries how many were asked and how many answered, because the difference
@@ -2869,30 +2928,50 @@ function namedBy(name) {
   return (name.sources || []).join(", ");
 }
 
-// doingNow is the state of one name and the evidence for it.
+// doingCell is what one name is doing, as a cell: the state on its own line
+// and the evidence for it underneath.
 //
-// The state first, because a reader runs an eye down the column and stops at
-// what is not "live", and the evidence beside it because a state with nothing
+// It was one sentence — "live — 192.0.2.1, 192.0.2.2, answering on 443 and
+// 80" — in a column a reader is meant to run an eye down, and three addresses
+// turned every such row into two lines of prose. The state is what somebody
+// scans for, so the state is the cell; the evidence is a row-note, which is
+// what the rest of this site calls a qualification of the cell above it. It
+// stays in the row rather than moving to a fold, because a state with nothing
 // behind it is a claim rather than a measurement (R17).
-function doingNow(name) {
+//
+// Only "unchecked" is drawn faint, and that is deliberate. Faint here means
+// nothing was measured, which is exactly what unchecked is. Greying "gone" or
+// "dangling" would put a reading of an estate into a colour, and this mode
+// grades nothing (R21) — the two states an operator is looking for are the
+// last two that should recede.
+function doingCell(name) {
   const now = name.now;
-  if (!now) return "unchecked — nothing asked what this name is doing";
+  if (!now) return el("td", "mark-faint", "unchecked");
 
+  const cell = el("td", null, now.status || "unchecked");
+  const why = doingWhy(now);
+  if (why) cell.appendChild(el("p", "row-note", why));
+  return cell;
+}
+
+// doingWhy is the evidence behind one state, without repeating the state.
+function doingWhy(now) {
   const where = addressList(now);
   switch (true) {
     case Boolean(now.reason):
-      return now.status + " — " + now.reason;
+      return now.reason;
     case now.status === "dangling":
-      return "dangling — an alias to " + now.alias + ", which does not resolve";
+      return "an alias to " + now.alias + ", which does not resolve";
     case now.status === "gone":
-      return "gone — does not resolve";
+      return "does not resolve";
     case now.status === "internal":
-      return "internal — " + where +
-        ", which nothing here may dial, and a resolver elsewhere may answer differently";
+      return where + ", which nothing here may dial, and a resolver elsewhere may answer differently";
     case now.status === "live":
-      return "live — " + where + ", answering on " + (now.answered || []).join(" and ");
+      return where + ", answering on " + (now.answered || []).join(" and ");
+    case !now.status:
+      return "nothing asked what this name is doing";
     default:
-      return now.status + " — " + where + ", nothing answered";
+      return where + ", nothing answered";
   }
 }
 
@@ -2912,6 +2991,12 @@ function addressList(now) {
 // years ago is either gone or is now under a wildcard, and an operator reading
 // their own estate is usually looking for exactly those. Which of the two it
 // is, this does not say — nothing here asked the host anything.
+// loggedWindow reports whether a log ever carried this name, which decides
+// whether the cell beside it is a measurement or an absence.
+function loggedWindow(name) {
+  return Boolean(name.lastSeen) && !name.lastSeen.startsWith("0001-01-01");
+}
+
 function covered(name) {
   // A date the service does not have is absent, not the first day of year one.
   // It was the latter until 2026-09-27, because `omitempty` does nothing for a

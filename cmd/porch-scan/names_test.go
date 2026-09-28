@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/netip"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -186,6 +187,29 @@ func TestASourceThatFailedIsANonZeroExit(t *testing.T) {
 	} {
 		if !shortInventory(short) {
 			t.Errorf("an inventory missing a source is reported as whole: %+v", short)
+		}
+	}
+
+	// And every other source, which this did not cover until 2026-09-28: it
+	// read the logs and the records while six sources could fail, so a run
+	// whose zone transfer or whose reverse walk failed exited zero with the
+	// inventory short. Taken from the struct rather than listed, so the
+	// seventh source is covered the day it arrives.
+	report := reflect.TypeOf(inventory.Inventory{})
+	reading := reflect.TypeOf(inventory.Reading{})
+	for i := range report.NumField() {
+		field := report.Field(i)
+		if field.Type != reading {
+			continue
+		}
+
+		short := answered
+		reflect.ValueOf(&short).Elem().FieldByName(field.Name).
+			Set(reflect.ValueOf(inventory.Reading{Asked: true, Reason: "it could not be read"}))
+
+		if !shortInventory(short) {
+			t.Errorf("a run whose %s source failed exits zero, so a script cannot tell a short "+
+				"inventory from a whole one", field.Name)
 		}
 	}
 }

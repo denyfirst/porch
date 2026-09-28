@@ -263,11 +263,12 @@ var pages = map[string]*page{
 		Description: "How to read a Porch report, what a check sends, how to run your own copy, and how to reach us.",
 		Fragment:    "assets/docs.html",
 		Data: docsPage{
-			TLS:  policy.TLSVersion,
-			Web:  policy.WebVersion,
-			Mail: policy.MailVersion,
-			DNS:  policy.DNSVersion,
-			Demo: demo.Enabled,
+			TLS:   policy.TLSVersion,
+			Web:   policy.WebVersion,
+			Mail:  policy.MailVersion,
+			DNS:   policy.DNSVersion,
+			Names: policy.Informational,
+			Demo:  demo.Enabled,
 		},
 	},
 
@@ -383,6 +384,15 @@ type consoleCheck struct {
 	Label  string
 	Says   string
 	Policy string
+
+	// Checked is whether the console draws the box ticked.
+	//
+	// Every check is on, because somebody who typed a name into a scanner
+	// wants it scanned. The inventory is off: it is the one entry that may
+	// ask somebody other than the host, and a list of an estate's names is a
+	// thing to ask for rather than a thing to receive because a default said
+	// so (N12).
+	Checked bool
 }
 
 // consolePage is what assets/console.html reads.
@@ -421,10 +431,33 @@ type consolePage struct {
 // "Full scan" would undo that argument in the one place a user actually looks.
 func consoleChecks() []consoleCheck {
 	return []consoleCheck{
-		{"tls", "Transport", "the handshake and the certificate behind it", policy.TLSVersion},
-		{"web", "Reach", "how the site is reached over HTTP and HTTPS", policy.WebVersion},
-		{"mail", "Mail", "what the domain's DNS says about its mail", policy.MailVersion},
-		{"dns", "DNS", "how the domain itself is served, and whether its DNSSEC chain holds", policy.DNSVersion},
+		{"tls", "Transport", "the handshake and the certificate behind it", policy.TLSVersion, true},
+		{"web", "Reach", "how the site is reached over HTTP and HTTPS", policy.WebVersion, true},
+		{"mail", "Mail", "what the domain's DNS says about its mail", policy.MailVersion, true},
+		{"dns", "DNS", "how the domain itself is served, and whether its DNSSEC chain holds", policy.DNSVersion, true},
+
+		// The inventory, last, and ticked only on the demonstration.
+		//
+		// It was reachable only from its own page until 2026-09-28, which
+		// meant somebody had to know it existed to find it — the worst way to
+		// offer the one mode that answers "what have I got". It is not a
+		// check and the row says so in the column where the others carry a
+		// rule-set name, so nothing here claims it was graded.
+		//
+		// Off by default on an installation somebody runs, because it is the
+		// one entry that may ask somebody other than the host, and a list of
+		// an estate's names is a thing to ask for rather than a thing that
+		// arrives because a default said so (N12).
+		//
+		// On by default on the demonstration, because the estate it lists is
+		// this project's own and showing it is the point: a demonstration
+		// that hides the mode it exists to demonstrate shows nothing. What
+		// makes that affordable is that the answer is kept for an hour, so a
+		// hundred visitors in an hour are one question to a monitor rather
+		// than a hundred.
+		{"names", "Names",
+			"which names under the domain its certificates, its own records and its zone publish",
+			policy.Informational, demo.Enabled},
 	}
 }
 
@@ -1036,7 +1069,12 @@ type porchPage struct {
 // docsPage is what assets/docs.html reads.
 type docsPage struct {
 	TLS, Web, Mail, DNS string
-	Demo                bool
+
+	// Names is what the inventory carries in the place the four checks carry a
+	// rule set: a word saying it grades nothing, not a version nobody could
+	// compare two reports with.
+	Names string
+	Demo  bool
 }
 
 // plain holds the two files a crawler reads, built at startup beside the

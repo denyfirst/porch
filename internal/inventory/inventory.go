@@ -204,9 +204,41 @@ type Inventory struct {
 // empty list as a domain with no names, and presenting that as an inventory is
 // the most comfortable wrong answer this mode can give (R4).
 func (i Inventory) Established() bool {
-	return i.Logs.Established() || i.Records.Established() ||
-		i.Passive.Established() || i.Presented.Established() ||
-		i.Reverse.Established() || i.Zone.Established()
+	for _, r := range i.Readings() {
+		if r.Established() {
+			return true
+		}
+	}
+	return false
+}
+
+// Readings are every source, in the order a report prints them.
+//
+// One list rather than six field reads in each caller, because the callers
+// kept disagreeing about how many sources there are. Established named all
+// six; the command line's exit status looked at two, so a run whose only
+// failed source was the zone exited zero with the inventory short; the page's
+// "not established" paragraph printed three reasons, so an installation whose
+// only source was the zone said a thing could not be established and then
+// would not say why (R4, I6).
+//
+// A seventh source added to the struct and not to this list fails
+// TestEverySourceIsAReadingAndEveryReadingIsListed rather than going quiet in
+// three places.
+func (i Inventory) Readings() []Reading {
+	return []Reading{i.Zone, i.Logs, i.Records, i.Passive, i.Presented, i.Reverse}
+}
+
+// Failures are the reasons the sources that could not be read gave, in the
+// same order.
+func (i Inventory) Failures() []string {
+	var out []string
+	for _, r := range i.Readings() {
+		if r.Reason != "" {
+			out = append(out, r.Reason)
+		}
+	}
+	return out
 }
 
 // Sources are the answers to merge, one field per source.

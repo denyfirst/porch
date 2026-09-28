@@ -41,17 +41,22 @@
     </div>
 
     <!--
-      Every check on by default, and each one named for what it reads rather
-      than for how hard it pushes. docs/scope.md refuses the words full, deep
-      and active, because each of them quietly authorises something this
-      project has already declined to do.
+      Each one named for what it reads rather than for how hard it pushes.
+      docs/scope.md refuses the words full, deep and active, because each of
+      them quietly authorises something this project has already declined to
+      do.
+
+      Every check is ticked: somebody who typed a name into a scanner wants it
+      scanned. The inventory is not, and the list decides that rather than this
+      markup — it is the one entry that may ask somebody other than the host,
+      so it is asked for rather than arriving because a default said so.
     -->
     <fieldset class="composer-part checks">
       <legend class="composer-step">02 / Checks</legend>
       <div class="check-grid">
         {{range .Checks}}
         <label class="check">
-          <input type="checkbox" name="check" value="{{.ID}}" checked>
+          <input type="checkbox" name="check" value="{{.ID}}"{{if .Checked}} checked{{end}}>
           <span class="check-name">{{.Label}}</span>
           <span class="check-says">{{.Says}}</span>
           <span class="check-policy">{{.Policy}}</span>
