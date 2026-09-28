@@ -80,6 +80,27 @@ func TestAListOfNamesIsSentWholeForTheServiceToRefuse(t *testing.T) {
 	}
 }
 
+// Every field in the inventory's column stops at the same measure.
+//
+// A row of inputs was held to it and the box for names was not, so it ran
+// on to the page's edge: the one field in the column with its own right
+// margin, beside two that lined up. Measured in a browser on 2026-09-28, all
+// of them now end on one line.
+func TestEveryFieldInTheColumnStopsAtTheMeasure(t *testing.T) {
+	css := asset(t, "assets/style.css")
+	for _, selector := range []string{".field-row {", ".field-lines {"} {
+		start := strings.Index(css, "\n"+selector)
+		if start < 0 {
+			t.Fatalf("style.css has no rule %q where this test reads it", selector)
+		}
+		rule := css[start : start+strings.Index(css[start:], "}")]
+		if !strings.Contains(rule, "max-width: var(--measure);") {
+			t.Errorf("%s is not held to the measure, so it ends on a different line from the fields beside it",
+				strings.TrimSuffix(selector, " {"))
+		}
+	}
+}
+
 // grouped writes a number the way the pages do: 4096 as "4,096".
 func grouped(n int) string {
 	s := strconv.Itoa(n)

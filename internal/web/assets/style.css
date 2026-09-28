@@ -315,9 +315,15 @@ h1 {
   somebody pastes in looks like what comes back out. It resizes vertically and
   not horizontally: a list of host names has no long lines, and a box somebody
   can drag over the page beside it is a layout they have to put back.
+
+  And it stops where the fields above it stop. A row of inputs is held to the
+  measure, and a box for names that ran on to the page's edge was the one
+  field in the column with its own right margin.
 */
 .field-lines {
+  display: block;
   width: 100%;
+  max-width: var(--measure);
   font-family: var(--mono);
   font-size: 0.86rem;
   line-height: 1.6;
