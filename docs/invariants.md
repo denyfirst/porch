@@ -6097,6 +6097,24 @@ meant has never existed under that name.
 format RFC 9116 defines. `/security.txt` redirects there rather than serving a
 second copy, so the canonical URL in the file stays true.
 
+**Only denyfirst.dev serves it, and the key beside it.** Every build did until
+2026-09-28, and on an installation somebody else runs each part of the file
+was wrong. Its `Canonical` named denyfirst.dev, so by RFC 9116 it was not
+authoritative for the host serving it. It sent whoever found a fault in that
+host — somebody else's machine — to us, who cannot fix it and should not be
+told about it. Its `Expires` date is fixed in the binary, so an installation
+left on one release would one day serve a lapsed file, which this entry calls
+worse than none. And it answered anyone who could reach an installation with
+our name, a way to find copies of this tool their operators never agreed to.
+An installation now answers all three addresses with a 404, and an operator
+who wants a `security.txt` publishes their own, naming themselves. On an
+installation the tests below read the embedded file rather than the served
+one, so the expiry reminder still fails on every build.
+
+The file ends with a line break. RFC 9116's grammar ends every line with one,
+the last included; most parsers forgive the omission and a strict one does
+not, and it was missing.
+
 The `Expires` date in that file is the only copy of it, and a test parses the
 served bytes rather than a constant beside them. The test fails sixty days
 before the date passes.
@@ -6145,6 +6163,7 @@ key it points at, which answers nothing a forger could not arrange.
 
 *Enforced in:* `internal/web`, the route table and `assets/security.txt`
 *Guarded by:* `TestSecurityTxtIsServedAtTheWellKnownPath`,
+`TestAnInstallationPublishesNoContactOfOurs`,
 `TestLegacySecurityTxtPathRedirects`, `TestSecurityTxtHasTheRequiredFields`,
 `TestSecurityTxtExpiryIsMovedByAPerson`,
 `TestSecurityTxtDoesNotSendExclusionRequestsToSecurity`,

@@ -4,8 +4,10 @@
 # the machine-readable fields are the unindented lines below.
 #
 # This file is embedded in the binary and served from /.well-known/
-# security.txt only. /security.txt redirects here, because a reporter who
-# guesses the old location should not meet a 404.
+# security.txt only, and by denyfirst.dev alone: an installation of porch
+# that somebody else runs is theirs to answer for, and serves nothing here.
+# /security.txt redirects here, because a reporter who guesses the old
+# location should not meet a 404.
 #
 # The Expires date below is the only copy of it. A test in internal/web
 # parses this file and fails sixty days before the date passes, so it is

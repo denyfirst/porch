@@ -83,7 +83,9 @@ const contentSecurityPolicy = "default-src 'none'; " +
 // pages are copies of ours.
 const SiteURL = "https://denyfirst.dev"
 
-// SecurityTxtPath is where RFC 9116 requires the file to be served.
+// SecurityTxtPath is where RFC 9116 requires the file to be served, and where
+// the demonstration serves ours. An installation serves nothing there; see
+// denyfirstFiles.
 //
 // Exported because the test parses the same file the handler serves, and a
 // second copy of this string is a second thing to keep in step.
@@ -497,9 +499,8 @@ type methodPage struct {
 // that with a 404 costs a report. Redirecting rather than serving two copies
 // keeps the canonical URL in the file true.
 var moved = map[string]string{
-	"/scanning":     "/privacy#scans",
-	"/about":        "/privacy",
-	"/security.txt": SecurityTxtPath,
+	"/scanning": "/privacy#scans",
+	"/about":    "/privacy",
 
 	// The method page moved under the service it describes. Permanent: it is
 	// not coming back to the root, and the address is printed in reports that
@@ -536,17 +537,37 @@ var moved = map[string]string{
 // read by people and by intermediaries that ignore the header.
 var standingIn = map[string]string{}
 
-// files are the assets served as they are.
-var files = map[string]struct {
+// servedFile is an asset served as it is.
+type servedFile struct {
 	name        string
 	contentType string
-}{
-	"/style.css":    {"assets/style.css", "text/css; charset=utf-8"},
-	"/app.js":       {"assets/app.js", "text/javascript; charset=utf-8"},
-	"/theme.js":     {"assets/theme.js", "text/javascript; charset=utf-8"},
-	"/session.js":   {"assets/session.js", "text/javascript; charset=utf-8"},
-	"/hero.js":      {"assets/hero.js", "text/javascript; charset=utf-8"},
-	"/favicon.svg":  {"assets/favicon.svg", "image/svg+xml"},
+}
+
+// files are the assets served as they are.
+var files = map[string]servedFile{
+	"/style.css":   {"assets/style.css", "text/css; charset=utf-8"},
+	"/app.js":      {"assets/app.js", "text/javascript; charset=utf-8"},
+	"/theme.js":    {"assets/theme.js", "text/javascript; charset=utf-8"},
+	"/session.js":  {"assets/session.js", "text/javascript; charset=utf-8"},
+	"/hero.js":     {"assets/hero.js", "text/javascript; charset=utf-8"},
+	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
+}
+
+// denyfirstFiles are this project's own contacts: where to report a security
+// problem in it, and the key to encrypt the report to. The demonstration
+// serves them, because it is denyfirst.dev. Nothing else does.
+//
+// Every build served them until 2026-09-28, and on an installation each one
+// was wrong. Its Canonical named denyfirst.dev, so by RFC 9116 the file was
+// not authoritative for the host serving it. It sent somebody who found a
+// fault in that host — somebody else's machine — to us, who cannot fix it and
+// should not be told about it. Its Expires date was fixed in the binary, so an
+// installation left on one release would one day serve a lapsed file, which
+// D1 calls worse than none. And it answered anyone who could reach an
+// installation with our name, which is a way to find installations of this
+// tool that their operators never agreed to. An operator who wants a
+// security.txt publishes their own, naming themselves.
+var denyfirstFiles = map[string]servedFile{
 	SecurityTxtPath: {"assets/security.txt", "text/plain; charset=utf-8"},
 
 	// text/plain rather than application/pgp-keys, so a browser shows it
@@ -563,6 +584,15 @@ var files = map[string]struct {
 var rendered = map[string][]byte{}
 
 func init() {
+	// Our contacts, and the short path to them, on the one deployment that is
+	// ours to answer for.
+	if demo.Enabled {
+		for path, file := range denyfirstFiles {
+			files[path] = file
+		}
+		moved["/security.txt"] = SecurityTxtPath
+	}
+
 	// The denyfirst front page and the Porch page exist on the demonstration
 	// only. An installation somebody runs is the tool at "/" and needs
 	// neither: nobody there needs the product explained to them.

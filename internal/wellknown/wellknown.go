@@ -69,8 +69,9 @@ var Paths = []Path{
 		Asked: "Whether a site publishes a way to report a fault in it, and whether that way has " +
 			"expired. The file exists in order to be read by strangers — that is what it is for — " +
 			"which makes it the clearest case N7 allows.",
-		Serves: "Where to report a security problem in this project, published so that somebody who " +
-			"finds one does not have to guess.",
+		Serves: "Where to report a security problem in this project, published by denyfirst.dev so " +
+			"that somebody who finds one does not have to guess. An installation somebody else runs " +
+			"serves nothing here: it is not ours to answer for.",
 	},
 }
 

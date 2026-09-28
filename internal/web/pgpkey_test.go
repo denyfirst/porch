@@ -1,24 +1,25 @@
 package web
 
 import (
-	"net/http"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/demo"
 )
 
 // The key a reporter encrypts to is reachable, and it is a key.
+//
+// On the demonstration, which is the one deployment that serves it; an
+// installation serves nothing there, and the embedded file is read instead.
 func TestPGPKeyIsServed(t *testing.T) {
-	w := get(t, PGPKeyPath)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("GET %s returned %d, want 200", PGPKeyPath, w.Code)
-	}
-	if got := w.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
-		t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", got)
+	if demo.Enabled {
+		if got := get(t, PGPKeyPath).Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+			t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", got)
+		}
 	}
 
-	body := w.Body.String()
+	body := denyfirstFile(t, PGPKeyPath)
 	for _, required := range []string{
 		"-----BEGIN PGP PUBLIC KEY BLOCK-----",
 		"-----END PGP PUBLIC KEY BLOCK-----",
@@ -59,7 +60,7 @@ func TestFingerprintAgreesAcrossSources(t *testing.T) {
 		}
 	}
 
-	securityTxt := get(t, SecurityTxtPath).Body.String()
+	securityTxt := denyfirstFile(t, SecurityTxtPath)
 	if !strings.Contains(compact(securityTxt), PGPFingerprint) {
 		t.Errorf("security.txt does not carry the fingerprint %s", PGPFingerprint)
 	}
