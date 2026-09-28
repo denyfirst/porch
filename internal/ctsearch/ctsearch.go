@@ -48,6 +48,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/truststore"
@@ -287,6 +288,16 @@ func names(value string) []string {
 // chosen by whoever obtained them. A report is rendered in a browser and pasted
 // into chat windows, and a control character in a subject is an old trick for
 // making one line look like another.
+//
+// C0 and DEL are dropped, as they always were. C1 and Unicode's format
+// characters are replaced with U+FFFD rather than dropped, which is the rule
+// internal/certinfo applies to the certificates a handshake carries (R10): a
+// terminal takes 0x9b as CSI, U+202E reverses what follows it in a terminal
+// and a browser alike, and a zero-width character makes one name read as
+// another. Dropping those would do the disguise's work for it — a name with a
+// zero-width space in it would come out as the name it imitates — so a reader
+// is shown that something was there. These strings reach a person now: the
+// certificates a TLS report counts are listed, and the inventory prints names.
 func clean(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > maxField {
@@ -295,10 +306,14 @@ func clean(s string) string {
 
 	var b strings.Builder
 	for _, r := range s {
-		if r < 0x20 || r == 0x7f {
+		switch {
+		case r < 0x20 || r == 0x7f:
 			continue
+		case (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r):
+			b.WriteRune('\uFFFD')
+		default:
+			b.WriteRune(r)
 		}
-		b.WriteRune(r)
 	}
 	return b.String()
 }

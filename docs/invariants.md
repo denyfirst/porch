@@ -2319,7 +2319,17 @@ an address is something an error message prints. The `%s` a monitor's address
 carries is read as the name it will become, so an address with the name in its
 path is not refused for the placeholder
 (`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`).
+
+**And the list the TLS check's Logged line asks for is shown.** The line ends
+on *N of which are valid today and were not the one presented here*, which
+asks the reader to check a list, and the entries sat in the JSON and on no
+face of the report: a count nobody can check against what they ordered. Each
+one is now a sentence composed in `internal/policy` — serial, issuer, validity,
+names — and printed under the line by both faces
+(`TestTheCertificatesTheLoggedLineCountsAreListed`,
+`TestTheCertificatesTheLoggedLineCountsArePrinted`).
 *Enforced in:* `cmd/porch-scan.httpsEndpoint`, `cmd/porchd.httpsEndpoint`,
+`internal/policy.UnaccountedLine`, `internal/scan.Scanner.searchLogs`,
 `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
 `internal/liveness`, `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`,
@@ -5192,10 +5202,20 @@ empty `Names` field and never exercises the path where the two could diverge,
 which is how the first version of that check passed a change that printed
 `CN`, `O` and `C` twice.
 
+**A monitor's answer is held to the same rule.** What a transparency monitor
+says about a certificate — its issuer and the names on it — is chosen by
+whoever obtained the certificate, and it reaches a person: the certificates a
+TLS report counts are listed under it, and the inventory prints names.
+`internal/ctsearch` dropped C0 and nothing else, so 0x9b and U+202E went
+through; now C1 and the format characters become the replacement mark, never
+dropped, because dropping a zero-width space turns the disguised name into the
+name it imitates.
+
 *Enforced in:* `internal/certinfo.sanitise`, applied by `trimmer.text`;
 `internal/certinfo.mixedScriptNote`, `internal/certinfo.confusableScripts`;
-`internal/certinfo.distinguishedName`
-*Guarded by:* `TestControlCharactersInCertificateFieldsAreNeutralised`,
+`internal/certinfo.distinguishedName`, `internal/ctsearch.clean`
+*Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`,
+`TestControlCharactersInCertificateFieldsAreNeutralised`,
 `TestC1ControlsAreNeutralisedToo`, `TestTrimmingCutsOnARuneBoundary`,
 `TestNothingCanRewriteHowTheReportReads`, `TestANameInTwoAlphabetsIsSaid`,
 `TestALookalikeNameIsNotRewritten`,

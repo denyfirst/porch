@@ -154,6 +154,12 @@ type Result struct {
 	LoggedLine string           `json:"loggedLine,omitempty"`
 	Logged     *ctsearch.Result `json:"logged,omitempty"`
 
+	// LoggedUnaccounted is that list: one sentence for each logged certificate
+	// valid now that was not the one presented, composed in internal/policy so
+	// the page and the terminal print the same words (R16). The sentence above
+	// counts them and tells the reader to check; this is what they check.
+	LoggedUnaccounted []string `json:"loggedUnaccounted,omitempty"`
+
 	// KeyExchangeLine is what the extra post-quantum handshake established,
 	// in the sentence both faces show.
 	KeyExchangeLine string `json:"keyExchangeLine,omitempty"`
@@ -546,7 +552,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// deployment's privacy page that it queries no log stays true by
 		// construction.
 		if !demo.Enabled && s.Logs != nil && len(tlsReport.Certificates) > 0 {
-			out.LoggedLine, out.Logged = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
+			out.LoggedLine, out.Logged, out.LoggedUnaccounted = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
 		}
 	}
 
@@ -1211,9 +1217,10 @@ func listStatus(s crl.Status) string {
 // The comparison against the certificate in hand is the point of it. A count of
 // certificates is a curiosity; a count of certificates that are valid today and
 // are not the one this server just presented is a list the operator can act on.
-func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certificate, report *certinfo.Report) (string, *ctsearch.Result) {
+func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certificate, report *certinfo.Report) (string, *ctsearch.Result, []string) {
 	found := s.Logs.Search(ctx, host)
 
+	var unaccounted []string
 	facts := policy.LogFacts{
 		Searched:  true,
 		Distinct:  found.Distinct,
@@ -1240,12 +1247,13 @@ func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certif
 			continue
 		}
 		facts.Unseen++
+		unaccounted = append(unaccounted, policy.UnaccountedLine(e.Serial, e.Issuer, e.Names, e.NotBefore, e.NotAfter))
 	}
 
 	if report != nil {
 		report.Notes = append(report.Notes, policy.DescribeLogged(facts)...)
 	}
-	return policy.LoggedLine(facts), &found
+	return policy.LoggedLine(facts), &found, unaccounted
 }
 
 // sameSerial reports whether a serial a monitor wrote as hexadecimal is the

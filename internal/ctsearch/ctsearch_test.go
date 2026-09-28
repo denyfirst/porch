@@ -335,3 +335,26 @@ func TestAnEmptyNameIsNotSearchedFor(t *testing.T) {
 		t.Errorf("the monitor was asked about an empty name: %v", *asked)
 	}
 }
+
+// A character that makes a display act, or makes a reader misread, is shown
+// as a replacement mark rather than passed on or silently dropped.
+//
+// These strings reach a person: the certificates a TLS report counts are
+// listed under it, and the inventory prints names. 0x9b is CSI to several
+// terminals; U+202E reverses what follows it; a zero-width space makes one name
+// read as another, and dropping it would turn the disguise into the name it
+// imitates.
+func TestAMonitorsAnswerCannotActOnTheDisplay(t *testing.T) {
+	for in, want := range map[string]string{
+		"ok.example":         "ok.example",
+		"goo​gle.example":    "goo�gle.example",
+		"safe‮moc.example":   "safe�moc.example",
+		"csi\u009b2Jhere":    "csi�2Jhere",
+		"bell\u0007.example": "bell.example",
+		"CN=Issuer‍ Inc":     "CN=Issuer� Inc",
+	} {
+		if got := clean(in); got != want {
+			t.Errorf("clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

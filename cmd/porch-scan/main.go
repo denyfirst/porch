@@ -871,6 +871,12 @@ func printCertificate(w io.Writer, r result) {
 	} {
 		fmt.Fprintf(w, "    %-13s%s\n", line.label, wrap(orNone(line.value, line.absent), 60, "                 "))
 	}
+
+	// And the certificates the Logged line counts, because a count asking the
+	// reader to check a list is no use without the list.
+	for _, c := range r.LoggedUnaccounted {
+		fmt.Fprintf(w, "                 · %s\n", wrap(c, 58, "                   "))
+	}
 }
 
 // orNone is a value, or the words that say there was none.

@@ -3,6 +3,8 @@ package policy
 import (
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // The two sentences the certificate section shows about revocation and
@@ -343,6 +345,35 @@ type LogFacts struct {
 
 	// Reason says why nothing was established.
 	Reason string
+}
+
+// UnaccountedLine describes one logged certificate that is valid today and was
+// not the one presented, in the words both faces print (R16).
+//
+// The sentence the Logged line ends on — N certificates valid today were not
+// the one presented here — asks the reader to check a list, and until
+// 2026-09-28 neither face showed one: the entries were in the JSON and nowhere
+// a person reads. The serial and the dates are what a reader matches against
+// their own orders; the issuer and the names are what tells a stranger's
+// certificate from an early renewal.
+func UnaccountedLine(serial, issuer string, names []string, from, until time.Time) string {
+	var b strings.Builder
+	b.WriteString("serial " + orUnknown(serial))
+	b.WriteString(", issued by " + orUnknown(issuer))
+	if !from.IsZero() && !until.IsZero() {
+		b.WriteString(", valid " + from.UTC().Format("2006-01-02") + " to " + until.UTC().Format("2006-01-02"))
+	}
+	if len(names) > 0 {
+		b.WriteString(", for " + strings.Join(names, ", "))
+	}
+	return b.String()
+}
+
+func orUnknown(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "not given by the monitor"
+	}
+	return s
 }
 
 // LoggedLine describes what the logs hold, in one sentence.

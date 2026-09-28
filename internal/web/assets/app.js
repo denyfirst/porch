@@ -939,6 +939,14 @@ function certificate(cert, tls, issuance, stapling, report) {
   pair("Logged", report && report.loggedLine,
     "not searched: the public logs were not asked what else exists for this name");
 
+  // And the certificates that line counts, one under another, because a count
+  // asking the reader to check a list is no use without the list. Composed in
+  // internal/policy, as the terminal prints them (R16).
+  for (const c of (report && report.loggedUnaccounted) || []) {
+    pairs.appendChild(el("dt", null, ""));
+    pairs.appendChild(el("dd", null, "· " + c));
+  }
+
   pair("SHA-256", leaf.fingerprintSha256);
 
   frag.appendChild(pairs);
