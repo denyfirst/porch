@@ -142,12 +142,19 @@ const MAX_KNOWN = 1000;
 //
 // Sent only when something was typed. An empty list would be a caller asking
 // for nothing, and the service would have to decide what that meant.
+//
+// And sent whole. It was cut to MAX_KNOWN here, without a word, so a list
+// pasted past the bound lost its tail on the way out and the service — which
+// refuses such a list rather than cutting it — never saw enough to refuse. The
+// report then listed a thousand names as if they were all of them. A file
+// loaded past the bound is still cut where it is loaded, and says so beside
+// the field; what somebody typed is theirs to be refused over.
 function knownAsked() {
   const field = document.getElementById("known");
   if (!field) return null;
 
   const names = splitNames(field.value);
-  return names.length ? { names: names.slice(0, MAX_KNOWN) } : null;
+  return names.length ? { names: names } : null;
 }
 
 // asked is everything the page adds to the domain, in one object.
