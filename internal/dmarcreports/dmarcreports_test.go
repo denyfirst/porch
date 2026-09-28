@@ -250,3 +250,16 @@ func same(got, want []string) bool {
 	}
 	return true
 }
+
+// A report address cannot act on the display that shows it (R10).
+func TestAReportAddressCannotActOnTheDisplay(t *testing.T) {
+	for in, want := range map[string]string{
+		"mailto:r\u009b2J@example.com": "mailto:r\ufffd2J@example.com",
+		"mailto:r@ex\u200bample.com":   "mailto:r@ex\ufffdample.com",
+		"mailto:r@example.com":         "mailto:r@example.com",
+	} {
+		if got := clean(in); got != want {
+			t.Errorf("clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

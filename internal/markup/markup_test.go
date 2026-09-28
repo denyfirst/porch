@@ -812,3 +812,13 @@ func TestNothingOverTLSIsBlocked(t *testing.T) {
 		}
 	}
 }
+
+// A host a page names cannot act on the display that shows it (R10): a
+// zero-width character is marked rather than dropped, so a disguised host
+// is not reported as the host it imitates.
+func TestAHostAPageNamesCannotActOnTheDisplay(t *testing.T) {
+	got := authority("goo\u200bgle.example/path", false)
+	if got.host != "goo\ufffdgle.example" {
+		t.Errorf("the host was kept as %q", got.host)
+	}
+}

@@ -119,6 +119,27 @@ type MailFacts struct {
 	// operator works from when the count is too high.
 	SPFIncludes []string `json:"spfIncludes,omitempty"`
 
+	// SPFVoidNames and SPFUnreadNames are which of those answered nothing, and
+	// which could not be read. The counts above said how many and never which,
+	// and which is the part an operator acts on.
+	SPFVoidNames   []string `json:"spfVoidNames,omitempty"`
+	SPFUnreadNames []string `json:"spfUnreadNames,omitempty"`
+
+	// SPFRecord, DMARCRecord and TLSRPTRecord are the records as the zone
+	// publishes them, bounded and with anything that could act on a display
+	// marked.
+	//
+	// Only where the report is read by the person the domain belongs to — the
+	// command line, or a service with proof of control or only its operator in
+	// front of it. The rows above are sentences this program writes from what
+	// it parsed, because a reader acts on them and a record's text is chosen
+	// by whoever is being measured; a stranger's report is not the place to
+	// print somebody's zone, and a DMARC or TLS-RPT record carries mailboxes.
+	// The owner is owed the record itself, which is what they would edit.
+	SPFRecord    string `json:"spfRecord,omitempty"`
+	DMARCRecord  string `json:"dmarcRecord,omitempty"`
+	TLSRPTRecord string `json:"tlsRptRecord,omitempty"`
+
 	// SPFReason says why the policy could not be read at all. A failure to
 	// read is not a domain without a policy, and the two lead a reader to
 	// opposite places.
@@ -138,6 +159,11 @@ type MailFacts struct {
 	// DMARCPercent is what pct= says, defaulting to 100. A policy applied to
 	// some of the mail is a policy in a rollout.
 	DMARCPercent int `json:"dmarcPercent"`
+
+	// DMARCSubdomainPolicy is what sp= says, or empty where the record carries
+	// none, in which case subdomains take p=. Reported rather than graded: a
+	// domain may have no subdomains that send, and nothing here can tell.
+	DMARCSubdomainPolicy string `json:"dmarcSubdomainPolicy,omitempty"`
 
 	// DMARCReporting is true when the record names somewhere to send aggregate
 	// reports. Without one an operator cannot see what their policy is doing,
@@ -413,7 +439,8 @@ func GradeMail(f MailFacts) MailFinding {
 			"The SPF policy relies on names that no longer resolve",
 			strconv.Itoa(f.SPFVoidLookups)+" of the lookups this policy requires return nothing. "+
 				"RFC 7208 allows two; beyond that the evaluation is a permanent error. A policy "+
-				"resting on names that have gone is a policy nobody is maintaining.",
+				"resting on names that have gone is a policy nobody is maintaining."+
+				namedPolicies(" The policies that answered nothing are ", f.SPFVoidNames),
 			rfc7208)
 	}
 
@@ -753,9 +780,18 @@ func describeMail(f MailFacts) []Note {
 		out = append(out, Observed("Evaluating this policy takes "+atLeast(f.SPFLookupsAtLeast)+strconv.Itoa(f.SPFLookups)+
 			" of the ten DNS lookups RFC 7208 allows."+includeList(f.SPFIncludes)))
 	}
+	// Void lookups under the limit are not graded and were not said at all, so
+	// an operator one away from the limit could not see that they were, or
+	// where. Said, with the names, because the fix is taking one out.
+	if f.SPFVoidLookups > 0 && !f.SPFVoidLimit {
+		out = append(out, Observed(plural(f.SPFVoidLookups, "lookup")+" this policy requires "+
+			"return nothing, of the two RFC 7208 allows before the evaluation is a permanent error."+
+			namedPolicies(" The policies that answered nothing are ", f.SPFVoidNames)))
+	}
 	if f.SPFUnreadIncludes > 0 {
 		out = append(out, Unsettled(policiesPulledIn(f.SPFUnreadIncludes)+" could not be read, "+
-			"so the lookup counts above are lower bounds and what those policies allow is not established."))
+			"so the lookup counts above are lower bounds and what those policies allow is not established."+
+			namedPolicies(" They are ", f.SPFUnreadNames)))
 	}
 
 	if f.SPFUsesPTR {
@@ -786,6 +822,16 @@ func describeMail(f MailFacts) []Note {
 		}
 	}
 
+	// A domain that rejects failing mail from itself and accepts it from every
+	// name beneath it. Reported, not graded: whether any subdomain sends mail
+	// is not something this can see.
+	if f.DMARCRecords == 1 && f.DMARCSubdomainPolicy != "" && strength(f.DMARCSubdomainPolicy) < strength(f.DMARCPolicy) {
+		out = append(out, Observed("Subdomains are covered by sp="+f.DMARCSubdomainPolicy+
+			" rather than by p="+f.DMARCPolicy+", so mail that fails from a name under this domain is "+
+			"handled "+subdomainHandling(f.DMARCSubdomainPolicy)+". A name that sends no mail is still one "+
+			"somebody else can send as."))
+	}
+
 	if f.DMARCRecords >= 1 && !f.DMARCReporting {
 		out = append(out, Observed("The DMARC record names nowhere to send aggregate reports. "+
 			"Those reports are how a domain finds out who is sending as it, and without them "+
@@ -814,6 +860,44 @@ func describeMail(f MailFacts) []Note {
 }
 
 // includeList names the domains a policy pulls in, when there are any.
+// namedPolicies ends a sentence with the names it counted, or adds nothing
+// where there are none to name.
+func namedPolicies(lead string, names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return lead + names[0] + "."
+	}
+	return lead + strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1] + "."
+}
+
+// strength orders DMARC's three policies from asking nothing to refusing.
+func strength(policy string) int {
+	switch policy {
+	case "none":
+		return 1
+	case "quarantine":
+		return 2
+	case "reject":
+		return 3
+	}
+	return 0
+}
+
+// subdomainHandling says what an sp= value asks a receiver to do.
+func subdomainHandling(sp string) string {
+	switch sp {
+	case "none":
+		return "as though no policy existed"
+	case "quarantine":
+		return "as suspicious rather than refused"
+	case "reject":
+		return "by refusing it"
+	}
+	return "by a policy RFC 7489 does not define"
+}
+
 func includeList(includes []string) string {
 	if len(includes) == 0 {
 		return ""

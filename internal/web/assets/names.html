@@ -26,83 +26,6 @@
         <button class="submit" type="submit" id="submit">List</button>
       </div>
 
-      {{if .Ranges}}
-      <!--
-        The one source that starts from an address rather than from a name,
-        and the one no proof of control can grant: a domain is proven with a
-        record in its zone, an address range is not provable by anything this
-        program can check. So the field is here only where the person asking
-        is the person running this installation — nobody else can reach it, or
-        a password they set stands in front of it.
-      -->
-      <label class="field-label" for="ranges">Address ranges you own</label>
-      <div class="field-row">
-        <input
-          class="field"
-          type="text"
-          id="ranges"
-          name="ranges"
-          placeholder="203.0.113.0/24, 198.51.100.0/28"
-          spellcheck="false"
-          autocapitalize="off"
-          autocorrect="off"
-          aria-describedby="ranges-help">
-      </div>
-      <p class="field-help" id="ranges-help">
-        Read for the names their reverse records answer to, which finds a host
-        from the other direction: one in no certificate, in no record this
-        domain publishes, and in no register. Nothing is sent to the addresses
-        themselves. A range wider than /20, or more than four thousand
-        addresses across all of them, is refused rather than cut short.
-      </p>
-      {{end}}
-
-      {{if not .Demo}}
-      <!--
-        The source that asks nothing, and the only one that can carry a host
-        nothing published.
-
-        DNS answers questions and does not list: there is no query for "every
-        name under this domain". So a host with no publicly logged certificate,
-        under a zone that will not transfer and is not signed, is in none of the
-        sources above however hard they are read. It is not secret — anybody who
-        knows it can look it up — and knowing it is the whole problem. The one
-        place it certainly exists is the estate's own records, which is to say
-        here.
-
-        Not on the demonstration: the estate it lists is compiled in, so a field
-        that took names would be offering something that deployment refuses.
-      -->
-      <label class="field-label" for="known">Names you already have</label>
-      <textarea
-        class="field field-lines"
-        id="known"
-        name="known"
-        rows="4"
-        placeholder="bitrix.example.com&#10;vpn.example.com"
-        spellcheck="false"
-        autocapitalize="off"
-        autocorrect="off"
-        aria-describedby="known-help"></textarea>
-      <div class="field-row field-row-file">
-        <label class="button button-secondary button-file" for="known-file">
-          Add a .txt file
-          <input type="file" id="known-file" accept=".txt,.csv,text/plain" hidden>
-        </label>
-        <span class="field-note" id="known-file-note"></span>
-      </div>
-      <p class="field-help" id="known-help">
-        One to a line, or separated by commas. They are taken as given —
-        nothing here invents a name — then resolved and reported beside what
-        the sources found, so a host of yours that no public source names is a
-        row you can see. A file is read in this browser and never uploaded:
-        what leaves this page is the names themselves, in the same request as
-        the domain. Blank lines and lines beginning with # are skipped. Up to
-        a thousand names; a longer list is a wordlist rather than an estate,
-        and this mode does not try wordlists.
-      </p>
-      {{end}}
-
       {{if .Demo}}
       <p class="field-help" id="field-help">
         This demonstration lists <strong>{{.Target}}</strong> and nothing else.
@@ -130,6 +53,91 @@
         written out in full.
       </p>
       {{end}}
+
+      {{if .Ranges}}
+      <!--
+        The one source that starts from an address rather than from a name,
+        and the one no proof of control can grant: a domain is proven with a
+        record in its zone, an address range is not provable by anything this
+        program can check. So the field is here only where the person asking
+        is the person running this installation — nobody else can reach it, or
+        a password they set stands in front of it.
+      -->
+      <div class="field-group">
+        <label class="field-label" for="ranges">Address ranges you own</label>
+        <div class="field-row">
+          <input
+            class="field"
+            type="text"
+            id="ranges"
+            name="ranges"
+            placeholder="203.0.113.0/24, 198.51.100.0/28"
+            spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
+            aria-describedby="ranges-help">
+        </div>
+        <p class="field-help" id="ranges-help">
+          Optional. Read for the names their reverse records answer to, which
+          finds a host from the other direction: one in no certificate, in no
+          record this domain publishes, and in no register. Nothing is sent to
+          the addresses themselves. A range wider than /20 (/116 for IPv6), or
+          more than 4,096 addresses across all of them, is refused rather than
+          cut short.
+          <a href="/names/method">What is asked, and the limits on a range.</a>
+        </p>
+      </div>
+      {{end}}
+
+      {{if not .Demo}}
+      <!--
+        The source that asks nothing, and the only one that can carry a host
+        nothing published.
+
+        DNS answers questions and does not list: there is no query for "every
+        name under this domain". So a host with no publicly logged certificate,
+        under a zone that will not transfer and is not signed, is in none of the
+        sources above however hard they are read. It is not secret — anybody who
+        knows it can look it up — and knowing it is the whole problem. The one
+        place it certainly exists is the estate's own records, which is to say
+        here.
+
+        Not on the demonstration: the estate it lists is compiled in, so a field
+        that took names would be offering something that deployment refuses.
+      -->
+      <div class="field-group">
+        <label class="field-label" for="known">Names you already have</label>
+        <textarea
+          class="field field-lines"
+          id="known"
+          name="known"
+          rows="4"
+          placeholder="intranet.example.com&#10;vpn.example.com"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
+          aria-describedby="known-help"></textarea>
+        <div class="field-row field-row-file">
+          <label class="button button-secondary button-file" for="known-file">
+            Add a .txt file
+            <input type="file" id="known-file" accept=".txt,.csv,text/plain" hidden>
+          </label>
+          <span class="field-note" id="known-file-note"></span>
+        </div>
+        <p class="field-help" id="known-help">
+          Optional. One to a line, or separated by commas. They are taken as
+          given — nothing here invents a name — then resolved and reported
+          beside what the sources found, so a host of yours that no public
+          source names is a row you can see. A file is read in this browser and
+          never uploaded: what leaves this page is the names themselves, in the
+          same request as the domain. Blank lines and lines beginning with #
+          are skipped. Up to 1,000 names; a longer list is a wordlist
+          rather than an estate, and this mode does not try wordlists.
+          <a href="/names/method">What is asked, and why a list is not a wordlist.</a>
+        </p>
+      </div>
+      {{end}}
+
     </form>
 
     <noscript>

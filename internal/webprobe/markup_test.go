@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/markup"
 )
 
@@ -36,6 +35,25 @@ type pageServer struct {
 	repeat int
 
 	taken atomic.Int64
+
+	// read is what the client pulled off the connection, which is what a
+	// bound on reading bounds. taken is what the handler handed to the
+	// kernel, and on loopback the kernel will buffer several megabytes nobody
+	// reads — so a bound asserted on taken failed one run in three under load
+	// on 2026-09-28, about bytes that never reached the prober.
+	read atomic.Int64
+}
+
+// countingConn counts what the client reads.
+type countingConn struct {
+	net.Conn
+	read *atomic.Int64
+}
+
+func (c countingConn) Read(b []byte) (int, error) {
+	n, err := c.Conn.Read(b)
+	c.read.Add(int64(n))
+	return n, err
 }
 
 func (p *pageServer) prober(t *testing.T) *Prober {
@@ -88,7 +106,11 @@ func (p *pageServer) prober(t *testing.T) *Prober {
 	addr := srv.Listener.Addr().String()
 	return &Prober{
 		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+			conn, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			return countingConn{Conn: conn, read: &p.read}, nil
 		},
 		RequestTimeout: 5 * time.Second,
 		TotalTimeout:   15 * time.Second,
@@ -144,7 +166,7 @@ func TestTheBodyIsNotReadUnlessItIsAskedFor(t *testing.T) {
 	if hop.Markup != nil {
 		t.Errorf("a prober that was not asked to read the page read it: %+v", hop.Markup)
 	}
-	if n := srv.taken.Load(); n > generous {
+	if n := srv.read.Load(); n > generous {
 		t.Errorf("%d bytes of a %d-byte page were carried by a probe that reads no bodies. "+
 			"A body closed unread costs a socket buffer; this cost a page.", n, enormous)
 	}
@@ -152,9 +174,6 @@ func TestTheBodyIsNotReadUnlessItIsAskedFor(t *testing.T) {
 
 // Asked for, it reads the page and keeps facts.
 func TestThePageIsReadWhenItIsAskedFor(t *testing.T) {
-	if demo.Enabled {
-		t.Skip("a demonstration build reads no body, which its own test asserts")
-	}
 
 	srv := &pageServer{
 		contentType: "text/html; charset=utf-8",
@@ -202,7 +221,7 @@ func TestSomethingThatIsNotAPageIsNotRead(t *testing.T) {
 		if hop.Markup != nil {
 			t.Errorf("Content-Type %q was read as markup: %+v", contentType, hop.Markup)
 		}
-		if n := srv.taken.Load(); n > generous {
+		if n := srv.read.Load(); n > generous {
 			t.Errorf("Content-Type %q: %d bytes were carried anyway", contentType, n)
 		}
 	}
@@ -256,16 +275,13 @@ func TestARedirectsBodyIsNotRead(t *testing.T) {
 	if hop.Markup != nil {
 		t.Errorf("a redirect's body was read: %+v", hop.Markup)
 	}
-	if n := srv.taken.Load(); n > generous {
+	if n := srv.read.Load(); n > generous {
 		t.Errorf("%d bytes of a redirect's body were carried", n)
 	}
 }
 
 // A 3xx with no Location is not a redirect, so its body is the page.
 func TestAThreeHundredWithNowhereToGoIsAPage(t *testing.T) {
-	if demo.Enabled {
-		t.Skip("a demonstration build reads no body")
-	}
 
 	srv := &pageServer{
 		contentType: "text/html",
@@ -287,9 +303,6 @@ func TestAThreeHundredWithNowhereToGoIsAPage(t *testing.T) {
 // A page longer than the bound costs the bound, and says nothing was seen past
 // it (R4).
 func TestALongPageIsBoundedAndSaysSo(t *testing.T) {
-	if demo.Enabled {
-		t.Skip("a demonstration build reads no body")
-	}
 
 	body, repeat := bigPage("<p>x</p>")
 	srv := &pageServer{contentType: "text/html", body: body, repeat: repeat}
@@ -304,7 +317,7 @@ func TestALongPageIsBoundedAndSaysSo(t *testing.T) {
 		t.Error("a page over the bound did not say it was truncated, so an empty list of " +
 			"findings would read as a page with nothing in it")
 	}
-	if n := srv.taken.Load(); n > generous {
+	if n := srv.read.Load(); n > generous {
 		t.Errorf("%d bytes were carried for a read bounded at %d", n, markup.MaxBytes)
 	}
 }

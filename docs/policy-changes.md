@@ -47,12 +47,12 @@ is entitled to find it still answering.
 
 ## `porch-mail-v2` → `porch-mail-v3`
 
-Unreleased.
+Released in v0.24.0, 2026-09.
 
-One finding is added and nothing that was graded before is graded differently.
-A domain whose report was strong under `porch-mail-v2` is strong under this one
-unless its aggregate reports are addressed to a domain that has not agreed to
-receive them.
+One finding is added and one is no longer raised against an exchanger whose
+name is an alias. A domain whose report was strong under `porch-mail-v2` is
+strong under this one unless its aggregate reports are addressed to a domain
+that has not agreed to receive them.
 
 ### Reports addressed to a domain that has not agreed to receive them
 
@@ -87,6 +87,37 @@ now named. The mailbox beside each is printed where the tool is run by the
 operator or the domain has been proven, and withheld otherwise: a domain is not
 a person and a mailbox is. Nothing about the finding depends on it, because the
 finding is about domains.
+
+### What a report now names, and grades no differently
+
+Nothing below moves a verdict. The void-lookup finding names the policies that
+answered nothing, where it counted them; void lookups under the limit, and
+policies that could not be read, are said with their names where they were
+counted or not said at all; and a DMARC record whose `sp=` asks less of
+subdomains than `p=` asks of the domain is said, not graded, because nothing
+here can see whether a subdomain sends mail. Where the report is read by the
+person the domain belongs to, the SPF, DMARC and TLS-RPT records are carried
+as the zone publishes them.
+
+### An exchanger whose name is an alias is not asked whether it relays
+
+`mail.open-relay` can no longer be raised against an exchanger whose name is a
+CNAME. Such an exchanger is measured as every other one is — STARTTLS, the
+certificate, DANE — and its relay line says the question was not put, and why.
+
+The relay question goes only to exchangers inside the domain being checked,
+because inside the domain is the operator's own server and outside it is a
+provider's. That was a reading of the name, and a name is not a server:
+`mail.example.com` pointed by an alias at a mail provider is inside the domain
+and is the provider's machine, which `docs/scope.md` names as the case a
+verified zone does not cover. A relay probe in that provider's log reads as a
+spam probe from the operator's address. An alias says so in DNS, so an alias is
+no longer asked; an address record pointing at a provider cannot be told apart
+from here, and the report claims nothing about it.
+
+A domain whose aliased exchanger accepted the relay question under the earlier
+reading was graded `insecure` for it and is not graded for it here. It is still
+graded `weak` for the alias itself, which RFC 2181 forbids.
 
 ---
 

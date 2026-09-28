@@ -67,6 +67,11 @@ func TestEmbeddedIPv4FormsAreBlocked(t *testing.T) {
 		{"3fff::1", "documentation, RFC 9637"},
 		{"100::1", "discard-only"},
 		{"5f00::1", "SRv6 segment identifier"},
+
+		// Site-local, deprecated and still routed inside networks old enough
+		// to have used it. IsPrivate knows only its replacement.
+		{"fec0::1", "site-local, deprecated"},
+		{"feff:ffff::1", "site-local, the top of the range"},
 	}
 
 	for _, tc := range blocked {

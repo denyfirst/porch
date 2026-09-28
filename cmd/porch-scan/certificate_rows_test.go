@@ -81,3 +81,36 @@ func TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty(t *testing.T) {
 		}
 	}
 }
+
+// The certificates the Logged line counts are printed under it, in the words
+// internal/policy wrote, and the page draws the same field (R16).
+func TestTheCertificatesTheLoggedLineCountsArePrinted(t *testing.T) {
+	stranger := policy.UnaccountedLine("0badc0de", "CN=Somebody Else", []string{"example.com"},
+		time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+
+	var buf bytes.Buffer
+	printCertificate(&buf, result{Result: &scan.Result{
+		Certificate: &certinfo.Report{
+			Chain: []certinfo.Certificate{{Subject: "CN=example.com", Issuer: "CN=Example CA"}},
+		},
+		LoggedLine:        "2 certificates for this exact name, one of which is valid today and was not the one presented here",
+		LoggedUnaccounted: []string{stranger},
+	}})
+	text := buf.String()
+	for _, want := range []string{"serial 0badc0de", "CN=Somebody Else", "2026-09-01 to 2026-12-01"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the terminal does not print %q under the Logged line:\n%s", want, text)
+		}
+	}
+	if logged, listed := strings.Index(text, "Logged"), strings.Index(text, "serial 0badc0de"); listed < logged {
+		t.Errorf("the certificates are not under the line that counts them:\n%s", text)
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), "report.loggedUnaccounted") {
+		t.Error("the page does not draw the certificates the Logged line counts")
+	}
+}

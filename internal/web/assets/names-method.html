@@ -59,6 +59,23 @@
       is you. This demonstration is the first kind, so the field is not on its
       page; your own copy shows it, and so does
       <code>porch-scan -check names -ranges 203.0.113.0/24</code>.
+      A range wider than a /20 (a /116 for IPv6), or ranges holding more than
+      4,096 addresses between them, are refused rather than cut short: a walk
+      that quietly stopped would report on addresses nobody was told were left
+      out.
+    </p>
+
+    <p>
+      <strong>And the names you already have</strong>, taken as given. They
+      are typed one to a line or separated by commas, or read from a text file;
+      blank lines and lines beginning with <code>#</code> are skipped. The file
+      is read in your browser and never uploaded, but the names in it are what
+      it is for: they leave the page in the same request as the domain, and
+      each is then resolved by this installation's resolver like any name a
+      source found. Up to 1,000 names; a longer list is refused rather than cut
+      short, because a list that long is a wordlist rather than an estate, and
+      this mode does not try wordlists. The demonstration's estate is compiled
+      in, so the field is only on your own copy.
     </p>
 
     <p>

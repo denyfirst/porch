@@ -169,11 +169,13 @@
 
     {{if .Demo}}
     <p>
-      <strong>This deployment never reads a body.</strong> Headers were taken
-      and the body was closed unread, so the traffic cost you a header's
-      worth. The restriction is compiled in rather than configured: this
-      build refuses to read a body at all, whatever it is asked, and there is
-      no setting that changes it.
+      <strong>This deployment reads the page, and only its own.</strong> It
+      connects to nothing but the hosts this project owns, so a page it reads
+      is ours: once, to a bound of one megabyte, streamed, and only the page at
+      the address whose headers it already fetched. A request in your log from
+      this deployment would mean your server is one of ours; any other
+      installation of the tool is somebody else's, and the next paragraph is
+      about those.
     </p>
 
     <p>
@@ -184,16 +186,17 @@
     {{else}}
     <p>
       <strong>This installation reads the page of a domain it has been shown
-      control of, and no other.</strong> Once, to a bound of one megabyte,
-      streamed, and only the page at the address whose headers it already
-      fetched. Where no proof of control was required, no body is read at
-      all.
+      control of</strong> — or, where it requires no proof, a page only its
+      operator asked for: on this machine's own loopback, or behind their
+      password. Once, to a bound of one megabyte, streamed, and only the page
+      at the address whose headers it already fetched. A copy that answers
+      strangers without proof reads no body at all.
     </p>
 
     <p>
-      <strong>The public deployment at denyfirst.dev never reads a
-      body</strong>, whatever it is asked. That restriction is compiled into
-      that build.
+      <strong>The public deployment at denyfirst.dev reads only its own
+      pages</strong>: the hosts it may connect to are compiled into that
+      build, and they are this project's own.
     </p>
     {{end}}
 

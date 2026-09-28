@@ -41,6 +41,8 @@ package spf
 import (
 	"context"
 	"strings"
+
+	"github.com/denyfirst/porch/internal/display"
 )
 
 const (
@@ -166,6 +168,17 @@ type Facts struct {
 	// and counting them as void would turn a resolver's failure into a finding
 	// about the domain.
 	Unread int
+
+	// VoidNames and UnreadNames are which names those were, in the order they
+	// were met and bounded like Includes.
+	//
+	// The counts alone told an operator that two of their lookups return
+	// nothing and not which two, so the one thing they could do about it —
+	// take out the include that points nowhere — started with finding it by
+	// hand. Only includes and redirects are followed, so only they can be
+	// named here; an a, mx or exists term is counted and never resolved.
+	VoidNames   []string
+	UnreadNames []string
 
 	// Reason says why nothing was established, in this package's own words.
 	// Empty when the policy was read.
@@ -343,6 +356,7 @@ func (w *walk) follow(ctx context.Context, name string, facts *Facts) (string, b
 		// Not a void lookup: the name may well have a policy, and this walk
 		// did not get to read it.
 		facts.Unread++
+		facts.UnreadNames = remember(facts.UnreadNames, name)
 		facts.LookupsAtLeast = true
 		return "", false
 	case !sub.Found:
@@ -350,6 +364,7 @@ func (w *walk) follow(ctx context.Context, name string, facts *Facts) (string, b
 		// bounds separately and low: a policy resting on names that no longer
 		// resolve is a policy nobody is maintaining.
 		facts.VoidLookups++
+		facts.VoidNames = remember(facts.VoidNames, name)
 		return "", false
 	}
 	return record, true
@@ -357,15 +372,27 @@ func (w *walk) follow(ctx context.Context, name string, facts *Facts) (string, b
 
 // rememberInclude keeps the domains a policy pulls in, bounded and in order.
 func (f *Facts) rememberInclude(name string) {
-	if len(f.Includes) >= maxTerms {
-		return
+	f.Includes = remember(f.Includes, name)
+}
+
+// remember adds a name to a list once, bounded, with anything in it that could
+// act on a display marked.
+//
+// The name is the zone's own text: a TXT record is bytes, and strings.Fields
+// splits it on whitespace and nothing else. Every one of these lists reaches a
+// report a person reads, so the rule internal/certinfo applies to a
+// certificate applies here (R10).
+func remember(list []string, name string) []string {
+	name = display.Mark(name)
+	if len(list) >= maxTerms {
+		return list
 	}
-	for _, have := range f.Includes {
+	for _, have := range list {
 		if have == name {
-			return
+			return list
 		}
 	}
-	f.Includes = append(f.Includes, name)
+	return append(list, name)
 }
 
 // isPolicy reports whether a TXT value announces itself as an SPF record.

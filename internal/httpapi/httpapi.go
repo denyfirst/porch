@@ -270,6 +270,11 @@ type Server struct {
 	// which is what an operator running their own copy gets.
 	kept *keptInventories
 
+	// keptReports is the same for the checks: the last report each produced
+	// for a host, handed to everybody until it is older than its interval. Nil
+	// scans for every caller.
+	keptReports *keptReports
+
 	// zone asks the domain's own servers to hand over the zone, where an
 	// operator asked for that. Nil is the ordinary state.
 	zone zoneReader
@@ -359,10 +364,11 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// ReadMarkup follows the proof rather than the deployment's name. A
 		// service that requires proof of control is reading a page belonging to
 		// whoever asked about it; one configured without a scope is scanning
-		// names nobody proved anything about, which N9 says a service must not
-		// do — and until somebody fixes that, it does not also read their
-		// pages. The demonstration is refused at the response in webprobe, so
-		// this line is not what protects it.
+		// names nobody proved anything about, and reads their pages only where
+		// the caller can be nobody but the operator — see operatorView, which
+		// ReachableByOthers and BehindPassword apply. The demonstration is
+		// refused at the response in webprobe, so this line is not what
+		// protects it.
 		web: &webscan.Scanner{
 			Verify:     scanner.Verify,
 			Roots:      scanner.Roots,
@@ -385,17 +391,14 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// it is the third time this exact field has been the omission.
 		//
 		// ReadSTSPolicy follows the proof, exactly as ReadMarkup does above and
-		// for the argument written out there. A service configured with a scope
-		// fetches the policy of a domain somebody has shown is theirs; one
-		// configured without a scope is scanning names nobody proved anything
-		// about, which N9 says a service must not do — and until that is fixed,
-		// it does not also fetch their files.
+		// for the argument written out there: a domain somebody has shown is
+		// theirs, or a copy only its operator can call (operatorView).
 		//
 		// The resolver is set below rather than here, and that is not tidiness.
-		// Documented selectors by default, and the operator's own are not
-		// offered here: a service takes one field, and a list of selectors in
-		// a request body is a field somebody else fills in. The command line
-		// is where an operator names their own.
+		// Documented selectors by default. A caller's own arrive in the request
+		// and are put in front of these for that request alone — see mailFor —
+		// each checked to be a DNS name and the list bounded before any is
+		// asked about.
 		mail: &mailscan.Scanner{
 			Verify:        scanner.Verify,
 			Roots:         scanner.Roots,
@@ -415,6 +418,10 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 			// has agreed to receive reports is a question about domains, so
 			// the finding is the same either way.
 			ShowReportAddresses: scanner.Verify != nil,
+
+			// And the records themselves, on the same condition: a record's
+			// text is the zone's, and two of them carry mailboxes.
+			ShowRecords: scanner.Verify != nil,
 		},
 		// The delegation is asked about directly only where control of the
 		// domain has been proven, which is the condition the mail check's two
@@ -526,6 +533,10 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		s.mux.HandleFunc(rt.method+" "+rt.path, rt.handler)
 	}
 
+	// And what a report carries, from the answer the defaults give: a server
+	// nobody has told otherwise is reachable by strangers, so this is the
+	// scope's answer — and the demonstration's, whose hosts are ours.
+	s.applyView()
 	return s
 }
 
@@ -688,11 +699,33 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 		return
 	}
 
+	// Each one a DNS name, before any of them is joined to the domain.
+	//
+	// The bound above counted entries, and the scanner splits on commas: one
+	// entry holding forty names passed it as one and was then looked under as
+	// forty, cut to sixteen without a word — the list the bound says is refused
+	// rather than cut short. A comma is not a DNS character, so refusing what is
+	// not a name closes that and the spaces and control characters with it.
+	for _, name := range t.selectors {
+		if err := dkim.CheckSelector(name); err != nil {
+			s.refuse(w, http.StatusBadRequest, "invalid_selector",
+				"A DKIM selector is one or more DNS labels separated by dots: letters, digits, "+
+					"hyphens and underscores. Send each selector as its own entry.")
+			return
+		}
+	}
+
 	host := t.host
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.limits.RequestTimeout)
 	defer cancel()
 
+	// Where this installation keeps a copy, the question everybody asks is
+	// answered from it. A caller's own selectors make it their question.
+	if s.keptReports.enabled() && len(t.selectors) == 0 {
+		s.serveKept(ctx, w, c, t, host)
+		return
+	}
 	s.runCheck(ctx, w, c, t, host)
 }
 
@@ -1333,6 +1366,7 @@ func notKept(err error) string {
 // the only caller is the person who started the process.
 func (s *Server) ReachableByOthers(reachable bool) {
 	s.exposed = reachable
+	s.applyView()
 }
 
 // BehindPassword says a password stands in front of this service, so the
@@ -1343,6 +1377,7 @@ func (s *Server) ReachableByOthers(reachable bool) {
 // server nobody told treats its callers as strangers.
 func (s *Server) BehindPassword(guarded bool) {
 	s.guarded = guarded
+	s.applyView()
 }
 
 // OperatorOnly reports that whoever is calling is the person who runs this
@@ -1355,4 +1390,47 @@ func (s *Server) BehindPassword(guarded bool) {
 // operator and for nobody else (N12).
 func (s *Server) operatorOnly() bool {
 	return !s.exposed || s.guarded
+}
+
+// operatorView reports that a report here is read by the person the estate
+// belongs to, or by the person running the machine it is read from: a scope
+// proved the domain is theirs, or nobody but the operator can call this copy.
+//
+// It decides what a report carries rather than what may be scanned. The page
+// itself, the addresses a security.txt names, the MTA-STS policy, what each
+// exchanger answers on port 25, the mailboxes DMARC reports go to, and what
+// the zone's own servers say — the command line has always shown all of it to
+// the person who ran it, because the report goes to them. A copy of porchd
+// nobody else can reach, or one behind the operator's password, is that same
+// person with a browser in front of the command line, and it showed them less:
+// every one of these followed the scope alone, a rule written when a service
+// without one answered strangers. A copy started with -open and no password
+// still answers strangers, and still shows them only what any visitor sees.
+//
+// The transparency logs and a certificate's own responder are not here. Both
+// name the domain to somebody else, and without a scope the domain may be
+// somebody else's; the command line asks both only behind a flag for that
+// reason, and the service asks them only for a proven domain.
+//
+// And the demonstration, whose hosts are compiled in (N6): every report it
+// draws is about this project's own estate, which is ours to show whole. It
+// showed less than any copy somebody runs until 2026-09-28, which is a
+// demonstration misrepresenting the product downwards — the argument the
+// inventory settled there the day before.
+func (s *Server) operatorView() bool {
+	return demo.Enabled || s.scanner.Verify != nil || s.operatorOnly()
+}
+
+// applyView hands operatorView to every check that reads it. Called by the
+// two setters that change the answer, which porchd calls before it serves,
+// like every other piece of configuration here.
+func (s *Server) applyView() {
+	view := s.operatorView()
+	s.web.ReadMarkup = view
+	s.web.ShowContacts = view
+	s.mail.ReadSTSPolicy = view
+	s.mail.ReadExchangers = view
+	s.mail.ShowReportAddresses = view
+	s.mail.ShowRecords = view
+	s.dns.AskServers = view
 }

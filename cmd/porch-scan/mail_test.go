@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/dkim"
 	"github.com/denyfirst/porch/internal/dmarcreports"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
@@ -460,5 +462,85 @@ func TestADestinationWithNoAddressStillNamesItsDomain(t *testing.T) {
 	printMail(&buf, r)
 	if !strings.Contains(buf.String(), "silent.example (HAS NOT AGREED, so it receives none)") {
 		t.Errorf("a destination with no address printed does not name its domain:\n%s", buf.String())
+	}
+}
+
+// -dkim-selector is held to what the service holds a request to: every name a
+// DNS name, and no more names than one scan looks under. A list cut short
+// without a word would answer about names the operator was not told were left
+// out.
+func TestTheSelectorsAnOperatorNamesAreCheckedBeforeAnythingIsAsked(t *testing.T) {
+	for _, good := range []string{"", "s1", "s1,google", "s1, google ,", "key1.migadu"} {
+		if err := checkSelectors(good); err != nil {
+			t.Errorf("%q was refused: %v", good, err)
+		}
+	}
+	for _, bad := range []string{"s1 google", "s1,,bad name", "-x", "a..b"} {
+		if err := checkSelectors(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+	many := make([]string, dkim.MaxSelectors+1)
+	for i := range many {
+		many[i] = "s" + strconv.Itoa(i)
+	}
+	if err := checkSelectors(strings.Join(many, ",")); err == nil {
+		t.Errorf("%d selectors were accepted, and the scan would have looked under %d of them",
+			len(many), dkim.MaxSelectors)
+	}
+
+	// And it is asked before the mail check runs, which is the only place it
+	// does anything. Read from the source, because run() reaches the network.
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := strings.Index(string(src), "checkSelectors(*dkimSelectors)")
+	scan := strings.Index(string(src), "return runMail(")
+	if check < 0 || scan < 0 || check > scan {
+		t.Error("the selectors an operator names are not checked before the mail check runs")
+	}
+}
+
+// A record the report carries is printed under the row written from it, and
+// the page draws the same three fields (R16).
+func TestTheRecordsArePrintedUnderTheirRows(t *testing.T) {
+	facts := policy.MailFacts{
+		SPFRecords: 1, SPFAll: "-", SPFLookups: 1,
+		SPFRecord:    "v=spf1 include:_spf.provider.example -all",
+		DMARCRecords: 1, DMARCPolicy: "reject", DMARCPercent: 100,
+		DMARCRecord:  "v=DMARC1; p=reject",
+		TLSReporting: true,
+		TLSRPTRecord: "v=TLSRPTv1; rua=mailto:tls@example.com",
+	}
+	var buf bytes.Buffer
+	printMail(&buf, mailResult{Domain: "example.com", Result: &mailscan.Result{Observed: &facts}})
+	text := buf.String()
+
+	for row, record := range map[string]string{
+		"SPF": facts.SPFRecord, "DMARC": facts.DMARCRecord, "TLS-RPT": facts.TLSRPTRecord,
+	} {
+		at, under := strings.Index(text, "    "+row+" "), strings.Index(text, "Record     "+record)
+		if at < 0 || under < 0 || under < at {
+			t.Errorf("the %s record is not printed under its row:\n%s", row, text)
+		}
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"facts.spfRecord", "facts.dmarcRecord", "facts.tlsRptRecord"} {
+		if !strings.Contains(string(page), `row("Record", `+field+`)`) {
+			t.Errorf("the page does not draw %s", field)
+		}
+	}
+
+	// And a report without them prints no Record row at all.
+	buf.Reset()
+	bare := policy.MailFacts{SPFRecords: 1, SPFAll: "-"}
+	printMail(&buf, mailResult{Domain: "example.com", Result: &mailscan.Result{Observed: &bare}})
+	if strings.Contains(buf.String(), "Record") {
+		t.Errorf("a report carrying no record prints a Record row:\n%s", buf.String())
 	}
 }

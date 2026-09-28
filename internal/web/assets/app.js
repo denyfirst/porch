@@ -142,12 +142,19 @@ const MAX_KNOWN = 1000;
 //
 // Sent only when something was typed. An empty list would be a caller asking
 // for nothing, and the service would have to decide what that meant.
+//
+// And sent whole. It was cut to MAX_KNOWN here, without a word, so a list
+// pasted past the bound lost its tail on the way out and the service — which
+// refuses such a list rather than cutting it — never saw enough to refuse. The
+// report then listed a thousand names as if they were all of them. A file
+// loaded past the bound is still cut where it is loaded, and says so beside
+// the field; what somebody typed is theirs to be refused over.
 function knownAsked() {
   const field = document.getElementById("known");
   if (!field) return null;
 
   const names = splitNames(field.value);
-  return names.length ? { names: names.slice(0, MAX_KNOWN) } : null;
+  return names.length ? { names: names } : null;
 }
 
 // asked is everything the page adds to the domain, in one object.
@@ -172,7 +179,9 @@ function selectorsAsked(name) {
   const field = document.getElementById("selectors");
   if (!field || name !== "mail") return null;
 
-  const named = field.value.split(",").map(s => s.trim()).filter(Boolean);
+  // Commas or spaces, because somebody pasting "s1 google" means two names and
+  // the service refuses a selector that is not a DNS name.
+  const named = field.value.split(/[\s,]+/).filter(Boolean);
   return named.length ? { selectors: named } : null;
 }
 
@@ -437,6 +446,12 @@ function summary(data) {
   const meta = [];
   if (address) meta.push(address);
   if (data.policy) meta.push("graded by " + data.policy);
+  // A kept copy says how old it is. The demonstration runs each check at most
+  // once an hour and hands the report to everybody who asks in that hour, and
+  // a copy without its age would read as a measurement of now.
+  if (data.producedAt && !data.producedAt.startsWith("0001-01-01")) {
+    meta.push("measured " + producedAt(data.producedAt));
+  }
   if (meta.length) left.appendChild(el("p", "summary-meta", meta.join("  ·  ")));
   // Not on the demonstration: a report there is about our own domain, and a
   // visitor has no use for a copy of it. A copy of your own is where a
@@ -936,6 +951,14 @@ function certificate(cert, tls, issuance, stapling, report) {
   // decides whether to show it.
   pair("Logged", report && report.loggedLine,
     "not searched: the public logs were not asked what else exists for this name");
+
+  // And the certificates that line counts, one under another, because a count
+  // asking the reader to check a list is no use without the list. Composed in
+  // internal/policy, as the terminal prints them (R16).
+  for (const c of (report && report.loggedUnaccounted) || []) {
+    pairs.appendChild(el("dt", null, ""));
+    pairs.appendChild(el("dd", null, "· " + c));
+  }
 
   pair("SHA-256", leaf.fingerprintSha256);
 
@@ -1597,9 +1620,11 @@ function buildMail(data) {
 
 // zone draws what the three lookups established.
 //
-// Every value here is written by this program from booleans and counts, never
-// pasted from the zone: a record's text is chosen by whoever is being measured,
-// and the sentences a reader acts on should not be.
+// Every row a reader acts on is written by this program from booleans and
+// counts, never pasted from the zone: a record's text is chosen by whoever is
+// being measured, and the sentences a reader acts on should not be. The one
+// exception is labelled as what it is — the Record rows, which carry the zone's
+// own text to the person the zone belongs to and to nobody else.
 function zone(facts) {
   const frag = document.createDocumentFragment();
   if (!facts) return frag;
@@ -1632,6 +1657,10 @@ function zone(facts) {
       facts.spfLookupLimit ? "insecure" : null,
     );
   }
+  // The record itself, where the report is read by the person the domain
+  // belongs to. The service decides that and leaves the field empty otherwise,
+  // and the terminal prints the same field under the same row (R16).
+  if (facts.spfRecord) row("Record", facts.spfRecord);
 
   if (facts.dmarcReason) {
     row("DMARC", "not read: " + facts.dmarcReason);
@@ -1644,6 +1673,7 @@ function zone(facts) {
   } else {
     row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%");
   }
+  if (facts.dmarcRecord) row("Record", facts.dmarcRecord);
 
   // Where the aggregate reports go, under the policy that asks for them.
   //
@@ -1655,6 +1685,7 @@ function zone(facts) {
   if (reportTo) row("Reports to", reportTo);
 
   row("TLS-RPT", facts.tlsReporting ? "yes" : "no");
+  if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord);
 
   // Signing keys, and which names were looked under.
   //
@@ -1896,45 +1927,6 @@ if (form) form.addEventListener("submit", async event => {
     button.textContent = label;
   }
 });
-// ── The counter ─────────────────────────────────────────────────────────
-
-/*
-  Shown because a number nobody can trace back to a person is the clearest
-  demonstration of the claim on this page. Saying "nothing is recorded" is a
-  promise; publishing the only thing that is recorded, and letting a reader
-  see it holds no hostname, no address and no time, is closer to a proof.
-*/
-async function showTally() {
-  const tally = document.getElementById("tally");
-  if (!tally || DEMO_SITE) return;
-
-  try {
-    const response = await fetch("/api/v1/stats", { cache: "no-store" });
-    if (!response.ok) return;
-
-    const stats = await response.json();
-    if (typeof stats.scansTotal !== "number" || stats.scansTotal < 1) return;
-
-    const total = stats.scansTotal.toLocaleString("en");
-    let since = "";
-    if (typeof stats.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(stats.since)) {
-      const date = new Date(stats.since + "T00:00:00Z");
-      if (!isNaN(date)) {
-        since = " since " + date.toLocaleDateString("en", {
-          day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
-        });
-      }
-    }
-
-    tally.textContent =
-      total + " scans" + since + ". The only trace any of them left.";
-    tally.hidden = false;
-  } catch {
-    // A missing counter is not worth an error on the page.
-  }
-}
-
-showTally();
 // ── The console ─────────────────────────────────────────────────────────
 
 /*
@@ -2626,6 +2618,126 @@ if (porchForm) {
 const historyBox = document.getElementById("history");
 const historyReport = document.getElementById("history-report");
 
+// The list as it was last drawn, so that a report opened from it can find the
+// one kept before it for the same check and host.
+let historyEntries = [];
+
+/*
+  What changed between a report and the one kept before it, for the same
+  check against the same host.
+
+  Findings are matched by rule identifier and title. The identifier is stable
+  across releases (policy.Finding says so), so a finding that appears or goes
+  away is named by the rule that produced it, and nothing is inferred from
+  prose.
+
+  A verdict is set beside the earlier one only where both were graded under
+  the same rule set. A verdict from one means nothing under another, and two
+  side by side would say otherwise.
+
+  And where either report measured nothing, no finding is listed at all:
+  nothing measured is not the same as passing (R4), so a finding missing from
+  a report that measured nothing has not gone away — it was not looked for.
+*/
+function reportFindings(report) {
+  const found = new Map();
+  const walk = (node, depth) => {
+    if (depth > 16 || node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, depth + 1);
+      return;
+    }
+    if (typeof node.ruleId === "string" && typeof node.title === "string") {
+      const key = node.ruleId + "\u0000" + node.title;
+      if (!found.has(key)) found.set(key, { ruleId: node.ruleId, title: node.title });
+      return;
+    }
+    for (const value of Object.values(node)) walk(value, depth + 1);
+  };
+  walk(report, 0);
+  return found;
+}
+
+function reportChanges(now, before) {
+  const graded = r => r && VERDICTS.includes(r.verdict);
+  const changes = {
+    samePolicy: typeof now.policy === "string" && now.policy !== "" && now.policy === before.policy,
+    measured: graded(now) && graded(before),
+    verdictNow: graded(now) ? now.verdict : "not graded",
+    verdictBefore: graded(before) ? before.verdict : "not graded",
+    appeared: [],
+    gone: [],
+  };
+  if (!changes.measured) return changes;
+  const a = reportFindings(now);
+  const b = reportFindings(before);
+  for (const [key, finding] of a) if (!b.has(key)) changes.appeared.push(finding);
+  for (const [key, finding] of b) if (!a.has(key)) changes.gone.push(finding);
+  return changes;
+}
+
+function changesBlock(changes, now, before, beforeDate) {
+  const box = el("section", "history-changes");
+  box.appendChild(el("h3", null, "Since the report kept " + beforeDate));
+
+  if (changes.samePolicy) {
+    const verdict = el("p");
+    verdict.appendChild(document.createTextNode("Verdict: "));
+    if (changes.verdictNow === changes.verdictBefore) {
+      verdict.appendChild(el("span", markClass(changes.verdictNow), changes.verdictNow));
+      verdict.appendChild(document.createTextNode(" then and now."));
+    } else {
+      verdict.appendChild(el("span", markClass(changes.verdictBefore), changes.verdictBefore));
+      verdict.appendChild(document.createTextNode(" then, "));
+      verdict.appendChild(el("span", markClass(changes.verdictNow), changes.verdictNow));
+      verdict.appendChild(document.createTextNode(" now."));
+    }
+    box.appendChild(verdict);
+  } else {
+    box.appendChild(el("p", null, "Graded under " + (before.policy || "no rule set") + " then and " +
+      (now.policy || "no rule set") + " now. A verdict from one rule set means nothing under " +
+      "another, so the two verdicts are not compared."));
+  }
+
+  if (!changes.measured) {
+    box.appendChild(el("p", null, "One of the two reports measured nothing that could be graded, " +
+      "so no finding is compared: a finding missing from it was not looked for, which is not " +
+      "the same as gone."));
+    return box;
+  }
+
+  const list = (title, findings) => {
+    if (!findings.length) return;
+    box.appendChild(el("p", "history-changes-title", title));
+    const ul = el("ul");
+    for (const f of findings) {
+      const li = el("li", null, f.title + " ");
+      li.appendChild(el("code", null, f.ruleId));
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+  };
+  list("In this report and not in the earlier one:", changes.appeared);
+  list("In the earlier report and not in this one:", changes.gone);
+  if (!changes.appeared.length && !changes.gone.length) {
+    box.appendChild(el("p", null, "The same findings, by rule, in both."));
+  }
+  return box;
+}
+
+// earlierEntry is the report kept before this one for the same check and
+// host, or null. Seq orders reports kept on the same date.
+function earlierEntry(entry) {
+  let best = null;
+  for (const other of historyEntries) {
+    if (other.id === entry.id || other.check !== entry.check || other.target !== entry.target) continue;
+    const earlier = other.date < entry.date || (other.date === entry.date && other.seq < entry.seq);
+    if (!earlier) continue;
+    if (!best || other.date > best.date || (other.date === best.date && other.seq > best.seq)) best = other;
+  }
+  return best;
+}
+
 async function historyRequest(method, path) {
   const response = await fetch(path, { method, credentials: "same-origin", cache: "no-store" });
   if (response.status === 401) {
@@ -2675,6 +2787,22 @@ function historyRow(entry) {
       // and when, which the report does not.
       head.appendChild(el("p", "eyebrow", (view ? view.label : record.check) + " · kept " + record.date));
       historyReport.appendChild(head);
+      // The report kept before this one for the same check and host, set
+      // above it. Asked for only when this one is opened, through the same
+      // gate; a failure to read it costs the comparison and nothing else.
+      const previous = earlierEntry(entry);
+      if (previous && previous.policy && record.report && typeof record.report === "object" &&
+          typeof record.report.policy === "string" && record.report.policy !== "") {
+        try {
+          const before = await historyRequest("GET", "/api/v1/history/" + previous.id);
+          if (before && before.report && typeof before.report === "object") {
+            const changes = reportChanges(record.report, before.report);
+            historyReport.appendChild(changesBlock(changes, record.report, before.report, previous.date));
+          }
+        } catch {
+          // The comparison is extra; the report below is what was asked for.
+        }
+      }
       if (view) {
         historyReport.appendChild(view.build(record.report));
       } else {
@@ -2695,6 +2823,7 @@ function historyRow(entry) {
     remove.disabled = true;
     try {
       await historyRequest("DELETE", "/api/v1/history/" + entry.id);
+      historyEntries = historyEntries.filter(other => other.id !== entry.id);
       row.remove();
       clear(historyReport);
       historyReport.hidden = true;
@@ -2718,6 +2847,7 @@ function showHistory(entries) {
   const table = document.getElementById("history-table");
   const rows = document.getElementById("history-rows");
   clear(rows);
+  historyEntries = entries.filter(entry => entry && typeof entry.id === "string");
   for (const entry of entries) rows.appendChild(historyRow(entry));
   table.hidden = entries.length === 0;
   document.getElementById("history-empty").hidden = entries.length !== 0;

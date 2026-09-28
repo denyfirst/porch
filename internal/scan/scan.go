@@ -154,6 +154,12 @@ type Result struct {
 	LoggedLine string           `json:"loggedLine,omitempty"`
 	Logged     *ctsearch.Result `json:"logged,omitempty"`
 
+	// LoggedUnaccounted is that list: one sentence for each logged certificate
+	// valid now that was not the one presented, composed in internal/policy so
+	// the page and the terminal print the same words (R16). The sentence above
+	// counts them and tells the reader to check; this is what they check.
+	LoggedUnaccounted []string `json:"loggedUnaccounted,omitempty"`
+
 	// KeyExchangeLine is what the extra post-quantum handshake established,
 	// in the sentence both faces show.
 	KeyExchangeLine string `json:"keyExchangeLine,omitempty"`
@@ -272,13 +278,12 @@ type Scanner struct {
 	// every caller wants: the address comes from the certificate the scanned
 	// server sent, so it is chosen by the party being measured.
 	//
-	// It runs everywhere except the demonstration build, and the reason is on
-	// that build's privacy page rather than here: the demonstration promises it
-	// asks no authority anything. Elsewhere there is nothing to switch on. A
-	// revoked certificate is the most serious thing this check can find, and on
-	// a deployment that requires proof of control the certificate belongs to
-	// whoever asked — a switch they had to find first would be a gap in a
-	// report dressed as a choice.
+	// It runs on every build, with nothing to switch on. A revoked certificate
+	// is the most serious thing this check can find, and on a deployment that
+	// requires proof of control the certificate belongs to whoever asked — a
+	// switch they had to find first would be a gap in a report dressed as a
+	// choice. The demonstration reaches only this project's own hosts, so the
+	// certificate there is ours.
 	Revocation *crl.Fetcher
 
 	// ShowRevocationURLs puts the addresses a certificate names for checking
@@ -488,11 +493,16 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// certificates there is nothing to staple and the report above has
 		// nothing to say. This fetches the list the certificate names.
 		//
-		// Not on the demonstration build. demo.Enabled is a constant, so the
-		// call below is compiled out there rather than switched off, and the
-		// promise on that deployment's privacy page — that it asks no
-		// authority anything — stays true by construction.
-		if !demo.Enabled && len(tlsReport.Certificates) > 0 {
+		// On every build, the demonstration included since 2026-09-28. It was
+		// compiled out of that build to keep a promise that it asked no
+		// authority anything, written when a visitor chose the host. A visitor
+		// no longer does: the demonstration reaches only this project's own
+		// hosts (N6), so the list it fetches is the one for our certificate,
+		// and what the authority learns is that somebody downloaded a list
+		// covering thousands. Leaving it out made the demonstration say
+		// "revocation not established" about a certificate every copy
+		// somebody runs would have checked.
+		if len(tlsReport.Certificates) > 0 {
 			leaf := tlsReport.Certificates[0]
 
 			fetcher := s.Revocation
@@ -557,12 +567,13 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// are the only place it is visible, and that is the whole reason this
 		// check exists (N12).
 		//
-		// Not on the demonstration: demo.Enabled is a constant, so the branch
-		// is eliminated there rather than switched off, and the promise on that
-		// deployment's privacy page that it queries no log stays true by
-		// construction.
-		if !demo.Enabled && s.Logs != nil && len(tlsReport.Certificates) > 0 {
-			out.LoggedLine, out.Logged = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
+		// Where a caller configured a searcher: a service with proof of
+		// control, the command line behind -check-logs, and the demonstration,
+		// whose hosts are compiled in and whose question can therefore only
+		// ever name this project's own domain — the argument the inventory
+		// made there on 2026-09-27, and the same answer.
+		if s.Logs != nil && len(tlsReport.Certificates) > 0 {
+			out.LoggedLine, out.Logged, out.LoggedUnaccounted = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
 		}
 	}
 
@@ -1227,9 +1238,10 @@ func listStatus(s crl.Status) string {
 // The comparison against the certificate in hand is the point of it. A count of
 // certificates is a curiosity; a count of certificates that are valid today and
 // are not the one this server just presented is a list the operator can act on.
-func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certificate, report *certinfo.Report) (string, *ctsearch.Result) {
+func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certificate, report *certinfo.Report) (string, *ctsearch.Result, []string) {
 	found := s.Logs.Search(ctx, host)
 
+	var unaccounted []string
 	facts := policy.LogFacts{
 		Searched:  true,
 		Distinct:  found.Distinct,
@@ -1256,12 +1268,13 @@ func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certif
 			continue
 		}
 		facts.Unseen++
+		unaccounted = append(unaccounted, policy.UnaccountedLine(e.Serial, e.Issuer, e.Names, e.NotBefore, e.NotAfter))
 	}
 
 	if report != nil {
 		report.Notes = append(report.Notes, policy.DescribeLogged(facts)...)
 	}
-	return policy.LoggedLine(facts), &found
+	return policy.LoggedLine(facts), &found, unaccounted
 }
 
 // sameSerial reports whether a serial a monitor wrote as hexadecimal is the
@@ -1294,10 +1307,11 @@ func sameSerial(hexSerial string, leaf *x509.Certificate) bool {
 // nothing was asked of an authority for as long as it took somebody to read a
 // report closely.
 //
-// demo.Enabled is a constant, so this is decided at build time and the branch
-// below is the same one the scan takes.
+// Every build fetches it now, the demonstration included, so the answer is a
+// constant; the function stays so that the test holding the limit to the
+// behaviour has one place to ask.
 func (s *Scanner) revocationFetched() bool {
-	return !demo.Enabled
+	return true
 }
 
 // certOptions is what this scanner lets a certificate report carry.

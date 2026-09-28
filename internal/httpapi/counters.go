@@ -54,6 +54,30 @@ var refusalCodes = []string{
 	// Both are things an operator wants to see, and neither can be seen from
 	// a scan count.
 	"not_verified", // a domain this deployment has not been shown control of
+
+	// The inventory's own refusals, and the mail check's bound on selectors.
+	//
+	// All six were answered through refuse and none was in this list, so every
+	// one was dropped on the way to the counter: the inventory has refused
+	// unproven domains, strangers' address ranges and wordlist-length lists
+	// since it existed, and the figures said nothing was ever turned away
+	// there. A7 says what that silence is worth. They were reachable and
+	// uncounted, which is the half of A7 the reachability test could not see,
+	// because it drove only the codes this list already held.
+	"proof_required",     // an inventory of a domain nobody has proven here
+	"not_offered",        // a source this installation was not started with
+	"not_your_range",     // an address range from somebody who is not the operator
+	"invalid_range",      // an address range that could not be read or is too wide
+	"list_too_long",      // more names than an estate list may carry
+	"too_many_selectors", // more DKIM selectors than one scan looks under
+
+	// A DKIM selector that is not a DNS name. New with the check that refuses
+	// one, and counted from the start rather than found missing later.
+	"invalid_selector",
+
+	// A plain-HTTP request naming this machine by a name nobody told it was
+	// its own, which is what a page rebinding its domain to this address sends.
+	"host_not_served",
 }
 
 // checkNames are the checks this service counts, and the complete set of keys

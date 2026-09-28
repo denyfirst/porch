@@ -90,31 +90,34 @@
         check is among the ones chosen, so a field filled in and left behind
         is not a caller believing something happened.
       -->
-      <label class="field-label" for="selectors">DKIM selectors, for the mail check</label>
-      <div class="field-row">
-        <input
-          class="field"
-          type="text"
-          id="selectors"
-          name="selectors"
-          placeholder="s1, mail2024, k1"
-          spellcheck="false"
-          autocapitalize="off"
-          autocorrect="off"
-          aria-describedby="selectors-help">
+      <div class="field-group">
+        <label class="field-label" for="selectors">DKIM selectors, for the mail check</label>
+        <div class="field-row">
+          <input
+            class="field"
+            type="text"
+            id="selectors"
+            name="selectors"
+            placeholder="selector1, selector2"
+            spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
+            aria-describedby="selectors-help">
+        </div>
+        <p class="field-help" id="selectors-help">
+          Separated by commas or spaces, and you can leave it empty: the check
+          already looks under the names mail providers document for their own
+          service, which covers most domains. Fill it in when yours is not one
+          of those.
+          <strong>Your selector is the <code>s=</code> tag in the
+          <code>DKIM-Signature</code> header of any message this domain sent</strong>
+          — open one and read it there. It is also the first label of the record
+          itself, in <code>&lt;selector&gt;._domainkey</code> under the domain.
+          Each is one lookup, to the same resolver as everything else. Up to
+          sixteen; a longer list is refused rather than cut short.
+          <a href="/mail/method">What is asked, and why nothing can list them.</a>
+        </p>
       </div>
-      <p class="field-help" id="selectors-help">
-        Comma separated, and you can leave it empty: the check already looks
-        under the names mail providers document for their own service, which
-        covers most domains. Fill it in when yours is not one of those.
-        <strong>Your selector is the <code>s=</code> tag in the
-        <code>DKIM-Signature</code> header of any message this domain sent</strong>
-        — open one and read it there. It is also the first label of the record
-        itself, in <code>&lt;selector&gt;._domainkey</code> under the domain.
-        Nothing can list them, which is why this field exists. Each is one
-        lookup, to the same resolver as everything else. Up to sixteen; a
-        longer list is refused rather than cut short.
-      </p>
 
       <div class="composer-run">
         <p>Each check reports on its own, one after another.</p>

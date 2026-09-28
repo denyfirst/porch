@@ -216,14 +216,22 @@ or not anyone runs it by hand.
 ```
 
 ```
-porch-scan v0.2.0
-policy denyfirst-v2
+porch-scan v0.20.0
+policy porch-tls-v7
+policy porch-web-v3
+policy porch-mail-v3
+policy porch-dns-v2
+scans whatever it is pointed at, from this machine
 ```
 
-Two lines, because they answer different questions. The first is the release,
-linked in at build time from the tag; the second is the rule set that produces
-verdicts. A verdict from one policy version is not comparable with a verdict
-from another, so a report carries the policy version too.
+The release and the rule sets are whatever the binary in front of you was built
+with; the shape is the part to check.
+
+Three kinds of line, because they answer three questions. The first is the
+release, linked in at build time from the tag; each `policy` line is the rule
+set one check grades by, and a verdict from one policy version is not
+comparable with a verdict from another, so a report carries its own too. The
+last says which hosts the binary will connect to at all.
 
 A binary that prints `(unknown: not built by scripts/build.sh)` was built some
 other way — most likely by `go build` from a checkout, which is a perfectly

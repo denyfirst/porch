@@ -698,3 +698,23 @@ func TestANoteThatAsksForASelectorSaysWhereToFindOne(t *testing.T) {
 		}
 	}
 }
+
+// The void-lookup finding names the policies that answered nothing.
+func TestTheVoidLookupFindingNamesThePolicies(t *testing.T) {
+	got := GradeMail(MailFacts{
+		SPFRecords: 1, SPFAll: "-", SPFLookups: 4,
+		SPFVoidLookups: 3, SPFVoidLimit: true,
+		SPFVoidNames: []string{"a.example", "b.example", "c.example"},
+		DMARCRecords: 1, DMARCPolicy: "reject", DMARCPercent: 100, MXRead: true,
+	})
+	for _, f := range got.Findings {
+		if f.RuleID != "mail.spf-void-lookups" {
+			continue
+		}
+		if !strings.Contains(f.Rationale, "a.example, b.example and c.example") {
+			t.Errorf("the finding does not name the policies: %s", f.Rationale)
+		}
+		return
+	}
+	t.Fatalf("no void-lookup finding: %+v", got.Findings)
+}

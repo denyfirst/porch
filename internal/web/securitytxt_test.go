@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/denyfirst/porch/internal/demo"
 )
 
 // expiryMargin is how long before the Expires date these tests start failing.
@@ -22,19 +24,51 @@ const expiryMargin = 60 * 24 * time.Hour
 // about a mailbox nobody has checked.
 const maxLifetime = 365 * 24 * time.Hour
 
-// securityTxtFields parses the served file the way a reporter's tool would:
-// comments and blank lines dropped, field names lowercased, values kept in
-// order of appearance.
+// denyfirstFile is one of our own contact files as a reporter receives it.
+//
+// On the demonstration, which serves it, that is the bytes the handler sends.
+// On an installation it is served by nothing, so the file embedded for the
+// demonstration is read instead — the Expires reminder then fails on every
+// build, and not only on the one job that builds with the tag.
+func denyfirstFile(t *testing.T, path string) string {
+	t.Helper()
+
+	file, found := denyfirstFiles[path]
+	if !found {
+		t.Fatalf("%s is not one of this project's own files", path)
+	}
+	if !demo.Enabled {
+		body, err := assets.ReadFile(file.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(body)
+	}
+
+	w := get(t, path)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET %s returned %d, want 200", path, w.Code)
+	}
+	return w.Body.String()
+}
+
+// securityTxtFields parses the file the way a reporter's tool would: comments
+// and blank lines dropped, field names lowercased, values kept in order of
+// appearance.
 func securityTxtFields(t *testing.T) map[string][]string {
 	t.Helper()
 
-	w := get(t, SecurityTxtPath)
-	if w.Code != http.StatusOK {
-		t.Fatalf("GET %s returned %d, want 200", SecurityTxtPath, w.Code)
+	body := denyfirstFile(t, SecurityTxtPath)
+
+	// RFC 9116's grammar ends every line, the last included, with a line
+	// break. A file without one parses in most tools and fails in a strict
+	// one, which is the tool least likely to be forgiving elsewhere.
+	if !strings.HasSuffix(body, "\n") {
+		t.Error("security.txt does not end with a line break; RFC 9116 ends every line with one")
 	}
 
 	fields := map[string][]string{}
-	for _, line := range strings.Split(w.Body.String(), "\n") {
+	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -57,9 +91,37 @@ func securityTxtFields(t *testing.T) map[string][]string {
 	return fields
 }
 
+// An installation publishes no contact of ours, at any of the addresses the
+// demonstration publishes one.
+//
+// Its Canonical would name another host, its reporter would be sent to people
+// who cannot fix that host, its Expires date would lapse on an installation
+// left on one release, and our name would answer anyone probing for copies of
+// this tool. See denyfirstFiles.
+func TestAnInstallationPublishesNoContactOfOurs(t *testing.T) {
+	for _, path := range []string{SecurityTxtPath, "/security.txt", PGPKeyPath} {
+		w := get(t, path)
+		if demo.Enabled {
+			if w.Code != http.StatusOK && w.Code != http.StatusMovedPermanently {
+				t.Errorf("GET %s on the demonstration returned %d", path, w.Code)
+			}
+			continue
+		}
+		if w.Code != http.StatusNotFound {
+			t.Errorf("GET %s on an installation returned %d, want 404", path, w.Code)
+		}
+		if strings.Contains(strings.ToLower(w.Body.String()), "denyfirst") {
+			t.Errorf("GET %s on an installation names us: %q", path, w.Body.String())
+		}
+	}
+}
+
 // The file is reachable at the path RFC 9116 names, and nowhere else that
 // would produce a second copy to keep in step.
 func TestSecurityTxtIsServedAtTheWellKnownPath(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("served by the demonstration alone; TestAnInstallationPublishesNoContactOfOurs covers this build")
+	}
 	w := get(t, SecurityTxtPath)
 
 	if w.Code != http.StatusOK {
@@ -90,6 +152,9 @@ func TestSecurityTxtIsServedAtTheWellKnownPath(t *testing.T) {
 // Somebody looking for a way to report a problem tries the short path first.
 // Answering that with a 404 costs a report.
 func TestLegacySecurityTxtPathRedirects(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("served by the demonstration alone; TestAnInstallationPublishesNoContactOfOurs covers this build")
+	}
 	w := get(t, "/security.txt")
 
 	if w.Code != http.StatusMovedPermanently {
