@@ -75,6 +75,47 @@
         {{end}}
         {{end}}
       </div>
+
+      <!--
+        The one input a check needs and cannot discover.
+
+        DNS does not list what is beneath a name, so a DKIM signing key is
+        found only where somebody says to look. Without this the mail check
+        looks under the selectors mail providers document and reports that
+        those names hold nothing — which is a sentence about this project's
+        list, read by an operator as a fact about their own domain.
+
+        Beside the checks rather than in a section of its own, because it
+        belongs to one of them and says so. It is sent only when the mail
+        check is among the ones chosen, so a field filled in and left behind
+        is not a caller believing something happened.
+      -->
+      <label class="field-label" for="selectors">DKIM selectors, for the mail check</label>
+      <div class="field-row">
+        <input
+          class="field"
+          type="text"
+          id="selectors"
+          name="selectors"
+          placeholder="s1, mail2024, k1"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
+          aria-describedby="selectors-help">
+      </div>
+      <p class="field-help" id="selectors-help">
+        Comma separated, and you can leave it empty: the check already looks
+        under the names mail providers document for their own service, which
+        covers most domains. Fill it in when yours is not one of those.
+        <strong>Your selector is the <code>s=</code> tag in the
+        <code>DKIM-Signature</code> header of any message this domain sent</strong>
+        — open one and read it there. It is also the first label of the record
+        itself, in <code>&lt;selector&gt;._domainkey</code> under the domain.
+        Nothing can list them, which is why this field exists. Each is one
+        lookup, to the same resolver as everything else. Up to sixteen; a
+        longer list is refused rather than cut short.
+      </p>
+
       <div class="composer-run">
         <p>Each check reports on its own, one after another.</p>
         <button class="submit" type="submit" id="console-submit">Run the checks</button>

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/dkim"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/tlsprobe"
@@ -564,5 +566,86 @@ func TestTheServicePrintsReportAddressesOnlyWhereItRequiredProof(t *testing.T) {
 	if withoutProof.mail.ShowReportAddresses {
 		t.Error("a service configured with no scope prints the mailboxes published by names " +
 			"nobody proved anything about")
+	}
+}
+
+// The mail check looks under the selectors the caller named, and no other
+// check takes them.
+//
+// A signing key is the one thing in this check that cannot be discovered. DNS
+// does not list what is beneath a name, so looking only under the selectors
+// mail providers document answers about this project's list rather than about
+// the domain — and until 2026-09-28 that was all a service could do, on the
+// argument that a list in a request body is "a field somebody else fills in".
+// Behind proof of control it is not: the person filling it in has shown the
+// domain is theirs.
+func TestTheMailCheckLooksUnderTheSelectorsTheCallerNamed(t *testing.T) {
+	s := New(&scan.Scanner{}, Limits{}, nil)
+
+	// Names no provider documents, so the assertions below are about what the
+	// caller sent rather than about what happened to be in the list already.
+	named := s.mailFor(target{host: "example.test", selectors: []string{"porch-a", "porch-b"}})
+	if named == s.mail {
+		t.Fatal("a caller who named selectors got the installation's own list")
+	}
+	if len(named.DKIMSelectors) != len(s.mail.DKIMSelectors)+2 {
+		t.Fatalf("the scanner looks under %d selectors, want the documented ones and two more",
+			len(named.DKIMSelectors))
+	}
+
+	// Theirs first, because the bound cuts from the end: a caller who named
+	// two and got the documented sixteen instead would have been answered
+	// about names they did not ask about.
+	for i, want := range []string{"porch-a", "porch-b"} {
+		if named.DKIMSelectors[i].Name != want {
+			t.Errorf("selector %d is %q, want %q", i, named.DKIMSelectors[i].Name, want)
+		}
+		if named.DKIMSelectors[i].Source != dkim.FromOperator {
+			t.Errorf("a selector the caller named is labelled %q", named.DKIMSelectors[i].Source)
+		}
+	}
+
+	// And the shared scanner is untouched, so one caller's selectors are not
+	// the next caller's.
+	for _, sel := range s.mail.DKIMSelectors {
+		if sel.Name == "porch-a" {
+			t.Fatal("one caller's selectors reached the installation's own list")
+		}
+	}
+
+	// A caller who named none gets the installation's own scanner rather than
+	// a copy of it.
+	if s.mailFor(target{host: "example.test"}) != s.mail {
+		t.Error("a request naming no selectors copies the scanner for nothing")
+	}
+}
+
+// Every check but mail refuses a list of selectors, and a list longer than a
+// scan looks under is refused rather than cut.
+//
+// The same rule as an address range and a list of names: a field accepted and
+// ignored is a caller believing something happened, and a list silently
+// shortened is a report answering about names nobody was told were skipped.
+func TestOnlyTheMailCheckTakesSelectors(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+
+	for _, path := range []string{"/api/v1/tls/scan", "/api/v1/web/scan", "/api/v1/dns/scan"} {
+		body := `{"target":"example.test","selectors":["s1"]}`
+		if got := errorCode(t, postTo(t, s, path, body, "203.0.113.170:5000")); got != "bad_request" {
+			t.Errorf("%s answered a list of selectors with %q", path, got)
+		}
+	}
+
+	var many []string
+	for i := 0; i <= dkim.MaxSelectors; i++ {
+		many = append(many, fmt.Sprintf("s%d", i))
+	}
+	body, err := json.Marshal(map[string]any{"target": "example.test", "selectors": many})
+	if err != nil {
+		t.Fatalf("marshalling: %v", err)
+	}
+	w := postTo(t, s, "/api/v1/mail/scan", string(body), "203.0.113.171:5000")
+	if got := errorCode(t, w); got != "too_many_selectors" {
+		t.Errorf("a list past the bound answered %q: %s", got, w.Body.String())
 	}
 }

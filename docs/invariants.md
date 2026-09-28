@@ -2343,6 +2343,48 @@ an alias is one RFC 2181 forbids, and finding it means asking that name for
 its own record rather than for an address — an exchanger whose name is an
 alias still resolves, so nothing else read here would show it.
 
+**And the one input a check needs and cannot discover: the selectors a signing
+key lives under.** DNS does not list what is beneath a name, so a DKIM key is
+found only where somebody says to look. A service looked under the selectors
+mail providers document and nothing else until 2026-09-28, which meant a domain
+with a selector of its own was told those names hold nothing — a sentence about
+this project's list, read by an operator as a fact about their estate. The
+command line had taken `-dkim-selector` since it was written; the web face
+could not.
+
+The reason given was that "a list of selectors in a request body is a field
+somebody else fills in". Behind proof of control it is not: the person filling
+it in has shown the domain is theirs, which is the answer the name inventory's
+own list arrived at three days earlier. The request takes them, the mail check
+alone takes them, and every other check refuses one rather than dropping it —
+a field accepted and ignored is a caller believing something happened
+(`TestOnlyTheMailCheckTakesSelectors`).
+
+The scanner a request runs with is a copy where a caller named their own, and
+the shared one otherwise (`internal/httpapi.Server.mailFor`,
+`TestTheMailCheckLooksUnderTheSelectorsTheCallerNamed`). A value copy of
+configuration: every field is read during a scan and written by nobody, so two
+requests share the resolver, the store and the fetchers and disagree about
+nothing but the names to look under. Theirs come first, because the bound cuts
+from the end — a caller who named two and got the documented sixteen instead
+would have been answered about names they did not ask about — and a list past
+`dkim.MaxSelectors` is refused rather than cut, because a report that quietly
+skipped the rest answers about names nobody was told were left out (R4).
+
+The field sits beside the checks rather than in a section of its own, says
+which check it belongs to, and is sent only when that check is running
+(`TestTheSelectorFieldGoesOnlyToTheMailCheck`).
+
+**And it says where a selector is found, because "name your selectors" is
+advice nobody can follow.** A selector is not a thing most operators have heard
+of, and both notes that ask for one stopped at asking — describing a gap and
+leaving it there. The `s=` tag in the `DKIM-Signature` header of any message
+the domain sent is the reliable answer and the one nobody thinks of: it is in
+front of anybody with a sent message, whatever their provider's documentation
+says. The record's own first label comes second, and the provider's setup page
+third, because that is the one that is wrong when a domain has moved
+(`TestANoteThatAsksForASelectorSaysWhereToFindOne`).
+
 **A report destination outside the domain is asked whether it agreed, and the
 address it points at is a separate question from the domain it is at.** RFC
 7489 §7.1 forbids a receiver from sending aggregate reports to a destination

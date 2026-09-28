@@ -160,6 +160,22 @@ function asked() {
   return Object.assign({}, rangesAsked(), knownAsked());
 }
 
+// selectorsAsked reads the DKIM selectors typed beside the checks.
+//
+// The one input a check needs and cannot discover: DNS does not list what is
+// beneath a name, so a signing key is found only where somebody says to look.
+//
+// Sent only to the check that uses them. Every other endpoint refuses a list
+// of selectors rather than dropping it, and sending one to the TLS check would
+// turn a filled-in field into a failed scan.
+function selectorsAsked(name) {
+  const field = document.getElementById("selectors");
+  if (!field || name !== "mail") return null;
+
+  const named = field.value.split(",").map(s => s.trim()).filter(Boolean);
+  return named.length ? { selectors: named } : null;
+}
+
 // A .txt of names is read in this browser and put in the box.
 //
 // Read here rather than uploaded, and that is the whole design of it. There is
@@ -1994,7 +2010,7 @@ async function runCheck(name, target) {
   body.appendChild(el("p", "working", spec.working));
 
   try {
-    const data = await check(target, spec);
+    const data = await check(target, spec, selectorsAsked(name));
     clear(body);
     body.appendChild(spec.build(data));
 

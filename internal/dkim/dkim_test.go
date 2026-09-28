@@ -290,8 +290,8 @@ func TestEveryDocumentedSelectorNamesItsProvider(t *testing.T) {
 	// The bound applies to the whole list a scan is given, so the documented
 	// names alone must leave room for an operator's own, or a service that
 	// offers only these would silently drop the last of them.
-	if len(Documented) >= maxSelectors {
-		t.Errorf("%d documented selectors leave no room under the bound of %d", len(Documented), maxSelectors)
+	if len(Documented) >= MaxSelectors {
+		t.Errorf("%d documented selectors leave no room under the bound of %d", len(Documented), MaxSelectors)
 	}
 
 	seen := map[string]bool{}
@@ -330,8 +330,8 @@ func TestTheSelectorListIsBounded(t *testing.T) {
 	}
 
 	Check(context.Background(), z, "example.com", many)
-	if len(z.asked) > maxSelectors {
-		t.Errorf("%d lookups were made and the bound is %d", len(z.asked), maxSelectors)
+	if len(z.asked) > MaxSelectors {
+		t.Errorf("%d lookups were made and the bound is %d", len(z.asked), MaxSelectors)
 	}
 }
 

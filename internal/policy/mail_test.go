@@ -655,3 +655,46 @@ func TestWhereTheReportsGoIsAlwaysReported(t *testing.T) {
 		t.Errorf("a record that names nowhere draws a destination line. Notes:\n%s", text)
 	}
 }
+
+// Every note that asks for a selector says where one is found.
+//
+// "Name your own selectors" is advice nobody can follow. A selector is not a
+// thing most operators have heard of, and both notes that ask for them used to
+// stop at asking — describing a gap and leaving it there. The s= tag in a sent
+// message's DKIM-Signature header is the reliable answer and the one nobody
+// thinks of, so it is the one the sentence leads with.
+func TestANoteThatAsksForASelectorSaysWhereToFindOne(t *testing.T) {
+	// Nothing was looked under at all.
+	unchecked := GradeMail(MailFacts{SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject"})
+
+	// And the documented names were tried and hold nothing, which is the
+	// moment somebody actually needs the answer.
+	tried := GradeMail(MailFacts{
+		SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject",
+		DKIMLooked: true,
+		DKIMKeys: []DKIMKey{
+			{Selector: "google", Describes: "Google Workspace"},
+			{Selector: "selector1", Describes: "Microsoft 365"},
+		},
+	})
+
+	for _, tc := range []struct {
+		name  string
+		notes []Note
+	}{
+		{"nothing was looked under", unchecked.Notes},
+		{"the documented names hold nothing", tried.Notes},
+	} {
+		text := mailNoteText(tc.notes)
+		if !strings.Contains(text, "selector") {
+			t.Fatalf("%s: nothing is said about selectors at all. Notes:\n%s", tc.name, text)
+		}
+		for _, want := range []string{"s= tag", "DKIM-Signature", "_domainkey"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s: the note asks for a selector and never says %q, so a reader is "+
+					"told to supply something they have no way to find. Notes:\n%s",
+					tc.name, want, text)
+			}
+		}
+	}
+}

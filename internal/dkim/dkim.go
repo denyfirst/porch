@@ -50,12 +50,17 @@ const (
 	// keyPrefix is where a key lives, beneath the selector.
 	keyPrefix = "._domainkey."
 
-	// maxSelectors bounds how many names one scan will look under.
+	// MaxSelectors bounds how many names one scan will look under.
 	//
 	// The operator supplies these, so this is not a defence against them. It
 	// bounds what one scan costs a resolver when somebody pastes a list, and it
 	// keeps a report a report.
-	maxSelectors = 16
+	//
+	// Exported because a service has to refuse a longer list at the door
+	// rather than accept it and quietly look under the first sixteen: a list
+	// cut without saying so is a report that answers about names nobody was
+	// told were skipped (R4).
+	MaxSelectors = 16
 
 	// maxTagLength bounds one value read out of a record.
 	maxTagLength = 512
@@ -142,8 +147,8 @@ func Check(ctx context.Context, r Resolver, domain string, selectors []Selector)
 	if len(selectors) == 0 {
 		return Facts{}
 	}
-	if len(selectors) > maxSelectors {
-		selectors = selectors[:maxSelectors]
+	if len(selectors) > MaxSelectors {
+		selectors = selectors[:MaxSelectors]
 	}
 
 	facts := Facts{Looked: true}

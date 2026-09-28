@@ -263,15 +263,24 @@ func TestEveryFieldThePageOffersIsSent(t *testing.T) {
 		}
 	}
 
-	// The readers, from the script, and each one called where the request is
-	// built.
+	// The readers, from the script, and each one's result carried into a
+	// request.
+	//
+	// Two ways that can be true and both are legitimate. A field every check
+	// takes is gathered in asked(); a field one check takes is passed to that
+	// check's own call, because sending it to the others would turn a
+	// filled-in field into a failed scan — they refuse what they do not use.
+	// What is not legitimate is a reader nobody calls, which leaves somebody
+	// typing into a box and pressing a button that ignores it.
 	asked := functionBody(t, src, "asked")
 	readers := regexp.MustCompile(`function (\w+Asked)\(`).FindAllStringSubmatch(src, -1)
-	if len(readers) < 2 {
+	if len(readers) < 3 {
 		t.Fatalf("the script declares %d field readers", len(readers))
 	}
 	for _, r := range readers {
-		if !strings.Contains(asked, r[1]+"()") {
+		gathered := strings.Contains(asked, r[1]+"()")
+		sent := regexp.MustCompile(`check\([^)]*\b` + r[1] + `\(`).MatchString(src)
+		if !gathered && !sent {
 			t.Errorf("%s reads a field and nothing sends what it read", r[1])
 		}
 	}
@@ -280,5 +289,49 @@ func TestEveryFieldThePageOffersIsSent(t *testing.T) {
 	// object assembled beside it.
 	if !strings.Contains(src, "check(target, CHECK, asked())") {
 		t.Error("the page no longer sends what its fields were read into")
+	}
+}
+
+// The selector field is offered beside the checks, and sent only to the check
+// that uses it.
+//
+// Every other endpoint refuses a list of selectors rather than dropping it, so
+// sending it with all four would turn a filled-in field into three failed
+// scans. The field belongs to one check and the script has to know which.
+func TestTheSelectorFieldGoesOnlyToTheMailCheck(t *testing.T) {
+	src := script(t)
+	form := asset(t, "assets/console.html")
+
+	if !strings.Contains(form, `id="selectors"`) {
+		t.Fatal("the console offers no way to name a DKIM selector, so the mail check can only " +
+			"look under the names this project happens to know")
+	}
+	// The label itself, not the markup around it. A sabotage that stripped
+	// "for the mail check" from the label passed a check for those words
+	// anywhere in the file, because the comment above the field explains the
+	// same thing to whoever reads the source — and nobody using the page
+	// reads the source.
+	if !strings.Contains(form, `for="selectors">DKIM selectors, for the mail check</label>`) {
+		t.Error("the field's own label does not say which check it belongs to, so a reader " +
+			"filling it in cannot tell what it does")
+	}
+
+	// And the field says where a selector is found, because somebody who does
+	// not know what one is cannot fill it in. The s= tag is the answer that
+	// does not depend on a provider's documentation being right.
+	for _, want := range []string{"s=", "DKIM-Signature", "_domainkey"} {
+		if !strings.Contains(form, want) {
+			t.Errorf("the field asks for a selector and never says %q, so a reader is told to "+
+				"supply something they have no way to find", want)
+		}
+	}
+
+	body := functionBody(t, src, "selectorsAsked")
+	if !strings.Contains(body, `name !== "mail"`) {
+		t.Error("the selectors are read without asking which check is running, so they are sent " +
+			"to checks that refuse them")
+	}
+	if !strings.Contains(src, "check(target, spec, selectorsAsked(name))") {
+		t.Error("nothing carries the selectors into the request")
 	}
 }
