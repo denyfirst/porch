@@ -66,7 +66,9 @@ func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
 	for _, line := range strings.Split(strings.ReplaceAll(string(guide), "\r\n", "\n"), "\n") {
 		given[strings.TrimSpace(line)] = true
 	}
-	blocks := regexp.MustCompile(`(?s)<pre><code>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
+	// Each carries the id its Copy button names, so the id is allowed and
+	// nothing else is.
+	blocks := regexp.MustCompile(`(?s)<pre><code(?: id="command-[a-z]+")?>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
 	if len(blocks) != 3 {
 		t.Fatalf("the Porch page has %d command blocks, want 3", len(blocks))
 	}

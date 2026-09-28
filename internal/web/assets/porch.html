@@ -134,22 +134,31 @@
       <h3>Build it</h3>
       <p>Get the source and build the service. Built elsewhere, copy
       <code>porchd</code> into the checkout on the server.</p>
-      <pre><code>git clone https://github.com/denyfirst/porch
+      <div class="command">
+        <pre><code id="command-build">git clone https://github.com/denyfirst/porch
 cd porch
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o porchd ./cmd/porchd</code></pre>
+        <button class="command-copy" type="button" data-copy="command-build" aria-label="Copy the commands to build it">Copy</button>
+      </div>
     </li>
     <li>
       <h3>Start it</h3>
       <p>Give the container a data directory, then start it. Proof of control
       is on from the first start.</p>
-      <pre><code>mkdir -p porch-data &amp;&amp; sudo chown 65534:65534 porch-data
+      <div class="command">
+        <pre><code id="command-start">mkdir -p porch-data &amp;&amp; sudo chown 65534:65534 porch-data
 docker compose up -d --build</code></pre>
+        <button class="command-copy" type="button" data-copy="command-start" aria-label="Copy the commands to start it">Copy</button>
+      </div>
     </li>
     <li>
       <h3>Open it</h3>
       <p>It listens only on the server itself. Reach it through SSH, then open
       <code>http://localhost:8080</code>.</p>
-      <pre><code>ssh -L 8080:127.0.0.1:8080 you@your-server</code></pre>
+      <div class="command">
+        <pre><code id="command-open">ssh -L 8080:127.0.0.1:8080 you@your-server</code></pre>
+        <button class="command-copy" type="button" data-copy="command-open" aria-label="Copy the command to open it">Copy</button>
+      </div>
     </li>
   </ol>
   <p class="band-footnote">The first check of a domain shows a DNS record to
