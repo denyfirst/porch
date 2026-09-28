@@ -73,6 +73,7 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -895,15 +896,28 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 			defer wg.Done()
 
 			// The relay question goes to an exchanger inside the domain
-			// being checked and to no other. Inside the domain it is the
-			// operator's own server; outside it belongs to a provider, and
-			// a relay probe in somebody else's log is what gets the address
-			// it came from listed.
-			if canAskRelay && within(host, domain) {
+			// being checked and to no other. Outside it belongs to a
+			// provider, and a relay probe in somebody else's log is what gets
+			// the address it came from listed.
+			//
+			// Inside is a statement about the name, and a name is not a
+			// server: docs/scope.md says a verified zone is not a list of
+			// hosts you control, and names mail.example.com pointed at a mail
+			// provider as the case. An exchanger whose name is an alias is
+			// that case said out loud in DNS — the name is the operator's and
+			// the server is whoever the alias names — so it is asked what any
+			// sender asks and not the relay question. A name that is an
+			// address record pointing at a provider cannot be told apart from
+			// here, and nothing claims otherwise.
+			if canAskRelay && within(host, domain) && !slices.Contains(facts.MXAliases, host) {
 				results[i] = relay.ProbeRelay(ctx, host)
 				return
 			}
 			results[i] = prober.Probe(ctx, host)
+			if canAskRelay && within(host, domain) {
+				results[i].RelayReason = "not asked, because its name is an alias and the server " +
+					"behind an alias may be somebody else's"
+			}
 		}()
 	}
 	wg.Wait()

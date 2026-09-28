@@ -210,3 +210,45 @@ func TestTheAliasQuestionIsBoundedLikeTheExchangers(t *testing.T) {
 		t.Errorf("%d exchangers were asked, want the bound of %d", len(got.Observed.MXAliases), maxExchangers)
 	}
 }
+
+// An exchanger inside the domain whose name is an alias is not asked the relay
+// question.
+//
+// The name is the operator's and the server is whoever the alias names:
+// docs/scope.md gives mail.example.com pointed at a mail provider as the case a
+// verified zone does not cover, and a relay probe in that provider's log is
+// what gets the address it came from listed. It is measured as any sender
+// measures it, and the report says why the question was not put.
+func TestAnExchangerBehindAnAliasIsNotAskedAboutRelay(t *testing.T) {
+	skipUnderDemo(t)
+
+	z := stsZone("mail.example.com", "mx.example.com")
+	z.aliases = map[string][]string{"mail.example.com": {"example-com.mail.provider.example"}}
+	x := &relayExchangers{accepting: map[string]bool{"mail.example.com": true}}
+
+	got, err := (&Scanner{Resolver: z, ReadExchangers: true, Exchangers: x}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+
+	measured, relayed := x.lists()
+	if !slices.Equal(relayed, []string{"mx.example.com"}) {
+		t.Errorf("the relay question went to %v", relayed)
+	}
+	if !slices.Equal(measured, []string{"mail.example.com"}) {
+		t.Errorf("the exchangers measured without it were %v", measured)
+	}
+	for _, e := range got.Observed.Exchangers {
+		if e.Host != "mail.example.com" {
+			continue
+		}
+		if e.RelayAsked || !strings.Contains(e.RelayReason, "alias") {
+			t.Errorf("the aliased exchanger: asked %v, reason %q", e.RelayAsked, e.RelayReason)
+		}
+	}
+	for _, f := range got.Findings {
+		if f.RuleID == "mail.open-relay" {
+			t.Errorf("an exchanger that was never asked was graded as a relay: %+v", f)
+		}
+	}
+}

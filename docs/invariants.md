@@ -130,6 +130,14 @@ reads as a spam probe, and the address it came from is what gets listed for it.
 There is no flag that widens this, because the question a flag would answer —
 *may I probe somebody else's mail server?* — is not one this project asks.
 
+**Inside the domain is a reading of the name, and a name is not a server.** An
+exchanger whose name is an alias — `mail.example.com` pointed by a CNAME at a
+provider — is inside the domain and is the provider's machine, which is the
+case `docs/scope.md` says a verified zone does not cover. It is asked what any
+sender asks and not the relay question, and its relay line says why
+(`porch-mail-v3`). An address record pointing at a provider cannot be told
+apart from here, and nothing claims otherwise.
+
 A server that refused, one that refused the empty sender, and one that was
 never asked are each reported as themselves. Only a server that accepted the
 recipient is graded (R4), and the report never repeats what the server wrote:
@@ -161,6 +169,7 @@ project is worth what the code says, and the code is here.
 `TestAnExchangerThatAcceptsTheRecipientIsReported`,
 `TestWhatTheRelayQuestionCouldNotEstablishIsSaidAsThat`,
 `TestTheRelayQuestionGoesOnlyToTheDomainsOwnExchangers`,
+`TestAnExchangerBehindAnAliasIsNotAskedAboutRelay`,
 `TestAnOpenRelayIsGradedAndSilenceIsNot`,
 `TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne`,
 `TestTheRelayAnswerReachesBothFacesOfTheReport`
