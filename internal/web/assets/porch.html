@@ -39,10 +39,16 @@
 
       <fieldset class="checks">
         <legend class="field-label">Checks</legend>
+        {{/* One grid for every row, so a name and what it says start at the same
+             line in each: the rows were a grid each, and the one without a
+             checkbox began a column early. It keeps that column, with the mark
+             that says it opens a page where the others have a box. */}}
+        <div class="check-rows">
         {{range .Checks}}
         {{if .Page}}
         <a class="check check-elsewhere" href="{{.Page}}">
-          <span class="check-name arrow-ne">{{.Label}}</span>
+          <span class="check-door" aria-hidden="true">&#8599;</span>
+          <span class="check-name">{{.Label}}</span>
           <span class="check-says">{{.Says}}</span>
           <span class="check-policy">{{.Policy}}</span>
         </a>
@@ -55,6 +61,7 @@
         </label>
         {{end}}
         {{end}}
+        </div>
       </fieldset>
 
       <button class="submit submit-wide arrow-ne" type="submit" id="porch-submit">Run the checks</button>

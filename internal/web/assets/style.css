@@ -1683,6 +1683,50 @@ a.card:hover { border-color: var(--link); }
 
 .check-panel .check-policy { display: none; }
 
+/*
+  The rows share their columns.
+
+  Each row was a grid of its own, so each sized its name column to its own
+  name: "Transport" pushed its sentence two pixels right of the rest, and the
+  row that opens a page, with no box to put first, began a whole column early —
+  at a phone's width it did not even stack the way the others did. One grid
+  with a subgrid per row sizes the name column to the longest name and puts
+  every sentence on one line. A browser without subgrid keeps the fixed
+  columns declared first, which line up too.
+*/
+.check-panel .check-rows {
+  display: grid;
+  grid-template-columns: 1.1rem 6rem 1fr;
+  grid-template-columns: 1.1rem max-content 1fr;
+  column-gap: 0.7rem;
+}
+
+.check-panel .check-rows .check {
+  grid-column: 1 / -1;
+  grid-template-columns: 1.1rem 6rem 1fr;
+  grid-template-columns: subgrid;
+  column-gap: 0.7rem;
+}
+
+.check-panel .check-rows .check > input,
+.check-panel .check-door { justify-self: center; }
+
+.check-panel .check-door {
+  color: var(--ink-faint);
+  transition: transform 160ms ease-out;
+}
+
+.check-panel .check-elsewhere:hover .check-door { transform: translate(2px, -2px); }
+
+@media (max-width: 34rem) {
+  .check-panel .check-rows { grid-template-columns: 1.1rem 1fr; }
+  .check-panel .check-rows .check-says { grid-column: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .check-panel .check-door { transition: none; }
+}
+
 .submit-wide {
   width: 100%;
   margin-top: 1.2rem;
