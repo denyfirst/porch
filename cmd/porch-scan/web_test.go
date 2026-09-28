@@ -274,3 +274,20 @@ func TestTheVersionSaysWhichHostsThisBinaryWillReach(t *testing.T) {
 		t.Errorf("the line does not say the scan leaves from the operator's own machine: %q", line)
 	}
 }
+
+// The command line prints the contacts a security.txt names.
+//
+// It runs on the operator's own machine, from their own address, and the
+// report goes to whoever ran it — the argument ReadMarkup rests on here. A
+// count answers "is there a way to reach us"; the operator's question is "does
+// it still reach somebody", and only the addresses answer that.
+//
+// Asserted because the alternative is a field that is set, documented and
+// handed to nothing, which has happened twice in this repository.
+func TestTheCommandLinePrintsTheSecurityContacts(t *testing.T) {
+	s := webScanner(5*time.Second, false)
+
+	if !s.ShowContacts {
+		t.Error("the command line withholds the security contacts from the operator running it")
+	}
+}

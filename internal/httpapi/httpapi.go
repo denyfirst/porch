@@ -361,6 +361,12 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 			Verify:     scanner.Verify,
 			Roots:      scanner.Roots,
 			ReadMarkup: scanner.Verify != nil,
+
+			// The contacts a security.txt names follow the same proof. A
+			// domain somebody has shown is theirs is a file that is theirs;
+			// without a scope this is a report a stranger asked for about a
+			// name nobody proved, and a published address is still a person's.
+			ShowContacts: scanner.Verify != nil,
 		},
 
 		// The mail check carries the boundary, and now the trust store with it.

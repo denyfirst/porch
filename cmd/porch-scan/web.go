@@ -87,6 +87,13 @@ func webScanner(timeout time.Duration, allowPrivate bool) *webscan.Scanner {
 		// it — the same argument -allow-private rests on. A demonstration
 		// build refuses at the response whatever is set here.
 		ReadMarkup: true,
+
+		// And prints the contacts a security.txt names, on the same argument.
+		// A published address is withheld from a report a stranger asked for;
+		// nobody is a stranger to their own terminal, and an operator reading
+		// their own file is checking whether the address still reaches
+		// somebody — which a count cannot say.
+		ShowContacts: true,
 	}
 	if allowPrivate {
 		// The same deliberate opt-out the TLS check offers, and for the same
