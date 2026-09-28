@@ -392,10 +392,10 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// it does not also fetch their files.
 		//
 		// The resolver is set below rather than here, and that is not tidiness.
-		// Documented selectors by default, and the operator's own are not
-		// offered here: a service takes one field, and a list of selectors in
-		// a request body is a field somebody else fills in. The command line
-		// is where an operator names their own.
+		// Documented selectors by default. A caller's own arrive in the request
+		// and are put in front of these for that request alone — see mailFor —
+		// each checked to be a DNS name and the list bounded before any is
+		// asked about.
 		mail: &mailscan.Scanner{
 			Verify:        scanner.Verify,
 			Roots:         scanner.Roots,
@@ -686,6 +686,22 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 				"list is refused rather than cut short, because a report that quietly skipped "+
 				"the rest would answer about names nobody was told were left out.")
 		return
+	}
+
+	// Each one a DNS name, before any of them is joined to the domain.
+	//
+	// The bound above counted entries, and the scanner splits on commas: one
+	// entry holding forty names passed it as one and was then looked under as
+	// forty, cut to sixteen without a word — the list the bound says is refused
+	// rather than cut short. A comma is not a DNS character, so refusing what is
+	// not a name closes that and the spaces and control characters with it.
+	for _, name := range t.selectors {
+		if err := dkim.CheckSelector(name); err != nil {
+			s.refuse(w, http.StatusBadRequest, "invalid_selector",
+				"A DKIM selector is one or more DNS labels separated by dots: letters, digits, "+
+					"hyphens and underscores. Send each selector as its own entry.")
+			return
+		}
 	}
 
 	host := t.host

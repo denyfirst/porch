@@ -472,3 +472,32 @@ func TestMigadusSelectorsAreDocumented(t *testing.T) {
 		}
 	}
 }
+
+// A selector is a DNS name, and CheckSelector says which strings are not.
+//
+// RFC 6376 §3.1 makes it dot-separated labels of letters, digits and hyphens.
+// An underscore is allowed as well, because DNS carries one and a record
+// somebody really published should not be refused by this parser. The
+// refusal names the rule and never the selector.
+func TestASelectorIsADNSName(t *testing.T) {
+	for _, good := range []string{
+		"s1", "google", "Selector1", "key1.migadu", "sel_2026-09", " k1 ", strings.Repeat("a", 63),
+	} {
+		if err := CheckSelector(good); err != nil {
+			t.Errorf("%q was refused: %v", good, err)
+		}
+	}
+	for _, bad := range []string{
+		"", " ", "a,b", "s1 google", ".", "a..b", ".lead", "trail.", "-lead", "trail-",
+		strings.Repeat("a", 64), strings.Repeat("a.", 70) + "a", "tab\there", "nul\x00", "über", "a/b",
+	} {
+		err := CheckSelector(bad)
+		if err == nil {
+			t.Errorf("%q was accepted", bad)
+			continue
+		}
+		if bad != "" && strings.TrimSpace(bad) != "" && strings.Contains(err.Error(), strings.TrimSpace(bad)) {
+			t.Errorf("the refusal repeats %q: %v", bad, err)
+		}
+	}
+}

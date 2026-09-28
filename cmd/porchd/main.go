@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -152,10 +153,6 @@ func run() int {
 				"\tabsent; when set, only domains that have published the matching challenge\n"+
 				"\tare scanned, and the page shows the record to publish")
 
-		// Signed proof only, for an operator whose resolver is theirs. The AD
-		// bit is the resolver's word and worth what the path to it is worth,
-		// so this is a choice about a resolver, not a switch that makes DNS
-		// safe (audit 2026-09-16, A06).
 		// Which transparency monitor the inventory endpoint asks, if any.
 		//
 		// Empty means none, and the endpoint then answers that this installation
@@ -229,6 +226,10 @@ func run() int {
 				"\tcertificate is being looked at, from this address and when — so it is\n"+
 				"\tonly a disclosure to make about your own estate")
 
+		// Signed proof only, for an operator whose resolver is theirs. The AD
+		// bit is the resolver's word and worth what the path to it is worth,
+		// so this is a choice about a resolver, not a switch that makes DNS
+		// safe (audit 2026-09-16, A06).
 		requireSigned = flag.Bool("verification-requires-dnssec", false,
 			"accept only a challenge record the resolver reports DNSSEC-validated, and\n"+
 				"\tno challenge file. Worth it only with a validating resolver you trust,\n"+
@@ -257,9 +258,10 @@ func run() int {
 		// their own disk, because they asked.
 		//
 		// Written and never served. A browsable history of an estate's
-		// weaknesses is a thing worth attacking and this service has no
-		// authentication at all, so reading it back is porch-scan's job, on the
-		// machine itself. See internal/results.
+		// weaknesses is a thing worth attacking, so this plain store is read
+		// back by porch-scan on the machine itself; behind -access-file the
+		// history is the sealed one instead, and the two are refused together.
+		// See internal/results and internal/vault.
 		resultsDir = flag.String("results-dir", "",
 			"`directory` to keep results in, readable with porch-scan -history. Never\n"+
 				"\tserved over HTTP. Empty keeps nothing, which is the default")
@@ -323,15 +325,11 @@ func run() int {
 	}
 
 	if *showVersion {
-		// Both, because they answer different questions. The release names
-		// this build; the policy names the rules it grades by, and a verdict
-		// from one policy version is not comparable with a verdict from
-		// another.
-		// Three lines, because they answer three questions. The release
-		// names this build; the policy names the rules it grades by, and a
-		// verdict from one policy version is not comparable with a verdict
-		// from another; and the third says which hosts this binary will
-		// connect to at all.
+		// Three kinds of line, because they answer three questions. The
+		// release names this build; each policy line names the rules one check
+		// grades by, and a verdict from one policy version is not comparable
+		// with a verdict from another; and the last says which hosts this
+		// binary will connect to at all.
 		//
 		// The third line exists because the two builds are indistinguishable
 		// from the outside until one refuses something. A deploy that
@@ -354,9 +352,7 @@ func run() int {
 			return 1
 		}
 
-		fmt.Printf("porchd %s\npolicy %s\npolicy %s\npolicy %s\n%s\n",
-			version, policy.TLSVersion, policy.WebVersion, policy.MailVersion,
-			reach(scope != nil))
+		fmt.Print(versionLines(reach(scope != nil)))
 		return 0
 	}
 
@@ -671,6 +667,13 @@ func run() int {
 	if gate != nil {
 		handler = gate.Wrap(root)
 	}
+
+	// And in front of the gate, the one check every request meets: over plain
+	// HTTP, only an address or localhost is answered. A page on another site
+	// can point its own name at this machine and call the service through its
+	// visitor's browser, and on loopback with no password that visitor is the
+	// operator the service trusts. See httpapi.GuardHost.
+	handler = api.GuardHost(handler)
 
 	srv := &http.Server{
 		Handler: handler,
@@ -1169,11 +1172,22 @@ func trustStoreUsable(pool *x509.CertPool, err error) error {
 	return nil
 }
 
+// versionLines is what -version prints: the release, every rule set this
+// binary grades by, and the reach line last, where the deploy check reads it.
+//
+// Every rule set, and a test holds it to that. It named three of four until
+// 2026-09-28: the DNS check has graded by porch-dns-v2 since it was written and
+// -version never said so, so a reader holding a DNS report could not learn from
+// the binary which rules had produced it.
+func versionLines(reach string) string {
+	return fmt.Sprintf("porchd %s\npolicy %s\npolicy %s\npolicy %s\npolicy %s\n%s\n",
+		version, policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion, reach)
+}
+
 // reach says which hosts this binary will connect to.
 //
 // Written from the same list the scanner enforces rather than from a constant
 // of its own, so a binary cannot say one thing and do another.
-// reach says which hosts this binary will connect to.
 //
 // Two sources of authority, and the line has to carry both or it is false for
 // half the deployments that read it. The compiled-in list is fixed at build
@@ -1279,8 +1293,8 @@ func createSecret(path string) error {
 // openAllowed refuses a service that would scan anything on an address other
 // than loopback, unless the operator said -open.
 //
-// An address that does not parse is left for the listener to refuse, which
-// says so better than this could.
+// An address that does not parse is treated as reachable, as beyondLoopback
+// says why, so this refuses it before the listener gets the chance to.
 func openAllowed(listen string, scoped, open bool) error {
 	if scoped || open || !beyondLoopback(listen) {
 		return nil
@@ -1397,18 +1411,13 @@ func retireSealed(dir, today string) (string, error) {
 // passwordAllowed refuses a service without a password on an address other
 // than loopback, unless the operator said -without-password. The same shape as
 // openAllowed: loopback is reachable only from this machine.
+//
+// It reads the address through beyondLoopback, as openAllowed does. It had a
+// reading of its own that answered the other way for an address it could not
+// parse — reachable to one, loopback to the other — which is the second copy
+// of one decision that beyondLoopback exists to prevent.
 func passwordAllowed(listen string, guarded, without bool) error {
-	if guarded || without {
-		return nil
-	}
-	host, _, err := net.SplitHostPort(listen)
-	if err != nil {
-		return nil
-	}
-	if host == "localhost" {
-		return nil
-	}
-	if ip, err := netip.ParseAddr(host); err == nil && ip.IsLoopback() {
+	if guarded || without || !beyondLoopback(listen) {
 		return nil
 	}
 	return errors.New("porchd will not listen beyond loopback without a password: anyone who " +
@@ -1422,6 +1431,9 @@ func passwordAllowed(listen string, guarded, without bool) error {
 // described by an address, because which monitor is being asked decides how its
 // answer is read. crt.sh and SSLMate agree on nothing but the idea.
 func namesSearcher(name, address string, timeout time.Duration) (ctsearch.EstateSearcher, error) {
+	if err := httpsEndpoint(address); err != nil {
+		return nil, fmt.Errorf("-names-monitor-url: %w", err)
+	}
 	switch name {
 	case "crtsh":
 		if address != "" && !strings.Contains(address, "%s") {
@@ -1450,6 +1462,9 @@ func namesSearcher(name, address string, timeout time.Duration) (ctsearch.Estate
 // discloses the same thing a successful search would. An operator finds out
 // when they start the service, which is when they can fix it.
 func namesRegister(name, address string, timeout time.Duration) (passivedns.Register, error) {
+	if err := httpsEndpoint(address); err != nil {
+		return nil, fmt.Errorf("-names-passive-url: %w", err)
+	}
 	switch name {
 	case "securitytrails":
 		token := os.Getenv("SECURITYTRAILS_TOKEN")
@@ -1465,4 +1480,29 @@ func namesRegister(name, address string, timeout time.Duration) (passivedns.Regi
 		return &passivedns.VirusTotal{Timeout: timeout, Endpoint: address, Token: token}, nil
 	}
 	return nil, fmt.Errorf("unknown -names-passive %q: it is securitytrails or virustotal", name)
+}
+
+// httpsEndpoint refuses a monitor or register address that is not HTTPS.
+//
+// Either is asked about a domain, and a register or CertSpotter is sent the
+// operator's key with the question. The dialler allows port 80 for both, so an
+// http:// address given here sent the key and the domain across every network
+// on the way in the clear — a credential somebody pays for, and the disclosure
+// N12 is written about, handed to whoever is on the path. Empty is the
+// provider's own address, which is HTTPS.
+//
+// No userinfo either: a key belongs in the environment, where the builders
+// above read it, and not in an address that is printed in an error.
+func httpsEndpoint(address string) error {
+	if address == "" {
+		return nil
+	}
+	// The monitor's address carries %s where the name goes, which is not a
+	// valid escape; it is read as the name it will become.
+	u, err := url.Parse(strings.ReplaceAll(address, "%s", "name"))
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return errors.New("the address must be an https:// URL with a host and no credentials in it, " +
+			"because the question names a domain and may carry this installation's key")
+	}
+	return nil
 }

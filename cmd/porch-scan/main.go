@@ -455,6 +455,10 @@ func run() int {
 	case checkWeb:
 		return runWeb(ctx, targets, *timeout, *allowPrivate, *asJSON, store)
 	case checkMail:
+		if err := checkSelectors(*dkimSelectors); err != nil {
+			fmt.Fprintln(os.Stderr, "-dkim-selector: "+err.Error())
+			return 2
+		}
 		return runMail(ctx, targets, *timeout, *resolver, *asJSON, store,
 			selectorsFrom(*dkimSelectors, *dkimCommon), *heloName)
 	case checkDNS:
@@ -588,8 +592,8 @@ func outcomes(results []result) []outcome {
 // what a binary says it is happens to be the one thing an operator holding it
 // has to be able to check.
 func versionLine() string {
-	return fmt.Sprintf("porch-scan %s\npolicy %s\npolicy %s\npolicy %s\n%s\n",
-		version, policy.TLSVersion, policy.WebVersion, policy.MailVersion, reach())
+	return fmt.Sprintf("porch-scan %s\npolicy %s\npolicy %s\npolicy %s\npolicy %s\n%s\n",
+		version, policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion, reach())
 }
 
 // reach says which hosts this binary will connect to.

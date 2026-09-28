@@ -140,6 +140,13 @@ var blockedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("2002::/16"),     // 6to4, embeds IPv4
 	netip.MustParsePrefix("3fff::/20"),     // documentation, RFC 9637
 	netip.MustParsePrefix("5f00::/16"),     // SRv6 segment identifiers, RFC 9602
+
+	// fec0::/10 is site-local unicast, IPv6's first answer to RFC 1918.
+	// Deprecated by RFC 3879 and never reassigned, so nothing public lives
+	// there — but networks set up before 2004 still route it internally, and
+	// IsPrivate knows only fc00::/7, its replacement. A deny list is worth
+	// what it leaves out.
+	netip.MustParsePrefix("fec0::/10"),
 }
 
 const (

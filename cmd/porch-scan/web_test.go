@@ -82,10 +82,11 @@ func TestLimitsFollowTheCheckBeingRun(t *testing.T) {
 }
 
 func TestTheVersionNamesEveryRuleSet(t *testing.T) {
-	// This binary carries three, and a reader holding one report cannot tell
-	// which produced it from the release number.
+	// This binary carries four, and a reader holding one report cannot tell
+	// which produced it from the release number. It said three until
+	// 2026-09-28, and the one it left out was the DNS check's.
 	line := versionLine()
-	for _, want := range []string{version, policy.TLSVersion, policy.WebVersion, policy.MailVersion} {
+	for _, want := range []string{version, policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion} {
 		if !strings.Contains(line, want) {
 			t.Errorf("-version does not name %q:\n%s", want, line)
 		}

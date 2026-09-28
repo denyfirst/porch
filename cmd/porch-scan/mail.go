@@ -300,6 +300,24 @@ func selectorsFrom(named string, common bool) []dkim.Selector {
 	return out
 }
 
+// checkSelectors refuses a -dkim-selector list the scan would not look under
+// as written: a name that is not a DNS name, or more names than one scan asks
+// about. The service refuses the same two; a list cut short without a word, or
+// a name no zone can hold, would answer about something other than what the
+// operator typed.
+func checkSelectors(named string) error {
+	selectors := dkim.Named(named)
+	if len(selectors) > dkim.MaxSelectors {
+		return fmt.Errorf("a scan looks under at most %d selectors, and a longer list is refused rather than cut short", dkim.MaxSelectors)
+	}
+	for _, s := range selectors {
+		if err := dkim.CheckSelector(s.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // lowerBound is the words a count that may be higher needs in front of it, the
 // same the page uses (R16).
 func lowerBound(bound bool) string {

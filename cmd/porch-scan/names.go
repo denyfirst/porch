@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/netip"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -710,6 +712,9 @@ const (
 // of one of these, or a paid one, overrides where it is asked without having to
 // say which answer format it speaks.
 func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateSearcher, error) {
+	if err := httpsEndpoint(address); err != nil {
+		return nil, fmt.Errorf("-monitor-url: %w", err)
+	}
 	switch name {
 	case "", monitorCRTSh:
 		if address != "" && !strings.Contains(address, "%s") {
@@ -734,6 +739,30 @@ func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateS
 	return nil, fmt.Errorf("unknown monitor %q: it is %s or %s", name, monitorCRTSh, monitorCertSpotter)
 }
 
+// httpsEndpoint refuses a monitor or register address that is not HTTPS.
+//
+// Either is asked about a domain, and a register or CertSpotter is sent the
+// operator's key with the question. The dialler allows port 80 for both, so an
+// http:// address given here sent the key and the domain in the clear to
+// whoever is on the path (N12). Empty is the provider's own address, which is
+// HTTPS. No userinfo either: a key belongs in the environment, where the
+// builders read it, and not in an address that is printed in an error.
+//
+// porchd refuses the same addresses for the same reason.
+func httpsEndpoint(address string) error {
+	if address == "" {
+		return nil
+	}
+	// The monitor's address carries %s where the name goes, which is not a
+	// valid escape; it is read as the name it will become.
+	u, err := url.Parse(strings.ReplaceAll(address, "%s", "name"))
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return errors.New("the address must be an https:// URL with a host and no credentials in it, " +
+			"because the question names a domain and may carry a key")
+	}
+	return nil
+}
+
 // The passive registers this can be pointed at, spelled once.
 const (
 	registerSecurityTrails = "securitytrails"
@@ -756,6 +785,9 @@ const (
 // domain to a company that will not answer buys nothing and discloses the same
 // thing a successful search would.
 func registerNamed(name, address string, timeout time.Duration) (passivedns.Register, error) {
+	if err := httpsEndpoint(address); err != nil {
+		return nil, fmt.Errorf("-passive-url: %w", err)
+	}
 	switch name {
 	case "":
 		return nil, nil

@@ -172,7 +172,9 @@ function selectorsAsked(name) {
   const field = document.getElementById("selectors");
   if (!field || name !== "mail") return null;
 
-  const named = field.value.split(",").map(s => s.trim()).filter(Boolean);
+  // Commas or spaces, because somebody pasting "s1 google" means two names and
+  // the service refuses a selector that is not a DNS name.
+  const named = field.value.split(/[\s,]+/).filter(Boolean);
   return named.length ? { selectors: named } : null;
 }
 

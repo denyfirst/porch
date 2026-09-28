@@ -1077,3 +1077,23 @@ func TestTheReportSaysWhatTheProofsListed(t *testing.T) {
 		t.Errorf("the report does not say the proofs went unwalked:\n%s", buf.String())
 	}
 }
+
+// A monitor or register the operator points elsewhere is asked over HTTPS, or
+// not at all: the question names a domain and may carry the operator's key,
+// and the dialler allows port 80.
+func TestAMonitorOrRegisterIsAskedOnlyOverHTTPS(t *testing.T) {
+	t.Setenv("SECURITYTRAILS_TOKEN", "a key")
+	for _, bad := range []string{"http://crt.example/?q=%s", "crt.example/%s", "https://user:key@crt.example/?q=%s"} {
+		if _, err := monitorNamed(monitorCRTSh, bad, time.Second); err == nil {
+			t.Errorf("-monitor-url %q was accepted", bad)
+		}
+		if _, err := registerNamed(registerSecurityTrails, bad, time.Second); err == nil {
+			t.Errorf("-passive-url %q was accepted", bad)
+		}
+	}
+	for _, good := range []string{"https://crt.example/?q=%s", "https://crt.example/search/%s"} {
+		if _, err := monitorNamed(monitorCRTSh, good, time.Second); err != nil {
+			t.Errorf("the https monitor address %q was refused: %v", good, err)
+		}
+	}
+}

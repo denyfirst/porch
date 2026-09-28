@@ -42,7 +42,12 @@ neighbour was in it. Each family needs a prefix of its own, and `2001::/23`
 covers several at once because IANA reserved that block for exactly this kind
 of assignment.
 
-That last family is not routed by a stock Linux stack, so nothing broke while
+`fec0::/10`, site-local unicast, joined the list on 2026-09-28. RFC 3879
+deprecated it and nothing public was ever assigned there, but networks set up
+before 2004 still route it inside, and `IsPrivate` knows only `fc00::/7`, its
+replacement.
+
+That RFC 2765 family is not routed by a stock Linux stack, so nothing broke while
 it was missing. It is listed because a deny list is worth exactly its
 completeness, and "not reachable on the kernel we happen to run" is a property
 of the kernel rather than of this code.
@@ -2274,7 +2279,19 @@ being unresolvable. A statement about somebody's estate, arrived at from a
 missing colon. `TestAResolverAddressWorksWithoutAPort` holds it, including the
 IPv6 literal, which is the case that would have been silently wrong rather than
 loudly wrong.
-*Enforced in:* `internal/ctsearch`, `internal/ctsearch.SearchEstate`,
+
+**And a monitor or register the operator points elsewhere is asked over HTTPS
+or not at all.** `-monitor-url`, `-passive-url` and their `porchd` twins took
+any address, and the dialler behind them allows port 80, so `http://` sent the
+domain — and, for a register or CertSpotter, the operator's key — across every
+network on the way in the clear. Refused at start now, on both programs, with
+credentials in the address refused too: a key belongs in the environment, and
+an address is something an error message prints. The `%s` a monitor's address
+carries is read as the name it will become, so an address with the name in its
+path is not refused for the placeholder
+(`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`).
+*Enforced in:* `cmd/porch-scan.httpsEndpoint`, `cmd/porchd.httpsEndpoint`,
+`internal/ctsearch`, `internal/ctsearch.SearchEstate`,
 `internal/liveness`, `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`,
 `internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
@@ -2405,7 +2422,9 @@ loudly wrong.
 `TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
 `TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
 `TestAnInstallationNotToldToWalkProofsDoesNot`,
-`TestTheReportSaysWhatTheProofsListed`
+`TestTheReportSaysWhatTheProofsListed`,
+`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`,
+`TestAnInventoryIsNotOfAnAddress`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 
@@ -2852,6 +2871,42 @@ every report.
 `TestTheCommandLineAsksTheExchangersWithItsName`,
 `TestEveryFlagIsReadSomewhere`
 
+### N15 — Over plain HTTP the service answers only to an address or to localhost
+
+A copy of `porchd` on loopback with no password is offered to its operator on
+the argument that nobody else can reach it: the name inventory runs there
+without proof, an address range is walked, and with no scope every check scans
+whatever it is given (N12). A browser can reach it for somebody else. A page on
+another site points its own name at 127.0.0.1 once it has loaded, and its
+script then calls "its own" server — the browser sends the request to this
+service as same-origin and reads the answer. Every guard the API had was
+satisfied, because `Sec-Fetch-Site` said `same-origin` and it was. What the
+page got was an open scanner leaving from the operator's address, the
+operator's inventory, and the operator's reverse records.
+
+The `Host` header is the one thing that attack cannot change: the browser sends
+the page's own name. So over plain HTTP a request is answered only when it
+names this machine by an address — which cannot be rebound, because the origin
+is then the address itself — or as `localhost`, which a browser resolves
+without asking anybody. Every other name is refused with 421 and a sentence
+stating the rule, never the name, and counted as `host_not_served`.
+
+Over TLS it is not asked. A browser that rebinds a name to this machine still
+expects that name's certificate and cannot get it, so no request is ever made.
+An operator who serves the installation under a name uses HTTPS, which is what
+P6 already requires of a password.
+
+It wraps everything the service answers, outside the gate: the pages carry the
+script that calls the API, and a guard in one of them is a guard the other
+walks around (N6). A copy behind a password was already safe from this — the
+gate refuses a session on plain HTTP to any name but this machine's — and the
+guard costs it nothing; a copy without one had nothing at all.
+
+*Enforced in:* `internal/httpapi.Server.GuardHost`, `internal/httpapi.servedHost`,
+`cmd/porchd.run`
+*Guarded by:* `TestARebindingPageIsNotAnswered`,
+`TestTheHostGuardIsInFrontOfEverything`, `TestEveryRefusalCodeCanBeProduced`
+
 ## Input
 
 
@@ -3079,6 +3134,28 @@ than folded.
 `TestTargetLimiterIgnoresSpelling`,
 `TestSpellingCannotBuyExtraScansOfOneHost`, `FuzzSplitTarget`
 
+### I8 — A DKIM selector is a DNS name, and a bound counts what it bounds
+
+A selector is joined to `._domainkey.` and the domain and asked of a resolver,
+so it is input that reaches a query, and it had no syntax at all. The service
+bounded the list by counting entries and the scanner split each entry on
+commas: one entry holding forty names passed the bound as one and was looked
+under as forty, cut to sixteen without a word — the list the bound says is
+refused rather than cut short. Spaces and control characters went through the
+same way, as names no zone can hold.
+
+Each selector is now checked to be what RFC 6376 §3.1 says it is — labels of
+letters, digits and hyphens separated by dots, with an underscore allowed
+because DNS carries one — and refused otherwise, in a sentence stating the rule
+and never the selector (I3). The command line holds `-dkim-selector` to the same
+rule and the same bound before anything is asked, and the page splits what is
+typed on spaces as well as commas, because `s1 google` means two names.
+
+*Enforced in:* `internal/dkim.CheckSelector`, `internal/httpapi.handleScan`,
+`cmd/porch-scan.checkSelectors`, `internal/web/assets/app.js`
+*Guarded by:* `TestASelectorIsADNSName`, `TestASelectorIsADNSNameAndCountsAsOne`,
+`TestTheSelectorsAnOperatorNamesAreCheckedBeforeAnythingIsAsked`
+
 ---
 
 ## Availability
@@ -3235,10 +3312,22 @@ It is true only where every hop was refused. A name reached on one port and
 declined on the other has been measured, and answering that with a refusal
 would hide the half that succeeded.
 
+**And the first half had a hole the test could not see.** Six refusals were
+answered through `refuse` with codes the list did not hold — every refusal the
+name inventory makes, and the bound on DKIM selectors — so each was dropped on
+its way to the counter. The inventory had refused unproven domains, strangers'
+address ranges and wordlist-length lists since it existed, and the figures said
+nothing had ever been turned away there. `TestEveryRefusalCodeCanBeProduced`
+drives the codes the list holds, so a code the list did not hold was not in its
+loop. `TestEveryCodeThisPackageRefusesWithIsCounted` reads the codes out of the
+source instead, from every place one is written, and each is now in the list
+and driven.
+
 *Enforced in:* `internal/httpapi.Server.refuse`,
 `internal/tlsprobe.Report.BlockedDestination`,
 `internal/webprobe.Report.BlockedDestination`
 *Guarded by:* `TestEveryRefusalCodeCanBeProduced`,
+`TestEveryCodeThisPackageRefusesWithIsCounted`,
 `TestOnlyKnownRefusalCodesAreCounted`,
 `TestANameThatResolvesOnlyWhereWeWillNotGoIsRecordedAsBlocked`,
 `TestTheWebEndpointCountsABlockedDestination`,
@@ -6345,11 +6434,17 @@ Determinism is unaffected: the value is the tag, both callers pass the same
 one, and two builds of a tag remain byte-identical. Measured on 2026-08-22,
 twice, all ten artifacts.
 
+Every rule set, not three of four. Both programs printed the TLS, web and mail
+rule sets and never the DNS check's, so a reader holding a DNS report could not
+learn from the binary which rules had produced it. The reach line stays last,
+where the deploy check reads it.
+
 *Enforced in:* `scripts/build.sh`, `cmd/porch-scan.version`,
-`cmd/porchd.version`
+`cmd/porchd.version`, `cmd/porch-scan.versionLine`, `cmd/porchd.versionLines`
 *Guarded by:* `TestTheBuildScriptStampsTheVersionSymbolThisProgramDefines`,
 `TestAnUnstampedBinaryDoesNotClaimAVersion`,
-`TestThePolicyVersionIsNotTheReleaseVersion`
+`TestThePolicyVersionIsNotTheReleaseVersion`,
+`TestTheVersionNamesEveryRuleSet`, `TestTheServiceVersionNamesEveryRuleSet`
 
 ### S11 — A rule set that changes says what changed
 
