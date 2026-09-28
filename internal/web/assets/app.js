@@ -1537,6 +1537,37 @@ function parentSays(facts) {
   if (atZone.length > 0) parts.push("does not hand out " + atZone.join(", "));
   return "Asked directly, " + above + " " + parts.join(", and ") + ".";
 }
+// saysReportTo is where a DMARC record asks for its aggregate reports, and
+// what was established about each destination outside the domain.
+//
+// The tag was a boolean on this page until 2026-09-28 — reports are asked for,
+// or they are not — which answered neither question an operator has of it.
+// Where they go decides whether the destination is still one they use; whether
+// it agreed decides whether anything arrives at all, because RFC 7489 §7.1
+// forbids a receiver from sending reports outside the domain until the
+// destination publishes a record accepting them.
+//
+// A mailbox appears where the service was told to send one, and the domain
+// always. Nothing here is drawn from the presence of the mailbox, so a report
+// that withheld it reads the same.
+function saysReportTo(facts) {
+  const dest = facts.dmarcReportTo || {};
+  const places = dest.destinations || [];
+  if (!dest.asked || !places.length) return "";
+
+  const said = places.map((d) => {
+    const at = d.mailbox || d.domain;
+    if (!d.external) return at + " (inside this domain)";
+    if (d.reason) return at + " (not established: " + d.reason + ")";
+    if (d.authorised) return at + " (agreed)";
+    return at + " (has not agreed, so it receives none)";
+  });
+
+  return dest.dropped
+    ? said.join(", ") + ", and " + dest.dropped + " more this check did not read"
+    : said.join(", ");
+}
+
 function buildMail(data) {
   const verdict = verdictOf(data);
 
@@ -1597,6 +1628,15 @@ function zone(facts) {
   } else {
     row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%");
   }
+
+  // Where the aggregate reports go, under the policy that asks for them.
+  //
+  // Each destination carries its own state rather than the row carrying a
+  // total: one that agreed, one that has published nothing and therefore
+  // receives nothing, and one whose authorisation could not be read are three
+  // different things to do about (R4, RFC 7489 §7.1).
+  const reportTo = saysReportTo(facts);
+  if (reportTo) row("Reports to", reportTo);
 
   row("TLS-RPT", facts.tlsReporting ? "yes" : "no");
 

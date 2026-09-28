@@ -45,6 +45,51 @@ is entitled to find it still answering.
 ---
 
 
+## `porch-mail-v2` → `porch-mail-v3`
+
+Unreleased.
+
+One finding is added and nothing that was graded before is graded differently.
+A domain whose report was strong under `porch-mail-v2` is strong under this one
+unless its aggregate reports are addressed to a domain that has not agreed to
+receive them.
+
+### Reports addressed to a domain that has not agreed to receive them
+
+`mail.dmarc-reports-unauthorised`, graded `weak`.
+
+RFC 7489 §7.1: where a DMARC record asks for reports at an address outside the
+domain being reported on, a receiver must not send anything there until that
+destination publishes a DMARC record at
+`<domain>._report._dmarc.<destination>`. Without it the receiver is required to
+discard the address. The reports are not delayed and not bounced — they never
+leave.
+
+This is invisible from the domain's own DNS. The record is well formed, the
+policy applies, the `rua` tag names a vendor, and every report goes nowhere;
+the missing record is in somebody else's zone. It is the position of a domain
+that believes it is watching its own mail and is not, which is the kind of
+fault this project exists to find.
+
+Two things bound what it claims. A destination *under* the domain being
+reported on is treated as inside it: the specification says "the same domain",
+receivers differ on whether a subdomain counts, and the two readings fail in
+opposite directions — so this takes the reading that reports fewer faults
+rather than more, and the report says so. And where the authorisation record
+could not be read at all, nothing is graded: an unanswered lookup is not a
+destination that declined, and the report says which of the two happened.
+
+Reading the `rua` tag is itself new. It was reduced to *reports are asked for,
+or they are not* until this rule set, which made the check above impossible and
+left an operator unable to see where their reports go — at a vendor they no
+longer pay, or at the mailbox of somebody who has left. The destinations are
+now named. The mailbox beside each is printed where the tool is run by the
+operator or the domain has been proven, and withheld otherwise: a domain is not
+a person and a mailbox is. Nothing about the finding depends on it, because the
+finding is about domains.
+
+---
+
 ## `porch-mail-v1` → `porch-mail-v2`
 
 Released in v0.19.0, 2026-09.

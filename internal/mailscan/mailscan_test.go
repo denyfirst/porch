@@ -987,3 +987,98 @@ func TestAStrayRecordAtTheMTASTSNameIsNotAPolicy(t *testing.T) {
 		t.Errorf("the report describes a domain with no policy as having one: %q", sts)
 	}
 }
+
+// Where the aggregate reports go is read, and a destination outside the domain
+// is asked whether it agreed to receive them.
+//
+// The tag was reduced to a boolean until 2026-09-28, which made the question
+// below impossible to ask. RFC 7489 §7.1 forbids a receiver from sending
+// reports outside the domain being reported on until the destination publishes
+// a record accepting them, so a domain pointing at a vendor without one gets
+// nothing while its own DNS looks correct.
+func TestWhereTheReportsGoIsReadAndTheOutsideOnesAreAsked(t *testing.T) {
+	skipUnderDemo(t)
+	z := &zone{records: map[string][]string{
+		"example.com": {"v=spf1 -all"},
+		"_dmarc.example.com": {"v=DMARC1; p=reject; " +
+			"rua=mailto:dmarc@example.com,mailto:reports@agreed.example,mailto:x@silent.example"},
+		"example.com._report._dmarc.agreed.example": {"v=DMARC1"},
+	}}
+
+	got, err := (&Scanner{Resolver: z, ShowReportAddresses: true}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+
+	dest := got.Observed.DMARCReportTo
+	if !dest.Asked || len(dest.Destinations) != 3 {
+		t.Fatalf("the destinations came back as %+v", dest)
+	}
+	if !got.Observed.DMARCReporting {
+		t.Error("a record that names three destinations reads as naming none")
+	}
+
+	if want := []string{"silent.example"}; len(dest.Unauthorised()) != 1 || dest.Unauthorised()[0] != want[0] {
+		t.Errorf("the destinations that receive nothing are %v, want %v", dest.Unauthorised(), want)
+	}
+
+	// And it is graded, because the specification says the receiver sends
+	// nothing there.
+	var found bool
+	for _, f := range got.Findings {
+		if f.RuleID == "mail.dmarc-reports-unauthorised" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("reports addressed nowhere are not a finding: %v", findingIDs(got))
+	}
+
+	// A destination inside the domain is not asked for an authorisation it
+	// does not need, and one at a vendor is asked once.
+	for _, name := range z.asked {
+		if name == "example.com._report._dmarc.example.com" {
+			t.Error("a destination inside the domain was asked to authorise itself")
+		}
+	}
+}
+
+// The addresses are printed only where the caller asked for them, and the
+// finding does not depend on them.
+//
+// A domain is not a person and a mailbox is. A deployment scanning names
+// nobody proved anything about names the destination without the address at
+// it — and still reports that the destination has not agreed, because that is
+// a question about domains.
+func TestTheReportAddressesArePrintedOnlyWhenAskedFor(t *testing.T) {
+	skipUnderDemo(t)
+	records := map[string][]string{
+		"example.com":        {"v=spf1 -all"},
+		"_dmarc.example.com": {"v=DMARC1; p=reject; rua=mailto:x@silent.example"},
+	}
+
+	withheld, err := (&Scanner{Resolver: &zone{records: records}}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	for _, d := range withheld.Observed.DMARCReportTo.Destinations {
+		if d.Mailbox != "" {
+			t.Errorf("an address was printed by a deployment that was not told to: %+v", d)
+		}
+		if d.Domain == "" {
+			t.Errorf("withholding the address lost the destination: %+v", d)
+		}
+	}
+	if len(withheld.Observed.DMARCReportTo.Unauthorised()) != 1 {
+		t.Error("withholding the address lost the finding underneath it")
+	}
+
+	shown, err := (&Scanner{Resolver: &zone{records: records}, ShowReportAddresses: true}).
+		Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if got := shown.Observed.DMARCReportTo.Destinations[0].Mailbox; got != "x@silent.example" {
+		t.Errorf("the address came back as %q", got)
+	}
+}

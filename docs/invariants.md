@@ -2343,6 +2343,61 @@ an alias is one RFC 2181 forbids, and finding it means asking that name for
 its own record rather than for an address — an exchanger whose name is an
 alias still resolves, so nothing else read here would show it.
 
+**A report destination outside the domain is asked whether it agreed, and the
+address it points at is a separate question from the domain it is at.** RFC
+7489 §7.1 forbids a receiver from sending aggregate reports to a destination
+outside the domain being reported on until that destination publishes a DMARC
+record at `<domain>._report._dmarc.<destination>`. So the lookup is one TXT
+question, to the resolver this check already uses, and it is the only way to
+learn something no amount of reading the domain's own zone can show: the record
+is well formed, the policy applies, `rua=` names a vendor, and every report
+goes nowhere, because the missing record is in somebody else's zone
+(`TestAnExternalDestinationIsAskedWhetherItAgreed`,
+`TestWhereTheReportsGoIsReadAndTheOutsideOnesAreAsked`).
+
+Three states are kept apart and none of them may be folded into another: a
+destination that agreed, one that has published nothing and therefore receives
+nothing, and one whose authorisation could not be read at all. The last is a
+fact about the lookup rather than about the destination, and reporting it as a
+refusal would send an operator to their vendor over a resolver that did not
+answer (R4, `TestAResolverThatWillNotAnswerIsNotARefusal`). A destination
+inside the domain is asked nothing: §7.1 exists because a domain cannot
+volunteer somebody else's mailbox, and it does not apply where the domain names
+itself. Two addresses at one vendor are one question
+(`TestOneVendorIsAskedOnce`).
+
+**Where the specification is ambiguous, the reading that reports fewer faults
+wins, and the report says which reading it took.** §7.1 says "the same domain",
+and receivers differ on whether a subdomain of it counts as external. The
+strict reading invents a finding at domains that have none; the loose one
+misses one. A scanner that invents is worse than one that reports less, so a
+destination under the domain is treated as inside it and the note beside the
+row says so (R17, R21).
+
+**The address is printed where the asker is the operator, and the domain
+always.** A domain is not a person and a mailbox is. The command line prints
+both, because it runs on the operator's own machine; a service prints the
+mailbox only where control of the domain has been proven, and otherwise names
+the destination without the address at it
+(`TestTheReportAddressesArePrintedOnlyWhenAskedFor`,
+`TestTheAddressesCanBeDroppedWithoutTheFinding`). Nothing about the finding
+rests on it, because the finding is about domains — which is the test that
+decides whether withholding a value is honest or is a hole: the sentence must
+mean the same thing without it (`TestADestinationWithNoAddressStillNamesItsDomain`).
+
+This replaced a boolean. The tag was read as *reports are asked for, or they
+are not* until 2026-09-28, and that discarded a measurement rather than a
+detail: the check above could not be made at all, and an operator could not see
+that their reports were addressed to an analytics vendor they stopped paying.
+The count answered neither question anybody has of the tag. Both faces say the
+same thing in the same words
+(`TestWhereTheReportsGoReachesBothFacesOfTheReport`), and the bounds are the
+usual ones for a value somebody else writes: eight destinations, the rest
+counted, and a URI this package cannot read dropped rather than guessed at
+(`TestTheTagIsReadAsThePlacesItNames`,
+`TestATagNamingMoreThanAnybodyReadsIsBounded`,
+`TestOnlyADMARCRecordIsAgreement`).
+
 That is not restraint applied to the check. It is what these records are: a
 domain publishes them so that strangers will read them, and reading one is the
 use they were put there for. The target learns nothing at all, because the

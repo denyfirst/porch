@@ -3,6 +3,8 @@ package policy
 import (
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/dmarcreports"
 )
 
 func mailRuleIDs(r MailFinding) []string {
@@ -558,5 +560,98 @@ func TestTheThreeDANEStatesAreKeptApart(t *testing.T) {
 	if len(NotesOfKind(graded.Notes, KindUnsettled)) == 0 {
 		t.Error("a lookup that failed was filed as an observation rather than as something the " +
 			"scan did not establish")
+	}
+}
+
+// Reports addressed to a domain that has not agreed to receive them are
+// graded, and the three other states are not.
+//
+// RFC 7489 §7.1 says a receiver must not send reports outside the domain until
+// the destination publishes a record accepting them, so this is a document
+// saying what a receiver does rather than an opinion about configuration —
+// which is the line between what this check grades and what it reports.
+//
+// The three states that are not graded are each a different reason not to be.
+// A destination inside the domain needs no authorisation. One that agreed has
+// it. One whose authorisation could not be read is silence, and grading
+// silence would tell an operator their vendor refused when nobody asked it
+// (R4).
+func TestReportsAddressedNowhereAreGraded(t *testing.T) {
+	facts := func(dest ...dmarcreports.Destination) MailFacts {
+		return MailFacts{
+			SPFRecords: 1, SPFAll: "-",
+			DMARCRecords: 1, DMARCPolicy: "reject", DMARCReporting: true,
+			DMARCReportTo: dmarcreports.Found{Asked: true, Destinations: dest},
+		}
+	}
+
+	refused := GradeMail(facts(dmarcreports.Destination{
+		Domain: "silent.example", External: true, Checked: true,
+	}))
+	if !mailHas(refused, "mail.dmarc-reports-unauthorised") {
+		t.Fatalf("a destination that has not agreed was not graded: %v", mailRuleIDs(refused))
+	}
+	if text := mailNoteText(refused.Notes); !strings.Contains(text, "silent.example") {
+		t.Errorf("the destination is not named, so an operator cannot tell which one. Notes:\n%s", text)
+	}
+
+	for _, tc := range []struct {
+		name string
+		dest dmarcreports.Destination
+	}{
+		{"inside the domain", dmarcreports.Destination{Domain: "example.test"}},
+		{"agreed", dmarcreports.Destination{
+			Domain: "agreed.example", External: true, Checked: true, Authorised: true}},
+		{"could not be read", dmarcreports.Destination{
+			Domain: "unread.example", External: true, Checked: true,
+			Reason: "the authorisation record could not be read"}},
+	} {
+		got := GradeMail(facts(tc.dest))
+		if mailHas(got, "mail.dmarc-reports-unauthorised") {
+			t.Errorf("a destination %s was graded: %v", tc.name, mailRuleIDs(got))
+		}
+	}
+
+	// And silence says so, rather than passing in the same silence as a
+	// destination that agreed.
+	unread := GradeMail(facts(dmarcreports.Destination{
+		Domain: "unread.example", External: true, Checked: true,
+		Reason: "the authorisation record could not be read",
+	}))
+	if text := mailNoteText(unread.Notes); !strings.Contains(text, "could not be read") {
+		t.Errorf("a destination nothing could be established about says nothing. Notes:\n%s", text)
+	}
+}
+
+// Where the reports go is reported whether or not anything is graded.
+//
+// The destinations are named for the reason the SPF includes are: a reader's
+// next action depends on which vendor it is, and a count answers a question
+// nobody asked.
+func TestWhereTheReportsGoIsAlwaysReported(t *testing.T) {
+	got := GradeMail(MailFacts{
+		SPFRecords: 1, SPFAll: "-",
+		DMARCRecords: 1, DMARCPolicy: "reject", DMARCReporting: true,
+		DMARCReportTo: dmarcreports.Found{Asked: true, Destinations: []dmarcreports.Destination{
+			{Domain: "example.test", Mailbox: "dmarc@example.test"},
+			{Domain: "agreed.example", External: true, Checked: true, Authorised: true},
+		}},
+	})
+
+	if len(got.Findings) != 0 {
+		t.Fatalf("a domain whose destinations all agreed was graded %v", mailRuleIDs(got))
+	}
+	text := mailNoteText(got.Notes)
+	for _, want := range []string{"agreed.example", "example.test", "§7.1"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the reporting note does not say %q. Notes:\n%s", want, text)
+		}
+	}
+
+	// A record that names nowhere says nothing here rather than an empty
+	// sentence: the note above it already covers a record with no rua at all.
+	none := GradeMail(MailFacts{SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject"})
+	if text := mailNoteText(none.Notes); strings.Contains(text, "Aggregate reports go to") {
+		t.Errorf("a record that names nowhere draws a destination line. Notes:\n%s", text)
 	}
 }

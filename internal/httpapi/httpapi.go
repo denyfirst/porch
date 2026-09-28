@@ -394,6 +394,15 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 			ReadExchangers: scanner.Verify != nil,
 
 			DKIMSelectors: dkim.DocumentedSelectors(),
+
+			// And the mailboxes a DMARC record asks for reports at, on the
+			// condition the two above have: a domain somebody has shown is
+			// theirs. A domain is not a person and a mailbox is, so a
+			// deployment scanning names nobody proved anything about names the
+			// destination without the address at it. Whether that destination
+			// has agreed to receive reports is a question about domains, so
+			// the finding is the same either way.
+			ShowReportAddresses: scanner.Verify != nil,
 		},
 		// The delegation is asked about directly only where control of the
 		// domain has been proven, which is the condition the mail check's two
