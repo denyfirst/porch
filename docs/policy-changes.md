@@ -47,7 +47,7 @@ is entitled to find it still answering.
 
 ## `porch-mail-v2` → `porch-mail-v3`
 
-Unreleased.
+Released in v0.24.0, 2026-09.
 
 One finding is added and one is no longer raised against an exchanger whose
 name is an alias. A domain whose report was strong under `porch-mail-v2` is
