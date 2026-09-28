@@ -74,7 +74,7 @@ func TestTheMailCheckHasAMethodPage(t *testing.T) {
 
 	// Which connections this deployment makes differs by build, and the page
 	// says the one that is true of the build serving it.
-	demoSentence := "This deployment makes neither connection"
+	demoSentence := "This deployment makes both, for the one mail domain it"
 	if strings.Contains(page, demoSentence) != demo.Enabled {
 		t.Errorf("the mail method page misdescribes this build's connections (demo %v)", demo.Enabled)
 	}

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"testing"
 
+	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
 )
@@ -39,8 +40,10 @@ func TestTheOperatorsOwnCopyShowsTheWholeReport(t *testing.T) {
 		}
 	}
 
+	// A stranger's copy shows what a visitor sees — except on the
+	// demonstration, whose hosts are ours; see the test named for it.
 	stranger := New(offlineScanner(), Limits{}, nil)
-	want(t, stranger, false, "a copy anybody can reach, with no password and no scope")
+	want(t, stranger, demo.Enabled, "a copy anybody can reach, with no password and no scope")
 
 	loopback := New(offlineScanner(), Limits{}, nil)
 	loopback.ReachableByOthers(false)
@@ -55,7 +58,7 @@ func TestTheOperatorsOwnCopyShowsTheWholeReport(t *testing.T) {
 	// back to what any visitor sees rather than keeping a wider view it was
 	// given for a different answer.
 	loopback.ReachableByOthers(true)
-	want(t, loopback, false, "a copy told it is reachable after all")
+	want(t, loopback, demo.Enabled, "a copy told it is reachable after all")
 
 	proven := New(&scan.Scanner{Verify: &verify.Scope{Secret: verificationSecret}}, Limits{}, nil)
 	proven.ReachableByOthers(true)

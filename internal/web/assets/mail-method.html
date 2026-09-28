@@ -58,9 +58,10 @@
       a greeting, <code>EHLO</code>, <code>STARTTLS</code>, the handshake and
       <code>QUIT</code>. No sender, recipient or message is named, so nothing
       is delivered and nothing is asked about a person.
-      {{if .Demo}}This deployment makes neither connection: both are made
-      only by an installation that has been shown control of the domain, and
-      by the command line.{{else}}This installation makes them for the
+      {{if .Demo}}This deployment makes both, for the one mail domain it
+      checks, which is this project's own: the policy file from our own
+      policy host, and the conversation with the exchangers our mail runs on,
+      at most once an hour.{{else}}This installation makes them for the
       domains it has been shown control of, and, where it requires no proof,
       only where nobody but its operator can call it — on this machine's own
       loopback, or behind their password. One that answers strangers without

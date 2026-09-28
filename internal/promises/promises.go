@@ -122,9 +122,18 @@ var Porch = Product{
 	What: "Measures how a host is reached — its TLS handshake, its web reach, its mail policy and its DNS — and grades what it finds.",
 	Adds: []Promise{
 		{
-			ID:   "porch-keeps-no-record-of-a-scan",
-			Says: "An installation keeps no record of what was scanned, by whom, or when. Not the hostname, not the address that asked, not a timestamp beyond a date.",
-			Checked: "There is no code that could write one, and a test fails if any appears. " +
+			// It read "An installation keeps no record of what was scanned, by
+			// whom, or when" until 2026-09-28, which stopped being true of what
+			// and when the day an operator could keep their own history — a
+			// results directory, then reports sealed under their password — and
+			// was never retired. Who asked is the half nothing has ever kept,
+			// and it is the half this undertakes without a condition.
+			ID: "porch-keeps-no-record-of-a-scan",
+			Says: "An installation keeps no record of who asked for a scan: not the address, not the person. " +
+				"What was scanned, and when, is kept only where whoever runs it said to keep it — on their own disk, " +
+				"or sealed under their own password. The demonstration keeps nothing but the last hour's report " +
+				"of its own hosts, in memory.",
+			Checked: "There is no code that could write down who asked, and a test fails if any appears. " +
 				"The published counter is a number with nothing behind it, which is why it can be published at all.",
 		},
 		{

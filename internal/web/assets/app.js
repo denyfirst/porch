@@ -439,6 +439,12 @@ function summary(data) {
   const meta = [];
   if (address) meta.push(address);
   if (data.policy) meta.push("graded by " + data.policy);
+  // A kept copy says how old it is. The demonstration runs each check at most
+  // once an hour and hands the report to everybody who asks in that hour, and
+  // a copy without its age would read as a measurement of now.
+  if (data.producedAt && !data.producedAt.startsWith("0001-01-01")) {
+    meta.push("measured " + producedAt(data.producedAt));
+  }
   if (meta.length) left.appendChild(el("p", "summary-meta", meta.join("  ·  ")));
   // Not on the demonstration: a report there is about our own domain, and a
   // visitor has no use for a copy of it. A copy of your own is where a

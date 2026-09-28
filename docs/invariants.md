@@ -703,17 +703,15 @@ about what may be read. So:
   another origin. Before the 2026-09-16 audit (A17) `http&#58;//host/` was a
   relative address, and a read that failed part way was reported as a page that
   ended there; `Incomplete` now says only its start was seen.
-- **Off unless asked, and refused outright in a demonstration build.**
-  `webprobe.Prober.ReadMarkup` is false in the zero value, so every caller
-  that has not been changed keeps the old behaviour. `demo.Enabled` is a
-  constant and is tested first, so the demonstration's branch is compiled out
-  and its promise is true by construction rather than by a field being left
-  unset. (The package is still linked; what is eliminated is the call.)
+- **Off unless asked.** `webprobe.Prober.ReadMarkup` is false in the zero
+  value, so every caller that has not been changed keeps the old behaviour.
+  The demonstration build refused it outright until 2026-09-28; it reads its
+  own pages now, because its own are the only ones it reaches (N6).
 
 **Which deployment reached a log reader is now part of the promise.** The user
 agent names `https://denyfirst.dev/web/method` from every installation, so that
-page describes both: the demonstration reads no body, and an installation
-somebody runs themselves may have read the page. A flat sentence there would
+page describes both: the demonstration reads only its own pages, and an
+installation somebody runs themselves may have read the page. A flat sentence there would
 have been true of one and false of the one in the reader's log, which is worse
 than no page — it is a scanning notice that misdescribes the scan.
 
@@ -785,8 +783,21 @@ reader: somebody who arrives from a log line did not choose to be here and
 wants one thing, which is what reached their server and the fact that there is
 nothing else to look for.
 
+**The demonstration reads its own page.** It read no body at all until
+2026-09-28, under a promise written when a visitor chose the host and the page
+read would have been somebody else's. Its hosts are compiled in now (N6), so a
+page it reads is ours, and the promise protected nobody while it kept the
+demonstration from showing the one thing a header check cannot see. The method
+page says so, and says the other half too: a request from the demonstration in
+somebody's log would mean their server is one of ours. The bound on what is
+carried is measured as what the client read, not what a handler handed to the
+kernel — on loopback the kernel buffers megabytes nobody reads, and the old
+measure failed one run in three under load on 2026-09-28, about bytes that never
+reached the prober.
+
 *Enforced in:* `internal/webprobe`, `internal/markup`,
-`internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`
+`internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
+`internal/httpapi.Server.operatorView`
 *Guarded by:* `TestOnlyTheRootIsRequestedUnlessTheServerSaysOtherwise`,
 `TestARedirectChainIsRecordedInOrder`,
 `TestTheRedirectLimitStopsTheChainAndSaysSo`,
@@ -807,8 +818,7 @@ nothing else to look for.
 `TestARedirectsBodyIsNotRead`,
 `TestAThreeHundredWithNowhereToGoIsAPage`,
 `TestALongPageIsBoundedAndSaysSo`,
-`TestTheDemonstrationReadsNoBodyEvenWhenAsked`,
-`TestTheDemonstrationIgnoresTheFieldOnAnOrdinaryPage`,
+`TestTheDemonstrationShowsItsOwnEstateWhole`,
 `TestTheScannerDecidesWhetherThePageIsRead`,
 `TestNoMarkupReachesTheResult`,
 `TestNothingButTheHostSurvives`,
@@ -1334,19 +1344,30 @@ a network error that would name a resolver or an address (I6).
 what it discloses.** Fetching a list tells an authority that somebody downloaded
 a list; it does not say which certificate, because one list covers thousands.
 That is a smaller disclosure than OCSP, which names the serial in the question,
-and it is why this is done where OCSP is not. The demonstration deployment
-promises on its privacy page that it asks no authority anything, so the call is
-compiled out of that build — `demo.Enabled` is a constant and the branch is
-eliminated, which keeps the promise true by construction rather than by a
-setting. Everywhere else it runs with no switch: on a deployment that requires
-proof of control the certificate belongs to whoever asked, and a switch they had
-to find first would be a gap in a report dressed as a choice.
+and it is why this is done where OCSP is not. It runs on every build with no
+switch: on a deployment that requires proof of control the certificate belongs
+to whoever asked, and a switch they had to find first would be a gap in a report
+dressed as a choice.
 
-Both directions are driven. A test under the tag fails if the demonstration
-fetches, and a test without it fails if the ordinary build does not — a guard
-that refuses everywhere is as wrong as one that refuses nowhere, and the second
+The demonstration included, since 2026-09-28. It was compiled out of that build
+to keep a promise that it asked no authority anything, written when a visitor
+chose the host. Its hosts are compiled in now (N6), so the list it fetches is
+the one our certificate names, and leaving it out made the demonstration say
+"revocation not established" about a certificate every copy somebody runs would
+have checked. The privacy page says what it asks and about whom, and that each
+check runs at most once an hour, the report kept and handed to everybody with
+its age.
+
+Both builds are driven. A test under the tag fails if the demonstration stops
+fetching, and a test without it fails if the ordinary build does — the second
 failure would be silent, since "revocation was not checked" is a sentence this
 project prints honestly in so many other places that nobody would look twice.
+
+**The standing sentence is true of the report it is on.** It said *no build
+asks* the question that names a serial, and `-ask-responder` asks exactly that;
+a report that asked it carried the sentence beside the finding quoting the
+answer. Where the responder was asked, the report now says so instead
+(`TestAReportThatAskedTheResponderDoesNotSayNobodyDid`).
 
 *Enforced in:* `internal/crl`, `internal/scan.Scanner.Scan`,
 `internal/scan.listStatus`, `internal/policy.GradeStapling`,
@@ -1370,7 +1391,9 @@ project prints honestly in so many other places that nobody would look twice.
 `TestTheDefaultDiallerRefusesPrivateAddresses`,
 `TestAnUnknownListStatusIsNotAnAnswer`,
 `TestTheOrdinaryBuildReadsTheRevocationList`,
-`TestTheDemonstrationAsksNoAuthorityAnything`,
+`TestTheDemonstrationReadsItsOwnRevocationList`,
+`TestAReportThatAskedTheResponderDoesNotSayNobodyDid`,
+`TestTheRevocationLimitDescribesThisBuild`,
 `TestAListThatNamesTheCertificateIsReported`,
 `TestAListThatDoesNotNameTheCertificateSaysAsOfWhen`,
 `TestAListThatCouldNotBeReadSaysWhy`,
@@ -1522,8 +1545,11 @@ the difference between reading and guessing.
 What it costs is the disclosure this invariant is about, unchanged and now
 larger: the question names the domain to a monitor this project does not run,
 and asking for everything under it says more about the estate than asking about
-one host. So it is never on a demonstration build, which promises it queries no
-log, and on the command line it is typed deliberately.
+one host. So on the command line it is typed deliberately, and a service asks it
+only for a domain it has been shown control of. The demonstration asks it about
+its own domain and no other, since 2026-09-27 for the inventory and 2026-09-28
+for the TLS check: its hosts are compiled in, so the only thing a monitor
+learns from it is that somebody is looking at us.
 
 **The inventory says what it cannot show, every time, under every list.** Three
 kinds of name are missing from it and no amount of searching will produce them:
@@ -1882,7 +1908,7 @@ the report carries all three:
 
 So it is **off unless an operator names one**, on both faces — `porch-scan
 -passive`, `porchd -names-passive` — and never on the demonstration, which
-refuses the whole mode. Every register worth reading wants an account: the key
+configures none. Every register worth reading wants an account: the key
 is the operator's own, the question names their domain to a company they chose,
 and the answer is billed to them. Nothing picks one for them and nothing falls
 back to one.
@@ -2375,7 +2401,10 @@ names — and printed under the line by both faces
 `TestAnOversizedAnswerIsRefusedRatherThanTruncated`,
 `TestAnEmptyNameIsNotSearchedFor`,
 `TestASerialFromAMonitorIsComparedAsANumber`,
-`TestTheDemonstrationQueriesNoTransparencyLog`,
+`TestTheDemonstrationSearchesTheLogsForItsOwnName`,
+`TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports`,
+`TestAKeptReportIsScannedOnceAnIntervalAndSaysItsAge`,
+`TestOnlyAnAnsweredReportIsKept`, `TestWithoutAnIntervalEveryCallerIsScanned`,
 `TestTheOrdinaryBuildSearchesTheLogsWhenAsked`,
 `TestNoSearcherMeansNoSearch`,
 `TestTheLogSearchIsOffUntilItIsAskedFor`,

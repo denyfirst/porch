@@ -398,9 +398,9 @@ covers thousands and authorities serve them from content delivery networks to
 the whole internet. That is a smaller disclosure than the one this project
 refused when it refused OCSP, where the serial is named in the question.
 
-It is still a request, and the demonstration deployment promises it makes none,
-so the call is compiled out of that build. Everywhere else it runs with no
-switch: on a deployment that requires proof of control the certificate belongs
+It is still a request, and it runs on every build with no switch — the
+demonstration included since 2026-09-28, because its hosts are compiled in and
+the certificate it asks about is ours: on a deployment that requires proof of control the certificate belongs
 to whoever asked, and a person has nothing to hide from themselves. A switch
 they had to find first would be a gap in a report dressed as a choice — which
 is the shape of the question to ask about every future check that discloses
@@ -409,9 +409,10 @@ something. *Whose is it, and what exactly does the other party learn?*
 **The same question, asked of the certificate logs, gets a different answer —
 and that is the point of asking it.** Searching for the certificates issued for
 a name sends the name to a monitor. That is the OCSP shape, not the revocation
-list shape, so it is offered differently: never on the demonstration, with no
-switch on a deployment that required proof of control, and behind `-check-logs`
-on the command line, where the name may be somebody else's.
+list shape, so it is offered differently: with no switch on a deployment that
+required proof of control, behind `-check-logs` on the command line, where the
+name may be somebody else's, and on the demonstration only because the name
+there can only ever be ours.
 
 What makes it acceptable at all is that certificate transparency is public by
 design — the certificates for a name are already published to anyone who looks,
@@ -503,13 +504,13 @@ deciding it later under pressure is how it goes wrong. **It was built on
 2026-09-11 to that shape, and the list below is now a description rather than a
 plan.** N7 has the detail; what follows is why each line is the line.
 
-- **Only where control has been proven, and never on the demonstration.** That
-  build reaches a compiled-in list and verifies nothing, so it reads no body at
-  all — the refusal is a constant tested before anything else, which compiles
-  the branch out. The command line reads the page: it runs on the operator's
-  own machine, from their own address, and the report goes to whoever ran it,
-  which is the same argument `-allow-private` rests on. A service reads the
-  page where it required proof of control and not otherwise.
+- **Only where the page belongs to whoever reads the report.** The command
+  line reads the page: it runs on the operator's own machine, from their own
+  address, and the report goes to whoever ran it, which is the same argument
+  `-allow-private` rests on. A service reads the page where it required proof
+  of control, or where only its operator can call it. The demonstration read
+  no body at all until 2026-09-28; it reaches a compiled-in list of this
+  project's own hosts, so it reads its own pages now.
 - **The page a log reader is sent to had to say both.** The user agent names
   `https://denyfirst.dev/web/method` from every installation, so one flat
   sentence there would be true of the demonstration and false of the scan in

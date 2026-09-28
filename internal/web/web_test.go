@@ -364,7 +364,6 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		"handshake",
 		"excluded",
 		"scanner.denyfirst.dev",
-		"no page is requested",
 
 		// Somebody reading it as a privacy policy.
 		"three minutes",
@@ -385,8 +384,16 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		// authority is contacted. The claim that did change is checked
 		// against the code in TestThePagesDoNotDenyACheckThatNowHappens
 		// rather than against a sentence.
-		"no certificate authority is asked anything",
-		"transparency logs are not queried",
+		//
+		// And on 2026-09-28 the property changed as well: the demonstration
+		// fetches its own certificate's revocation list, reads its own pages
+		// and names its own domain to a monitor, because its hosts are ours.
+		// The three sentences that said otherwise are quoted on the page as
+		// retired, which a phrase match cannot tell from a claim — so what is
+		// required is what holds now.
+		"no certificate authority is asked about one certificate",
+		"scans only the hosts this project owns",
+		"each check runs at most once an hour",
 		"without warranty",
 	}
 

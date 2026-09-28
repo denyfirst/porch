@@ -563,6 +563,15 @@ func run() int {
 		api.SearchNames(&ctsearch.CRTSh{Timeout: *requestTimeout})
 		api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})
 		api.KeepInventoryFor(time.Hour)
+
+		// And a kept copy of every check's report, for the same reason and one
+		// more. The demonstration shows the whole report of its own estate, so
+		// a scan there asks a transparency monitor, the authority's revocation
+		// list, the mail exchangers on port 25 and the servers of the zone
+		// above as well as the host; a page anybody can refresh would make it
+		// press on every one of them. Kept, each check runs at most once an
+		// hour for each host, and the answer says when it was made.
+		api.KeepReportsFor(time.Hour)
 	}
 
 	// The register, the same way: named or not asked. It is wired even where
@@ -1110,6 +1119,14 @@ func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, 
 		if askResponder {
 			scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
 		}
+	}
+
+	// And the demonstration searches the logs too, with no scope: its hosts are
+	// compiled in, so the name it asks about is only ever this project's own.
+	// The responder stays out, because it is asked only where an operator said
+	// so and nobody says so to the demonstration.
+	if demo.Enabled {
+		scanner.Logs = &ctsearch.CRTSh{Timeout: timeout}
 	}
 
 	// Always, and never nil. An empty Server already means this machine's own

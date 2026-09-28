@@ -169,7 +169,7 @@ unless you say so.** Asking a responder whether a serial is still valid tells
 it which certificate somebody is examining, so that question is behind
 `-ask-responder` and needs proof of control on a service. The revocation list a
 certificate names is fetched, because one list covers thousands of certificates
-and asking for it names none of them; the demonstration does not fetch it.
+and asking for it names none of them.
 
 What the server sends can include a stapled status response, and that is read.
 Until 2026-08-22 it was not: this reported that some bytes had arrived, which

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/policy"
 )
 
@@ -98,3 +99,30 @@ func TestAMonitorOrRegisterIsAskedOnlyOverHTTPS(t *testing.T) {
 		}
 	}
 }
+
+// The demonstration searches the logs for its own name and keeps each check's
+// report for an hour.
+//
+// Both are wired here rather than decided in a package, because they are what
+// this binary is when it is the demonstration. The first is what lets its TLS
+// report say what a proven copy's says about its own domain; the second is what
+// stops a page anybody can refresh from pressing the parties that report now
+// asks. Read from the source, because run() binds a port.
+func TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports(t *testing.T) {
+	source := repoFile(t, "cmd/porchd/main.go")
+	for _, want := range []string{
+		"if demo.Enabled {\n\t\tscanner.Logs = &ctsearch.CRTSh{Timeout: timeout}\n\t}",
+		"api.KeepReportsFor(time.Hour)",
+	} {
+		if !strings.Contains(source, want) {
+			t.Errorf("the demonstration is not wired with %q", want)
+		}
+	}
+	if s := serviceScanner(nil, nil, "", false, time.Second); (s.Logs != nil) != demoBuild() {
+		t.Errorf("a service with no scope searches the logs: %v, and this build is the demonstration: %v",
+			s.Logs != nil, demoBuild())
+	}
+}
+
+// demoBuild is whether this test binary is the demonstration build.
+func demoBuild() bool { return demo.Enabled }

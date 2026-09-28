@@ -301,3 +301,38 @@ func TestNoAuthorityIsAskedOnAnyStapleOutcome(t *testing.T) {
 		t.Errorf("a verified response is no longer described as verified:\n  %s", verified)
 	}
 }
+
+// Where the certificate's own responder was asked, the report says so, and
+// does not also carry the standing sentence that says no scan asks it.
+//
+// -ask-responder puts exactly the question that sentence refuses, and the
+// report said "no build asks it" beside the finding that quoted the answer.
+func TestAReportThatAskedTheResponderDoesNotSayNobodyDid(t *testing.T) {
+	asked := GradeStapling(StapleFacts{HasResponder: true, QueryStatus: "good"})
+	failed := GradeStapling(StapleFacts{HasResponder: true, QueryReason: "the responder did not answer"})
+	quiet := GradeStapling(StapleFacts{HasResponder: true})
+
+	for name, r := range map[string]StapleFinding{"asked": asked, "asked and unanswered": failed} {
+		var said []string
+		for _, n := range r.Notes {
+			said = append(said, n.Text)
+		}
+		all := strings.Join(said, " | ")
+		if strings.Contains(all, LimitNoAuthorityAsked.Text) {
+			t.Errorf("%s: the report says no scan asks the responder:\n%s", name, all)
+		}
+		if !strings.Contains(all, "own responder was asked") {
+			t.Errorf("%s: the report does not say the responder was asked:\n%s", name, all)
+		}
+	}
+
+	found := false
+	for _, n := range quiet.Notes {
+		if n.Text == LimitNoAuthorityAsked.Text {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("a report that asked nobody no longer carries the standing sentence")
+	}
+}

@@ -39,21 +39,24 @@ func flatten(s string) string {
 func TestTheMethodPageDescribesTheDeploymentServingIt(t *testing.T) {
 	page := flatten(get(t, "/web/method").Body.String())
 
-	// The demonstration's promise, in the words that make it a promise.
-	const neverReadsABody = "never reads a body"
+	// The demonstration's promise, in the words that make it a promise. It
+	// read "never reads a body" until 2026-09-28, when the demonstration began
+	// reading its own pages: the hosts it reaches are compiled in and ours, so
+	// the promise protected nobody and cost the demonstration a check.
+	const readsOnlyItsOwn = "reads the page, and only its own"
 
 	// What a deployment that reads pages has to say instead.
 	const readsWhatItWasShown = "reads the page of a domain it has been shown control of"
 
 	if demo.Enabled {
-		if !strings.Contains(page, neverReadsABody) {
-			t.Errorf("the demonstration's page does not say it never reads a body. That promise " +
-				"is why somebody who found this scanner in their access log is entitled not to " +
+		if !strings.Contains(page, readsOnlyItsOwn) {
+			t.Errorf("the demonstration's page does not say it reads only its own page. That is " +
+				"why somebody who found this scanner in their access log is entitled not to " +
 				"investigate further.")
 		}
 		if strings.Contains(page, readsWhatItWasShown) {
-			t.Error("the demonstration's page claims it reads pages, and this build cannot: " +
-				"the call is compiled out")
+			t.Error("the demonstration's page says it reads the pages of domains it was shown " +
+				"control of, and it is shown nothing: its hosts are compiled in")
 		}
 		if !strings.Contains(page, "the hosts this project owns") {
 			t.Error("the demonstration's page no longer says which hosts it will follow a " +
@@ -65,7 +68,7 @@ func TestTheMethodPageDescribesTheDeploymentServingIt(t *testing.T) {
 	if !strings.Contains(page, readsWhatItWasShown) {
 		t.Error("a self-hosted installation's page does not say what it reads")
 	}
-	if strings.Contains(page, "This deployment "+neverReadsABody) {
+	if strings.Contains(page, "This deployment "+readsOnlyItsOwn) {
 		t.Error("a self-hosted installation's page says of itself that it never reads a body. " +
 			"It may; that is what proof of control buys. A scanning notice that misdescribes " +
 			"the scan is worse than no notice, because a log reader acts on it.")
@@ -78,7 +81,7 @@ func TestTheMethodPageDescribesTheDeploymentServingIt(t *testing.T) {
 
 	// And it still says what the public deployment does, because a log reader
 	// may have been reached by that one and lands on the same page.
-	if !strings.Contains(page, "denyfirst.dev never reads a body") {
+	if !strings.Contains(page, "denyfirst.dev reads only its own") {
 		t.Error("the page no longer tells a reader what the public deployment does, so somebody " +
 			"reached by that one and reading this page is told about an installation that is " +
 			"not the one in their log")

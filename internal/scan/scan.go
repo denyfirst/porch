@@ -278,13 +278,12 @@ type Scanner struct {
 	// every caller wants: the address comes from the certificate the scanned
 	// server sent, so it is chosen by the party being measured.
 	//
-	// It runs everywhere except the demonstration build, and the reason is on
-	// that build's privacy page rather than here: the demonstration promises it
-	// asks no authority anything. Elsewhere there is nothing to switch on. A
-	// revoked certificate is the most serious thing this check can find, and on
-	// a deployment that requires proof of control the certificate belongs to
-	// whoever asked — a switch they had to find first would be a gap in a
-	// report dressed as a choice.
+	// It runs on every build, with nothing to switch on. A revoked certificate
+	// is the most serious thing this check can find, and on a deployment that
+	// requires proof of control the certificate belongs to whoever asked — a
+	// switch they had to find first would be a gap in a report dressed as a
+	// choice. The demonstration reaches only this project's own hosts, so the
+	// certificate there is ours.
 	Revocation *crl.Fetcher
 
 	// Logs searches the public certificate logs for other certificates issued
@@ -478,11 +477,16 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// certificates there is nothing to staple and the report above has
 		// nothing to say. This fetches the list the certificate names.
 		//
-		// Not on the demonstration build. demo.Enabled is a constant, so the
-		// call below is compiled out there rather than switched off, and the
-		// promise on that deployment's privacy page — that it asks no
-		// authority anything — stays true by construction.
-		if !demo.Enabled && len(tlsReport.Certificates) > 0 {
+		// On every build, the demonstration included since 2026-09-28. It was
+		// compiled out of that build to keep a promise that it asked no
+		// authority anything, written when a visitor chose the host. A visitor
+		// no longer does: the demonstration reaches only this project's own
+		// hosts (N6), so the list it fetches is the one for our certificate,
+		// and what the authority learns is that somebody downloaded a list
+		// covering thousands. Leaving it out made the demonstration say
+		// "revocation not established" about a certificate every copy
+		// somebody runs would have checked.
+		if len(tlsReport.Certificates) > 0 {
 			leaf := tlsReport.Certificates[0]
 
 			fetcher := s.Revocation
@@ -547,11 +551,12 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// are the only place it is visible, and that is the whole reason this
 		// check exists (N12).
 		//
-		// Not on the demonstration: demo.Enabled is a constant, so the branch
-		// is eliminated there rather than switched off, and the promise on that
-		// deployment's privacy page that it queries no log stays true by
-		// construction.
-		if !demo.Enabled && s.Logs != nil && len(tlsReport.Certificates) > 0 {
+		// Where a caller configured a searcher: a service with proof of
+		// control, the command line behind -check-logs, and the demonstration,
+		// whose hosts are compiled in and whose question can therefore only
+		// ever name this project's own domain — the argument the inventory
+		// made there on 2026-09-27, and the same answer.
+		if s.Logs != nil && len(tlsReport.Certificates) > 0 {
 			out.LoggedLine, out.Logged, out.LoggedUnaccounted = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
 		}
 	}
@@ -1286,8 +1291,9 @@ func sameSerial(hexSerial string, leaf *x509.Certificate) bool {
 // nothing was asked of an authority for as long as it took somebody to read a
 // report closely.
 //
-// demo.Enabled is a constant, so this is decided at build time and the branch
-// below is the same one the scan takes.
+// Every build fetches it now, the demonstration included, so the answer is a
+// constant; the function stays so that the test holding the limit to the
+// behaviour has one place to ask.
 func (s *Scanner) revocationFetched() bool {
-	return !demo.Enabled
+	return true
 }

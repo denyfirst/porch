@@ -270,6 +270,11 @@ type Server struct {
 	// which is what an operator running their own copy gets.
 	kept *keptInventories
 
+	// keptReports is the same for the checks: the last report each produced
+	// for a host, handed to everybody until it is older than its interval. Nil
+	// scans for every caller.
+	keptReports *keptReports
+
 	// zone asks the domain's own servers to hand over the zone, where an
 	// operator asked for that. Nil is the ordinary state.
 	zone zoneReader
@@ -528,6 +533,10 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		s.mux.HandleFunc(rt.method+" "+rt.path, rt.handler)
 	}
 
+	// And what a report carries, from the answer the defaults give: a server
+	// nobody has told otherwise is reachable by strangers, so this is the
+	// scope's answer — and the demonstration's, whose hosts are ours.
+	s.applyView()
 	return s
 }
 
@@ -711,6 +720,12 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.limits.RequestTimeout)
 	defer cancel()
 
+	// Where this installation keeps a copy, the question everybody asks is
+	// answered from it. A caller's own selectors make it their question.
+	if s.keptReports.enabled() && len(t.selectors) == 0 {
+		s.serveKept(ctx, w, c, t, host)
+		return
+	}
 	s.runCheck(ctx, w, c, t, host)
 }
 
@@ -1396,8 +1411,14 @@ func (s *Server) operatorOnly() bool {
 // name the domain to somebody else, and without a scope the domain may be
 // somebody else's; the command line asks both only behind a flag for that
 // reason, and the service asks them only for a proven domain.
+//
+// And the demonstration, whose hosts are compiled in (N6): every report it
+// draws is about this project's own estate, which is ours to show whole. It
+// showed less than any copy somebody runs until 2026-09-28, which is a
+// demonstration misrepresenting the product downwards — the argument the
+// inventory settled there the day before.
 func (s *Server) operatorView() bool {
-	return s.scanner.Verify != nil || s.operatorOnly()
+	return demo.Enabled || s.scanner.Verify != nil || s.operatorOnly()
 }
 
 // applyView hands operatorView to every check that reads it. Called by the
