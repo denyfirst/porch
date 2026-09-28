@@ -59,6 +59,11 @@ type target struct {
 	// inventory reads them, and it bounds them before it walks one.
 	ranges []string
 
+	// names are hosts the caller says they already have, unparsed. Only the
+	// inventory takes them, and it bounds them and holds them to the domain
+	// before one of them is resolved.
+	names []string
+
 	// scope is the second dimension of the per-target budget.
 	//
 	// It is the port for the TLS check, so that scanning one host on two

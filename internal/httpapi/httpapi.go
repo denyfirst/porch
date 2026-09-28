@@ -66,6 +66,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/exclusion"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/passivedns"
@@ -82,10 +83,23 @@ import (
 const (
 	DefaultRequestTimeout  = 30 * time.Second
 	DefaultMaxRequestBytes = 4 << 10 // 4 KiB; the body is one JSON field
-	DefaultMaxConcurrent   = 8
-	DefaultBurst           = 5
-	DefaultRefill          = 12 * time.Second // five at once, then one per twelve
-	DefaultMaxTrackedIPs   = 20_000
+
+	// DefaultMaxInventoryBytes is the body the inventory endpoint accepts,
+	// and it is derived rather than chosen.
+	//
+	// That endpoint is the one whose body is not one field: a caller may send
+	// the names they already have, up to knownnames.MaxNames of them. Two
+	// bounds on the same list must not be able to disagree — a list inside the
+	// one that is documented, refused by the one that is not, is an operator
+	// told their estate is too large when it is not — so this is the arithmetic
+	// of the other bound rather than a number beside it: every name at its
+	// longest, its quotes and its comma, and a kilobyte for the rest of the
+	// object.
+	DefaultMaxInventoryBytes = int64(knownnames.MaxNames*(253+3)) + 1<<10
+	DefaultMaxConcurrent     = 8
+	DefaultBurst             = 5
+	DefaultRefill            = 12 * time.Second // five at once, then one per twelve
+	DefaultMaxTrackedIPs     = 20_000
 
 	// Asking whether a domain is proven is one DNS lookup, and the Domains
 	// page asks once for every domain on it, so it has an allowance of its
@@ -108,7 +122,11 @@ const (
 type Limits struct {
 	RequestTimeout  time.Duration
 	MaxRequestBytes int64
-	MaxConcurrent   int
+
+	// MaxInventoryBytes is the body the inventory endpoint accepts, which is
+	// larger because its body carries a list rather than a field.
+	MaxInventoryBytes int64
+	MaxConcurrent     int
 
 	// Burst is how many scans a client may run back to back; Refill is how
 	// long one token takes to return.
@@ -149,6 +167,9 @@ func (l Limits) withDefaults() Limits {
 	}
 	if l.MaxRequestBytes <= 0 {
 		l.MaxRequestBytes = DefaultMaxRequestBytes
+	}
+	if l.MaxInventoryBytes <= 0 {
+		l.MaxInventoryBytes = DefaultMaxInventoryBytes
 	}
 	if l.MaxConcurrent <= 0 {
 		l.MaxConcurrent = DefaultMaxConcurrent
@@ -545,6 +566,20 @@ type scanRequest struct {
 	// was sent one refuses rather than dropping it, because a field accepted
 	// and ignored is a caller believing something happened.
 	Ranges []string `json:"ranges,omitempty"`
+
+	// Names are hosts the caller says they already have, taken as given and
+	// reported beside what the sources found.
+	//
+	// The one input to this mode that measures nothing, and the only way a
+	// host nothing published can appear at all: DNS lists nothing, so a name
+	// with no publicly logged certificate, under a zone that will not
+	// transfer and is not signed, is in no source however long they are read.
+	//
+	// Bounded and held to the domain by internal/knownnames, and behind the
+	// same proof of control as everything else: names under a domain somebody
+	// proved are that person's own, and nothing here is resolved or connected
+	// to until they have proved it (N9).
+	Names []string `json:"names,omitempty"`
 }
 
 type scanResponse struct {
@@ -580,7 +615,8 @@ func (s *Server) scanHandler(c check) http.HandlerFunc {
 }
 
 func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
-	t, ok := s.admit(w, r, c.parse, s.rate, "Too many scans from this address. Try again shortly.")
+	t, ok := s.admit(w, r, c.parse, s.rate, s.limits.MaxRequestBytes,
+		"Too many scans from this address. Try again shortly.")
 	if !ok {
 		return
 	}
@@ -591,6 +627,11 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 	if len(t.ranges) > 0 {
 		s.refuse(w, http.StatusBadRequest, "bad_request",
 			"A check takes no address ranges. The name inventory reads them.")
+		return
+	}
+	if len(t.names) > 0 {
+		s.refuse(w, http.StatusBadRequest, "bad_request",
+			"A check measures one host. The name inventory takes a list of them.")
 		return
 	}
 
@@ -611,7 +652,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request, c check) {
 // admit spends from budget, which is the scan allowance for a scan and the
 // proof allowance for asking whether a domain is proven, and answers tooMany
 // once it is spent.
-func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string) (target, *refusal), budget *limiter, tooMany string) (target, bool) {
+func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string) (target, *refusal), budget *limiter, maxBody int64, tooMany string) (target, bool) {
 	key := clientKey(r, s.limits.TrustedProxies, s.limits.TrustedProxyHops)
 
 	// Everything below this line costs something, including the refusals.
@@ -683,7 +724,7 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string
 
 	// The reader is capped before any parsing, so an oversized body is
 	// refused rather than buffered.
-	body := http.MaxBytesReader(w, r.Body, s.limits.MaxRequestBytes)
+	body := http.MaxBytesReader(w, r.Body, maxBody)
 
 	var req scanRequest
 	dec := json.NewDecoder(body)
@@ -721,6 +762,7 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string
 		return target{}, false
 	}
 	t.ranges = req.Ranges
+	t.names = req.Names
 	host := t.host
 
 	// A short list of defence and intelligence names, plus anyone who asked

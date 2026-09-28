@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/netip"
 	"strings"
 	"sync/atomic"
@@ -13,6 +14,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
@@ -901,5 +903,160 @@ func TestAnInstallationNotToldToReadAZoneDoesNot(t *testing.T) {
 	}
 	if got.Zone.Asked || got.Zone.Reason != "" {
 		t.Errorf("an installation that asks for no zone reports %+v", got.Zone)
+	}
+}
+
+// The list a caller already has is read for a domain they proved, and for no
+// other.
+//
+// A range cannot be proven and is refused to anybody but the operator (A30).
+// A list of names can: every name in it is held to the domain the caller has
+// already been shown to control, so the worst a list can cause is this
+// installation resolving hosts under an estate that is theirs. That makes the
+// gate the ordinary one — but it is still a gate, and a list sent for a domain
+// nobody proved must reach nothing.
+func TestAListOfNamesIsReadForAProvenDomainAndNoOther(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+
+	body := `{"target":"unproven.example","names":["bitrix.unproven.example"]}`
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan", body, "203.0.113.150:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain with a list was answered %q", got)
+	}
+
+	w := postTo(t, s, "/api/v1/names/scan",
+		`{"target":"proven.example","names":["bitrix.proven.example","www.proven.example","x.other.example"]}`,
+		"203.0.113.151:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain with a list answered %d: %s", w.Code, w.Body.String())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.Known.Established() || got.Known.Named != 2 {
+		t.Errorf("the list's reading came back as %+v", got.Known)
+	}
+	if got.Known.Foreign != 1 {
+		t.Errorf("a name under another domain was not counted as one: %+v", got.Known)
+	}
+	if got.Distinct != 2 {
+		t.Errorf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+
+	// And the name nothing published is in the report, labelled as the
+	// caller's own. That row is the whole reason to send a list.
+	var alone bool
+	for _, n := range got.Names {
+		if n.Name == "bitrix.proven.example" {
+			alone = len(n.Sources) == 1 && n.Sources[0] == inventory.FromOperator
+		}
+	}
+	if !alone {
+		t.Errorf("a name only the caller had is not labelled as theirs: %+v", got.Names)
+	}
+}
+
+// A list longer than an estate is refused, and the message says the rule.
+//
+// The bound is the line between a list somebody has and a dictionary being
+// tried against a resolver, so it is where this mode could quietly become the
+// thing it refuses to be (N7). It is refused whole rather than cut to size,
+// because a list silently shortened is an inventory that is quietly
+// incomplete (R4), and the message names no host that was sent (I6).
+func TestAListLongerThanAnEstateIsRefusedByTheService(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
+
+	names := make([]string, knownnames.MaxNames+1)
+	for i := range names {
+		names[i] = fmt.Sprintf("host%d.proven.example", i)
+	}
+	body, err := json.Marshal(map[string]any{"target": "proven.example", "names": names})
+	if err != nil {
+		t.Fatalf("marshalling: %v", err)
+	}
+
+	w := postTo(t, s, "/api/v1/names/scan", string(body), "203.0.113.152:5000")
+	if got := errorCode(t, w); got != "list_too_long" {
+		t.Fatalf("a wordlist was answered %q: %s", got, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "host0.proven.example") {
+		t.Errorf("the refusal echoes what was sent: %s", w.Body.String())
+	}
+}
+
+// A check refuses a list rather than dropping it.
+//
+// The same rule as an address range: a field accepted and ignored is a caller
+// believing something happened. A check measures one host and has nothing to
+// do with a list of them.
+func TestACheckRefusesAListOfNames(t *testing.T) {
+	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+
+	for _, path := range []string{"/api/v1/tls/scan", "/api/v1/web/scan", "/api/v1/mail/scan", "/api/v1/dns/scan"} {
+		body := `{"target":"example.test","names":["www.example.test"]}`
+		if got := errorCode(t, postTo(t, s, path, body, "203.0.113.153:5000")); got != "bad_request" {
+			t.Errorf("%s answered a list of names with %q", path, got)
+		}
+	}
+}
+
+// A list nobody gave is not an empty list, and a list one caller gave is never
+// kept for the next one.
+//
+// Two halves of the same property. The first is the difference every source
+// here is held to: a report where no list was handed over and a report where
+// one was handed over and added nothing are different reports, and only Asked
+// says which happened (R4).
+//
+// The second is what the first would cost if it were wrong. A kept copy exists
+// so that the same question asked twice is answered once, and a list makes it a
+// different question — the caller's own names are in the answer. Filing that
+// under the domain would hand one caller's list to the next caller who asked
+// about the same domain, which is somebody else's estate arriving in a report
+// they did not ask for.
+func TestAListIsNeverKeptForTheNextCaller(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+	s.KeepInventoryFor(time.Hour)
+
+	read := func(body, from string) inventory.Inventory {
+		t.Helper()
+		w := postTo(t, s, "/api/v1/names/scan", body, from)
+		if w.Code != 200 {
+			t.Fatalf("the inventory answered %d: %s", w.Code, w.Body.String())
+		}
+		var got inventory.Inventory
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("the inventory did not decode: %v", err)
+		}
+		return got
+	}
+
+	// One caller hands over a list.
+	with := read(`{"target":"proven.example","names":["bitrix.proven.example"]}`, "203.0.113.160:5000")
+	if !with.Known.Asked || with.Known.Named != 1 {
+		t.Fatalf("the list came back as %+v", with.Known)
+	}
+
+	// The next asks the same domain and hands over nothing.
+	without := read(`{"target":"proven.example"}`, "203.0.113.161:5000")
+	if without.Known.Asked {
+		t.Errorf("a caller who gave no list is told one was given: %+v", without.Known)
+	}
+	for _, n := range without.Names {
+		if n.Name == "bitrix.proven.example" {
+			t.Errorf("one caller's own list reached another caller: %+v", without.Names)
+		}
 	}
 }

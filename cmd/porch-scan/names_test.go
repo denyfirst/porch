@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
@@ -918,5 +921,107 @@ func TestTheReportSaysWhatTheZoneHandedOver(t *testing.T) {
 	}))
 	if !strings.Contains(buf.String(), "The zone     not asked: -read-zone was not given") {
 		t.Errorf("the report does not say the zone went unasked:\n%s", buf.String())
+	}
+}
+
+// The report says what the operator's own list contributed, and what nothing
+// else named.
+//
+// The last of those is the reason to hand a list over at all. Every other
+// source answers "what is out there"; this one answers "what have I got that
+// is not out there", and a host in the list that no log, register, zone or
+// record carried is the line somebody reading their own estate came for.
+func TestTheReportSaysWhatTheListContributed(t *testing.T) {
+	var buf bytes.Buffer
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test", LastSeen: day(2026, 9, 1)}}},
+		Known: knownnames.Found{Asked: true, Names: []string{
+			"www.example.test",    // one the logs had as well
+			"bitrix.example.test", // and one nothing published
+		}},
+	}))
+	out := buf.String()
+
+	for _, want := range []string{
+		"Your list    2 given, 1 of them named by nothing else",
+		"bitrix.example.test",
+		"certificate, operator",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q:\n%s", want, out)
+		}
+	}
+
+	// A list where everything was found anyway says that, rather than saying
+	// nothing: it is the answer "the outside can see all of this", which is
+	// worth as much as the other one.
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Logs: ctsearch.Estate{Asked: true, Domain: "example.test", Certificates: 1,
+			Names: []ctsearch.Name{{Name: "www.example.test"}}},
+		Known: knownnames.Found{Asked: true, Names: []string{"www.example.test"}},
+	}))
+	if !strings.Contains(buf.String(), "every one of them named by something else as well") {
+		t.Errorf("a list nothing added to is not reported plainly:\n%s", buf.String())
+	}
+
+	// And a report nobody gave a list to says so, rather than leaving the line
+	// out or reporting an empty one (R4).
+	buf.Reset()
+	printNames(&buf, fromLogs(ctsearch.Estate{
+		Asked: true, Domain: "example.test", Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.example.test"}},
+	}))
+	if !strings.Contains(buf.String(), "Your list    not given: -names or -names-file was not used") {
+		t.Errorf("the report does not say no list was given:\n%s", buf.String())
+	}
+}
+
+// The names an operator hands over arrive from the flag and from the file, and
+// a list longer than an estate is refused before anything is asked.
+//
+// Refused here rather than mid-run for the reason the bound exists at all: a
+// wordlist is not an estate (N7), and finding that out after four hundred
+// lookups have gone to somebody's resolver is finding out too late.
+func TestTheNamesGivenComeFromTheFlagAndTheFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts.txt")
+	if err := os.WriteFile(path, []byte("# ours\nvpn.example.test  the vpn\n\napi.example.test\n"), 0o600); err != nil {
+		t.Fatalf("writing the file: %v", err)
+	}
+
+	got, err := namesGiven("bitrix.example.test, www.example.test", path)
+	if err != nil {
+		t.Fatalf("namesGiven: %v", err)
+	}
+	want := []string{"bitrix.example.test", "www.example.test", "vpn.example.test", "api.example.test"}
+	if len(got) != len(want) {
+		t.Fatalf("the names given came back as %v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("name %d is %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	// Neither on its own is required.
+	if got, err := namesGiven("", ""); err != nil || len(got) != 0 {
+		t.Errorf("no names given came back as %v, %v", got, err)
+	}
+
+	// And the two together are held to the bound, which is the line between a
+	// list and a dictionary.
+	var many strings.Builder
+	for i := 0; i < knownnames.MaxNames; i++ {
+		fmt.Fprintf(&many, "host%d.example.test\n", i)
+	}
+	full := filepath.Join(t.TempDir(), "full.txt")
+	if err := os.WriteFile(full, []byte(many.String()), 0o600); err != nil {
+		t.Fatalf("writing the file: %v", err)
+	}
+	if _, err := namesGiven("one.example.test", full); err == nil {
+		t.Error("a flag and a file that together exceed the bound were accepted")
+	} else if strings.Contains(err.Error(), "host0.example.test") {
+		t.Errorf("the refusal echoes what was sent: %v", err)
 	}
 }

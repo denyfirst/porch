@@ -245,6 +245,30 @@ func run() int {
 				"\tanswers; almost all of them refuse, which is correct and is reported\n"+
 				"\tas such. Use it on a zone that is yours")
 
+		// The names the operator already has, typed or filed.
+		//
+		// Every other source reads a list somebody else keeps — a
+		// transparency log, a register, a zone, an address. There is no DNS
+		// query that lists a domain's names, so a host with no publicly
+		// logged certificate, under a zone that will not transfer and is not
+		// signed, is in none of them however long they are read. It is not
+		// secret; it is unlisted. This is where its owner says it exists.
+		//
+		// Not a wordlist, and the bound is the difference: a list of an
+		// estate is in the hundreds, and past that it is a dictionary being
+		// tried against somebody's resolver (N7).
+		namesGivenFlag = flag.String("names", "",
+			"names you already have, comma separated. They are taken as given —\n"+
+				"\tnothing here invents a name — then resolved and reported beside\n"+
+				"\twhat the other sources found, so a host of yours that no public\n"+
+				"\tsource names is a row you can see")
+
+		namesFile = flag.String("names-file", "",
+			"a file of names you already have, one to a line. Blank lines and\n"+
+				"\tlines beginning with # are skipped, and anything after the first\n"+
+				"\tspace on a line is ignored, so an exported list with notes beside\n"+
+				"\tit needs no editing first")
+
 		readCertificates = flag.Bool("read-certificates", false,
 			"ask each name that answers for the certificate it presents, and keep\n"+
 				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
@@ -438,8 +462,18 @@ func run() int {
 			return 2
 		}
 
+		// Read before the run for the same reason: a file that is not there,
+		// or a list longer than an estate, is something to learn on pressing
+		// return rather than after the first source has been read.
+		given, err := namesGiven(*namesGivenFlag, *namesFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+
 		return runNames(ctx, targets, namesOptions{
 			Ranges:           walk,
+			Known:            given,
 			Timeout:          *timeout,
 			Monitor:          *monitor,
 			MonitorURL:       *monitorURL,

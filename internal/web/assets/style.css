@@ -308,6 +308,43 @@ h1 {
 
 .field:focus { border-color: var(--ink-faint); }
 
+/*
+  A field that takes a list rather than a value.
+
+  One to a line, in the same face the report prints names in, so that what
+  somebody pastes in looks like what comes back out. It resizes vertically and
+  not horizontally: a list of host names has no long lines, and a box somebody
+  can drag over the page beside it is a layout they have to put back.
+*/
+.field-lines {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/*
+  Choosing a file, without the control the browser draws for one.
+
+  The input itself is hidden and the label is the button, which is the only way
+  to have a file picker that looks like the rest of a page. Nothing is
+  uploaded: the file is read in the browser and its names go into the box
+  above, so this is a way of typing rather than a way of sending.
+*/
+.field-row-file {
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+}
+
+.button-file { cursor: pointer; }
+
+.field-row-file .field-note {
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
 .field::placeholder { color: var(--ink-faint); }
 
 /* The one action a page asks for, in the accent. White on the accent holds

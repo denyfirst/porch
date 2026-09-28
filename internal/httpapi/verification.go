@@ -65,7 +65,7 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	// Every guard a scan has, spending the proof allowance rather than the
 	// scan one: the Domains page asks once per domain, and a list of five
 	// used to leave nothing to scan with (audit 2026-09-18, D04).
-	t, ok := s.admit(w, r, parseVerifyTarget, s.proofs,
+	t, ok := s.admit(w, r, parseVerifyTarget, s.proofs, s.limits.MaxRequestBytes,
 		"Too many proof checks from this address. Try again shortly.")
 	if !ok {
 		return

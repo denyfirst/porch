@@ -5,12 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/passivedns"
@@ -65,7 +67,8 @@ import (
 // answer is kept for an interval and handed to everyone, so a visit causes no
 // request at all — see keptInventories.
 func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
-	t, ok := s.admit(w, r, parseNamesTarget, s.proofs, "Too many inventories from this address. Try again shortly.")
+	t, ok := s.admit(w, r, parseNamesTarget, s.proofs, s.limits.MaxInventoryBytes,
+		"Too many inventories from this address. Try again shortly.")
 	if !ok {
 		return
 	}
@@ -199,12 +202,32 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// A kept copy is for the question everybody asks. Ranges make it somebody
-	// else's question, so it is produced for them and kept for nobody.
-	produce := func() inventory.Inventory { return s.inventory(ctx, t.host, walk) }
+	// The names the caller says they already have.
+	//
+	// No gate of its own, unlike a range. A range cannot be proven and this
+	// can: every name in the list is held to the domain the caller has already
+	// been shown to control, so a list is a statement about an estate they own
+	// and the worst it can cause is this installation resolving their own
+	// hosts. Bounded and cleaned by the same package the command line uses,
+	// before one of them is looked up.
+	//
+	// Refused rather than silently dropped where nothing here could report it,
+	// because a field accepted and ignored is a caller believing something
+	// happened.
+	if len(t.names) > knownnames.MaxNames {
+		s.refuse(w, http.StatusBadRequest, "list_too_long",
+			"A list may name up to "+strconv.Itoa(knownnames.MaxNames)+" hosts. A longer one "+
+				"is a wordlist rather than an estate, and this mode does not try wordlists.")
+		return
+	}
+
+	// A kept copy is for the question everybody asks. Ranges and a list of
+	// somebody's own names both make it somebody else's question, so it is
+	// produced for them and kept for nobody.
+	produce := func() inventory.Inventory { return s.inventory(ctx, t.host, walk, t.names) }
 
 	var found inventory.Inventory
-	if len(walk) > 0 {
+	if len(walk) > 0 || len(t.names) > 0 {
 		found = produce()
 	} else {
 		found = s.kept.serve(t.host, produce)
@@ -224,7 +247,7 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 // Split out of the handler because it is also what a kept copy is made from,
 // and because the handler above it is a list of refusals: what is produced and
 // what is allowed are two different subjects and were one function.
-func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Prefix) inventory.Inventory {
+func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Prefix, given []string) inventory.Inventory {
 	// Two registers and the domain's own records.
 	//
 	// The records cost three lookups to the resolver this installation already
@@ -274,12 +297,21 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 		answered = s.reverse.Under(ctx, domain, walk)
 	}
 
+	// And the list the caller already had, which no source can produce for
+	// them. It is held to the domain they proved, so the worst it can name is
+	// their own estate.
+	var already knownnames.Found
+	if len(given) > 0 {
+		already = knownnames.From(domain, given)
+	}
+
 	sources := inventory.Sources{
 		Logs:    estate,
 		Records: records,
 		Passive: observed,
 		Reverse: answered,
 		Zone:    handed,
+		Known:   already,
 	}
 	found := inventory.Merge(domain, sources)
 

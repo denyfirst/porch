@@ -10,6 +10,7 @@ import (
 	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
@@ -746,4 +747,76 @@ func TestEverySourceIsAReadingAndEveryReadingIsListed(t *testing.T) {
 			t.Errorf("a failed %s reads as %v", name, failures)
 		}
 	}
+}
+
+// A name whoever asked already had is a source of its own, and says so.
+//
+// The point of the source is the row a reader goes looking for: a host they
+// listed that nothing public named. So it is labelled like every other source
+// rather than folded into the list, and it is labelled last, because the
+// column leads with evidence and this is a claim — the operator saying the
+// host is theirs is not the same kind of statement as a certificate log
+// holding a certificate for it.
+func TestAListSomebodyGaveIsItsOwnSource(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{
+			{Name: "www.example.test"},
+			// One the list does not carry, so that a source crediting itself
+			// with every name in the inventory rather than with its own is a
+			// failure here. Without it every count in this test is the same
+			// number and any of them could be wrong unseen.
+			{Name: "shop.example.test"},
+		}},
+		Known: knownnames.Found{Asked: true, Names: []string{
+			"www.example.test",    // one the logs had too
+			"bitrix.example.test", // and one nothing public holds
+		}},
+	})
+
+	if got.Distinct != 3 {
+		t.Fatalf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+	if got.Known.Named != 2 {
+		t.Errorf("the list is credited with %d names, want 2", got.Known.Named)
+	}
+	if got.Logs.Named != 2 {
+		t.Errorf("the logs are credited with %d names, want 2", got.Logs.Named)
+	}
+
+	by := map[string][]Source{}
+	for _, n := range got.Names {
+		by[n.Name] = n.Sources
+	}
+	if want := []Source{FromCertificate, FromOperator}; !sameSources(by["www.example.test"], want) {
+		t.Errorf("a name both had is named by %v, want %v", by["www.example.test"], want)
+	}
+	if want := []Source{FromOperator}; !sameSources(by["bitrix.example.test"], want) {
+		t.Errorf("a name only the operator had is named by %v, want %v", by["bitrix.example.test"], want)
+	}
+
+	// The claim is last in the column. A reader running an eye down it meets
+	// the evidence first, and "operator" alone is the row worth stopping at.
+	if order[len(order)-1] != FromOperator {
+		t.Errorf("the sources are listed %v", order)
+	}
+
+	// And a list nobody gave is not an empty list.
+	none := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{{Name: "www.example.test"}}},
+	})
+	if none.Known.Asked || none.Known.Reason != "" {
+		t.Errorf("a list nobody gave is reported as %+v", none.Known)
+	}
+}
+
+func sameSources(got, want []Source) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

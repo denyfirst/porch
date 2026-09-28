@@ -42,6 +42,7 @@ import (
 	"github.com/denyfirst/porch/internal/certnames"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/dnsnames"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
@@ -84,6 +85,15 @@ const (
 	// FromZone: the zone itself handed the name over. The only source that is
 	// complete when it works, and the one that usually refuses.
 	FromZone Source = "zone"
+
+	// FromOperator: whoever asked already had the name and handed it over.
+	//
+	// The only source that measured nothing, and the only one that can carry
+	// a host no register, log or zone will ever produce. DNS answers
+	// questions and does not list, so a host with no public certificate,
+	// under a zone that will not transfer and is not signed, exists in
+	// exactly one place a reader can get at: its own operator's records.
+	FromOperator Source = "operator"
 )
 
 // order is the order sources are listed in beside one name.
@@ -91,7 +101,7 @@ const (
 // Fixed rather than the order they were read, so that two runs of the same
 // inventory read the same and a difference between two reports is a difference
 // in the estate.
-var order = []Source{FromZone, FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR}
+var order = []Source{FromZone, FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR, FromOperator}
 
 // Name is one host, everything that named it, and the window a log covered it
 // in.
@@ -181,6 +191,13 @@ type Inventory struct {
 	Reverse Reading `json:"reverse"`
 	Zone    Reading `json:"zone"`
 
+	// Known is the list whoever asked already had, where they gave one. It
+	// establishes nothing about the estate on its own — it is a claim, not a
+	// measurement — and it is a reading like the rest because the question a
+	// reader has of it is the same: was it given, how much of the list is it
+	// answerable for, and what did it carry that belongs elsewhere.
+	Known Reading `json:"known"`
+
 	// ProducedAt is when this inventory was made, where whoever made it kept a
 	// copy rather than producing a new one for each reader.
 	//
@@ -226,7 +243,7 @@ func (i Inventory) Established() bool {
 // TestEverySourceIsAReadingAndEveryReadingIsListed rather than going quiet in
 // three places.
 func (i Inventory) Readings() []Reading {
-	return []Reading{i.Zone, i.Logs, i.Records, i.Passive, i.Presented, i.Reverse}
+	return []Reading{i.Known, i.Zone, i.Logs, i.Records, i.Passive, i.Presented, i.Reverse}
 }
 
 // Failures are the reasons the sources that could not be read gave, in the
@@ -275,6 +292,14 @@ type Sources struct {
 	// complete when it works: no sample, no inference, every name from the
 	// server authoritative for it — and almost always a refusal.
 	Zone zonenames.Found
+
+	// Known is the list whoever asked already had. The only source that asked
+	// nothing, and the answer to what none of the others can do: DNS lists
+	// nothing, so a host with no public certificate, under a zone that refuses
+	// to transfer and is not signed, is reachable only through whoever runs
+	// it. It is a claim rather than a measurement, so it is labelled as one on
+	// every name it carries.
+	Known knownnames.Found
 }
 
 // Merge builds one inventory out of what each source said.
@@ -286,6 +311,7 @@ func Merge(domain string, from Sources) Inventory {
 	e, d, p, h := from.Logs, from.Records, from.Passive, from.Presented
 	v := from.Reverse
 	z := from.Zone
+	k := from.Known
 
 	out := Inventory{
 		Domain:       fold(domain),
@@ -297,6 +323,7 @@ func Merge(domain string, from Sources) Inventory {
 		Presented:    Reading{Asked: h.Asked, Foreign: h.Foreign, Reason: h.Reason},
 		Reverse:      Reading{Asked: v.Asked, Foreign: v.Foreign, Reason: v.Reason},
 		Zone:         Reading{Asked: z.Asked, Foreign: z.Foreign, Reason: z.Reason},
+		Known:        Reading{Asked: k.Asked, Foreign: k.Foreign, Reason: k.Reason},
 	}
 	if out.Domain == "" {
 		out.Domain = fold(e.Domain)
@@ -334,11 +361,18 @@ func Merge(domain string, from Sources) Inventory {
 		}
 	}
 
+	// The records are the one source whose labels are not written here: a
+	// record type the reader learns about and this package does not carries
+	// the reader's own spelling through rather than being dropped. So which
+	// hosts they named is remembered as they are read, instead of being
+	// worked out afterwards from labels this package may not recognise.
+	fromRecords := map[string]bool{}
 	for _, n := range d.Names {
 		host := at(n.Name)
 		if host == nil {
 			continue
 		}
+		fromRecords[host.Name] = true
 		for _, s := range n.Sources {
 			host.Sources = append(host.Sources, sourceOf(s))
 		}
@@ -376,6 +410,19 @@ func Merge(domain string, from Sources) Inventory {
 		host.Sources = append(host.Sources, FromPTR)
 	}
 
+	// The names whoever asked already had. They go in like any other source
+	// and are labelled like any other source: a reader has to be able to see
+	// that a host is in this list because it was handed over rather than
+	// because anything found it, and — more usefully — that a host they handed
+	// over is one nothing else named.
+	for _, n := range k.Names {
+		host := at(n)
+		if host == nil {
+			continue
+		}
+		host.Sources = append(host.Sources, FromOperator)
+	}
+
 	// A wildcard a host presented is a wildcard: nothing resolves it, and
 	// putting it in the list of names to ask about would produce a failure that
 	// reads as a fault in the estate.
@@ -397,28 +444,34 @@ func Merge(domain string, from Sources) Inventory {
 		// One name an MX and a sender policy both named is one name the
 		// records are answerable for, so each source group is counted once
 		// per host rather than once per mention.
-		fromLog := names(host, FromCertificate)
-		fromPassive := names(host, FromPassive)
-		fromHost := names(host, FromHost)
-		fromPTR := names(host, FromPTR)
-		fromZone := names(host, FromZone)
-		if fromLog > 0 {
+		// Each source is counted by asking for itself, including the records.
+		//
+		// The records used to be counted as whatever was left over — every
+		// other source subtracted from the length of the list — which was
+		// correct only for as long as nobody added a source. It survived four
+		// of them by luck and each new one had to remember to join the
+		// subtraction, so the sixth was a line away from crediting the domain's
+		// own records with names a zone transfer handed over.
+		if names(host, FromCertificate) > 0 {
 			out.Logs.Named++
 		}
-		if fromPassive > 0 {
+		if fromRecords[host.Name] {
+			out.Records.Named++
+		}
+		if names(host, FromPassive) > 0 {
 			out.Passive.Named++
 		}
-		if fromHost > 0 {
+		if names(host, FromHost) > 0 {
 			out.Presented.Named++
 		}
-		if fromPTR > 0 {
+		if names(host, FromPTR) > 0 {
 			out.Reverse.Named++
 		}
-		if fromZone > 0 {
+		if names(host, FromZone) > 0 {
 			out.Zone.Named++
 		}
-		if fromLog+fromPassive+fromHost+fromPTR+fromZone < len(host.Sources) {
-			out.Records.Named++
+		if names(host, FromOperator) > 0 {
+			out.Known.Named++
 		}
 		out.Names = append(out.Names, *host)
 	}

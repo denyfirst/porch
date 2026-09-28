@@ -2092,6 +2092,71 @@ and requires a line for each of them, and
 `TestThePageReadsTheNameFieldsTheAPISends` does the same for the fields of one
 name.
 
+**And a seventh source, which reads nothing: the list the operator already
+has.** It is here because of a property of the DNS that the six above are all
+working around. DNS answers questions and does not list — there is no query for
+*every name under this domain* — which is why every source here is a register,
+a log, a zone or an address rather than the DNS itself: each of them is
+somewhere a list is kept. A host with no publicly logged certificate, under a
+zone that refuses to transfer and is not signed, with no register account
+configured, is in none of them however long they are read. It is not secret;
+anybody who knows the name can look it up. Knowing it is the whole problem, and
+the one place it certainly exists is the estate's own operator.
+
+So they can hand it over: `-names`, `-names-file`, and on the page a box and a
+`.txt` (`TestTheListIsTakenAsGivenAndHeldToTheDomain`,
+`TestAFileIsOneNameToALineWithRoomForNotes`). The file is read in the browser
+and nothing is uploaded — what leaves the page is the names, in the same
+request as the domain, which is what typing them does. Everything this mode
+does to a name it found it does to a name it was given: resolves it, says what
+it is doing, and labels where it came from. The label is last in the column
+(`TestAListSomebodyGaveIsItsOwnSource`), because the column leads with evidence
+and this is a claim — an operator saying a host is theirs is not the same kind
+of statement as a log holding a certificate for it.
+
+The row it exists for is the one that reads *named by nothing else*. A host in
+the list that no log, register, zone or record carried is a host the outside
+cannot see; one that does not resolve is one their own records have let go of.
+
+**What keeps it from being a wordlist is the bound, and that is the reason the
+bound exists.** A dictionary tried against DNS — mail, dev, staging, old —
+invents names, and N7 refuses that: the report would then be about the wordlist
+as much as about the estate, and a host whose name was not in it would be
+missing with nothing saying so. A list of an estate is in the tens or the
+hundreds. `knownnames.MaxNames` is a thousand, and a longer one is refused
+whole rather than cut short, because a list silently shortened is an inventory
+that is quietly incomplete (R4, `TestAListLongerThanAnEstateIsRefused`,
+`TestAListLongerThanAnEstateIsRefusedByTheService`). The message says the rule
+and names nothing that was sent (I6).
+
+**The service takes one behind the ordinary proof, and no more than that**
+(`TestAListOfNamesIsReadForAProvenDomainAndNoOther`). An address range is
+refused to everybody but the operator because nothing can prove a range (A30);
+a name can be proven, because every name in the list is held to the domain the
+caller has already been shown to control. The worst a list can cause is this
+installation resolving hosts under an estate that is the caller's. A check
+refuses one rather than dropping it (`TestACheckRefusesAListOfNames`), for the
+same reason a check refuses a range: a field accepted and ignored is a caller
+believing something happened.
+
+**The endpoint's body bound is the arithmetic of the list bound, not a number
+beside it.** `DefaultMaxRequestBytes` is four kilobytes because a body was one
+JSON field, and a list of a thousand names is not. Two bounds on one list that
+can disagree produce the worst possible error — a list inside the documented
+bound refused by an undocumented one, telling an operator their estate is too
+large when it is not — so `DefaultMaxInventoryBytes` is computed from
+`knownnames.MaxNames` rather than chosen next to it.
+
+**A source is counted where it is read, not worked out from labels
+afterwards.** The records used to be credited with whatever was left over —
+every other source subtracted from the length of a name's provenance — which
+was correct only for as long as nobody added a source. It survived four of
+them because each remembered to join the subtraction; the seventh would have
+credited the domain's own records with names an operator typed. Each source
+now asks for itself, and the records, whose labels come from their reader
+rather than from this package, are remembered as they are read
+(`TestARecordSourceWithNoShortLabelIsStillCarried`).
+
 **The console offers the inventory as a door rather than as a box, and the
 column that carries a rule set carries a word instead.** It was reachable only
 from its own page until 2026-09-28, which meant somebody had to know it existed
@@ -2163,6 +2228,10 @@ loudly wrong.
 `internal/dnsclient.Client.Transfer`, `internal/dnsclient.transferNames`,
 `internal/dnsclient.readTransferMessage`, `internal/httpapi.Server.ReadZoneTransfers`, `internal/httpapi.zoneReader`,
 `cmd/porch-scan.saysZone`,
+`internal/knownnames`, `internal/knownnames.From`, `internal/knownnames.ReadFile`,
+`internal/knownnames.MaxNames`, `internal/inventory.FromOperator`,
+`cmd/porch-scan.namesGiven`, `cmd/porch-scan.saysKnown`, `cmd/porch-scan.onlyGiven`,
+`internal/httpapi.DefaultMaxInventoryBytes`,
 `internal/inventory.Inventory.Readings`, `internal/inventory.Inventory.Failures`,
 `internal/web.consoleChecks`, `internal/web.consoleCheck`, `internal/policy.Informational`,
 `cmd/porch-scan.shortInventory`,
@@ -2242,7 +2311,20 @@ loudly wrong.
 `TestThePageDrawsALineForEverySourceTheInventorySends`,
 `TestThePageReadsTheNameFieldsTheAPISends`,
 `TestTheConsoleOffersTheInventoryAsADoorNotABox`,
-`TestTheDemonstrationOffersTheInventoryAsADoor`
+`TestTheDemonstrationOffersTheInventoryAsADoor`,
+`TestTheListIsTakenAsGivenAndHeldToTheDomain`,
+`TestNoListIsNotAnEmptyList`,
+`TestAListLongerThanAnEstateIsRefused`,
+`TestAFileIsOneNameToALineWithRoomForNotes`,
+`TestAFileThatIsNotAListIsRefused`,
+`TestAListSomebodyGaveIsItsOwnSource`,
+`TestAListOfNamesIsReadForAProvenDomainAndNoOther`,
+`TestAListLongerThanAnEstateIsRefusedByTheService`,
+`TestAListIsNeverKeptForTheNextCaller`,
+`TestACheckRefusesAListOfNames`,
+`TestTheReportSaysWhatTheListContributed`,
+`TestTheNamesGivenComeFromTheFlagAndTheFile`,
+`TestEveryFieldThePageOffersIsSent`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
 

@@ -16,6 +16,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
+	"github.com/denyfirst/porch/internal/knownnames"
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
@@ -87,6 +88,16 @@ type namesOptions struct {
 	// Off unless the operator says so: it is the one part of this mode that
 	// opens a connection to the estate on purpose.
 	ReadCertificates bool
+
+	// Known are names the operator already has, taken as given.
+	//
+	// The one source that asks nothing and the answer to what none of the
+	// others can do: DNS lists nothing, so a host with no public certificate,
+	// under a zone that refuses to transfer and is not signed, exists for a
+	// reader only because whoever runs it says it does. Bounded, because a
+	// list of an estate and a dictionary being tried against a resolver are
+	// different instruments (N7).
+	Known []string
 
 	// JSON writes the inventory as it stands rather than as a report.
 	JSON bool
@@ -162,6 +173,15 @@ func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 		// be a second place for the two to disagree.
 		addresses := &ptrnames.Reader{Resolver: client, Timeout: timeout}
 		sources.Reverse = addresses.Under(ctx, domain, opt.Ranges)
+
+		// And the names the operator handed over, which is the only way a host
+		// nothing published can be in this report at all. Taken as given and
+		// then treated like any other name: resolved, asked what it is doing,
+		// and labelled with where it came from — so the row that matters,
+		// a host they listed and nothing else named, is readable at a glance.
+		if len(opt.Known) > 0 {
+			sources.Known = knownnames.From(domain, opt.Known)
+		}
 		if passive != nil {
 			sources.Passive = passive.Under(ctx, domain)
 		}
@@ -274,6 +294,7 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	fmt.Fprintf(w, "    Passive DNS  %s\n", saysPassive(inv))
 	fmt.Fprintf(w, "    The hosts    %s\n", saysPresented(inv))
 	fmt.Fprintf(w, "    Reverse DNS  %s\n", saysReverse(inv))
+	fmt.Fprintf(w, "    Your list    %s\n", saysKnown(inv))
 
 	if inv.Wildcards > 0 {
 		fmt.Fprintf(w, "    Wildcards    %d, each covering hosts it does not name\n", inv.Wildcards)
@@ -288,6 +309,43 @@ func printNames(w io.Writer, inv inventory.Inventory) {
 	printNamesNow(w, inv)
 	printWildcards(w, inv)
 	printNamesLimits(w, inv, inv.Probed)
+}
+
+// saysKnown is what the operator's own list contributed, in one line.
+//
+// It carries the number nobody else can give them: how many of the names they
+// handed over nothing else found. That is the whole reason to hand a list
+// over — a host in it that no log, register, zone or record named is a host
+// the outside cannot see, and it is the row somebody reading their own estate
+// came here for.
+func saysKnown(inv inventory.Inventory) string {
+	switch r := inv.Known; {
+	case !r.Asked:
+		return "not given: -names or -names-file was not used"
+	case r.Reason != "":
+		return "Not established: " + r.Reason
+	case r.Named == 0:
+		return "named none of them"
+	default:
+		line := fmt.Sprintf("%d given", r.Named)
+		if alone := onlyGiven(inv); alone > 0 {
+			line += fmt.Sprintf(", %d of them named by nothing else", alone)
+		} else {
+			line += ", every one of them named by something else as well"
+		}
+		return line
+	}
+}
+
+// onlyGiven counts the hosts nothing but the list itself carried.
+func onlyGiven(inv inventory.Inventory) int {
+	alone := 0
+	for _, n := range inv.Names {
+		if len(n.Sources) == 1 && n.Sources[0] == inventory.FromOperator {
+			alone++
+		}
+	}
+	return alone
 }
 
 // saysZone is what the zone handed over, in one line.
@@ -877,6 +935,44 @@ func printNamesFound(w io.Writer, inv inventory.Inventory) {
 // asked, because the refusal is the point: a range too wide to read is refused
 // when the flag is read rather than after tens of thousands of questions have
 // gone to somebody's resolver. Empty names none, which is the ordinary case.
+// namesGiven gathers the names the operator handed over, from the flag and
+// from the file, in that order.
+//
+// Two ways in because an estate arrives two ways. A handful of hosts somebody
+// remembers is faster typed than filed; a list exported out of an inventory or
+// a configuration repository is a file, and asking somebody to paste four
+// hundred lines onto a command line is asking them not to bother.
+//
+// Neither invents a name. Both are refused here, before the run, rather than
+// part way through it: a list too long for an estate is a wordlist, and
+// finding that out after four hundred lookups have gone to somebody's resolver
+// is finding out too late (N7).
+func namesGiven(list, path string) ([]string, error) {
+	var out []string
+
+	for _, raw := range strings.FieldsFunc(list, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	}) {
+		if raw = strings.TrimSpace(raw); raw != "" {
+			out = append(out, raw)
+		}
+	}
+
+	if path != "" {
+		fromFile, err := knownnames.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("-names-file: %w", err)
+		}
+		out = append(out, fromFile...)
+	}
+
+	if len(out) > knownnames.MaxNames {
+		return nil, fmt.Errorf("a list may name up to %d hosts; a longer one is a wordlist "+
+			"rather than an estate, and this mode does not try wordlists", knownnames.MaxNames)
+	}
+	return out, nil
+}
+
 func rangesNamed(list string) ([]netip.Prefix, error) {
 	list = strings.TrimSpace(list)
 	if list == "" {

@@ -124,6 +124,120 @@ function rangesAsked() {
   return ranges.length ? { ranges: ranges } : null;
 }
 
+// MAX_KNOWN is how many names a list may carry, and it is the service's bound
+// said again here so the page can refuse before the request rather than after.
+//
+// internal/knownnames.MaxNames is the one that decides. This is the same
+// number for the sake of the message: a list refused by the service is refused
+// with a sentence in place of a report, and a list refused here is refused
+// beside the field somebody typed it into.
+const MAX_KNOWN = 1000;
+
+// knownAsked reads the names somebody already has, typed or loaded from a file.
+//
+// Split on lines and commas both, because a list arrives as either: a column
+// exported out of an inventory, or a row somebody pasted. Comments and the
+// notes after a name are dropped the same way the command line drops them, so
+// a file that is kept for people stays usable here.
+//
+// Sent only when something was typed. An empty list would be a caller asking
+// for nothing, and the service would have to decide what that meant.
+function knownAsked() {
+  const field = document.getElementById("known");
+  if (!field) return null;
+
+  const names = splitNames(field.value);
+  return names.length ? { names: names.slice(0, MAX_KNOWN) } : null;
+}
+
+// asked is everything the page adds to the domain, in one object.
+//
+// One function rather than two spread through the caller, because the two grew
+// apart once: the console sent ranges and the inventory page sent ranges, and
+// a third field would have been added to whichever of them somebody was
+// looking at.
+function asked() {
+  return Object.assign({}, rangesAsked(), knownAsked());
+}
+
+// A .txt of names is read in this browser and put in the box.
+//
+// Read here rather than uploaded, and that is the whole design of it. There is
+// no endpoint that takes a file, nothing is written to disk anywhere, and what
+// leaves the page is the names themselves in the same request as the domain —
+// the identical thing that happens when somebody types them. A file upload
+// would have been a second way in, with a second set of bounds, for a result
+// this already gives.
+//
+// The box is filled rather than the request being built from the file, so that
+// somebody can see what was loaded and take a line out before running it.
+const knownFile = document.getElementById("known-file");
+if (knownFile) {
+  // A megabyte, which is the bound the command line puts on the same file. A
+  // list of a thousand names is some tens of kilobytes, so anything near this
+  // is not an estate.
+  const MAX_FILE = 1 << 20;
+
+  knownFile.addEventListener("change", () => {
+    const note = document.getElementById("known-file-note");
+    const box = document.getElementById("known");
+    const file = knownFile.files && knownFile.files[0];
+    if (!file || !box) return;
+
+    const say = (text) => { if (note) note.textContent = text; };
+
+    if (file.size > MAX_FILE) {
+      say("That file is larger than a list of names: up to a megabyte is read.");
+      knownFile.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => say("That file could not be read.");
+    reader.onload = () => {
+      const names = splitNames(reader.result);
+      if (!names.length) {
+        say("No names were found in that file.");
+        return;
+      }
+
+      const already = splitNames(box.value);
+      const all = already.concat(names);
+      const kept = all.slice(0, MAX_KNOWN);
+      box.value = kept.join("\n");
+
+      say(all.length > kept.length
+        ? kept.length + " names loaded; the rest were left out, because a list is up to " +
+          MAX_KNOWN + " names"
+        : names.length + (names.length === 1 ? " name loaded" : " names loaded"));
+
+      // Cleared so that choosing the same file again fires this at all, and
+      // so the file's own name is not left sitting under the field.
+      knownFile.value = "";
+    };
+    reader.readAsText(file);
+  });
+}
+
+// splitNames turns whatever is in the box into a list of names.
+function splitNames(text) {
+  const out = [];
+  for (const line of String(text || "").split(/[\r\n]+/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    for (const part of trimmed.split(/[,\s]+/)) {
+      const name = part.trim();
+      // Anything after the first name on a line is a note, not a name. A
+      // comma-separated row is a row, though, so the split above keeps both
+      // shapes and this only stops at whitespace that follows a comma-free
+      // name.
+      if (name) out.push(name);
+      if (!trimmed.includes(",")) break;
+    }
+  }
+  return out;
+}
+
 // ── Small builders ──────────────────────────────────────────────────────
 
 function el(tag, className, text) {
@@ -1713,7 +1827,7 @@ if (form) form.addEventListener("submit", async event => {
   show(el("p", "working", CHECK.working));
 
   try {
-    show(CHECK.build(await check(target, CHECK, rangesAsked())));
+    show(CHECK.build(await check(target, CHECK, asked())));
   } catch (err) {
     const hint = err.status === 429
       ? "Wait a moment before trying again."
@@ -2627,7 +2741,7 @@ function daneSummary(facts) {
 // sources there are, and every one of them was short by the time the sixth
 // arrived.
 function readings(data) {
-  return [data.zone, data.logs, data.records, data.passive, data.presented, data.reverse]
+  return [data.zone, data.logs, data.records, data.passive, data.presented, data.reverse, data.known]
     .map((r) => r || {});
 }
 
@@ -2686,6 +2800,7 @@ function buildNames(data) {
   row("Passive DNS", saysPassive(data));
   row("The hosts", saysPresented(data));
   row("Reverse DNS", saysReverse(data));
+  row("Your list", saysKnown(data));
 
   if (data.wildcards) {
     row("Wildcards", data.wildcards + ", each covering hosts it does not name");
@@ -2859,6 +2974,28 @@ function saysPassive(data) {
   if (r.reason) return "Not established: " + r.reason;
   if (!r.named) return "named none of them: the register has observed no host under this domain";
   return "named " + r.named + " of them, observed by the register";
+}
+
+// saysKnown is what the list somebody already had contributed.
+//
+// It carries the number no source can give them: how many of the names they
+// handed over nothing else found. That is the reason to hand a list over at
+// all — a host in it that no log, register, zone or record named is a host the
+// outside cannot see, and it is the line somebody reading their own estate
+// came here for.
+function saysKnown(data) {
+  const r = data.known || {};
+
+  if (!r.asked) return "not given: no names were typed or loaded";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) return "named none of them";
+
+  const alone = (data.names || []).filter(
+    (n) => (n.sources || []).length === 1 && n.sources[0] === "operator"
+  ).length;
+  return alone
+    ? r.named + " given, " + alone + " of them named by nothing else"
+    : r.named + " given, every one of them named by something else as well";
 }
 
 // saysReverse is what the addresses in the ranges somebody named answered to.

@@ -227,6 +227,23 @@ deployment does not use, and a copy you run yourself reads each of them. Four
 lines saying *not asked*, with nothing saying where they can be asked, describe
 a tool with four things it cannot do.
 
+**The list you already have is a source, and it is the one that answers what
+none of the others can.** DNS has no query that lists a domain's names: it
+answers questions about names you already know. Every source above is therefore
+somewhere a list is kept — a log, a register, a zone, a range — and a host in
+none of them is invisible to all of them, however long they are read. It is not
+secret; knowing the name is the whole problem. So `-names`, `-names-file`, and
+a box on the page take the names the operator already holds, and each is then
+resolved and reported like any name that was found, labelled as theirs. A file
+chosen on the page is read in the browser: nothing is uploaded, and what leaves
+the page is the names, in the same request as the domain.
+
+This is not the wordlist N7 refuses, and the bound is where the difference is
+kept. A dictionary tried against DNS invents names; this takes names somebody
+states they have, up to a thousand of them, and refuses a longer list rather
+than cutting it short. Past that it would be a dictionary under another name,
+which is a different instrument with a different argument for existing.
+
 **It grades nothing and says so.** No document says which names an estate ought
 to have, so a verdict would be a threshold this project invented (R21).
 
