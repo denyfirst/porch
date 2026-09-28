@@ -14,13 +14,14 @@ import "testing"
 func TestTheDemonstrationShowsItsOwnEstateWhole(t *testing.T) {
 	s := New(offlineScanner(), Limits{}, nil)
 	for what, on := range map[string]bool{
-		"page":             s.web.ReadMarkup,
-		"security.txt":     s.web.ShowContacts,
-		"MTA-STS policy":   s.mail.ReadSTSPolicy,
-		"exchangers":       s.mail.ReadExchangers,
-		"DMARC mailboxes":  s.mail.ShowReportAddresses,
-		"the records":      s.mail.ShowRecords,
-		"the zone servers": s.dns.AskServers,
+		"page":                 s.web.ReadMarkup,
+		"security.txt":         s.web.ShowContacts,
+		"MTA-STS policy":       s.mail.ReadSTSPolicy,
+		"exchangers":           s.mail.ReadExchangers,
+		"DMARC mailboxes":      s.mail.ShowReportAddresses,
+		"the records":          s.mail.ShowRecords,
+		"the zone servers":     s.dns.AskServers,
+		"revocation addresses": s.scanner.ShowRevocationURLs,
 	} {
 		if !on {
 			t.Errorf("the demonstration withholds %s about its own estate", what)

@@ -22,13 +22,14 @@ import (
 func TestTheOperatorsOwnCopyShowsTheWholeReport(t *testing.T) {
 	view := func(s *Server) map[string]bool {
 		return map[string]bool{
-			"page":             s.web.ReadMarkup,
-			"security.txt":     s.web.ShowContacts,
-			"MTA-STS policy":   s.mail.ReadSTSPolicy,
-			"exchangers":       s.mail.ReadExchangers,
-			"DMARC mailboxes":  s.mail.ShowReportAddresses,
-			"the records":      s.mail.ShowRecords,
-			"the zone servers": s.dns.AskServers,
+			"page":                 s.web.ReadMarkup,
+			"security.txt":         s.web.ShowContacts,
+			"MTA-STS policy":       s.mail.ReadSTSPolicy,
+			"exchangers":           s.mail.ReadExchangers,
+			"DMARC mailboxes":      s.mail.ShowReportAddresses,
+			"the records":          s.mail.ShowRecords,
+			"the zone servers":     s.dns.AskServers,
+			"revocation addresses": s.scanner.ShowRevocationURLs,
 		}
 	}
 	want := func(t *testing.T, s *Server, on bool, who string) {

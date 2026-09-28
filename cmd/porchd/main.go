@@ -1120,14 +1120,12 @@ func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, 
 			scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
 		}
 
-		// And the report names the addresses a certificate gives for checking
-		// its own revocation, on the same condition. Those strings are written
-		// by whoever issued the certificate, which on a name nobody proved
-		// means they are written by the party being measured; for a domain
-		// somebody has shown is theirs, the authority is their own. What it
-		// buys is the sentence a count cannot write — when revocation could
-		// not be established, which address failed.
-		scanner.ShowRevocationURLs = true
+		// Whether the report names the addresses a certificate gives for
+		// checking its own revocation is not decided here. It is decided with
+		// every other part of a report that is shown whole only to the person
+		// it is about, in httpapi's operatorView, which covers a scope and
+		// more: the demonstration's own estate, and a copy only its operator
+		// can call.
 	}
 
 	// And the demonstration searches the logs too, with no scope: its hosts are

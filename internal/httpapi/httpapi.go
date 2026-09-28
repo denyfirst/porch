@@ -1398,8 +1398,9 @@ func (s *Server) operatorOnly() bool {
 //
 // It decides what a report carries rather than what may be scanned. The page
 // itself, the addresses a security.txt names, the MTA-STS policy, what each
-// exchanger answers on port 25, the mailboxes DMARC reports go to, and what
-// the zone's own servers say — the command line has always shown all of it to
+// exchanger answers on port 25, the mailboxes DMARC reports go to, what the
+// zone's own servers say, and the addresses a certificate gives for checking
+// its own revocation — the command line has always shown all of it to
 // the person who ran it, because the report goes to them. A copy of porchd
 // nobody else can reach, or one behind the operator's password, is that same
 // person with a browser in front of the command line, and it showed them less:
@@ -1417,6 +1418,14 @@ func (s *Server) operatorOnly() bool {
 // showed less than any copy somebody runs until 2026-09-28, which is a
 // demonstration misrepresenting the product downwards — the argument the
 // inventory settled there the day before.
+//
+// The revocation addresses joined the list the same day they were first named
+// at all. They arrived following the scope alone, set in porchd, which put the
+// one decision in two places again and left the demonstration and the
+// operator's own copy printing a count of their own certificate's addresses.
+// The argument for the count — a stranger's report does not repeat what the
+// measured party wrote — is the argument for the security.txt contacts, and it
+// ends at the same line.
 func (s *Server) operatorView() bool {
 	return demo.Enabled || s.scanner.Verify != nil || s.operatorOnly()
 }
@@ -1433,4 +1442,7 @@ func (s *Server) applyView() {
 	s.mail.ShowReportAddresses = view
 	s.mail.ShowRecords = view
 	s.dns.AskServers = view
+	if s.scanner != nil {
+		s.scanner.ShowRevocationURLs = view
+	}
 }
