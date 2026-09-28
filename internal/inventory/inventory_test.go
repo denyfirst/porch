@@ -12,6 +12,7 @@ import (
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 func day(y int, m time.Month, d int) time.Time {
@@ -627,5 +628,72 @@ func TestANameWithNoDateCarriesNoneInTheJSON(t *testing.T) {
 		if n.Name == "dated.example.test" && n.LastSeen.IsZero() {
 			t.Errorf("the dated name came back without its date")
 		}
+	}
+}
+
+// What a zone handed over is its own source, and it is the one that is
+// complete.
+//
+// Every other source is a sample. This one is the zone, so a name in it needs
+// no corroboration — and a name only it has is the ordinary case rather than
+// the surprising one, because most names in a zone were never certified,
+// never resolved from outside, and never had to appear in a record anybody
+// else reads.
+func TestWhatAZoneHandedOverIsItsOwnSource(t *testing.T) {
+	got := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Certificates: 1, Names: []ctsearch.Name{
+			{Name: "www.example.test"},
+		}},
+		Zone: zonenames.Found{Asked: true, Servers: 2, Refused: 1, From: "ns2.example.test",
+			Names: []string{"www.example.test", "bitrix.example.test", "staging.example.test"}},
+	})
+
+	want := map[string][]Source{
+		"www.example.test":     {FromZone, FromCertificate},
+		"bitrix.example.test":  {FromZone},
+		"staging.example.test": {FromZone},
+	}
+	if len(got.Names) != len(want) {
+		t.Fatalf("the merged inventory holds %+v", got.Names)
+	}
+	for _, n := range got.Names {
+		sources, known := want[n.Name]
+		if !known || len(n.Sources) != len(sources) {
+			t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+			continue
+		}
+		for i := range sources {
+			if n.Sources[i] != sources[i] {
+				t.Errorf("%s was named by %v, want %v", n.Name, n.Sources, sources)
+				break
+			}
+		}
+	}
+	if got.Zone.Named != 3 {
+		t.Errorf("the zone is credited with %d names, want 3", got.Zone.Named)
+	}
+
+	// The zone comes first in the column, because it is the source that needed
+	// no inference: a reader running an eye down it should meet the strongest
+	// evidence first.
+	if order[0] != FromZone {
+		t.Errorf("the sources are listed %v", order)
+	}
+
+	// A zone nobody asked for is not a zone that refused.
+	none := Merge("example.test", Sources{
+		Logs: ctsearch.Estate{Asked: true, Names: []ctsearch.Name{{Name: "www.example.test"}}},
+	})
+	if none.Zone.Asked || none.Zone.Reason != "" {
+		t.Errorf("a zone nobody asked for is reported as %+v", none.Zone)
+	}
+
+	// And a zone that refused established something: it was asked, and the
+	// answer was no.
+	refused := Merge("example.test", Sources{
+		Zone: zonenames.Found{Asked: true, Servers: 2, Refused: 2},
+	})
+	if !refused.Zone.Established() || refused.Zone.Named != 0 {
+		t.Errorf("a zone that refused came back as %+v", refused.Zone)
 	}
 }

@@ -75,6 +75,7 @@ import (
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
 	"github.com/denyfirst/porch/internal/webscan"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 // Defaults chosen to be comfortable by hand and unattractive in bulk.
@@ -246,6 +247,10 @@ type Server struct {
 	// installation keeps one. Nil produces a fresh inventory for every caller,
 	// which is what an operator running their own copy gets.
 	kept *keptInventories
+
+	// zone asks the domain's own servers to hand over the zone, where an
+	// operator asked for that. Nil is the ordinary state.
+	zone zoneReader
 
 	// reverse walks the address ranges a caller named, where that caller is
 	// the operator. Nil where this installation has no resolver.
@@ -1070,6 +1075,23 @@ func (s *Server) AskPassiveRegister(register passivedns.Register) {
 // internal/dnsnames.Reader is the one there is.
 type recordReader interface {
 	Under(ctx context.Context, domain string) dnsnames.Found
+}
+
+// zoneReader asks a zone for itself.
+// internal/zonenames.Reader is the one there is.
+type zoneReader interface {
+	Under(ctx context.Context, domain string) zonenames.Found
+}
+
+// ReadZoneTransfers tells this service to ask a domain's own name servers to
+// hand over the zone, and to keep the names in it.
+//
+// Off unless called. The DNS check asks whether a zone transfers to anybody and
+// deliberately reads none of it, because that zone belongs to whoever runs it;
+// reading one is for an estate the asker owns, which on a service means a
+// domain it has been shown control of.
+func (s *Server) ReadZoneTransfers(reader zoneReader) {
+	s.zone = reader
 }
 
 // reverseWalker reads the names the addresses in a range answer to.

@@ -674,7 +674,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 			"about a name somebody already knows. RFC 5936 does not call it a fault and neither does " +
 			"this: an operator may open transfers deliberately, and a zone whose names are not secret " +
 			"loses nothing by it. This check read the first reply's header and closed the connection, " +
-			"so the zone itself was not taken and nothing of its contents is reported here.")
+			"so the zone itself was not taken and nothing of its contents is reported here. To see " +
+			"what it hands over, read your own zone: porch-scan -check names -read-zone, which lists " +
+			"every name in it beside the names its certificates and records already publish.")
 	} else if len(unread) > 0 {
 		note("Whether the zone can be read whole was not established for " + strings.Join(unread, ", ") +
 			": the question did not complete. That is not a zone that refused one (R4).")

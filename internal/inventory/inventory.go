@@ -45,6 +45,7 @@ import (
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 // Source is what named a host.
@@ -79,6 +80,10 @@ const (
 	// FromPTR: an address in a range the operator named answers to it. The
 	// only source that starts from an address rather than from a name.
 	FromPTR Source = "PTR"
+
+	// FromZone: the zone itself handed the name over. The only source that is
+	// complete when it works, and the one that usually refuses.
+	FromZone Source = "zone"
 )
 
 // order is the order sources are listed in beside one name.
@@ -86,7 +91,7 @@ const (
 // Fixed rather than the order they were read, so that two runs of the same
 // inventory read the same and a difference between two reports is a difference
 // in the estate.
-var order = []Source{FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR}
+var order = []Source{FromZone, FromCertificate, FromMX, FromSPF, FromNS, FromPassive, FromHost, FromPTR}
 
 // Name is one host, everything that named it, and the window a log covered it
 // in.
@@ -172,8 +177,9 @@ type Inventory struct {
 	Presented Reading `json:"presented"`
 
 	// Reverse is what the addresses in the ranges the operator named answer
-	// to, where any were named.
+	// to, where any were named, and Zone is what the zone handed over.
 	Reverse Reading `json:"reverse"`
+	Zone    Reading `json:"zone"`
 
 	// ProducedAt is when this inventory was made, where whoever made it kept a
 	// copy rather than producing a new one for each reader.
@@ -199,7 +205,8 @@ type Inventory struct {
 // the most comfortable wrong answer this mode can give (R4).
 func (i Inventory) Established() bool {
 	return i.Logs.Established() || i.Records.Established() ||
-		i.Passive.Established() || i.Presented.Established() || i.Reverse.Established()
+		i.Passive.Established() || i.Presented.Established() ||
+		i.Reverse.Established() || i.Zone.Established()
 }
 
 // Sources are the answers to merge, one field per source.
@@ -231,6 +238,11 @@ type Sources struct {
 	// only one nothing can prove belongs to whoever asked — which is why no
 	// service offers it.
 	Reverse ptrnames.Found
+
+	// Zone is what the zone's own servers handed over. The only source that is
+	// complete when it works: no sample, no inference, every name from the
+	// server authoritative for it — and almost always a refusal.
+	Zone zonenames.Found
 }
 
 // Merge builds one inventory out of what each source said.
@@ -241,16 +253,18 @@ type Sources struct {
 func Merge(domain string, from Sources) Inventory {
 	e, d, p, h := from.Logs, from.Records, from.Passive, from.Presented
 	v := from.Reverse
+	z := from.Zone
 
 	out := Inventory{
 		Domain:       fold(domain),
 		Certificates: e.Certificates,
-		Truncated:    e.Truncated || p.Truncated,
+		Truncated:    e.Truncated || p.Truncated || z.Truncated,
 		Logs:         Reading{Asked: e.Asked, Foreign: e.Foreign, Reason: e.Reason},
 		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason},
 		Passive:      Reading{Asked: p.Asked, Foreign: p.Foreign, Reason: p.Reason},
 		Presented:    Reading{Asked: h.Asked, Foreign: h.Foreign, Reason: h.Reason},
 		Reverse:      Reading{Asked: v.Asked, Foreign: v.Foreign, Reason: v.Reason},
+		Zone:         Reading{Asked: z.Asked, Foreign: z.Foreign, Reason: z.Reason},
 	}
 	if out.Domain == "" {
 		out.Domain = fold(e.Domain)
@@ -314,6 +328,14 @@ func Merge(domain string, from Sources) Inventory {
 		host.Sources = append(host.Sources, FromHost)
 	}
 
+	for _, n := range z.Names {
+		host := at(n)
+		if host == nil {
+			continue
+		}
+		host.Sources = append(host.Sources, FromZone)
+	}
+
 	for _, n := range v.Names {
 		host := at(n)
 		if host == nil {
@@ -347,6 +369,7 @@ func Merge(domain string, from Sources) Inventory {
 		fromPassive := names(host, FromPassive)
 		fromHost := names(host, FromHost)
 		fromPTR := names(host, FromPTR)
+		fromZone := names(host, FromZone)
 		if fromLog > 0 {
 			out.Logs.Named++
 		}
@@ -359,7 +382,10 @@ func Merge(domain string, from Sources) Inventory {
 		if fromPTR > 0 {
 			out.Reverse.Named++
 		}
-		if fromLog+fromPassive+fromHost+fromPTR < len(host.Sources) {
+		if fromZone > 0 {
+			out.Zone.Named++
+		}
+		if fromLog+fromPassive+fromHost+fromPTR+fromZone < len(host.Sources) {
 			out.Records.Named++
 		}
 		out.Names = append(out.Names, *host)

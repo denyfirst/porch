@@ -94,9 +94,17 @@ const (
 	TypeRRSIG = 46
 
 	// TypeAXFR asks a server for the whole zone (RFC 5936). It is not a record
-	// type and no answer to it is ever kept here: the question is whether a
-	// server will begin the transfer for anybody who asks, and the first reply
-	// settles that.
+	// type, and two callers here ask it for two different reasons.
+	//
+	// AskTransfer asks whether a server will begin the transfer for anybody who
+	// asks, and the first reply settles that: it reads the header and closes
+	// the connection, because the records are the scanned party's own zone and
+	// a scanner holding one would be the thing it is warning them about.
+	//
+	// Transfer reads the zone, and is asked only about an estate the person
+	// asking owns — a domain a service has been shown control of, or one an
+	// operator named on their own machine with the flag that says so. Reading
+	// your own zone is not holding somebody else's.
 	TypeAXFR = 252
 
 	classIN = 1

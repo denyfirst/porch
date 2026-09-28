@@ -932,3 +932,69 @@ func parseGlue(raw []byte, offset, count int, names []string) (map[string][]neti
 	}
 	return out, nil
 }
+
+// transferNames walks one message of a zone transfer and returns the name each
+// record is for, and how many of them are the zone's SOA.
+//
+// # Why this is not parseAnswers
+//
+// parseAnswers reads one answer to one question: it knows the type that was
+// asked for, it checks every record against the name that was asked about, and
+// it decodes what it finds. None of that applies here. A transfer carries every
+// record in the zone, of every type, for every name under it, and the question
+// this asks of them is only "what are they called". So the record's data is
+// stepped over rather than read — the names are the answer, and a record's
+// contents belong to whoever asked for that record.
+//
+// The SOA count is how a transfer ends. RFC 5936: a zone begins with its SOA
+// and closes with the same record, so the second one is the end of the answer
+// rather than a record in it.
+func transferNames(raw []byte) (names []string, soas int, err error) {
+	if len(raw) < headerLen {
+		return nil, 0, errors.New("dnsclient: a transfer message is shorter than a header")
+	}
+
+	questions := int(binary.BigEndian.Uint16(raw[4:6]))
+	answers := int(binary.BigEndian.Uint16(raw[6:8]))
+
+	offset := headerLen
+	for i := 0; i < questions; i++ {
+		next, err := skipName(raw, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		// The type and class that follow a question.
+		if next+4 > len(raw) {
+			return nil, 0, errors.New("dnsclient: a transfer message ends inside its question")
+		}
+		offset = next + 4
+	}
+
+	for i := 0; i < answers; i++ {
+		name, next, err := readName(raw, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		// Type, class, time to live, and the length of what follows.
+		const fixed = 10
+		if next+fixed > len(raw) {
+			return nil, 0, errors.New("dnsclient: a transfer record ends inside its header")
+		}
+		rrtype := binary.BigEndian.Uint16(raw[next : next+2])
+		rdlength := int(binary.BigEndian.Uint16(raw[next+8 : next+fixed]))
+
+		end := next + fixed + rdlength
+		if end > len(raw) || end < next {
+			return nil, 0, errors.New("dnsclient: a transfer record announces more data than the message holds")
+		}
+		offset = end
+
+		if rrtype == TypeSOA {
+			soas++
+		}
+		names = append(names, nameText(name))
+	}
+
+	return names, soas, nil
+}

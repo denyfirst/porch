@@ -232,6 +232,19 @@ func run() int {
 				"\tsent to the addresses themselves. A range wider than /20, or more than\n"+
 				"\tfour thousand addresses in total, is refused rather than cut short")
 
+		// The sixth source, and the only one that is complete when it works.
+		//
+		// Off unless asked for, and the asking is the point: the DNS check
+		// reports a zone that transfers to anybody as a finding and reads
+		// none of it, because that zone belongs to whoever runs it. This
+		// reads one, so it is for an estate that is the reader's — the flag
+		// is where somebody says so.
+		readZone = flag.Bool("read-zone", false,
+			"ask the domain's own name servers to hand over the zone, and keep the\n"+
+				"\tnames in it. One AXFR question over TCP to each server until one\n"+
+				"\tanswers; almost all of them refuse, which is correct and is reported\n"+
+				"\tas such. Use it on a zone that is yours")
+
 		readCertificates = flag.Bool("read-certificates", false,
 			"ask each name that answers for the certificate it presents, and keep\n"+
 				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
@@ -433,6 +446,7 @@ func run() int {
 			Resolver:         *resolver,
 			Register:         *register,
 			RegisterURL:      *registerURL,
+			ReadZone:         *readZone,
 			ReadCertificates: *readCertificates,
 			JSON:             *asJSON,
 		})

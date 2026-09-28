@@ -16,6 +16,7 @@ import (
 	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
+	"github.com/denyfirst/porch/internal/zonenames"
 )
 
 // stubMonitor answers without asking anybody, and records what it was asked.
@@ -817,5 +818,88 @@ func TestACheckRefusesAddressRanges(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "name inventory reads them") {
 		t.Errorf("the refusal does not say where ranges belong: %s", w.Body.String())
+	}
+}
+
+// stubZone hands a zone over without asking any server anything.
+type stubZone struct {
+	asked atomic.Value
+	found zonenames.Found
+}
+
+func (z *stubZone) Under(_ context.Context, domain string) zonenames.Found {
+	z.asked.Store(domain)
+	return z.found
+}
+
+func (z *stubZone) was() string {
+	if v, ok := z.asked.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// The zone is read for a proven domain, and for no other.
+//
+// The DNS check asks whether a zone transfers to anybody and reads none of it,
+// because that zone belongs to whoever runs it. Reading one is for an estate
+// the asker owns, and on a service that means a domain this installation has
+// been shown control of — the same gate every other source is behind.
+func TestTheZoneIsReadOnlyForAProvenDomain(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+	zone := &stubZone{found: zonenames.Found{
+		Asked: true, Servers: 2, Refused: 1, From: "ns2.proven.example",
+		Names: []string{"www.proven.example", "staging.proven.example"},
+	}}
+	s.ReadZoneTransfers(zone)
+
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"unproven.example"}`, "203.0.113.130:5000")); got != "proof_required" {
+		t.Errorf("an unproven domain was answered %q", got)
+	}
+	if was := zone.was(); was != "" {
+		t.Errorf("the zone of %q was read, and nobody proved it", was)
+	}
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.131:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+	if zone.was() != "proven.example" {
+		t.Errorf("the zone read was %q", zone.was())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if !got.Zone.Established() || got.Zone.Named != 2 {
+		t.Errorf("the zone's reading came back as %+v", got.Zone)
+	}
+	if got.Distinct != 2 {
+		t.Errorf("the merged inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+}
+
+// An installation that was not told to ask for a zone does not ask.
+func TestAnInstallationNotToldToReadAZoneDoesNot(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "www.proven.example"}}}})
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.132:5000")
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if got.Zone.Asked || got.Zone.Reason != "" {
+		t.Errorf("an installation that asks for no zone reports %+v", got.Zone)
 	}
 }

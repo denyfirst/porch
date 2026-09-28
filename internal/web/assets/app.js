@@ -2622,7 +2622,8 @@ function buildNames(data) {
   const records = data.records || {};
   const passive = data.passive || {};
 
-  if (!answered(logs) && !answered(records) && !answered(passive) && !answered(data.presented)) {
+  if (!answered(logs) && !answered(records) && !answered(passive) &&
+      !answered(data.presented) && !answered(data.zone)) {
     // Not one source answered, so there is no inventory. The reassuring
     // answer here is "none found", so a failure that rendered as an empty
     // list would be the most comfortable wrong answer available.
@@ -2655,6 +2656,7 @@ function buildNames(data) {
   // names from two sources and six names from one that answered while the
   // other timed out are the same six names, and only these two lines tell a
   // reader which report they are holding.
+  row("The zone", saysZone(data));
   row("Certificates", saysLogs(data));
   row("Records", saysRecords(data));
   row("Passive DNS", saysPassive(data));
@@ -2756,6 +2758,20 @@ function producedAt(when) {
 // could not be reached. The three render differently for that reason.
 function answered(reading) {
   return Boolean(reading && reading.asked) && !reading.reason;
+}
+
+// saysZone is what the zone handed over, in one line.
+//
+// A refusal is a first-class answer here rather than a failure: a zone is
+// handed to the secondaries its operator named and to nobody else, so "every
+// server refused" is somebody reading their own DNS working as it should.
+function saysZone(data) {
+  const r = data.zone || {};
+
+  if (!r.asked) return "not asked: this installation does not ask for one";
+  if (r.reason) return "Not established: " + r.reason;
+  if (!r.named) return "named none of them: every server refused the transfer, which is the ordinary answer";
+  return "named " + r.named + " of them, handed over by the zone itself";
 }
 
 // saysLogs is what the certificate monitor established, in one line.
@@ -2951,6 +2967,12 @@ function namesLimits(data) {
     item(
       "From the domain's own records, these are the hosts its mail, its sender policy and its delegation have to name. " +
         "A host that takes no mail, sends none and answers for no zone is in none of them."
+    );
+  }
+  if (answered(data.zone) && (data.zone.named || 0) > 0) {
+    item(
+      "The zone handed itself over, so the names above are every name in it rather than a sample. " +
+        "What is not in a zone is still not here: a host reached by address alone, and anything in a zone delegated away from this one."
     );
   }
   if (answered(data.presented)) {
