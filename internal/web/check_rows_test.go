@@ -37,7 +37,22 @@ func TestTheCheckRowsShareTheirColumns(t *testing.T) {
 		t.Error("the row that opens a page carries a second arrow on its name")
 	}
 
+	// The chips above the panel name what the panel offers, one each. They
+	// named four of five: the inventory was added to the list and not to the
+	// row that summarises it.
+	chips := page[strings.Index(page, `<p class="chips">`):]
+	chips = chips[:strings.Index(chips, "</p>")]
+	if n, want := strings.Count(chips, "<span>"), len(consoleChecks()); n != want {
+		t.Errorf("the Porch page names %d things above a panel that offers %d", n, want)
+	}
+
 	css := asset(t, "assets/style.css")
+
+	// The note beside a band's title is centred on the heading beside it; it
+	// hung from the bottom edge and read as having slipped down the page.
+	if !strings.Contains(css, ".band-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;") {
+		t.Error("a band's note no longer sits centred on its heading")
+	}
 
 	// A note under rows of anything is given room. The section note is pulled
 	// up to sit under its heading, and under the DNS report's table of name

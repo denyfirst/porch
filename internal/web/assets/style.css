@@ -1511,10 +1511,22 @@ h1 {
 
 .band[id] { scroll-margin-top: 1rem; }
 
+/*
+  The note beside a band's title is centred on the heading beside it.
+
+  It hung from the heading's bottom edge. A note of three short lines beside a
+  title of two large ones then began well below the title's first line and
+  ended below its last, and the pair read as the note having slipped down the
+  page. Sharing the last baseline instead moved it two pixels and did not
+  change that; centred on the heading — the eyebrow and the title together —
+  it sits beside the block it belongs to. Measured on every band on both
+  pages; where the two wrap onto separate lines on a narrow screen, this has
+  nothing to align.
+*/
 .band-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem 2.5rem;
   margin-bottom: 2.2rem;
