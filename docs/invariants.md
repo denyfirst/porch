@@ -1084,6 +1084,23 @@ nothing on the list weakens the proof; one whose name reads as a way round it
 listed. Asking for a stronger proof is a flag this project can have
 (`-verification-requires-dnssec`); skipping it is not.
 
+**What denyfirst distributes checks only what has been proven.** Every release
+before v0.25.1 checked names nobody had proven, and was still downloadable
+after the code stopped doing so. On 2026-10-01 their binaries were withdrawn.
+v0.1.0 to v0.25.0 keep their tag, `SHA256SUMS`, its signature and `BUILD`, and
+are titled as withdrawn, so a copy somebody already has is checked as
+`docs/verify.md` says and each still rebuilds from its tag, but none is offered
+for download. The image of the unreleased v0.26.0-rc1 was deleted from the
+registry the same day. No guide may send a reader to a withdrawn binary
+(`TestNoGuideDownloadsAWithdrawnBinary`).
+
+An installation already running an old release is its operator's, and nothing
+here reaches it. Nothing should be able to: a switch that could turn old
+copies off would be a connection home from every installation, and a single
+place from which all of them could be stopped, which is the arrangement this
+project exists not to make. They are told instead, in the release notes and
+on each withdrawn release.
+
 **The command line asks for the same proof, since 2026-09-29.** It needed none,
 on the argument that whoever runs it has the machine, the scan leaves from
 their own address, and nobody else can reach it. All true, and an answer to a
@@ -1338,7 +1355,8 @@ same two facts.
 `TestAFileProofOpensTheWebCheck`,
 `TestAFileProofDoesNotOpenAnotherName`,
 `TestNoServiceFlagTurnsProofOff`,
-`TestNoCommandLineFlagTurnsProofOff`
+`TestNoCommandLineFlagTurnsProofOff`,
+`TestNoGuideDownloadsAWithdrawnBinary`
 
 ---
 

@@ -28,8 +28,8 @@ record of what was released.
 curl -fsSLO https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers
 
 # The list and its signature, from the release.
-curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.1.0/SHA256SUMS
-curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.1.0/SHA256SUMS.sig
+curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.26.0/SHA256SUMS
+curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.26.0/SHA256SUMS.sig
 
 ssh-keygen -Y verify \
   -f .allowed_signers \
@@ -48,6 +48,13 @@ Good "file" signature for releases@denyfirst.dev with ED25519 key SHA256:ut6bgin
 Anything else means stop. A missing signature, a key that does not match, or a
 modified list are all the same answer.
 
+**Releases before v0.25.1 carry their list and no binaries.** Every one of
+them checked names nobody had proven, so on 2026-10-01 their binaries were
+withdrawn and each was titled as withdrawn (N9). Each keeps its tag,
+`SHA256SUMS`, the signature and `BUILD`, so a copy somebody already has is
+checked exactly as above, and rebuilt from its tag as below. None is offered
+for download.
+
 ### About the key
 
 The signing key is not the key used to push to GitHub. They are separate so
@@ -63,7 +70,7 @@ they liked, and the signature would confirm only that the attacker had access.
 ## Check the binary against the list
 
 ```sh
-curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.1.0/porch-scan_v0.1.0_linux_amd64
+curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.26.0/porch-scan_v0.26.0_linux_amd64
 
 sha256sum --ignore-missing -c SHA256SUMS
 ```
@@ -90,7 +97,7 @@ anonymously and fails unless every byte is the one the release signed.
 On Windows:
 
 ```powershell
-(Get-FileHash -Algorithm SHA256 .\porch-scan_v0.1.0_windows_amd64.exe).Hash.ToLower()
+(Get-FileHash -Algorithm SHA256 .\porch-scan_v0.26.0_windows_amd64.exe).Hash.ToLower()
 ```
 
 and compare that line against `SHA256SUMS` by eye.
