@@ -1360,6 +1360,26 @@ code.flag { white-space: nowrap; }
   color: var(--ink-faint);
 }
 
+/*
+  Where the name goes at the common DNS providers. Folded, because most
+  people know their own provider's form and the record above is what matters.
+*/
+.provider-help {
+  margin: 0.4rem 0 0.9rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.provider-help > summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  padding: 0.2rem 0;
+}
+
+.provider-help p { margin: 0.5rem 0; }
+.provider-help .rows { margin: 0.5rem 0; font-size: 0.76rem; }
+
 .proof-record {
   display: grid;
   grid-template-columns: max-content 1fr;

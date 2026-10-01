@@ -371,6 +371,33 @@ the image is a wrapper around a binary **you verified**, or built yourself.
    for every name under that domain without asking again, for as long as the
    record is there. Delete the record and the domain is refused again.
 
+### Where the record goes at your provider
+
+Every provider asks for the type, `TXT`; the name; and the value, pasted as it
+is. Most add your domain to the name themselves, so type only the part before
+it — for `_porch-challenge.www.example.com` in the zone `example.com`, that is
+`_porch-challenge.www`. If the record reads back with your domain on it twice,
+type the shorter form.
+
+| Provider | The name goes in |
+|---|---|
+| Cloudflare | Name |
+| Amazon Route 53 | Record name, with the value inside double quotes |
+| Google Cloud DNS | DNS name |
+| Azure DNS | Name |
+| GoDaddy | Name |
+| Namecheap | Host |
+| Hetzner | Name |
+| DigitalOcean | Hostname |
+| A zone file | The whole name with a final dot, the value inside double quotes, then a reload |
+
+The same table is beside the record in the console and on the Domains page.
+It is help with a form and nothing else. The record is read from whichever
+servers the zone names, reached from the root, whoever runs them; pinning the
+check to a provider picked from a list would prove less, because control of
+the zone is what is being proven and a zone moved to another provider is still
+its owner's. A provider missing from the table works exactly as well.
+
 ### Proof of control is on, and has to be
 
 A container listens beyond loopback by construction, and `porchd` refuses to

@@ -164,6 +164,7 @@ func proveTargets(ctx context.Context, scope *verify.Scope, check string, target
 				fmt.Fprintf(w, "  %s  TXT  %q\n", r.Name, r.Value)
 			}
 			fmt.Fprintln(w, "A record at a domain covers every name under it. It is read from the zone's own servers, so it counts as soon as they serve it.")
+			fmt.Fprintln(w, "Most DNS providers add your domain to the name themselves: type only the part before it.")
 		default:
 			failed = true
 			fmt.Fprintf(w, "%s: the proof could not be looked up: %v\n", host, err)

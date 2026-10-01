@@ -52,7 +52,42 @@
         <dt>Value</dt>
         <dd><code id="domain-value"></code> <button class="proof-copy" type="button" data-copy="domain-value">Copy</button></dd>
       </dl>
-      <p class="proof-hint">Some providers want only the part of the name before your domain.</p>
+      <!--
+        Where the name goes at the providers most people use. Help with a form
+        and nothing more: the record is read from whichever servers the zone
+        names, reached from the root, so no provider here is trusted or
+        preferred. The same block is on the Domains page, and a test holds the
+        two the same.
+      -->
+      <details class="provider-help">
+        <summary>Where this goes at your DNS provider</summary>
+        <p>Every provider asks for the same three things: the type,
+        <code>TXT</code>; the name; and the value, pasted as it is. Most add your
+        domain to the name themselves, so type only the part before it: for
+        <code>_porch-challenge.www.example.com</code> in the zone
+        <code>example.com</code>, that is <code>_porch-challenge.www</code>.</p>
+        <table class="rows">
+          <thead><tr><th scope="col">Provider</th><th scope="col">The name goes in</th></tr></thead>
+          <tbody>
+            <tr><td>Cloudflare</td><td>Name</td></tr>
+            <tr><td>Amazon Route 53</td><td>Record name, with the value inside double quotes</td></tr>
+            <tr><td>Google Cloud DNS</td><td>DNS name</td></tr>
+            <tr><td>Azure DNS</td><td>Name</td></tr>
+            <tr><td>GoDaddy</td><td>Name</td></tr>
+            <tr><td>Namecheap</td><td>Host</td></tr>
+            <tr><td>Hetzner</td><td>Name</td></tr>
+            <tr><td>DigitalOcean</td><td>Hostname</td></tr>
+            <tr><td>A zone file</td><td>The whole name with a final dot, the value inside double quotes, then a reload</td></tr>
+          </tbody>
+        </table>
+        <p>If the record reads back with your domain on it twice, the provider
+        added it for you: type the shorter form. Menus move more often than the
+        form changes.</p>
+        <p>This is help with a form, not part of the proof. The record is looked
+        for on whichever servers your zone names, whoever runs them: control of
+        the zone is what is proven, and a zone moved to another provider is
+        still yours.</p>
+      </details>
 
       <div class="proof-actions">
         <button class="submit" type="button" id="domain-again">Check again</button>

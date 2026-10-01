@@ -90,6 +90,7 @@ func TestEveryTargetIsProvenBeforeAnythingIsChecked(t *testing.T) {
 		verify.Label + ".other.test",
 		verify.Token(testSecret, "other.test"),
 		"other.test is not proven",
+		"type only the part before it",
 	} {
 		if !strings.Contains(said, want) {
 			t.Errorf("the refusal does not say %q:\n%s", want, said)

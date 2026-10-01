@@ -110,12 +110,18 @@ func TestDomainsSaysWhetherTheProofWasSigned(t *testing.T) {
 	src := string(body)
 	for _, want := range []string{
 		`"The resolver reported the record DNSSEC-signed."`,
-		`"The record is not DNSSEC-signed, so the proof rests on the resolver's answer alone."`,
+		`"Whether the record is DNSSEC-signed was not asked: -verification-requires-dnssec asks."`,
 		`answer.signed ? "proven, signed" : "proven"`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("app.js no longer says %s", want)
 		}
+	}
+
+	// The record is read from the zone's own servers, so no proof rests on a
+	// resolver's answer, and an unasked question is not a finding.
+	if strings.Contains(src, "rests on the resolver's answer alone") {
+		t.Error("app.js says a proof rests on the resolver, which reads nothing from one")
 	}
 }
 
@@ -159,5 +165,50 @@ func TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten(t *testing.T) {
 	}
 	if !strings.Contains(asset(t, "assets/style.css"), ".run-state:empty { display: none; }") {
 		t.Error("an empty heading state is not hidden, so it leaves a gap")
+	}
+}
+
+// Where the name goes at the common providers, the same on both pages that
+// show a record, and saying what it is not.
+//
+// Help with a form, never a list of where the record is looked for: it is
+// read from whichever servers the zone names. A provider chosen from a list
+// would prove less than the zone does — a zone moved elsewhere is still its
+// owner's — so the page says so, where somebody would otherwise assume it.
+func TestTheProviderHelpIsTheSameWhereverARecordIsShown(t *testing.T) {
+	block := func(page string) string {
+		src := asset(t, page)
+		start := strings.Index(src, `<details class="provider-help">`)
+		end := strings.Index(src, "</details>")
+		if start < 0 || end < start {
+			t.Fatalf("%s has no provider help beside its record", page)
+		}
+		var lines []string
+		for _, line := range strings.Split(src[start:end], "\n") {
+			lines = append(lines, strings.TrimSpace(line))
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	console, domains := block("assets/console.html"), block("assets/domains.html")
+	if console != domains {
+		t.Error("the provider help differs between the console and the Domains page")
+	}
+	for _, want := range []string{
+		"type only the part before it",
+		"<td>Cloudflare</td>",
+		"<td>Amazon Route 53</td><td>Record name, with the value inside double quotes</td>",
+		"not part of the proof",
+		"whichever servers your zone names",
+	} {
+		if !strings.Contains(console, want) {
+			t.Errorf("the provider help does not say %q", want)
+		}
+	}
+
+	// And it is on the page only where a record is: inside the proof dialog,
+	// which an installation that requires no proof does not draw.
+	if strings.Contains(consoleAs(t, false), "provider-help") {
+		t.Error("an installation requiring no proof shows help publishing a record")
 	}
 }
