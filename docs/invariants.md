@@ -1073,6 +1073,17 @@ flags are gone, and an installation started with either is told why rather than
 started (`TestTheFlagsThatOpenedAServiceAreRefused`). No release checks a
 name nobody has proven any more: the command line asks too, below.
 
+**And no flag brings one back without saying so.** Each of those two was one
+line in `main.go`, added the way every flag is. Every flag either program
+accepts is now named in a test beside what it does, read from the source
+rather than from a run, so one behind an untaken branch still counts
+(`TestNoServiceFlagTurnsProofOff`, `TestNoCommandLineFlagTurnsProofOff`). A
+new flag fails until it is added there, in the open, under the rule that
+nothing on the list weakens the proof; one whose name reads as a way round it
+— open, insecure, skip, without, bypass, no-verify — fails even when it is
+listed. Asking for a stronger proof is a flag this project can have
+(`-verification-requires-dnssec`); skipping it is not.
+
 **The command line asks for the same proof, since 2026-09-29.** It needed none,
 on the argument that whoever runs it has the machine, the scan leaves from
 their own address, and nobody else can reach it. All true, and an answer to a
@@ -1325,7 +1336,9 @@ same two facts.
 `TestAChallengeIsNotReadOverAnUntrustedConnection`,
 `TestAFileProofDoesNotOpenTheTLSCheck`,
 `TestAFileProofOpensTheWebCheck`,
-`TestAFileProofDoesNotOpenAnotherName`
+`TestAFileProofDoesNotOpenAnotherName`,
+`TestNoServiceFlagTurnsProofOff`,
+`TestNoCommandLineFlagTurnsProofOff`
 
 ---
 
