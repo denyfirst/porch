@@ -1093,6 +1093,17 @@ and is not reported as one (`TestAProofThatCouldNotBeReadIsNotAPass`). The web
 check takes the served file as the service does, and no other check does
 (`TestOnlyTheWebCheckAcceptsTheServedFile`).
 
+**One record can cover a service and the command line, and only when told
+to.** Each copy makes its own secret, so running both means two values at the
+same name. `-verification-secret-file` pointed at the service's secret makes
+the command line read that file as it is and leave it as it is, and the
+record the service shows then proves the domain here too
+(`TestOneRecordCoversTheServiceAndTheCommandLine`). It is not the default
+because the file is the authority to check every domain proven to the
+service, from wherever it is copied, and the only way to take it back is a
+new secret and every record published again. docs/self-host.md moves it over
+SSH and says so.
+
 Proving before the run is the part a person reads, so that the answer to "why
 did nothing happen" is a record to publish. It is not the guard. Each check is
 handed the same scope and asks again where it connects, so a mode added later,

@@ -140,6 +140,27 @@ because two copies of a verification procedure drift and the copy nobody is
 reading is the one that goes wrong. Do that first; everything below assumes a
 binary you have checked.
 
+Nothing needs Go. The command line for this machine's system and processor,
+with the list and its signature to check it against:
+
+```sh
+V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
+OS=$(uname -s | tr '[:upper:]' '[:lower:]'); A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+for f in "porch-scan_${V}_${OS}_${A}" SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
+```
+
+Then check them as `docs/verify.md` says, and only then name it and make it
+runnable:
+
+```sh
+mv "porch-scan_${V}_${OS}_${A}" porch-scan && chmod +x porch-scan
+```
+
+On Windows, `porch-scan_<version>_windows_amd64.exe` from the release page,
+checked with `Get-FileHash` as `docs/verify.md` shows. The service is the
+same: its binary is in the release, and a server runs it in a container
+without Go (see *In a container*).
+
 Building from source is the other answer, and needs nothing but Go:
 
 ```sh
@@ -177,6 +198,31 @@ such as `intranet`. A host on a private address is checked with
 `-allow-private` and named by a domain proven in public DNS. The secret is
 yours: another user on the machine has their own, and proving a domain to them
 proves nothing to you.
+
+### One record for the service and the command line
+
+A record proves a domain to one secret, and each copy makes its own: `porchd`
+in its data directory, `porch-scan` under your configuration directory. Run
+both and there are two values to publish. They can sit at the same name side
+by side, which DNS allows and the check reads; or the command line can use the
+service's secret, and then one record covers both:
+
+```sh
+# on the server: a copy you can read, for one transfer
+sudo install -m 600 -o "$USER" porch/porch-data/secret ~/porch-secret
+# on your computer
+(umask 077; scp you@your-server:porch-secret ./porch-secret) && ssh you@your-server 'rm ~/porch-secret'
+./porch-scan -verification-secret-file ./porch-secret example.com
+```
+
+Separate secrets are the default because of what this gives away. The file is
+the authority to check every domain proven to that installation, from wherever
+it is copied to: keep it on machines you would give the server's password,
+readable by you alone, and never in a repository, a chat or a clipboard. It
+moves over SSH above for that reason. If a copy is lost, delete the server's
+secret and restart it: a new one is made, and every domain has to publish its
+record again. That is the only way to take back a secret once it has been
+copied, and it is why the command line does not borrow one unless told to.
 
 The exit status is the worst verdict found — `0` strong, `1` weak, `2`
 insecure, `3` the scan could not be completed — so it gates a pipeline without
@@ -310,15 +356,21 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 ### On a server, step by step
 
 1. Get the release, and nothing else. On the server, in a directory of its
-   own: the binary, the Dockerfile and compose file that run it, and the
-   signed list of their hashes. No source, no documents and no history go to a
-   machine that runs one binary.
+   own: the binary for its processor, the Dockerfile and compose file that run
+   it, and the signed list of their hashes. No source, no documents and no
+   history go to a machine that runs one binary, and nothing is built there,
+   so the server needs Docker and no Go.
 
    ```sh
    mkdir -p porch && cd porch
    V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
-   for f in "porchd_${V}_linux_amd64" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
+   A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+   for f in "porchd_${V}_linux_${A}" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
    ```
+
+   `A` is the processor: `amd64` for most servers, `arm64` for ARM ones. A
+   processor the release is not built for has no file to download, and `curl
+   -f` stops there rather than fetching something that will not run.
 
    Then check them, in that directory, as [`docs/verify.md`](verify.md) says:
    the signature over `SHA256SUMS`, then every file against it. From v0.25.0
@@ -333,7 +385,7 @@ the image is a wrapper around a binary **you verified**, or built yourself.
    runs as. There is no shell in the image to do this from inside:
 
    ```sh
-   mv porchd_*_linux_amd64 porchd
+   mv porchd_*_linux_* porchd
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
    ```
 

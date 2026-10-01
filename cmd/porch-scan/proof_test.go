@@ -325,3 +325,38 @@ func TestTheCommandLineProvesBeforeItChoosesACheck(t *testing.T) {
 		}
 	}
 }
+
+// One record covers the service and the command line when the command line is
+// given the service's secret: the file porchd made is read as it is, left as
+// it is, and the record derived from it proves the domain here too.
+func TestOneRecordCoversTheServiceAndTheCommandLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "porch-secret")
+	if created, err := verify.CreateSecret(path); err != nil || !created {
+		t.Fatalf("the service's secret was not made: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, err := verify.ReadSecret(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scope, created, err := proofScope(path)
+	if err != nil || created {
+		t.Fatalf("the service's secret was not taken as it is: created %v, %v", created, err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Error("the command line rewrote a secret it was given")
+	}
+
+	// The record the service shows for the domain, and nothing else published.
+	scope.Authority = &zone{records: map[string][]string{
+		verify.Label + ".example.com": {verify.Token(served, "example.com")},
+	}}
+	var out bytes.Buffer
+	if code := proveTargets(context.Background(), scope, checkTLS, []string{"www.example.com"}, &out); code != exitOK {
+		t.Errorf("the service's record does not prove the domain to the command line:\n%s", out.String())
+	}
+}

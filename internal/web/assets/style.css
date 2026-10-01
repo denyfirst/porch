@@ -37,6 +37,20 @@
   --weak:        #845900;
   --insecure:    #b3202e;
 
+  /* The terminal the install commands are drawn in. Dark in both schemes, so
+     the dark block does not restate them, and each text colour is checked
+     against the panel and its bar rather than the paper. */
+  --term-bg:     #0e1013;
+  --term-bar:    #1a1d22;
+  --term-rule:   #2b2f36;
+  --term-ink:    #e8e9ec;
+  --term-faint:  #959aa5;
+  --term-prompt: #ff7c86;
+  --term-cmd:    #7cc4ff;
+  --term-flag:   #c9a7ff;
+  --term-str:    #a6dc85;
+  --term-var:    #f2c97d;
+
   --sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
           -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo,
@@ -2210,52 +2224,104 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 /*
-  A command and the button that copies it.
+  A command, drawn as the terminal it is typed into, and the button that
+  copies it.
 
-  The box is the grid item, so the button sits in its corner however the step
-  is laid out, and the command keeps room on its right so a long line scrolls
-  under nothing.
+  Dark in both schemes, because that is what a terminal looks like and what a
+  reader is about to paste into. The bar says where the command runs — on the
+  server, or on your own computer — which was the one thing the old boxes left
+  a reader to work out.
+
+  The prompt is drawn by CSS, so it is on the screen and never in what Copy
+  writes: the button copies the element's text, and generated content is not
+  text (see copyRecord in app.js). Each colour is held to 4.5:1 against the
+  panel, the same threshold as the body text.
 */
-.steps .command {
-  position: relative;
-  grid-column: 2;
-  grid-row: 1 / 4;
-  align-self: center;
+.terminal {
   min-width: 0;
+  overflow: hidden;
+  background: var(--term-bg);
+  border: 1px solid var(--term-rule);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.55);
 }
 
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 2.3rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.85rem;
+  background: var(--term-bar);
+  border-bottom: 1px solid var(--term-rule);
+}
+
+/* Three dots, one element: the other two are its shadows. */
+.terminal-dots {
+  flex: none;
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-right: 2rem;
+  border-radius: 50%;
+  background: #ff5f57;
+  box-shadow: 1rem 0 0 #febc2e, 2rem 0 0 #28c840;
+}
+
+.terminal-where {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--term-faint);
+}
+
+.terminal pre {
+  margin: 0;
+  padding: 0.95rem 1.1rem 1rem;
+  overflow-x: auto;
+  background: transparent;
+}
+
+.terminal pre code {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: var(--term-ink);
+  white-space: pre;
+}
+
+.terminal .ln::before {
+  content: "$ ";
+  color: var(--term-prompt);
+  user-select: none;
+}
+
+.t-c   { color: var(--term-cmd); }
+.t-f   { color: var(--term-flag); }
+.t-s   { color: var(--term-str); }
+.t-v   { color: var(--term-var); }
+.t-o   { color: var(--term-faint); }
+.t-key { color: var(--term-cmd); }
+
 .command-copy {
-  position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
+  margin-left: auto;
   font-family: var(--sans);
   font-size: 0.78rem;
   min-height: 24px;
-  padding: 0.2rem 0.6rem;
-  color: var(--ink-soft);
-  background: var(--paper-sunk);
-  border: 1px solid var(--rule);
+  padding: 0.2rem 0.65rem;
+  color: var(--term-ink);
+  background: transparent;
+  border: 1px solid var(--term-rule);
   border-radius: var(--radius);
   cursor: pointer;
 }
 
-.command-copy:hover { color: var(--ink); border-color: var(--ink-faint); }
+.command-copy:hover,
+.command-copy:focus-visible { border-color: var(--term-faint); }
 
-.steps pre {
-  margin: 0;
-  padding: 0.9rem 5rem 0.9rem 1rem;
-  overflow-x: auto;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-}
-
-.steps pre code {
-  font-family: var(--mono);
-  font-size: 0.82rem;
-  line-height: 1.75;
-  color: var(--ink);
-  white-space: pre;
+.steps .command {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  align-self: center;
 }
 
 .steps p code {
@@ -2267,12 +2333,32 @@ main > .band:last-child { border-bottom: 0; }
 @media (max-width: 52rem) {
   .steps li { grid-template-columns: minmax(0, 1fr); }
   .steps .command { grid-column: 1; grid-row: auto; margin-top: 1rem; }
+}
 
-  /* Narrow, a command's long lines scroll, and they scrolled under a button
-     sitting inside the box. It stands above the box's corner instead. */
-  .steps .command { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
-  .steps .command pre { align-self: stretch; padding-right: 1rem; }
-  .command-copy { position: static; order: -1; }
+/*
+  The compose file, folded under the steps. Read rather than copied, so it
+  has no button: the copy that runs is the signed one in the release.
+*/
+.compose-view {
+  margin: 1.2rem 0 0;
+  padding: 1rem 1.4rem;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.compose-view > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.compose-view > summary code { font-family: var(--mono); font-size: 0.88em; }
+
+.compose-view > p {
+  max-width: var(--measure);
+  margin: 0.8rem 0 1rem;
+  font-size: 0.93rem;
+  color: var(--ink-soft);
 }
 
 /* A domain the page shows rather than offers: the field's box, no control. */
@@ -3156,6 +3242,16 @@ main > .band:last-child { border-bottom: 0; }
   /* A link that is nothing but blue on paper. The one address worth printing
      is the method page, and it is named in the text beside it. */
   a { color: inherit; text-decoration: none; }
+
+  /* A terminal on paper would be a black rectangle as well: the commands are
+     printed in ink, and the window and its button stay on the screen. */
+  .terminal {
+    --term-bg: #ffffff; --term-bar: #ffffff; --term-rule: #c9ccd4;
+    --term-ink: #16181d; --term-faint: #5c6270; --term-prompt: #16181d;
+    --term-cmd: #16181d; --term-flag: #16181d; --term-str: #16181d; --term-var: #16181d;
+    box-shadow: none;
+  }
+  .terminal-dots, .command-copy { display: none; }
 
   @page { margin: 18mm 16mm; }
 }

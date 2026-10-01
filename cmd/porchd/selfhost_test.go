@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"html"
 	"math/big"
 	"os"
 	"regexp"
@@ -591,11 +592,30 @@ func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
 		t.Errorf(".dockerignore sends the builder %v, want the binary alone", ignore)
 	}
 
-	fetch := `for f in "porchd_${V}_linux_amd64" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do`
+	// The binary for the server's own processor: an ARM server given the
+	// amd64 build has a file that will not run.
+	fetch := []string{
+		`A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')`,
+		`for f in "porchd_${V}_linux_${A}" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do`,
+	}
 	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
-		body := repoFile(t, path)
-		if !strings.Contains(body, fetch) {
-			t.Errorf("%s does not fetch the binary, the two files that run it, and the signed list", path)
+		// The page colours its commands with spans; what it says is the text.
+		// Whole lines, because the guide's command line download works the
+		// processor out on a line of its own, and finding the server's line
+		// inside that one would let the server's step lose it unnoticed.
+		body := html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(repoFile(t, path), ""))
+		lines := map[string]bool{}
+		for _, line := range strings.Split(body, "\n") {
+			lines[strings.TrimSpace(line)] = true
+		}
+		for _, want := range fetch {
+			found := lines[want]
+			if strings.HasSuffix(want, "; do") {
+				found = strings.Contains(body, want)
+			}
+			if !found {
+				t.Errorf("%s does not give %s", path, want)
+			}
 		}
 	}
 	if strings.Contains(repoFile(t, "internal/web/assets/porch.html"), "git clone") {
