@@ -98,6 +98,25 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
 try {
+    # Cleared before anything can stop this script, and kept per tag.
+    #
+    # On 2026-10-01 v0.26.0 was published carrying the signature from the
+    # v0.26.0-rc1 dry run. This script had not run for v0.26.0 -- it cleared
+    # its directory as it started, so had it run, the old file could not have
+    # survived -- and the upload that followed sent whatever
+    # dist\SHA256SUMS.sig held. reproduce.yml said so in public within the
+    # minute, and every installation that checked the signature refused, but
+    # the release went out with nothing that verified it.
+    #
+    # So the directory is named for the tag and the upload names it too: a
+    # signature this script did not make for this tag is not at the path the
+    # upload reads. And everything under dist goes before the first check
+    # that can stop the script, so a run that stops early leaves nothing to
+    # upload rather than whatever the last run left.
+    $distRoot = Join-Path $repoRoot 'dist'
+    if (Test-Path $distRoot) { Remove-Item -Recurse -Force $distRoot }
+    $dist = Join-Path $distRoot $Tag
+
     if (-not (Test-Path $SigningKey)) {
         throw "No signing key at $SigningKey."
     }
@@ -106,9 +125,6 @@ try {
     if (-not $tagged) {
         throw "Tag $Tag does not exist locally. Create and push it first:`n  git tag -s $Tag -m 'notes'`n  git push origin $Tag"
     }
-
-    $dist = Join-Path $repoRoot 'dist'
-    if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
 
     # ── Fetch what the workflow built ──────────────────────────────────────
     #
@@ -119,7 +135,7 @@ try {
 
     Write-Host "Downloading the draft release for $Tag" -ForegroundColor Cyan
 
-    New-Item -ItemType Directory -Path $dist | Out-Null
+    New-Item -ItemType Directory -Path $dist -Force | Out-Null
     gh release download $Tag --dir $dist --clobber
     if ($LASTEXITCODE -ne 0) {
         # A download can fail with the release right there: on the v0.17.0
@@ -140,8 +156,14 @@ try {
         throw "No release found for $Tag. Push the tag and wait for build-release.yml, or start it with:`n  gh workflow run build-release.yml -f tag=$Tag"
     }
 
-    if (Test-Path (Join-Path $dist 'SHA256SUMS.sig')) {
+    $published = Join-Path $dist 'SHA256SUMS.sig'
+    if (Test-Path $published) {
         Write-Warning "This release already carries a signature. Signing again replaces it."
+        # Removed now rather than overwritten at the end, so the only
+        # signature this directory can hold is one this run made. A run that
+        # stops before signing would otherwise leave the downloaded one at
+        # the path the upload reads.
+        Remove-Item -Force $published
     }
 
     $checksums = Join-Path $dist 'SHA256SUMS'
@@ -371,9 +393,32 @@ the thing this check exists to avoid. Nothing was signed.
             if ($mine -eq (Get-FileHash -Algorithm SHA256 $theirs).Hash.ToLower()) { $same++ }
             else { $different += $_.Name }
         }
+
+        # And the other way round: everything the list names was rebuilt
+        # here. BUILD aside, which is a record rather than a build and is read
+        # field by field above. A file only the workflow produced is one the
+        # signature would vouch for with nothing to compare it against.
+        $rebuilt = @(Get-ChildItem $local -File | ForEach-Object { $_.Name })
+        foreach ($line in Get-Content $checksums) {
+            if ($line -notmatch '^[0-9a-f]{64}\s+(.+)$') { continue }
+            $name = $Matches[1].Trim()
+            if ($name -ne 'BUILD' -and $rebuilt -notcontains $name) { $different += "$name (not rebuilt here)" }
+        }
+
         Write-Host "  $same identical, $($different.Count) different" -ForegroundColor DarkGray
         foreach ($name in $different) { Write-Host "    differs: $name" -ForegroundColor Yellow }
         Remove-Item -Recurse -Force $local
+
+        # A refusal, not a line to read. The passphrase prompt comes next,
+        # and until 2026-10-01 it came after a difference count too: the
+        # count was printed, and the signature over the files it counted was
+        # one keystroke away. The image's digest in particular is trusted
+        # because this comparison holds it (S17), so a difference is never
+        # signed past. If it is the toolchain -- BUILD's goroot line against
+        # `go env GOROOT` here -- that is fixed here, and this run again.
+        if ($different.Count -gt 0) {
+            throw "$($different.Count) file(s) built here are not the release's. Compare the goroot line in BUILD with go env GOROOT before reading this as tampering. Nothing was signed."
+        }
     }
 
     # ── Sign ───────────────────────────────────────────────────────────────
@@ -384,7 +429,10 @@ the thing this check exists to avoid. Nothing was signed.
 
     Write-Host "`nSigning SHA256SUMS" -ForegroundColor Cyan
     ssh-keygen -Y sign -f $SigningKey -n file $checksums
-    if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -Force "$checksums.sig" -ErrorAction SilentlyContinue
+        throw 'Signing failed.'
+    }
 
     $allowed = Join-Path $repoRoot '.allowed_signers'
     if (Test-Path $allowed) {
@@ -403,7 +451,10 @@ the thing this check exists to avoid. Nothing was signed.
         # cheap is not a reason to leave it.
         cmd /c "ssh-keygen -Y verify -f `"$allowed`" -I `"$Identity`" -n file -s `"$checksums.sig`" < `"$checksums`""
         if ($LASTEXITCODE -ne 0) {
-            throw 'The signature did not verify against .allowed_signers.'
+            # Removed, so that a signature nobody could verify is not there
+            # for the upload to find.
+            Remove-Item -Force "$checksums.sig" -ErrorAction SilentlyContinue
+            throw 'The signature did not verify against .allowed_signers. It was removed, so there is nothing to upload.'
         }
     }
     else {
@@ -411,8 +462,9 @@ the thing this check exists to avoid. Nothing was signed.
     }
 
     Write-Host "`nSigned." -ForegroundColor Green
-    Write-Host "Upload the signature and publish:" -ForegroundColor Green
-    Write-Host "  gh release upload $Tag dist\SHA256SUMS.sig --clobber" -ForegroundColor DarkGray
+    Write-Host "Upload the signature, then the notes, then publish (docs/releasing.md):" -ForegroundColor Green
+    Write-Host "  gh release upload $Tag dist\$Tag\SHA256SUMS.sig --clobber" -ForegroundColor DarkGray
+    Write-Host "  gh release edit $Tag --notes-file NOTES.md" -ForegroundColor DarkGray
     Write-Host "  gh release edit $Tag --draft=false" -ForegroundColor DarkGray
 }
 finally {

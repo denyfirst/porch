@@ -186,6 +186,8 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Tag v0.2.0-r
 
 Stop there. Do not upload the signature and do not publish: `reproduce.yml`
 runs on publication, and a release candidate is not the thing to point it at.
+The signature it made stays in `dist\v0.2.0-rc1` until the script next runs,
+and the real release's upload names its own tag, so it cannot pick that one up.
 
 **The tag stays.** Tags here cannot be deleted or moved, which is what makes a
 signature over one mean anything, so a dry run leaves a signed tag behind for
@@ -324,6 +326,14 @@ A mismatch is now worth stopping for. Telling a verifier that mismatches are
 normal on their platform is the one lesson this check must never teach, and it
 was being taught in four places.
 
+**And the script stops for it.** Until 2026-10-01 it printed the difference
+count and went straight on to the passphrase prompt, so a difference was one
+keystroke from being signed. Now any file built here that is not the
+release's, and any file the list names that was not built here, refuses the
+signature: the image's digest in particular is trusted because this comparison
+holds it (S17). `BUILD` is the one exception, because it is a record rather
+than a build, and the script reads it field by field before anything else.
+
 Anything the script refuses to sign, it says why and signs nothing. Do not
 work around it.
 
@@ -336,11 +346,22 @@ did. Write them to `NOTES.md` outside the commit (see *Afterwards* for what
 they say), then:
 
 ```powershell
-gh release upload v0.2.0 dist\SHA256SUMS.sig --clobber
+gh release upload v0.2.0 dist\v0.2.0\SHA256SUMS.sig --clobber
 gh release edit v0.2.0 --notes-file NOTES.md
 gh release edit v0.2.0 --draft=false
 Remove-Item NOTES.md
 ```
+
+The signature is read from a directory named for the tag, which `release.ps1`
+makes, and only `release.ps1` writes into. On 2026-10-01 the path was
+`dist\SHA256SUMS.sig` for every tag. The script had not run for v0.26.0, the
+directory still held what the v0.26.0-rc1 dry run had signed, and the upload
+sent that: v0.26.0 was published with a signature over another release's list.
+`reproduce.yml` reported it within the minute and every installation that
+checked refused, so nothing false was believed, but the release could not be
+verified until it was signed again. Now a signature not made for this tag is
+not at the path this line reads, and the script empties `dist` before its
+first check, so a run that stops early leaves nothing behind to upload.
 
 Publication starts `reproduce.yml`, which verifies the signature, checks that
 the tag and the default branch trust the same keys, rebuilds every artifact on

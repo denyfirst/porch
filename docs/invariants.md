@@ -6818,10 +6818,22 @@ signed, reproduced and deployed without the fix it was for. A commit is also
 now looked at twice, before staging and after, which is what would have kept
 two saved workflow logs out of `main` on 2026-08-31.
 
-*Enforced in:* `docs/releasing.md`, `scripts/release.ps1`'s help
+A step that hands over a file has to hand over the one the previous step made.
+On 2026-10-01 v0.26.0 was published with the signature the v0.26.0-rc1 dry run
+had left in `dist\SHA256SUMS.sig`: `release.ps1` had not run for v0.26.0, and
+the upload read the same path for every tag. Nothing was believed that should
+not have been: `reproduce.yml` said so in public within the minute, and every
+installation that checked refused. But a release went out with nothing that
+verified it. The signature now lives under `dist\<tag>`, the upload line names
+the tag, and the script empties `dist` before the first check that can stop it
+and removes any signature it did not make and verify
+(`TestTheSignatureUploadedIsTheOneMadeForThatTag`).
+
+*Enforced in:* `docs/releasing.md`, `scripts/release.ps1`
 *Guarded by:* `TestTheReleaseProcedureIsWrittenDown`,
 `TestTheDocumentedInvocationIsTheOneThatWorks`,
-`TestEveryRunCommandNamesItsRun`
+`TestEveryRunCommandNamesItsRun`,
+`TestTheSignatureUploadedIsTheOneMadeForThatTag`
 
 ### S14 — A gate goes red for its own subject, and for nothing else
 
@@ -7028,10 +7040,14 @@ not build — for the image as well: the workflow builds and pushes, and
 `release.ps1 -Compare` rebuilds the archive and the compose file and signs only
 if every byte matches. An image the maintainer
 signed without rebuilding would be the workflow's word, and the split would be
-gone. Measured on 2026-10-01: built twice, from binaries with different times,
-modes and umask, the archive and the digest were identical; pushed to a
-registry, pulled by digest and started, it ran as `65534:65534` with proof of
-control and a password on.
+gone. Until 2026-10-01 that sentence was a description of the maintainer rather
+than of the script: it printed the difference count and went on to the
+passphrase prompt. It now refuses on any file built here that is not the
+release's, and on any file the list names that was not built here
+(`TestADifferenceInTheComparisonSignsNothing`). Measured on 2026-10-01:
+built twice, from binaries with different times, modes and umask, the archive
+and the digest were identical; pushed to a registry, pulled by digest and
+started, it ran as `65534:65534` with proof of control and a password on.
 
 **The image is the two binaries and nothing else**, for `amd64` and `arm64`,
 as the Dockerfile always described (`TestTheImageIsTheTwoBinariesAndNothingElse`,
@@ -7082,7 +7098,8 @@ compares it with what `Compose` makes (`TestThePorchPageShowsTheComposeFileThatS
 `TestAPushWithoutCredentialsIsRefused`,
 `TestTheComposeFilePinsEveryServiceToTheDigest`,
 `TestTheReleaseImageIsPublishedByDigestAndChecked`,
-`TestThePorchPageShowsTheComposeFileThatShips`
+`TestThePorchPageShowsTheComposeFileThatShips`,
+`TestADifferenceInTheComparisonSignsNothing`
 
 ---
 
