@@ -351,9 +351,13 @@ compose file.
    ```
 
    The last line has to print `Good "file" signature for
-   releases@denyfirst.dev` and `docker-compose.yml: OK`. Anything else is a
-   stop. [`docs/verify.md`](verify.md) says what each part proves, and why the
-   key comes from the repository rather than from the release.
+   releases@denyfirst.dev with ED25519 key SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y` and
+   `docker-compose.yml: OK`. Anything else is a stop. The key file comes from
+   the repository, and the Porch page on denyfirst.dev prints the same
+   fingerprint from a server GitHub does not run: a key changed on GitHub
+   alone prints one that does not match. [`docs/verify.md`](verify.md) says
+   what each part proves, and why the key comes from the repository rather
+   than from the release.
 
    Building the image yourself instead: the `Dockerfile` in the repository
    builds the same contents from binaries you built, as *Get a binary* above

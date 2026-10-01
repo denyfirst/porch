@@ -6973,9 +6973,20 @@ in one line on the Porch page and in the guide, and the drift is held by a
 test instead: that line has to use the key file, identity and namespace
 `docs/verify.md` gives.
 
+**And it names the fingerprint the check has to print.** The key file and the
+release both come from GitHub, so a signature checked against that key alone
+proves only that the two agree; whoever could replace one could replace both.
+The Porch page is served by denyfirst.dev, which GitHub does not run, and it
+prints the key's fingerprint beside the command: a key changed on GitHub
+alone prints a fingerprint that does not match. The test works the fingerprint
+out from `.allowed_signers` rather than copying it, so a rotated key fails
+here and not on somebody's server
+(`TestTheInstallNamesTheReleaseKeysFingerprint`).
+
 *Enforced in:* `Dockerfile`, `docker-compose.yml`, `docs/self-host.md`,
 `cmd/porchd.trustStoreUsable`
 *Guarded by:* `TestTheImageHasNoBaseSystem`,
+`TestTheInstallNamesTheReleaseKeysFingerprint`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
 `TestSelfHostChecksTheSignatureTheWayVerifyMdDoes`,
