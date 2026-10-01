@@ -178,6 +178,19 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 	if strings.Contains(string(raw), `data-copy="compose-file"`) {
 		t.Error("the compose file is offered to the clipboard; the one to run is the signed one")
 	}
+	// One way in, and the page says which. Somebody used to pasting a compose
+	// file looks for it here, and the answer is that step 1's paste is the one
+	// that puts this file on the server, checked: said in both places, so
+	// nobody goes looking for a second way that skips the signature.
+	said := strings.Join(strings.Fields(shownText(string(raw))), " ")
+	for _, sentence := range []string{
+		"On the server, in one paste: the latest release's compose file, the one shown below,",
+		"There is nothing to copy from here: the copy that runs is the one step 1 checked against the release's signature.",
+	} {
+		if !strings.Contains(said, sentence) {
+			t.Errorf("the Porch page no longer says %q", sentence)
+		}
+	}
 	// Open, so it is read before it is run rather than behind a click.
 	if !strings.Contains(string(raw), `<section class="compose-view"`) || strings.Contains(string(raw), `<details class="compose-view"`) {
 		t.Error("the compose file is folded away, or no longer on the page")

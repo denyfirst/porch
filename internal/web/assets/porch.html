@@ -133,8 +133,9 @@
   <ol class="steps">
     <li>
       <h3>Get it</h3>
-      <p>On the server: the latest release's compose file, the signed list of
-      hashes that covers it, and the check that both are ours. The last line
+      <p>On the server, in one paste: the latest release's compose file, the
+      one shown below, with the signed list of hashes that covers it, and the
+      check that both are ours. The last line
       has to print <code>Good "file" signature</code> with the key
       <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code> and
       <code>docker-compose.yml: OK</code>; anything else is a stop. The key
@@ -195,12 +196,13 @@
   -->
   <section class="compose-view" aria-labelledby="compose-title">
     <h3 id="compose-title">What you are about to run: <code>docker-compose.yml</code></h3>
-    <p>The file step 1 downloads and checks, shown here to be read rather than
-    copied: the image named by its digest, so a registry cannot hand over
-    anything else under that name; the port published on the server's own
-    loopback; nothing in the container writable but its data directory; and
-    every capability dropped. The comments in the file say why each line is
-    there.</p>
+    <p>What step 1 puts on your server, shown so it is read before it is run.
+    There is nothing to copy from here: the copy that runs is the one step 1
+    checked against the release's signature. In it, the image named by its
+    digest, so a registry cannot hand over anything else under that name; the
+    port published on the server's own loopback; nothing in the container
+    writable but its data directory; and every capability dropped. The
+    comments in the file say why each line is there.</p>
     <div class="terminal">
       <div class="terminal-bar">
         <span class="terminal-dots" aria-hidden="true"></span>
