@@ -16,6 +16,11 @@ services:
     build: .
     image: porch
 
+    # Built here, from the binaries you checked, and never pulled: "porch" is
+    # this image's local name, and a registry asked for it would be a
+    # stranger's image under it.
+    pull_policy: build
+
     # Proof of control is on. The secret is created in the data directory on
     # the first start and kept there; every domain is then asked to publish
     # this installation's record before it is scanned, and the page shows the
@@ -83,3 +88,33 @@ services:
       - ALL
 
     restart: unless-stopped
+
+  # The command line, on this server, with this installation's secret: the
+  # record that proves a domain to the page proves it here, and nothing else
+  # does. Run it when you want it; it checks, prints and exits:
+  #
+  #   docker compose run --rm scan example.com
+  #   docker compose run --rm scan -check mail example.com
+  #
+  # The same image and the same sandbox as the service. The data directory is
+  # mounted read-only, so the command line can read the secret and change
+  # nothing in it — not the secret, not the password, not a kept report. Start
+  # the service once first: that is what makes the secret.
+  #
+  # A profile, so "docker compose up" leaves it alone, and never pulled, so a
+  # run before the image is built fails rather than fetching one.
+  scan:
+    image: porch
+    pull_policy: never
+    profiles: ["cli"]
+    entrypoint: ["/porch-scan", "-verification-secret-file", "/data/secret"]
+    volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ./porch-data:/data:ro
+    environment:
+      SSL_CERT_DIR: /etc/ssl/certs
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

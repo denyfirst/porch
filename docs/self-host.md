@@ -199,30 +199,9 @@ such as `intranet`. A host on a private address is checked with
 yours: another user on the machine has their own, and proving a domain to them
 proves nothing to you.
 
-### One record for the service and the command line
-
-A record proves a domain to one secret, and each copy makes its own: `porchd`
-in its data directory, `porch-scan` under your configuration directory. Run
-both and there are two values to publish. They can sit at the same name side
-by side, which DNS allows and the check reads; or the command line can use the
-service's secret, and then one record covers both:
-
-```sh
-# on the server: a copy you can read, for one transfer
-sudo install -m 600 -o "$USER" porch/porch-data/secret ~/porch-secret
-# on your computer
-(umask 077; scp you@your-server:porch-secret ./porch-secret) && ssh you@your-server 'rm ~/porch-secret'
-./porch-scan -verification-secret-file ./porch-secret example.com
-```
-
-Separate secrets are the default because of what this gives away. The file is
-the authority to check every domain proven to that installation, from wherever
-it is copied to: keep it on machines you would give the server's password,
-readable by you alone, and never in a repository, a chat or a clipboard. It
-moves over SSH above for that reason. If a copy is lost, delete the server's
-secret and restart it: a new one is made, and every domain has to publish its
-record again. That is the only way to take back a secret once it has been
-copied, and it is why the command line does not borrow one unless told to.
+On a server running the service, use the command line that runs beside it
+instead (*The command line, on the server*, below): it has the service's
+secret, so the record the page asked for is the only one there is.
 
 The exit status is the worst verdict found — `0` strong, `1` weak, `2`
 insecure, `3` the scan could not be completed — so it gates a pipeline without
@@ -356,16 +335,16 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 ### On a server, step by step
 
 1. Get the release, and nothing else. On the server, in a directory of its
-   own: the binary for its processor, the Dockerfile and compose file that run
-   it, and the signed list of their hashes. No source, no documents and no
-   history go to a machine that runs one binary, and nothing is built there,
-   so the server needs Docker and no Go.
+   own: the service and its command line for the server's processor, the
+   three files that run them, and the signed list of their hashes. No source,
+   no documents and no history go to a machine that runs two binaries, and
+   nothing is built there, so the server needs Docker and no Go.
 
    ```sh
    mkdir -p porch && cd porch
    V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
    A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
-   for f in "porchd_${V}_linux_${A}" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
+   for f in "porchd_${V}_linux_${A}" "porch-scan_${V}_linux_${A}" Dockerfile Dockerfile.dockerignore docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
    ```
 
    `A` is the processor: `amd64` for most servers, `arm64` for ARM ones. A
@@ -374,18 +353,23 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 
    Then check them, in that directory, as [`docs/verify.md`](verify.md) says:
    the signature over `SHA256SUMS`, then every file against it. From v0.25.0
-   the list carries the Dockerfile and the compose file as well as the binary,
-   so the same two commands check all three. Stop at the first that fails.
+   the list carries the three container files as well as the binaries, so the
+   same two commands check all of them. Stop at the first that fails.
+
+   `Dockerfile.dockerignore` is what keeps `porch-data` — the secret and the
+   sealed key — out of what the image build is sent. Without it the whole
+   directory goes to the builder, and a build run with `sudo` leaves a copy of
+   the secret in Docker's build cache.
 
    Building it yourself instead: build on any machine with Go, as *Get a
-   binary* above says, and copy `porchd`, `Dockerfile` and
-   `docker-compose.yml` to the server. Nothing else is needed there.
+   binary* above says, and copy `porchd`, `porch-scan` and the three files to
+   the server. Nothing else is needed there.
 
-2. Name the binary, and make the data directory for the user the container
+2. Name the binaries, and make the data directory for the user the container
    runs as. There is no shell in the image to do this from inside:
 
    ```sh
-   mv porchd_*_linux_* porchd
+   mv porchd_*_linux_* porchd && mv porch-scan_*_linux_* porch-scan
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
    ```
 
@@ -423,6 +407,25 @@ the image is a wrapper around a binary **you verified**, or built yourself.
    for every name under that domain without asking again, for as long as the
    record is there. Delete the record and the domain is refused again.
 
+### The command line, on the server
+
+The image carries `porch-scan` beside the service, and the compose file runs
+it with this installation's secret. The record that proves a domain to the
+page proves it here, and nothing else proves anything:
+
+```sh
+docker compose run --rm scan example.com
+docker compose run --rm scan -check mail example.com
+```
+
+It checks, prints and exits, and its exit status is the worst verdict, so a
+job on the server can gate on it. It runs in the same sandbox as the service —
+no capability, nothing writable — and sees the data directory read-only: it
+reads the secret and can change nothing there, not the secret, not the
+password, not a kept report. Start the service once first, because the first
+start is what makes the secret. A domain not proven to this installation is
+refused with the record to publish, which is the record the page shows.
+
 ### Where the record goes at your provider
 
 Every provider asks for the type, `TXT`; the name; and the value, pasted as it
@@ -459,7 +462,8 @@ A password is the same: beyond loopback `porchd` wants `-access-file`, and the
 image and the compose file give it. Neither can be turned off — `-open` and
 `-without-password` did that until 2026-09-29, and an installation started with
 either is now told they were removed. Nothing checks a name nobody has
-proven: `porch-scan` asks for the same record, from a secret of its own.
+proven: `porch-scan` asks for the same record, and on this server it asks
+with this installation's secret.
 
 **Why showing the record is safe.** The value is derived from this
 installation's secret and the one domain. It proves something only once it is

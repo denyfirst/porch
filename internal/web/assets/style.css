@@ -2330,6 +2330,10 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink);
 }
 
+/* What follows the three steps without being one: marked, not numbered. */
+.steps-extra { margin-top: 0.8rem; }
+.steps-extra li::before { content: "+"; }
+
 @media (max-width: 52rem) {
   .steps li { grid-template-columns: minmax(0, 1fr); }
   .steps .command { grid-column: 1; grid-row: auto; margin-top: 1rem; }

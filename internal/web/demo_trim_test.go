@@ -69,8 +69,8 @@ func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
 	// Each carries the id its Copy button names, so the id is allowed and
 	// nothing else is.
 	blocks := regexp.MustCompile(`(?s)<pre><code(?: id="command-[a-z]+")?>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 3 {
-		t.Fatalf("the Porch page has %d command blocks, want 3", len(blocks))
+	if len(blocks) != 4 {
+		t.Fatalf("the Porch page has %d command blocks, want 4", len(blocks))
 	}
 	for _, b := range blocks {
 		// The text a reader sees and Copy writes: the colours are spans, and
@@ -98,8 +98,8 @@ func TestThePorchCommandsAreATerminalWhosePromptIsNotCopied(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocks := regexp.MustCompile(`(?s)<code id="command-[a-z]+">(.*?)</code>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 3 {
-		t.Fatalf("%d command blocks, want 3", len(blocks))
+	if len(blocks) != 4 {
+		t.Fatalf("%d command blocks, want 4", len(blocks))
 	}
 	for _, b := range blocks {
 		text := shownText(b[1])

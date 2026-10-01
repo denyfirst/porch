@@ -1093,16 +1093,29 @@ and is not reported as one (`TestAProofThatCouldNotBeReadIsNotAPass`). The web
 check takes the served file as the service does, and no other check does
 (`TestOnlyTheWebCheckAcceptsTheServedFile`).
 
-**One record can cover a service and the command line, and only when told
-to.** Each copy makes its own secret, so running both means two values at the
-same name. `-verification-secret-file` pointed at the service's secret makes
-the command line read that file as it is and leave it as it is, and the
-record the service shows then proves the domain here too
-(`TestOneRecordCoversTheServiceAndTheCommandLine`). It is not the default
-because the file is the authority to check every domain proven to the
-service, from wherever it is copied, and the only way to take it back is a
-new secret and every record published again. docs/self-host.md moves it over
-SSH and says so.
+**On a server, one record covers the service and the command line, and the
+secret never moves.** The image carries `porch-scan` beside `porchd`, and the
+compose file's `scan` service runs it with `-verification-secret-file
+/data/secret`: the same image, the same sandbox, and the data directory
+mounted read-only, so the command line reads the secret as it is and can write
+nothing there — not the secret, not the sealed key, not a kept report
+(`TestOneRecordCoversTheServiceAndTheCommandLine`,
+`TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing`). It is
+never pulled: a run before the image is built fails rather than fetching
+something called `porch` from a registry. Copying the secret to another
+machine was documented for one day and taken out: the file is the authority
+to check every domain proven to the service, from wherever it is copied, and
+the only way to take it back is a new secret and every record published
+again. A command line elsewhere keeps a secret of its own.
+
+**The image build is never sent the data directory.** The release shipped a
+Dockerfile without an ignore file, so `docker compose up --build` sent the
+whole directory — `porch-data` with it — to the builder, and run with `sudo` it
+left the secret in BuildKit's cache. Measured on 2026-10-01: a file in
+`porch-data` could be copied into the image. `Dockerfile.dockerignore`, named so
+that a release can carry it and read by BuildKit before `.dockerignore`, sends
+the builder the two binaries and nothing else, and the same probe then fails
+with "not found" (`TestAServerHoldsTheReleaseAndNothingElse`).
 
 Proving before the run is the part a person reads, so that the answer to "why
 did nothing happen" is a record to publish. It is not the guard. Each check is

@@ -79,9 +79,10 @@ It checks only domains proven to it, as the service does. The first run makes
 a secret for you under your configuration directory; `-verification-token`
 prints the `_porch-challenge` TXT record a domain publishes to be checked from
 your machine, and a record at a domain covers every name under it. A target
-that is not proven is refused with the record that would prove it. If you run
-the service as well, one record can cover both: the guide says how, and what
-sharing its secret gives away.
+that is not proven is refused with the record that would prove it. On a
+server running the service, `docker compose run --rm scan example.com` runs it
+in the service's container with the service's secret, so the record the page
+asked for covers both.
 
 The exit status is the worst verdict found, so it can gate a pipeline: `0`
 when everything is strong, `1` on a weak finding, `2` on an insecure one, and
