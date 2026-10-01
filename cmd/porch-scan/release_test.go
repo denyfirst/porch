@@ -303,3 +303,119 @@ func TestEveryCloneIsFollowedByTheDirectoryItMade(t *testing.T) {
 		}
 	}
 }
+
+// The signature uploaded is the one release.ps1 made for that tag, and no
+// other.
+//
+// On 2026-10-01 v0.26.0 was published with the signature the v0.26.0-rc1 dry
+// run had left behind. The upload read dist\SHA256SUMS.sig whatever the tag,
+// release.ps1 had not run for v0.26.0, and so the file the dry run signed was
+// the file that went out. reproduce.yml said so within the minute and every
+// installation that checked refused, but a release was published with nothing
+// that verified it.
+//
+// So the path carries the tag, the script empties dist before anything can
+// stop it, and a signature it did not make, or could not verify, is not left
+// where the upload looks.
+func TestTheSignatureUploadedIsTheOneMadeForThatTag(t *testing.T) {
+	body, err := os.ReadFile("../../docs/releasing.md")
+	if err != nil {
+		t.Fatalf("reading docs/releasing.md: %v", err)
+	}
+	uploads := regexp.MustCompile(`(?m)^gh release upload (\S+) (\S+)`).FindAllStringSubmatch(string(body), -1)
+	if len(uploads) == 0 {
+		t.Fatal("docs/releasing.md no longer uploads a signature, so this test checks nothing there")
+	}
+	for _, m := range uploads {
+		if want := `dist\` + m[1] + `\SHA256SUMS.sig`; m[2] != want {
+			t.Errorf("docs/releasing.md uploads %s for %s, where only %s is the signature made for that tag", m[2], m[1], want)
+		}
+	}
+
+	raw, err := os.ReadFile("../../scripts/release.ps1")
+	if err != nil {
+		t.Fatalf("reading scripts/release.ps1: %v", err)
+	}
+	script := string(raw)
+
+	if !strings.Contains(script, `gh release upload $Tag dist\$Tag\SHA256SUMS.sig --clobber`) {
+		t.Error("release.ps1 prints an upload that does not name the tag's own signature")
+	}
+	if !regexp.MustCompile(`(?m)^\s*\$dist = Join-Path \$distRoot \$Tag\s*$`).MatchString(script) {
+		t.Error("release.ps1 no longer keeps each tag's files in a directory of its own")
+	}
+
+	// Emptied before the first statement that can stop the script, or a run
+	// that stops early leaves the last run's signature in place.
+	clear := strings.Index(script, "Remove-Item -Recurse -Force $distRoot")
+	first := regexp.MustCompile(`(?m)^\s*throw\b`).FindStringIndex(script)
+	if clear < 0 || first == nil || clear > first[0] {
+		t.Error("release.ps1 can stop before it empties dist, leaving an earlier signature to be uploaded")
+	}
+
+	// The signature the release already carries is downloaded with
+	// everything else; it is gone before signing, so a run that stops there
+	// cannot leave it to be uploaded again.
+	download := strings.Index(script, "gh release download $Tag")
+	removed := strings.Index(script, "Remove-Item -Force $published")
+	sign := strings.Index(script, "ssh-keygen -Y sign")
+	if download < 0 || sign < 0 || removed < download || removed > sign {
+		t.Error("release.ps1 keeps the downloaded signature until it signs, so a run that stops leaves it to be uploaded")
+	}
+
+	// Every way out after signing, other than success, removes the signature.
+	signed := strings.Index(script, `"`+"`nSigned.")
+	if signed < sign {
+		t.Fatal("release.ps1 no longer says when it has signed, so this test cannot find the end of signing")
+	}
+	exits := strings.Split(script[sign:signed], "throw ")
+	for _, before := range exits[:len(exits)-1] {
+		if !strings.Contains(before, `Remove-Item -Force "$checksums.sig"`) {
+			t.Error("release.ps1 stops after signing without removing a signature it could not stand behind")
+		}
+	}
+	if len(exits) < 3 {
+		t.Error("release.ps1 no longer refuses both a failed signing and a signature that does not verify")
+	}
+}
+
+// A comparison that finds a difference signs nothing.
+//
+// S17 says release.ps1 -Compare signs only if every byte matches, and until
+// 2026-10-01 that was a description of the maintainer rather than of the
+// script: it printed "n identical, m different" and went straight on to the
+// passphrase prompt. The image's digest is trusted because this comparison
+// holds it, so a difference is a refusal, in both directions: a file built
+// here that is not the release's, and a file the list names that was not
+// built here.
+func TestADifferenceInTheComparisonSignsNothing(t *testing.T) {
+	raw, err := os.ReadFile("../../scripts/release.ps1")
+	if err != nil {
+		t.Fatalf("reading scripts/release.ps1: %v", err)
+	}
+	script := string(raw)
+
+	compare := strings.Index(script, "if ($Compare) {")
+	sign := strings.Index(script, "ssh-keygen -Y sign")
+	if compare < 0 || sign < compare {
+		t.Fatal("release.ps1 no longer compares before it signs, so this test checks nothing")
+	}
+	region := script[compare:sign]
+
+	for _, counted := range []string{"(not in the release)", "(not rebuilt here)"} {
+		if !strings.Contains(region, counted) {
+			t.Errorf("release.ps1 no longer counts a file %s as a difference", counted)
+		}
+	}
+	if !strings.Contains(region, "$name -ne 'BUILD' -and $rebuilt -notcontains $name") {
+		t.Error("release.ps1 no longer requires every listed file but BUILD to have been rebuilt")
+	}
+
+	refusal := regexp.MustCompile(`if \(\$different\.Count -gt 0\) \{\s*throw `).FindStringIndex(region)
+	if refusal == nil {
+		t.Fatal("release.ps1 signs past a difference it has counted")
+	}
+	if last := strings.LastIndex(region, "$different +="); last > refusal[0] {
+		t.Error("release.ps1 refuses before every difference has been counted")
+	}
+}
