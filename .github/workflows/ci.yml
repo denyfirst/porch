@@ -263,11 +263,11 @@ jobs:
 
           echo "Every test named in invariants.md exists."
 
-      # And the map in CLAUDE.md names every package, and no package it does
+      # And the map in CONTRIBUTING.md names every package, and no package it does
       # not have.
       #
-      # That table is the first thing read at the start of a session and the
-      # first thing an outside reviewer reads to learn what this program is
+      # That table is the first thing a contributor and an outside reviewer
+      # read to learn what this program is
       # made of. On 2026-09-25 it was missing seven packages, two of them added
       # the same week and five of them older — including the one holding the
       # sign-in gate, the one holding the encrypted store, and the one that
@@ -276,16 +276,16 @@ jobs:
       #
       # Both directions, because a row naming a package that has been removed
       # sends somebody looking for code that is not there.
-      - name: Compare the package map in CLAUDE.md against the tree
+      - name: Compare the package map in CONTRIBUTING.md against the tree
         run: |
           set -eu
 
           ls -d internal/*/ | sed 's|/$||' | sort > /tmp/packages
-          grep -oE '`internal/[a-z0-9]+`' CLAUDE.md | tr -d '`' | sort -u > /tmp/mapped
+          grep -oE '`internal/[a-z0-9]+`' CONTRIBUTING.md | tr -d '`' | sort -u > /tmp/mapped
 
           unmapped="$(comm -23 /tmp/packages /tmp/mapped)"
           if [ -n "${unmapped}" ]; then
-            echo "CLAUDE.md's map does not name these packages:"
+            echo "CONTRIBUTING.md's map does not name these packages:"
             echo "${unmapped}"
             echo
             echo "Add a row saying what each is for. The table is what a reader"
@@ -296,12 +296,12 @@ jobs:
 
           gone="$(comm -13 /tmp/packages /tmp/mapped)"
           if [ -n "${gone}" ]; then
-            echo "CLAUDE.md's map names packages that do not exist:"
+            echo "CONTRIBUTING.md's map names packages that do not exist:"
             echo "${gone}"
             exit 1
           fi
 
-          echo "Every package under internal/ is named in CLAUDE.md, and no others."
+          echo "Every package under internal/ is named in CONTRIBUTING.md, and no others."
 
   # A release is only reproducible if there is one build command to reproduce.
   #

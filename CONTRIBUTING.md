@@ -1,9 +1,8 @@
-# Working on porch
+# Contributing to porch
 
-This file is read at the start of every session. It is the rules that are not
-visible from the code, and the reasons behind them are in
-[`docs/invariants.md`](docs/invariants.md) — three thousand lines of *why*,
-each entry written the day something went wrong. Read the invariant before
+These are the rules that are not visible from the code. The reasons behind
+them are in [`docs/invariants.md`](docs/invariants.md) — three thousand lines
+of *why*, each entry written the day something went wrong. Read the invariant before
 changing what it guards.
 
 Everything here is public. It carries no personal preference, no account, no

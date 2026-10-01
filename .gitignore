@@ -40,10 +40,10 @@ secrets.yml
 .vscode/
 .idea/
 
-# Local agent settings.
+# Local tool settings.
 #
-# CLAUDE.md is committed and is project rules everybody shares. Permissions
-# are not: an allow list of shell commands in a public repository is a line a
+# CONTRIBUTING.md is committed and is project rules everybody shares. Tool
+# permissions are not: an allow list of shell commands in a public repository is a line a
 # pull request can add to, and a reviewer reads the code rather than the
 # settings. Keep them local and unshared.
 .claude/settings.local.json
