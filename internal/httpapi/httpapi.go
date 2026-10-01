@@ -1405,8 +1405,9 @@ func (s *Server) operatorOnly() bool {
 // nobody else can reach, or one behind the operator's password, is that same
 // person with a browser in front of the command line, and it showed them less:
 // every one of these followed the scope alone, a rule written when a service
-// without one answered strangers. A copy started with -open and no password
-// still answers strangers, and still shows them only what any visitor sees.
+// without one answered strangers. A copy that answers strangers still shows
+// them only what any visitor sees; porchd no longer starts one, since -open
+// and -without-password went, and this does not assume it.
 //
 // The transparency logs and a certificate's own responder are not here. Both
 // name the domain to somebody else, and without a scope the domain may be

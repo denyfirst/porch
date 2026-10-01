@@ -125,8 +125,7 @@
       record at <code>_porch-challenge.&lt;domain&gt;</code> are checked; the
       check page shows the record to publish.{{else}}<strong>This installation
       checks any public name it is given.</strong> Without proof, it listens
-      beyond this machine's own loopback address only when its operator said so
-      with <code class="flag">-open</code>.{{end}}
+      on this machine's own loopback address and nowhere else.{{end}}
       Private, loopback and reserved addresses are refused whatever is asked.
     </p>
 
@@ -193,7 +192,14 @@
       <li><strong>The certificate authority</strong> named in a certificate is
         asked for its revocation list. It learns a list was fetched, not which
         certificate was being looked at, because one list covers thousands.</li>
-      {{if .Verified}}<li><strong>The host itself</strong> may be asked for
+      {{if .Verified}}<li><strong>The domain's own name servers</strong> are
+        asked for its proof record, reached from the root rather than through
+        the resolver, so that a resolver cannot answer for a domain it does
+        not hold. On the way the root servers learn which top-level domain,
+        and that domain's servers which domain — neither learns the name under
+        it being proven. All of them see this machine's address, as the
+        resolver's own questions to them would have shown the resolver's.</li>
+      <li><strong>The host itself</strong> may be asked for
         <code>/.well-known/porch-challenge</code> when its domain publishes no
         record, as the other way of proving a site is yours.</li>
       <li><strong>crt.sh</strong>, a certificate transparency monitor, is asked

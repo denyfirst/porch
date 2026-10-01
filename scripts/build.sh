@@ -74,4 +74,17 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
         -ldflags "-s -w -X main.version=${tag}" \
         -o "${out}/porchd-demonstration_${tag}_linux_amd64" "./cmd/porchd"
 
+# And the three files that run the service, so that a server needs nothing but
+# the release. Dockerfile.dockerignore keeps the server's data directory, which
+# holds the verification secret, out of what the image build is sent.
+#
+# Until v0.25.1 the way to them was a clone of this repository onto the
+# server, which put the whole source tree, its documents and its history on a
+# machine that runs one binary. Listed in SHA256SUMS they are covered by the
+# same signature as the binary beside them, where a clone of the default
+# branch is covered by nothing a reader checks. Copied as they are, so a
+# reproduction produces the same bytes: .gitattributes gives every checkout
+# LF line endings, Windows included.
+cp Dockerfile Dockerfile.dockerignore docker-compose.yml "${out}/"
+
 ls -la "$out"

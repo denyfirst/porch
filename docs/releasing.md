@@ -207,6 +207,11 @@ git pull
 # merge early, and the two `rev-parse` lines agreed with each other because
 # both were read before main moved. A tag matching main proves nothing if main
 # is not finished.
+#
+# And on 2026-10-01: this list showed the pull request the release existed for,
+# still open, and the block was run on regardless. v0.25.0 is the commit
+# v0.24.1 was cut from, under a new number, signed and published; what it was
+# meant to carry shipped as v0.25.1. The list printing anything is a stop.
 gh pr list --state open
 
 git log --oneline -1              # the commit this will release
@@ -217,7 +222,12 @@ git log --oneline -1              # the commit this will release
 # back for it — and on 2026-09-01 nobody had: `denyfirst-v4` was still marked
 # unreleased on the page five releases after v0.4.0 shipped it. Any output
 # here is a stop while the rule set is the one being released.
-Select-String -Path docs\policy-changes.md -Pattern 'Unreleased'
+#
+# Case-sensitive, because Select-String is not by default, and the page says
+# "were unreleased" in a sentence of history: on 2026-10-01 that line was
+# printed, read as a false alarm, and the next line run — which is the habit
+# this check cannot afford to teach.
+Select-String -Path docs\policy-changes.md -Pattern 'Unreleased' -CaseSensitive
 
 git tag -s v0.2.0 -m "porch v0.2.0"
 
@@ -308,17 +318,29 @@ work around it.
 
 ### Publish
 
+The notes go on before the release is published. The draft's own text says it
+has no signature yet, and a release published without new notes says that
+in public for as long as nobody comes back for it — v0.24.0 and v0.25.0 both
+did. Write them to `NOTES.md` outside the commit (see *Afterwards* for what
+they say), then:
+
 ```powershell
 gh release upload v0.2.0 dist\SHA256SUMS.sig --clobber
+gh release edit v0.2.0 --notes-file NOTES.md
 gh release edit v0.2.0 --draft=false
+Remove-Item NOTES.md
 ```
 
 Publication starts `reproduce.yml`, which verifies the signature, checks that
 the tag and the default branch trust the same keys, rebuilds every artifact on
-a runner and compares. Watch it:
+a runner and compares. Watch the run for this tag, not the newest run:
+published a second ago, it may not be registered yet, and the newest is then
+the previous release's, already green. On 2026-10-01 that is what was watched,
+and it reported success for a run that had nothing to do with the release.
 
 ```powershell
-gh run watch (gh run list --workflow=reproduce.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+do { Start-Sleep 5; $id = gh run list --workflow=reproduce.yml --limit 1 --json databaseId,headBranch --jq '.[] | select(.headBranch == "v0.2.0") | .databaseId' } until ($id)
+gh run watch $id
 ```
 
 A red mark there is public, which is the point. It is also the only thing that

@@ -39,9 +39,8 @@ import (
 // assembling it, on request, for people who will not say who they are.
 //
 // So where there is no scope it is answered only by a copy nobody else can
-// reach, and refused everywhere else — the opposite of how the checks behave
-// on a copy started with -open. "Nobody has proven anything" must not mean
-// "everybody may ask".
+// reach, and refused everywhere else. "Nobody has proven anything" must not
+// mean "everybody may ask".
 //
 // # And on the demonstration, only this project's own estate
 //
@@ -91,8 +90,12 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// own domain. That is friction bought with no safety, and friction bought
 	// with no safety is how a rule gets turned off entirely.
 	//
-	// So a service nobody else can reach is the command line with a browser in
-	// front of it, and the command line has never asked for proof (A30, N12).
+	// So a service nobody else can reach was the command line with a browser in
+	// front of it, and the command line did not ask for proof (A30, N12). Since
+	// 2026-09-29 both do: porchd does not start without a scope, and the
+	// command line proves every target before it checks one, so the last case
+	// below is reached only by a Server built with no Verify — a test, or a
+	// program that embeds this package — and it still refuses a stranger.
 	// A service anybody else can reach is the case the rule is for: what this
 	// produces is the shape of an estate, the scanned party cannot see it
 	// happen, and answering it for strangers would make this an anonymous

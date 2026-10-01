@@ -34,3 +34,22 @@ func TestThePrivacyPageSaysWhatIsCopied(t *testing.T) {
 		t.Error("the privacy page does not say a report stays out of the clipboard")
 	}
 }
+
+// The privacy page names the servers a proof is read from, because they are
+// asked directly now.
+//
+// Until 2026-09-29 the resolver asked them, and they saw the resolver's
+// address. The proof is read from the root down since then, so the root, the
+// top-level domain and the domain's own servers see this installation's — and
+// a page listing who else is asked has to say so.
+func TestThePrivacyPageSaysWhoAProofIsReadFrom(t *testing.T) {
+	proved := workspaceWith(t, "/privacy", true, false)
+	for _, want := range []string{"The domain's own name servers", "reached from the root", "this machine's address"} {
+		if !strings.Contains(proved, want) {
+			t.Errorf("the privacy page of an installation that requires proof does not say %q", want)
+		}
+	}
+	if open := workspaceWith(t, "/privacy", false, false); strings.Contains(open, "The domain's own name servers") {
+		t.Error("an installation that proves nothing says it asks for proof")
+	}
+}

@@ -60,15 +60,45 @@ func TestAPublicServiceWithoutAPasswordIsRefused(t *testing.T) {
 		t.Errorf("a public service with proof and no password: exit %d, %q", code, said)
 	}
 	for _, listen := range []string{"127.0.0.1:0", "localhost:0", "[::1]:0"} {
-		if err := passwordAllowed(listen, false, false); err != nil {
+		if err := passwordAllowed(listen, false); err != nil {
 			t.Errorf("%s is loopback and was refused: %v", listen, err)
 		}
 	}
-	if err := passwordAllowed("0.0.0.0:8080", true, false); err != nil {
+	if err := passwordAllowed("0.0.0.0:8080", true); err != nil {
 		t.Errorf("a guarded service was refused: %v", err)
 	}
-	if err := passwordAllowed("0.0.0.0:8080", false, true); err != nil {
-		t.Errorf("-without-password was not honoured: %v", err)
+}
+
+// The two flags that turned those rules off are gone, and an installation
+// started with either is told why rather than started.
+//
+// -open served any name beyond loopback and -without-password served anyone,
+// each on the strength of a sentence in its help text about a network nobody
+// else could reach — nothing that could check it. Found on 2026-09-29, when a
+// second copy started on another port with both served every name to every
+// caller from the same machine as the proven one.
+func TestTheFlagsThatOpenedAServiceAreRefused(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"-listen", "0.0.0.0:0", "-open"},
+		{"-listen", "0.0.0.0:0", "--open=true"},
+		{"-listen", "0.0.0.0:0", "-verification-secret-file", filepath.Join(dir, "s"), "-without-password"},
+		{"-listen", "127.0.0.1:0", "-without-password=false"},
+	} {
+		code, said := start(t, args...)
+		if code != 2 || !strings.Contains(said, "was removed") {
+			t.Errorf("%v: exit %d, %q", args, code, said)
+		}
+	}
+	// A value that happens to read like one of them is not one.
+	if err := removedFlags([]string{"-resolver", "open", "--", "-open"}); err != nil {
+		t.Errorf("a value, or anything after --, was read as a flag: %v", err)
+	}
+	src := repoFile(t, "cmd/porchd/main.go")
+	for _, gone := range []string{`flag.Bool("open"`, `flag.Bool("without-password"`} {
+		if strings.Contains(src, gone) {
+			t.Errorf("main.go defines %s again", gone)
+		}
 	}
 }
 
@@ -78,6 +108,7 @@ func TestAPublicServiceWithoutAPasswordIsRefused(t *testing.T) {
 func TestAPasswordAndAPlainResultsDirectoryAreRefusedTogether(t *testing.T) {
 	dir := t.TempDir()
 	code, said := start(t, "-listen", "127.0.0.1:0",
+		"-verification-secret-file", filepath.Join(dir, "secret"),
 		"-access-file", filepath.Join(dir, "access"),
 		"-results-dir", filepath.Join(dir, "plain"))
 	if code != 2 || !strings.Contains(said, "-results-dir keeps results in the clear") {

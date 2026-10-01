@@ -149,7 +149,13 @@ func TestEveryColourTextIsSetInIsLegible(t *testing.T) {
 				continue
 			}
 
-			for _, surface := range surfaces {
+			// The terminal is the one panel that is dark in both schemes, and
+			// its colours are drawn on it and nowhere else.
+			on := surfaces
+			if strings.HasPrefix(token, "term-") {
+				on = []string{"term-bg", "term-bar"}
+			}
+			for _, surface := range on {
 				got := contrast(value, tokens[surface])
 				if got < readableContrast {
 					t.Errorf("%s: --%s (%s) on --%s (%s) is %.2f:1, below %.1f:1 — %s",

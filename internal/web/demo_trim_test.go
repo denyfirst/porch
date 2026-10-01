@@ -69,15 +69,92 @@ func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
 	// Each carries the id its Copy button names, so the id is allowed and
 	// nothing else is.
 	blocks := regexp.MustCompile(`(?s)<pre><code(?: id="command-[a-z]+")?>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 3 {
-		t.Fatalf("the Porch page has %d command blocks, want 3", len(blocks))
+	if len(blocks) != 4 {
+		t.Fatalf("the Porch page has %d command blocks, want 4", len(blocks))
 	}
 	for _, b := range blocks {
-		for _, line := range strings.Split(html.UnescapeString(b[1]), "\n") {
+		// The text a reader sees and Copy writes: the colours are spans, and
+		// the prompt is drawn by CSS, so neither is in it.
+		for _, line := range strings.Split(shownText(b[1]), "\n") {
 			if !given[line] {
 				t.Errorf("the Porch page gives %q, which docs/self-host.md does not", line)
 			}
 		}
+	}
+}
+
+// shownText is what a block of markup puts on the screen and in the
+// clipboard: its text, without the tags that colour it.
+func shownText(markup string) string {
+	return html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(markup, ""))
+}
+
+// The commands are drawn as the terminal they are typed into, and the prompt
+// is drawn by CSS: on the screen, never in what Copy writes. A "$ " in the
+// text would be pasted into a shell, where it is a command that does not exist.
+func TestThePorchCommandsAreATerminalWhosePromptIsNotCopied(t *testing.T) {
+	page, err := assets.ReadFile("assets/porch.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := regexp.MustCompile(`(?s)<code id="command-[a-z]+">(.*?)</code>`).FindAllStringSubmatch(string(page), -1)
+	if len(blocks) != 4 {
+		t.Fatalf("%d command blocks, want 4", len(blocks))
+	}
+	for _, b := range blocks {
+		text := shownText(b[1])
+		if strings.HasPrefix(text, "$") || strings.Contains(text, "\n$") {
+			t.Errorf("a prompt is in the text Copy writes: %q", text)
+		}
+		if lines, drawn := strings.Count(text, "\n")+1, strings.Count(b[1], `<span class="ln">`); lines != drawn {
+			t.Errorf("%d lines and %d prompts", lines, drawn)
+		}
+	}
+
+	css, err := assets.ReadFile("assets/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(css), ".terminal .ln::before {\n  content: \"$ \";") {
+		t.Error("the prompt is not drawn by the stylesheet")
+	}
+	// And each says where it runs, which is the question a reader has.
+	for _, where := range []string{"on the server", "on your computer"} {
+		if !strings.Contains(string(page), `<span class="terminal-where">`+where+`</span>`) {
+			t.Errorf("no command says it runs %s", where)
+		}
+	}
+}
+
+// The compose file on the Porch page is the one the release ships, line for
+// line without its comments, and it is offered to be read, not copied: the
+// copy that runs is the signed one.
+func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
+	page, err := assets.ReadFile("assets/porch.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown := regexp.MustCompile(`(?s)<code id="compose-file">(.*?)</code>`).FindStringSubmatch(string(page))
+	if shown == nil {
+		t.Fatal("the Porch page does not show the compose file")
+	}
+	file, err := os.ReadFile("../../docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, line := range strings.Split(strings.ReplaceAll(string(file), "\r\n", "\n"), "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			want = append(want, line)
+		}
+	}
+	got := strings.Split(shownText(shown[1]), "\n")
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("the page shows a compose file the release does not ship:\n%s\nwant:\n%s",
+			strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if strings.Contains(string(page), `data-copy="compose-file"`) {
+		t.Error("the compose file is offered to the clipboard; the one to run is the signed one")
 	}
 }
 

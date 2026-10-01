@@ -199,8 +199,9 @@ type Scanner struct {
 	// it, because the two answer different questions: Verify says whose estate
 	// this is, and this says whether this deployment fetches files at all. A
 	// service ties them together (see internal/httpapi); the command line sets
-	// this and leaves Verify nil, because it runs on the operator's own machine
-	// from their own address — the same argument webscan.ReadMarkup rests on.
+	// this for every domain it checks, because it checks none that has not
+	// been proven to it (N9), and the fetch leaves from the operator's own
+	// address — the same argument webscan.ReadMarkup rests on.
 	ReadSTSPolicy bool
 
 	// STS fetches the policy. Nil means internal/mtasts, dialling through the

@@ -8,8 +8,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"html"
 	"math/big"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -113,8 +115,8 @@ func TestTheComposeFileTakesAwayWhatItSays(t *testing.T) {
 		if !strings.Contains(file, `"-verification-secret-file"`) || !strings.Contains(file, `"/data/secret"`) {
 			t.Errorf("%s does not turn proof of control on", name)
 		}
-		if strings.Contains(file, `"-open"`) {
-			t.Errorf("%s turns proof of control off", name)
+		if strings.Contains(file, `"-open"`) || strings.Contains(file, `"-without-password"`) {
+			t.Errorf("%s names a flag that was removed", name)
 		}
 	}
 	if !strings.Contains(compose, "./porch-data:/data") || !strings.Contains(compose, "chown 65534:65534 porch-data") {
@@ -332,8 +334,11 @@ func TestTheReachLineSaysWhetherAScopeIsConfigured(t *testing.T) {
 		t.Fatalf("a deployment that requires proof of control says the same thing as one that "+
 			"does not: %q", open)
 	}
-	if !strings.Contains(open, "whatever it is pointed at") {
-		t.Errorf("an unbounded deployment does not say it is unbounded: %q", open)
+	// Since 2026-09-29 porchd does not start unbounded, so -version asked
+	// without a secret says that rather than describing a service that will
+	// never run.
+	if !strings.Contains(open, "will not start") || !strings.Contains(open, "-verification-secret-file") {
+		t.Errorf("-version without a secret does not say the service will not start, or why: %q", open)
 	}
 	if !strings.Contains(bounded, "shown control of") {
 		t.Errorf("a bounded deployment does not say what bounds it: %q", bounded)
@@ -564,5 +569,125 @@ func TestTheRevocationAddressesFollowTheOperatorsView(t *testing.T) {
 	if strings.Contains(src, "ShowRevocationURLs") {
 		t.Error("main.go decides whether the revocation addresses are named, which httpapi's " +
 			"operatorView decides for every part of a report shown whole only to its owner")
+	}
+}
+
+// A server running the service holds the release and nothing else.
+//
+// The way to the Dockerfile and the compose file was a clone of this
+// repository onto the server, which put the source tree, its documents and
+// its history on a machine that runs one binary — found there on 2026-09-29.
+// The release carries both files now, listed in SHA256SUMS beside the binary,
+// so the one signature covers them. The Porch page and the guide fetch those
+// five files and clone nothing, and a build from a checkout is sent the
+// binary alone.
+func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
+	build := repoFile(t, "scripts/build.sh")
+	if !strings.Contains(build, `cp Dockerfile Dockerfile.dockerignore docker-compose.yml "${out}/"`) {
+		t.Error("scripts/build.sh no longer puts the three container files in the release, " +
+			"so a server has to clone the repository to get them, or builds without the ignore file")
+	}
+
+	// The ignore file travels with the Dockerfile, because the build on a
+	// server is sent the directory porch-data lives in. Named for the
+	// Dockerfile so a release can carry it: a ".dockerignore" in the checkout
+	// would be read there and missing on every server.
+	ignore := strings.Fields(strings.Join(nonComments(repoFile(t, "Dockerfile.dockerignore")), "\n"))
+	if strings.Join(ignore, " ") != "* !porchd !porch-scan" {
+		t.Errorf("the build is sent %v, want the two binaries alone", ignore)
+	}
+	if _, err := os.Stat(filepath.Join("..", "..", ".dockerignore")); err == nil {
+		t.Error("a .dockerignore is back beside the Dockerfile; the release cannot carry it, " +
+			"and a checkout reading it would hide that servers have none")
+	}
+
+	// The binary for the server's own processor: an ARM server given the
+	// amd64 build has a file that will not run.
+	fetch := []string{
+		`A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')`,
+		`for f in "porchd_${V}_linux_${A}" "porch-scan_${V}_linux_${A}" Dockerfile Dockerfile.dockerignore docker-compose.yml SHA256SUMS SHA256SUMS.sig; do`,
+	}
+	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
+		// The page colours its commands with spans; what it says is the text.
+		// Whole lines, because the guide's command line download works the
+		// processor out on a line of its own, and finding the server's line
+		// inside that one would let the server's step lose it unnoticed.
+		body := html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(repoFile(t, path), ""))
+		lines := map[string]bool{}
+		for _, line := range strings.Split(body, "\n") {
+			lines[strings.TrimSpace(line)] = true
+		}
+		for _, want := range fetch {
+			found := lines[want]
+			if strings.HasSuffix(want, "; do") {
+				found = strings.Contains(body, want)
+			}
+			if !found {
+				t.Errorf("%s does not give %s", path, want)
+			}
+		}
+	}
+	if strings.Contains(repoFile(t, "internal/web/assets/porch.html"), "git clone") {
+		t.Error("the Porch page puts the source on the server again")
+	}
+}
+
+// nonComments is a file's lines without comments or blank lines.
+func nonComments(body string) []string {
+	var out []string
+	for _, line := range strings.Split(body, "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// The command line on a server runs with the service's secret, in the
+// service's sandbox, and can change nothing the service keeps.
+//
+// So one record proves a domain to both, and the secret never leaves the
+// directory it was made in. Read out of the compose file service by service,
+// because the hardening the file's own test looks for anywhere in it would be
+// satisfied by the service alone while the command line went without.
+func TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing(t *testing.T) {
+	compose := repoFile(t, "docker-compose.yml")
+	service := func(name string) string {
+		at := regexp.MustCompile(`(?m)^  ` + name + `:$`).FindStringIndex(compose)
+		if at == nil {
+			t.Fatalf("the compose file has no %s service", name)
+		}
+		rest := compose[at[1]:]
+		if next := regexp.MustCompile(`(?m)^  \S`).FindStringIndex(rest); next != nil {
+			rest = rest[:next[0]]
+		}
+		return strings.Join(nonComments(rest), "\n")
+	}
+	scan, porch := service("scan"), service("porch")
+
+	for _, want := range []string{
+		`entrypoint: ["/porch-scan", "-verification-secret-file", "/data/secret"]`,
+		"- ./porch-data:/data:ro",
+		"- /etc/ssl/certs:/etc/ssl/certs:ro",
+		"SSL_CERT_DIR: /etc/ssl/certs",
+		"read_only: true",
+		"- no-new-privileges:true",
+		"cap_drop:\n- ALL",
+		"pull_policy: never",
+		`profiles: ["cli"]`,
+	} {
+		if !strings.Contains(scan, want) {
+			t.Errorf("the scan service does not have %q:\n%s", want, scan)
+		}
+	}
+	if strings.Contains(scan, "ports:") || strings.Contains(scan, "build:") {
+		t.Error("the scan service publishes a port or builds an image of its own")
+	}
+	if !strings.Contains(porch, "pull_policy: build") {
+		t.Error("the service's image may be pulled from a registry rather than built from the release")
+	}
+
+	if !regexp.MustCompile(`(?m)^COPY --chmod=0555 porchd porch-scan /$`).MatchString(repoFile(t, "Dockerfile")) {
+		t.Error("the image does not carry the command line beside the service")
 	}
 }

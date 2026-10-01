@@ -972,9 +972,8 @@ address.
 
 ### N9 — A deployment scans only estates it has been shown control of
 
-The command line needs no boundary: whoever runs it has the machine, the scan
-leaves from their own address, and nobody else can reach it. A service is the
-other case entirely, and until this existed it had nothing at all. A
+A service needed a boundary first, and until this existed it had nothing at
+all. A
 `porchd` bound to an interface is reachable by a careless colleague, by a
 compromised CI job, and by an SSRF into the scanner — and every scan any of
 them starts puts the operator's address in a stranger's logs. That is N6's
@@ -984,6 +983,32 @@ arrangement rebuilt inside somebody's own network, which is the thing
 **Proof is a TXT record at `_porch-challenge.<domain>`** carrying the token
 this deployment expects for that domain. Publishing it needs control of the
 zone, which is what is being proven.
+
+**And it is read from the zone's own servers, never through a resolver.** It
+was read through this machine's resolver, or the one `-resolver` named, and a
+resolver says whatever it is configured to say. On 2026-09-29 a resolver
+started on the same server as a proven installation answered for a domain
+nobody there controlled, carrying the token the installation expected, and the
+domain was scanned. Any resolver between a deployment and a zone — one handed
+out by DHCP, one with a poisoned cache, one on a path somebody sits on — was
+the proof's weakest point. The record is now read by walking from the root
+servers, whose addresses the binary carries, down each delegation to the
+servers holding the zone: one label at a time, so the root and the top-level
+domain never learn which name is being proven (RFC 9156); over TCP through the
+guard that refuses private and loopback destinations, since a zone names its
+own servers; with an address a referral carries used only for a server inside
+the zone that sent it; with a record believed only where its owner is the name
+asked about, and an alias followed by a walk of its own. The walk is bounded at
+forty-eight questions. What it cannot stop is somebody who answers in place of
+the zone's servers on this machine's own network, for a zone that is not
+signed; `-verification-requires-dnssec` then asks the resolver's signed bit as
+well, and a record counts only where both carry it
+(`TestTheChallengeIsReadFromTheZonesOwnServersAndNoResolver`,
+`TestGlueFromOutsideItsZoneIsNotBelieved`,
+`TestAnAliasIsWalkedFromTheRootAndNotBelieved`,
+`TestAWalkThatNeverEndsIsBounded`,
+`TestTheZonesOwnServersDecideAndNotAResolver`,
+`TestTheServiceReadsTheChallengeFromTheZone`).
 
 **Or a file at `/.well-known/porch-challenge`**, for teams without access
 to their own DNS — which is a common enough arrangement that refusing them
@@ -1032,11 +1057,82 @@ a new secret, created exclusively and readable by its owner alone, so turning
 proof on is one flag; a mistyped path means a new secret and every record
 refused, which fails closed.
 
-**A service beyond loopback requires it.** `porchd` will not listen anywhere
-but loopback without a secret unless it is also given `-open`, and the image and
-the compose file both turn proof on. docs/scope.md said the service default was
-on while the code shipped it off; the 2026-09-16 audit (A01, A02) found a
+**A service beyond loopback requires it, and nothing turns that off.**
+`porchd` will not listen anywhere but loopback without a secret, and the image
+and the compose file both turn proof on. docs/scope.md said the service default
+was on while the code shipped it off; the 2026-09-16 audit (A01, A02) found a
 container example publishing an open scanner.
+
+Until 2026-09-29 `-open` turned it off, and `-without-password` turned off the
+password beside it. Each rested on one sentence in its help text — "only for a
+network nobody else can reach" — which nothing could check, so an operator's
+belief about their network was the whole of the boundary. A second copy started
+on another port of a server that ran a proven installation, with both flags,
+served every name to everyone who could reach it, from the same address. Both
+flags are gone, and an installation started with either is told why rather than
+started (`TestTheFlagsThatOpenedAServiceAreRefused`). No release checks a
+name nobody has proven any more: the command line asks too, below.
+
+**The command line asks for the same proof, since 2026-09-29.** It needed none,
+on the argument that whoever runs it has the machine, the scan leaves from
+their own address, and nobody else can reach it. All true, and an answer to a
+different question — who can reach the program, rather than what denyfirst
+distributes. A release that checks whatever name is typed into it is a tool for
+looking at anybody's estate with this project's name on it, and the project
+undertakes to be a tool for looking at your own. So `porch-scan` keeps a secret
+per user — `porch/secret` under the user's configuration directory, made on
+the first run in a directory only they can enter, readable by them alone — and
+every target is proven before anything is checked, by the record the service
+asks for, read the same way from the zone's own servers and never through a
+resolver (`TestEveryTargetIsProvenBeforeAnythingIsChecked`,
+`TestTheCommandLineKeepsItsOwnSecretAndAsksNoResolver`,
+`TestTheCommandLineProvesBeforeItChoosesACheck`). A target that is not proven
+is refused with the records that would prove it; `-verification-token` prints
+them without asking anything. A lookup that failed is not a missing record,
+and is not reported as one (`TestAProofThatCouldNotBeReadIsNotAPass`). The web
+check takes the served file as the service does, and no other check does
+(`TestOnlyTheWebCheckAcceptsTheServedFile`).
+
+**On a server, one record covers the service and the command line, and the
+secret never moves.** The image carries `porch-scan` beside `porchd`, and the
+compose file's `scan` service runs it with `-verification-secret-file
+/data/secret`: the same image, the same sandbox, and the data directory
+mounted read-only, so the command line reads the secret as it is and can write
+nothing there — not the secret, not the sealed key, not a kept report
+(`TestOneRecordCoversTheServiceAndTheCommandLine`,
+`TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing`). It is
+never pulled: a run before the image is built fails rather than fetching
+something called `porch` from a registry. Copying the secret to another
+machine was documented for one day and taken out: the file is the authority
+to check every domain proven to the service, from wherever it is copied, and
+the only way to take it back is a new secret and every record published
+again. A command line elsewhere keeps a secret of its own.
+
+**The image build is never sent the data directory.** The release shipped a
+Dockerfile without an ignore file, so `docker compose up --build` sent the
+whole directory — `porch-data` with it — to the builder, and run with `sudo` it
+left the secret in BuildKit's cache. Measured on 2026-10-01: a file in
+`porch-data` could be copied into the image. `Dockerfile.dockerignore`, named so
+that a release can carry it and read by BuildKit before `.dockerignore`, sends
+the builder the two binaries and nothing else, and the same probe then fails
+with "not found" (`TestAServerHoldsTheReleaseAndNothingElse`).
+
+Proving before the run is the part a person reads, so that the answer to "why
+did nothing happen" is a record to publish. It is not the guard. Each check is
+handed the same scope and asks again where it connects, so a mode added later,
+or a `run()` rearranged, is refused by the check itself
+(`TestEveryCheckAsksForProofWhereItConnects`); within one run the zone is asked
+once per name (`TestARunAsksTheZoneOncePerName`), and the next run asks again.
+
+An address is refused: it has no zone this can read, and a reverse zone is
+published by whoever holds the range rather than whoever types the address. So
+is a single label, before anything is asked, because asking the root about an
+internal name sends it to the root servers for nothing
+(`TestAnAddressIsNotCheckedFromTheCommandLine`). A host with a private address
+is still reached with `-allow-private`, named by a domain proven in public DNS.
+What this does not claim is written here so nobody else has to: the source is
+published, and anybody determined can delete these lines and build it again,
+or use a tool that asks nothing. The promise is about what the release does.
 
 **The page shows the record to publish, and that is safe because of the token,
 not despite it.** `POST /api/v1/verify` answers whether a name is proven and,
@@ -1138,7 +1234,8 @@ the resolver reported the proving record DNSSEC-validated, and Domains shows it
 in those words, because the AD bit is the resolver's claim and worth what the
 path to it is worth — the objection the CAA report makes about the same bit.
 `-verification-requires-dnssec` accepts only signed records and never the file,
-for an operator whose resolver is theirs. Freshness, a failed lookup, and
+for an operator whose resolver is theirs; since 2026-09-29 the record must also
+be carried by the zone's own servers, reached from the root. Freshness, a failed lookup, and
 starting over with a new secret are in `docs/self-host.md`; nothing is cached,
 so a record taken out ends the proof as soon as the resolver lets it go.
 
@@ -1158,8 +1255,9 @@ all of them to the person who ran it. A copy of `porchd` only its operator can
 call, on this machine's loopback or behind their password, is that person with
 a browser in front of the command line, and it showed them a stranger's report
 of their own estate. `operatorView` now decides it: a scope, or a copy nobody
-but the operator can call. A copy started with `-open` and no password still
-answers strangers and still shows only what a visitor sees. The two questions
+but the operator can call. A copy that answers strangers shows only what a
+visitor sees — `porchd` no longer starts one, since `-open` and
+`-without-password` went on 2026-09-29, and the service does not assume it. The two questions
 that name the domain to somebody else — the transparency logs and the
 certificate's responder — stay with the scope, because without one the domain
 may be somebody else's, and the command line asks both only behind a flag for
@@ -1199,7 +1297,7 @@ same two facts.
 `TestSignedProofOnlyNeedsProofAndReachesTheScope`, `TestDomainsSaysWhetherTheProofWasSigned`,
 `TestProofLookupsInFlightAreBounded`, `TestTheProofDefaultsToTheNameItself`,
 `TestAMissingSecretIsCreatedAndThenKept`,
-`TestTheSecretIsCreatedByStartingAndNotByAsking`, `TestAnOpenServiceStaysOnLoopback`,
+`TestTheSecretIsCreatedByStartingAndNotByAsking`, `TestAServiceWithoutProofDoesNotStart`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestTheProofDialogIsOfferedOnlyWhereProofIsRequired`, `TestTheConsoleAsksForProofBeforeItRuns`,
 `TestOnlyTheEndpointsThatOpenNothingAskWithoutScanning`, `TestAServedFileIsNotReportedAsProofForEveryCheck`,
@@ -1676,9 +1774,13 @@ DNS record proving to themselves that they owned their own domain. That is
 friction bought with no safety, and friction bought with no safety is how a rule
 comes to be turned off altogether.
 
-A service nobody else can reach is the command line with a browser in front of
-it, and the command line has never asked for proof (A30). A service anybody else
-can reach is the case the rule is for. Where verification *is* configured it is
+A service nobody else can reach was the command line with a browser in front
+of it, and the command line did not ask for proof (A30). Since 2026-09-29 both
+do (N9): `porchd` does not start without a scope, and the command line proves
+every target, so the reachability rule here is reached only by a `Server` built
+with no `Verify` — which nothing this project ships builds, and which stays
+because a program embedding the package is an entry point too. A service anybody
+else can reach is the case the rule is for. Where verification *is* configured it is
 enforced wherever the service listens, because setting it up is an operator
 saying what they want, and a copy that quietly stopped enforcing it because of
 the address it bound to would be answering a question they had already answered.
@@ -3695,8 +3797,9 @@ HTTP to any other address does not work, by design. The server refuses it too, b
 password is read, and does not count a session sent by hand on such a request:
 only TLS, or a request addressed to this machine's own name, which is what the
 browser at the near end of an SSH tunnel sends, carries a password or a session.
-Beyond loopback `porchd` will not serve without `-access-file` unless told
-`-without-password`, and every configuration this project ships carries it; one
+Beyond loopback `porchd` will not serve without `-access-file`, and since
+2026-09-29 nothing turns that off; every configuration this project ships
+carries it; one
 example in the guide dropped it once, because a compose command replaces the
 default rather than adding to it. A plain `-results-dir` beside a password is
 refused at start, since it would keep in the clear, under each checked name,

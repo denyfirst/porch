@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/dnsclient"
 )
 
 // A secret file that does not exist is created, once, and then used.
@@ -96,28 +98,35 @@ func TestTheSecretIsCreatedByStartingAndNotByAsking(t *testing.T) {
 	}
 }
 
-// A service that scans anything listens on loopback, or says -open.
-func TestAnOpenServiceStaysOnLoopback(t *testing.T) {
-	for _, listen := range []string{"127.0.0.1:8080", "[::1]:8080", "localhost:8080", "127.1.2.3:9"} {
-		if err := openAllowed(listen, false, false); err != nil {
-			t.Errorf("%s was refused: %v", listen, err)
-		}
+// A service that scans anything does not start, on loopback or anywhere else.
+//
+// Loopback was the one place porchd served without proof, on the ground that
+// only this machine can reach it. Another user on the machine, another
+// container, a web application with an SSRF in it and a reverse proxy set up
+// in a hurry reach loopback too, and on 2026-09-29 that was reason enough.
+func TestAServiceWithoutProofDoesNotStart(t *testing.T) {
+	if err := proofRequired(false); err == nil {
+		t.Error("a service with no proof required was allowed")
 	}
-	for _, listen := range []string{"0.0.0.0:8443", ":8443", "[::]:8443", "192.0.2.10:443", "scanner.example:443"} {
-		if err := openAllowed(listen, false, false); err == nil {
-			t.Errorf("%s, with no proof required, was allowed", listen)
+	if err := proofRequired(true); err != nil {
+		t.Errorf("a service with proof required was refused: %v", err)
+	}
+	// The demonstration starts with no secret by design: its hosts are
+	// compiled in, a narrower boundary than any proof, and the call below
+	// passes demo.Enabled for exactly that.
+	for _, listen := range []string{"127.0.0.1:0", "localhost:0", "[::1]:0", "0.0.0.0:0"} {
+		if demoBuild() {
+			break
 		}
-		if err := openAllowed(listen, true, false); err != nil {
-			t.Errorf("%s with proof required was refused: %v", listen, err)
-		}
-		if err := openAllowed(listen, false, true); err != nil {
-			t.Errorf("%s with -open was refused: %v", listen, err)
+		code, said := start(t, "-listen", listen)
+		if code != 2 || !strings.Contains(said, "shown control of") {
+			t.Errorf("%s with no secret: exit %d, %q", listen, code, said)
 		}
 	}
 
 	// Asked before anything listens.
 	source := repoFile(t, "cmd/porchd/main.go")
-	check := strings.Index(source, "openAllowed(*listen, scope != nil || demo.Enabled, *allowOpen)")
+	check := strings.Index(source, "proofRequired(scope != nil || demo.Enabled)")
 	serve := strings.Index(source, `net.Listen("tcp", *listen)`)
 	if check < 0 || serve < 0 || check > serve {
 		t.Error("the open-service check is not made before listening")
@@ -155,7 +164,7 @@ func TestWhatCountsAsReachableByAnybodyElse(t *testing.T) {
 	// from this line.
 	source := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
-		"exposed := beyondLoopback(*listen) || *allowOpen",
+		"exposed := beyondLoopback(*listen)\n",
 		"api.ReachableByOthers(exposed)",
 		"api.BehindPassword(gate != nil)",
 		"OperatorOnly:      !exposed || gate != nil,",
@@ -164,5 +173,33 @@ func TestWhatCountsAsReachableByAnybodyElse(t *testing.T) {
 			t.Errorf("the service does not tell the API and the pages %q, so whether "+
 				"anybody else can reach it is worked out somewhere else", want)
 		}
+	}
+}
+
+// The scope porchd builds reads the challenge from the zone's own servers, and
+// keeps the resolver only for the signed bit.
+//
+// A scope that read it through the resolver would work in every test here and
+// accept whatever a resolver on the machine, or one it was pointed at, chose
+// to answer — which is how a domain nobody controlled was scanned on
+// 2026-09-29.
+func TestTheServiceReadsTheChallengeFromTheZone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secret")
+	if err := createSecret(path); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := verificationScope(path, "192.0.2.53:53")
+	if err != nil {
+		t.Fatal(err)
+	}
+	walk, ok := scope.Authority.(*dnsclient.Authority)
+	if !ok || walk == nil || walk.Client == nil {
+		t.Fatalf("the scope reads the challenge from %T, not from the zone's own servers", scope.Authority)
+	}
+	if walk.Client.Server != "" {
+		t.Errorf("the walk was handed a resolver (%q) to ask", walk.Client.Server)
+	}
+	if len(walk.Roots) != 0 {
+		t.Errorf("the walk starts somewhere other than the root servers carried: %v", walk.Roots)
 	}
 }

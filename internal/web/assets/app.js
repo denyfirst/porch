@@ -2169,10 +2169,15 @@ function showDomainRecord(answer) {
 
   // Signed is the resolver's word that it checked DNSSEC, and is shown as
   // that: not this page's work, and worth what the resolver is worth (A06).
+  //
+  // Unsigned said the proof rested on the resolver's answer alone. Since the
+  // record is read from the zone's own servers it rests on no resolver, and
+  // signed is false wherever the question was not asked, so the sentence was
+  // wrong twice. It says what was not asked instead (R17).
   state.textContent = answer.verified
     ? "Proven. Every check may run against this domain. " + (answer.signed
       ? "The resolver reported the record DNSSEC-signed."
-      : "The record is not DNSSEC-signed, so the proof rests on the resolver's answer alone.")
+      : "Whether the record is DNSSEC-signed was not asked: -verification-requires-dnssec asks.")
     : "Not proven yet. Publish this record, then check again.";
   state.className = "domain-state " + (answer.verified ? "mark-strong" : "mark-weak");
 

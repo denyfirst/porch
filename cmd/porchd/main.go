@@ -17,10 +17,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -226,22 +224,15 @@ func run() int {
 				"\tcertificate is being looked at, from this address and when — so it is\n"+
 				"\tonly a disclosure to make about your own estate")
 
-		// Signed proof only, for an operator whose resolver is theirs. The AD
-		// bit is the resolver's word and worth what the path to it is worth,
-		// so this is a choice about a resolver, not a switch that makes DNS
-		// safe (audit 2026-09-16, A06).
+		// Signed proof only, for an operator whose resolver is theirs. The
+		// record is read from the zone's own servers either way; this adds the
+		// resolver's AD bit, which is its word and worth what the path to it is
+		// worth, so this is a choice about a resolver, not a switch that makes
+		// DNS safe (audit 2026-09-16, A06).
 		requireSigned = flag.Bool("verification-requires-dnssec", false,
-			"accept only a challenge record the resolver reports DNSSEC-validated, and\n"+
-				"\tno challenge file. Worth it only with a validating resolver you trust,\n"+
-				"\tsuch as one on this machine: see -resolver")
-
-		// Stated rather than implied. Without it porchd refuses to listen
-		// beyond loopback unless a secret is given, because a service anyone can
-		// reach and that scans anything is an open scanner with this machine's
-		// address on it.
-		allowOpen = flag.Bool("open", false,
-			"listen beyond loopback without -verification-secret-file, scanning any\n"+
-				"\tpublic name it is given. Only for a network nobody else can reach")
+			"accept a challenge record only where the zone's own servers carry it and\n"+
+				"\tthe resolver also reports it DNSSEC-validated, and no challenge file.\n"+
+				"\tWorth it only with a validating resolver you trust: see -resolver")
 
 		verifyToken = flag.String("verification-token", "",
 			"print what the named domain must publish at "+verify.Label+", then exit")
@@ -292,7 +283,8 @@ func run() int {
 		resolver = flag.String("resolver", "",
 			"`address` of the resolver for the lookups this service makes, ip:port; empty\n"+
 				"\treads this machine's own configuration. The addresses scans connect to\n"+
-				"\tare still resolved by the machine")
+				"\tare still resolved by the machine, and a proof of control is read from\n"+
+				"\tthe zone's own servers, never through a resolver")
 
 		// One password in front of the whole installation, and the key its kept
 		// data is encrypted with, sealed by it. See internal/access.
@@ -301,12 +293,6 @@ func run() int {
 				"\tabsent; when set, nothing is served without signing in, and what is\n"+
 				"\tkept is encrypted under a key the password seals")
 
-		// Said out loud, like -open. A service beyond loopback with no password
-		// is one anyone who can reach it may use.
-		withoutPassword = flag.Bool("without-password", false,
-			"listen beyond loopback without -access-file, so anyone who can reach the\n"+
-				"\tservice may use it. Only for a network nobody else can reach")
-
 		showVersion = flag.Bool("version", false, "print the release and policy versions, then exit")
 	)
 
@@ -314,6 +300,12 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "porchd serves the denyfirst scanner over HTTP.\n\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n  %s [flags]\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
+	}
+	// Two flags are gone, and an installation started with either is told why
+	// rather than handed the flag package's "provided but not defined".
+	if err := removedFlags(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	flag.Parse()
 
@@ -403,13 +395,19 @@ func run() int {
 		scope.RequireSigned = true
 	}
 
-	// An open service is refused anywhere but loopback.
+	// A service without proof is refused, wherever it listens.
 	//
 	// docs/scope.md said proof was on by default for a service and the code
 	// did not (audit A01): a porchd bound to a public interface with no secret
-	// scanned whatever anyone asked. Loopback stays open, because only this
-	// machine can reach it; anything else needs proof, or -open said out loud.
-	if err := openAllowed(*listen, scope != nil || demo.Enabled, *allowOpen); err != nil {
+	// scanned whatever anyone asked. Loopback stayed open after that, on the
+	// ground that only this machine can reach it — and on 2026-09-29 that
+	// ground was found to be thinner than it reads: another user on the
+	// machine, another container, a web application with an SSRF in it and a
+	// reverse proxy set up in a hurry all reach loopback too. Nothing turns
+	// this off; -open did, and removedFlags says why it went. The
+	// demonstration's hosts are compiled in, which is a narrower boundary
+	// than any proof.
+	if err := proofRequired(scope != nil || demo.Enabled); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
@@ -428,13 +426,12 @@ func run() int {
 		return 2
 	}
 
-	// And a service beyond loopback has a password in front of it, or says out
-	// loud that it has none. Proof of control is about which domains may be
-	// checked, not who may ask: an example that dropped -access-file while
-	// adding a certificate (audit 2026-09-18, D01) made every proven domain
-	// scannable by anyone who could reach the address. The demonstration is
-	// public by design.
-	if err := passwordAllowed(*listen, *accessFile != "" || demo.Enabled, *withoutPassword); err != nil {
+	// And a service beyond loopback has a password in front of it, always.
+	// Proof of control is about which domains may be checked, not who may ask:
+	// an example that dropped -access-file while adding a certificate (audit
+	// 2026-09-18, D01) made every proven domain scannable by anyone who could
+	// reach the address. The demonstration is public by design.
+	if err := passwordAllowed(*listen, *accessFile != "" || demo.Enabled); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
@@ -525,7 +522,7 @@ func run() int {
 	// their own estate is offered without proof. A copy nobody else can reach is
 	// the command line with a browser in front of it, and the command line has
 	// never asked the operator to prove they own their own domain.
-	exposed := beyondLoopback(*listen) || *allowOpen
+	exposed := beyondLoopback(*listen)
 	api.ReachableByOthers(exposed)
 
 	// The monitor the inventory endpoint asks, if the operator named one.
@@ -1236,7 +1233,9 @@ func reach(scoped bool) string {
 	if scoped {
 		return "scans only domains it has been shown control of"
 	}
-	return "scans whatever it is pointed at"
+	// Not a configuration porchd starts in: proofRequired refuses it. Said
+	// here for -version, which answers without starting.
+	return "will not start: it scans only domains it has been shown control of, and was given no -verification-secret-file"
 }
 
 // verificationScope reads the deployment secret, or reports why it could not.
@@ -1249,30 +1248,28 @@ func reach(scoped bool) string {
 // The secret is read from a file rather than a flag: a flag value is in the
 // process list, where every user on the machine reads it.
 //
-// resolver is the -resolver flag: the challenge is read through it when set.
+// resolver is the -resolver flag. The challenge is not read through it: it is
+// read from the zone's own servers, reached from the root, and the resolver is
+// asked only for the signed bit -verification-requires-dnssec wants.
 func verificationScope(path, resolver string) (*verify.Scope, error) {
 	if path == "" {
 		return nil, nil
 	}
 
-	// #nosec G304 -- operator-supplied path, never request-supplied
-	secret, err := os.ReadFile(path)
+	secret, err := verify.ReadSecret(path)
 	if err != nil {
-		return nil, fmt.Errorf("the verification secret could not be read: %w", err)
-	}
-
-	secret = []byte(strings.TrimSpace(string(secret)))
-	if len(secret) < 32 {
-		// Short enough to guess is short enough to forge every token this
-		// deployment will ever check, and a deployment whose tokens can be
-		// forged is one anyone can add a domain to.
-		return nil, errors.New("the verification secret is shorter than 32 bytes; generate one with " +
-			"head -c 32 /dev/urandom | base64 > the file")
+		return nil, err
 	}
 
 	return &verify.Scope{
-		Secret:   secret,
-		Resolver: &dnsclient.Client{Server: resolver},
+		Secret: secret,
+
+		// The challenge is read from the zone's own servers, from the root,
+		// and no resolver's word is taken for it. The resolver stays for the
+		// signed bit -verification-requires-dnssec asks for, and a record then
+		// counts only where both carry it.
+		Authority: &dnsclient.Authority{Client: &dnsclient.Client{Timeout: 3 * time.Second}},
+		Resolver:  &dnsclient.Client{Server: resolver},
 
 		// The file method, for teams without access to their own DNS. It
 		// is consulted only when the zone proof was not found, and only for
@@ -1290,42 +1287,56 @@ var secretOut io.Writer = os.Stderr
 // there. An existing file is left alone, whatever it holds: reading and judging
 // it is verificationScope's job.
 func createSecret(path string) error {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return fmt.Errorf("a verification secret could not be generated: %w", err)
-	}
-
-	// #nosec G304 -- operator-supplied path, never request-supplied
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return nil
-	}
+	created, err := verify.CreateSecret(path)
 	if err != nil {
-		return fmt.Errorf("the verification secret could not be created: %w", err)
+		return err
 	}
-	if _, err := f.Write([]byte(base64.StdEncoding.EncodeToString(raw) + "\n")); err != nil {
-		f.Close() //nolint:errcheck,gosec // the write error is the one worth reporting
-		return fmt.Errorf("the verification secret could not be written: %w", err)
+	if created {
+		fmt.Fprintln(secretOut, "a new verification secret was written; every domain has to publish its record again")
 	}
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("the verification secret could not be written: %w", err)
-	}
-	fmt.Fprintln(secretOut, "a new verification secret was written; every domain has to publish its record again")
 	return nil
 }
 
-// openAllowed refuses a service that would scan anything on an address other
-// than loopback, unless the operator said -open.
-//
-// An address that does not parse is treated as reachable, as beyondLoopback
-// says why, so this refuses it before the listener gets the chance to.
-func openAllowed(listen string, scoped, open bool) error {
-	if scoped || open || !beyondLoopback(listen) {
+// proofRequired refuses a service that would scan a domain nobody proved,
+// wherever it listens.
+func proofRequired(scoped bool) error {
+	if scoped {
 		return nil
 	}
-	return errors.New("porchd will not listen beyond loopback without proof of control: " +
-		"anyone who can reach it could point it at any host, from this machine's address. " +
-		"Add -verification-secret-file, or -open if no one else can reach this network")
+	return errors.New("porchd scans only domains it has been shown control of: " +
+		"anyone who can reach it — on this machine or beyond it — could otherwise point it at " +
+		"any host, from this machine's address. Add -verification-secret-file")
+}
+
+// removedFlags refuses the two flags that turned the rules above off, and
+// says why they went.
+//
+// -open served any name beyond loopback, and -without-password served anyone.
+// Each was a sentence in its help text — "only for a network nobody else can
+// reach" — and nothing that could check it: an operator's belief about their
+// network was the whole of the boundary. A porchd reachable by others scans
+// only what it has been shown control of, for whoever signed in, with no
+// switch. Scanning a name nobody proved is what porch-scan is for, run by the
+// person at the terminal, who is the one answerable for it.
+func removedFlags(args []string) error {
+	for _, arg := range args {
+		if arg == "--" {
+			return nil
+		}
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		switch name {
+		case "open":
+			return errors.New("-open was removed: porchd always requires " +
+				"-verification-secret-file, loopback included, and so does porch-scan")
+		case "without-password":
+			return errors.New("-without-password was removed: porchd beyond loopback always " +
+				"requires -access-file")
+		}
+	}
+	return nil
 }
 
 // beyondLoopback reports whether an address somebody other than this machine's
@@ -1433,20 +1444,19 @@ func retireSealed(dir, today string) (string, error) {
 }
 
 // passwordAllowed refuses a service without a password on an address other
-// than loopback, unless the operator said -without-password. The same shape as
-// openAllowed: loopback is reachable only from this machine.
+// than loopback. The same shape as openAllowed: loopback is reachable only
+// from this machine.
 //
 // It reads the address through beyondLoopback, as openAllowed does. It had a
 // reading of its own that answered the other way for an address it could not
 // parse — reachable to one, loopback to the other — which is the second copy
 // of one decision that beyondLoopback exists to prevent.
-func passwordAllowed(listen string, guarded, without bool) error {
-	if guarded || without || !beyondLoopback(listen) {
+func passwordAllowed(listen string, guarded bool) error {
+	if guarded || !beyondLoopback(listen) {
 		return nil
 	}
 	return errors.New("porchd will not listen beyond loopback without a password: anyone who " +
-		"can reach it could use it. Add -access-file, or -without-password if no one else can " +
-		"reach this network")
+		"can reach it could use it. Add -access-file")
 }
 
 // namesSearcher builds the transparency monitor the inventory endpoint asks.

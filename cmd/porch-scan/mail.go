@@ -16,6 +16,7 @@ import (
 	"github.com/denyfirst/porch/internal/mtasts"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
+	"github.com/denyfirst/porch/internal/verify"
 )
 
 // mailScanner builds the check this command runs.
@@ -70,8 +71,9 @@ type mailResult struct {
 // private address is not a case an operator is asking about in either: both
 // exist so that senders on the public internet can reach them, so one only this
 // machine can reach is one no sender ever would.
-func runMail(ctx context.Context, domains []string, timeout time.Duration, resolver string, asJSON bool, store *results.Store, selectors []dkim.Selector, heloName string) int {
+func runMail(ctx context.Context, scope *verify.Scope, domains []string, timeout time.Duration, resolver string, asJSON bool, store *results.Store, selectors []dkim.Selector, heloName string) int {
 	scanner := mailScanner(timeout, selectors, heloName)
+	scanner.Verify = scope
 	if resolver != "" {
 		// One question at a time is bounded by the client's own timeout, as on
 		// the TLS path. This used to be -timeout itself, the budget for a whole

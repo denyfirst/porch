@@ -53,7 +53,7 @@ porchd -listen 0.0.0.0:8443 -verification-secret-file /etc/porch/secret
 ```
 
 The file is created on the first start if it is not there. Without it, `porchd`
-refuses to listen anywhere but loopback unless it is also given `-open`.
+does not start — on loopback or anywhere else — and no flag changes that.
 
 `porchd -version` says which of the two you have, so a deploy can read it
 rather than trust a filename:
@@ -140,6 +140,27 @@ because two copies of a verification procedure drift and the copy nobody is
 reading is the one that goes wrong. Do that first; everything below assumes a
 binary you have checked.
 
+Nothing needs Go. The command line for this machine's system and processor,
+with the list and its signature to check it against:
+
+```sh
+V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
+OS=$(uname -s | tr '[:upper:]' '[:lower:]'); A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+for f in "porch-scan_${V}_${OS}_${A}" SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
+```
+
+Then check them as `docs/verify.md` says, and only then name it and make it
+runnable:
+
+```sh
+mv "porch-scan_${V}_${OS}_${A}" porch-scan && chmod +x porch-scan
+```
+
+On Windows, `porch-scan_<version>_windows_amd64.exe` from the release page,
+checked with `Get-FileHash` as `docs/verify.md` shows. The service is the
+same: its binary is in the release, and a server runs it in a container
+without Go (see *In a container*).
+
 Building from source is the other answer, and needs nothing but Go:
 
 ```sh
@@ -156,10 +177,31 @@ library, so there is no third-party supply chain to audit here.
 ## The command line
 
 ```sh
+./porch-scan -verification-token example.com   # the TXT record to publish, once
 ./porch-scan example.com
 ./porch-scan -json example.com
-./porch-scan -allow-private 10.0.0.5
+./porch-scan -allow-private intranet.example.com
 ```
+
+**Every domain is proven first**, as on the service. The first run makes a
+secret under your configuration directory (`-verification-secret-file` names
+another), and every record you publish is derived from it:
+`-verification-token` prints the `_porch-challenge` TXT records for a name and
+each domain above it, and any one of them proves the name. The record is read
+from the zone's own servers, reached from the root over TCP port 53, so it
+counts as soon as they serve it and no resolver on this machine is asked. The
+web check also takes the file at `/.well-known/porch-challenge`, as the
+service does.
+
+An address is refused, because no record can prove one; so is a single label
+such as `intranet`. A host on a private address is checked with
+`-allow-private` and named by a domain proven in public DNS. The secret is
+yours: another user on the machine has their own, and proving a domain to them
+proves nothing to you.
+
+On a server running the service, use the command line that runs beside it
+instead (*The command line, on the server*, below): it has the service's
+secret, so the record the page asked for is the only one there is.
 
 The exit status is the worst verdict found — `0` strong, `1` weak, `2`
 insecure, `3` the scan could not be completed — so it gates a pipeline without
@@ -292,22 +334,42 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 
 ### On a server, step by step
 
-1. Get the code and a binary. Either the release, verified — `docs/verify.md` —
-   or built from this checkout on any machine with Go, which fetches nothing
-   else:
+1. Get the release, and nothing else. On the server, in a directory of its
+   own: the service and its command line for the server's processor, the
+   three files that run them, and the signed list of their hashes. No source,
+   no documents and no history go to a machine that runs two binaries, and
+   nothing is built there, so the server needs Docker and no Go.
 
    ```sh
-   git clone https://github.com/denyfirst/porch
-   cd porch
-   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o porchd ./cmd/porchd
+   mkdir -p porch && cd porch
+   V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
+   A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+   for f in "porchd_${V}_linux_${A}" "porch-scan_${V}_linux_${A}" Dockerfile Dockerfile.dockerignore docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
    ```
 
-   Built elsewhere, copy `porchd` into the checkout on the server.
+   `A` is the processor: `amd64` for most servers, `arm64` for ARM ones. A
+   processor the release is not built for has no file to download, and `curl
+   -f` stops there rather than fetching something that will not run.
 
-2. Make the data directory and give it to the user the container runs as.
-   There is no shell in the image to do this from inside:
+   Then check them, in that directory, as [`docs/verify.md`](verify.md) says:
+   the signature over `SHA256SUMS`, then every file against it. From v0.25.1
+   the list carries the three container files as well as the binaries, so the
+   same two commands check all of them. Stop at the first that fails.
+
+   `Dockerfile.dockerignore` is what keeps `porch-data` — the secret and the
+   sealed key — out of what the image build is sent. Without it the whole
+   directory goes to the builder, and a build run with `sudo` leaves a copy of
+   the secret in Docker's build cache.
+
+   Building it yourself instead: build on any machine with Go, as *Get a
+   binary* above says, and copy `porchd`, `porch-scan` and the three files to
+   the server. Nothing else is needed there.
+
+2. Name the binaries, and make the data directory for the user the container
+   runs as. There is no shell in the image to do this from inside:
 
    ```sh
+   mv porchd_*_linux_* porchd && mv porch-scan_*_linux_* porch-scan
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
    ```
 
@@ -345,15 +407,63 @@ the image is a wrapper around a binary **you verified**, or built yourself.
    for every name under that domain without asking again, for as long as the
    record is there. Delete the record and the domain is refused again.
 
+### The command line, on the server
+
+The image carries `porch-scan` beside the service, and the compose file runs
+it with this installation's secret. The record that proves a domain to the
+page proves it here, and nothing else proves anything:
+
+```sh
+docker compose run --rm scan example.com
+docker compose run --rm scan -check mail example.com
+```
+
+It checks, prints and exits, and its exit status is the worst verdict, so a
+job on the server can gate on it. It runs in the same sandbox as the service —
+no capability, nothing writable — and sees the data directory read-only: it
+reads the secret and can change nothing there, not the secret, not the
+password, not a kept report. Start the service once first, because the first
+start is what makes the secret. A domain not proven to this installation is
+refused with the record to publish, which is the record the page shows.
+
+### Where the record goes at your provider
+
+Every provider asks for the type, `TXT`; the name; and the value, pasted as it
+is. Most add your domain to the name themselves, so type only the part before
+it — for `_porch-challenge.www.example.com` in the zone `example.com`, that is
+`_porch-challenge.www`. If the record reads back with your domain on it twice,
+type the shorter form.
+
+| Provider | The name goes in |
+|---|---|
+| Cloudflare | Name |
+| Amazon Route 53 | Record name, with the value inside double quotes |
+| Google Cloud DNS | DNS name |
+| Azure DNS | Name |
+| GoDaddy | Name |
+| Namecheap | Host |
+| Hetzner | Name |
+| DigitalOcean | Hostname |
+| A zone file | The whole name with a final dot, the value inside double quotes, then a reload |
+
+The same table is beside the record in the console and on the Domains page.
+It is help with a form and nothing else. The record is read from whichever
+servers the zone names, reached from the root, whoever runs them; pinning the
+check to a provider picked from a list would prove less, because control of
+the zone is what is being proven and a zone moved to another provider is still
+its owner's. A provider missing from the table works exactly as well.
+
 ### Proof of control is on, and has to be
 
 A container listens beyond loopback by construction, and `porchd` refuses to
 do that while scanning whatever it is given: it will not start without
-`-verification-secret-file` or an explicit `-open`. The image and the compose
-file both turn proof on. `-open` exists for a network nobody else can reach,
-and it is the setting to think about twice. A password is the same: beyond loopback
-`porchd` wants `-access-file`, or `-without-password` said out loud, and the
-image and the compose file give it the first.
+`-verification-secret-file`. The image and the compose file both turn proof on.
+A password is the same: beyond loopback `porchd` wants `-access-file`, and the
+image and the compose file give it. Neither can be turned off — `-open` and
+`-without-password` did that until 2026-09-29, and an installation started with
+either is now told they were removed. Nothing checks a name nobody has
+proven: `porch-scan` asks for the same record, and on this server it asks
+with this installation's secret.
 
 **Why showing the record is safe.** The value is derived from this
 installation's secret and the one domain. It proves something only once it is
@@ -371,16 +481,24 @@ refused, each host has a budget, and a scan sends what a browser or a mail
 server would.
 
 **It is asked every time.** Nothing remembers that a domain was proven: every
-check asks DNS again, so taking the record out ends the proof. How soon
-depends on the resolver, which may answer from its cache until the record's
-time to live runs out; a short TTL on the record makes removal quick. A lookup
-that fails is not taken as proof, and the check is refused with a sentence
-saying the record could not be looked up.
+check asks the zone's own servers again, so taking the record out ends the
+proof as soon as those servers stop serving it — no resolver's cache stands in
+between. A lookup that fails is not taken as proof, and the check is refused
+with a sentence saying the record could not be looked up.
 
 **Starting over.** Every record is derived from the secret in
 `porch-data/secret`. Delete it and restart, and a new one is made: every
 record published so far stops proving anything, and each domain has to publish
 its new value, which Domains shows.
+
+**Where the record is read.** From the zone's own servers, not from a
+resolver. porchd walks from the root servers, whose addresses it carries, down
+to the servers that hold the domain, and asks them; a resolver on this machine,
+or the one `-resolver` names, is not asked for the record at all, so a resolver
+that lies cannot prove a domain. The walk leaves over TCP port 53 to name
+servers anywhere on the internet: a firewall that allows the server only its
+own resolver refuses every proof, with a sentence saying the record could not
+be looked up.
 
 **Signed or not.** Domains says whether the resolver reported the record
 DNSSEC-signed. That is the resolver's word, not porch's own check, and it is
@@ -491,7 +609,7 @@ one from Let's Encrypt for `scan.example.com`:
 A `command` replaces the one in the compose file, it is not added to it, so
 every argument has to be there: drop `-access-file` and the password goes, and
 `porchd` then refuses to start on a public address, because it will not serve
-anyone beyond loopback without a password unless told `-without-password`.
+anyone beyond loopback without a password.
 
 The key has to be readable by user 65534. Nothing listens on port 80 — see
 `docs/invariants.md`, P5 — so obtain the certificate with a DNS challenge, or

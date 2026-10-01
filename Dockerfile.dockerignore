@@ -1,0 +1,18 @@
+# The image is built from two files, and the build is sent those two: the
+# service and the command line, both from the signed release.
+#
+# Without this, "docker compose up --build" sends the whole directory to the
+# builder. In a checkout that is the source and .git; on a server it is
+# porch-data, which holds the verification secret and the sealed key — and run
+# with sudo, the build reads them and BuildKit keeps a copy in its cache, a
+# place nobody thinks to look for a secret. The Dockerfile's single COPY was
+# the only thing keeping them out of the image.
+#
+# Named for the Dockerfile rather than ".dockerignore" so that it can travel in
+# the release: BuildKit reads <Dockerfile>.dockerignore first, and a file whose
+# name starts with a dot is one a download loop and a directory listing both
+# pass over. Before v0.25.1 there was no ignore file at all, and a server that
+# built in its checkout sent the builder its porch-data with everything else.
+*
+!porchd
+!porch-scan

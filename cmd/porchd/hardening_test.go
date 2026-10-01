@@ -40,7 +40,7 @@ func TestAPasswordIsAskedForOnTheSameReadingOfAnAddress(t *testing.T) {
 		"0.0.0.0:8443", ":8443", "[::]:8443", "192.0.2.10:443", "scanner.example:443",
 		"", "not an address", "1.2.3.4",
 	} {
-		if (passwordAllowed(listen, false, false) == nil) != !beyondLoopback(listen) {
+		if (passwordAllowed(listen, false) == nil) != !beyondLoopback(listen) {
 			t.Errorf("%q: a password and the loopback reading disagree", listen)
 		}
 	}

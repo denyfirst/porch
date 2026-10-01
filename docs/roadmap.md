@@ -36,13 +36,13 @@ proves `www.example.com` and every name added later, because a TXT record
 proves control of a zone. The pages ask for the name's own record unless the
 operator picks a domain above it, and say what that gives away (A04, D05).
 
-**The command line needs no proof.** Proof and a password protect a service:
-somebody else's machine and address, used by whoever reaches it. `porch-scan`
-runs on the machine of the person asking, from their address, under their
-responsibility, as `openssl` and `curl` do. A restriction there would be one
-line anyone could delete from source that is published to be read, and
-pretending otherwise would be the kind of claim this project does not make
-(A30).
+**The command line asks for proof too**, since 2026-09-29. It did not, on the
+argument that it runs on the machine of the person asking, from their address,
+under their responsibility, as `openssl` and `curl` do. That is who can reach
+it; what denyfirst distributes is a tool for checking your own estate, and the
+release now keeps that promise in a terminal as well. The restriction is still
+lines anyone could delete from published source, and N9 says so rather than
+claiming otherwise (A30).
 
 ---
 
@@ -103,9 +103,9 @@ constructor now hands the boundary to every check it builds, `UseWebScanner`
 cannot drop it, and the test drives the `POST` routes read out of the source
 rather than a list somebody has to remember to extend.
 
-**The default is on.** Beyond loopback `porchd` will not start without a
-verification secret unless `-open` is said, nor without a password unless
-`-without-password` is; the image and the compose file carry both. The
+**The default is on, and stays on.** Beyond loopback `porchd` will not start
+without a verification secret or without a password, and since 2026-09-29 no
+flag turns either off; the image and the compose file carry both. The
 reviews of 2026-09-16 (A01, A07) and 2026-09-18 (D01) are closed by that, and
 v0.18.0 said so in its release note.
 
@@ -136,7 +136,7 @@ right:
 
 | | default | why |
 |---|---|---|
-| `porch-scan`, in a terminal | off | whoever runs it already has the machine; nobody else can reach it |
+| `porch-scan`, in a terminal | **on** | what the release does is the promise, wherever it runs (N9) |
 | `porchd`, a service | **on** | anything anyone can reach must not scan arbitrary hosts |
 
 Architecturally it is a sibling of `internal/demo`: the same boundary, asked
