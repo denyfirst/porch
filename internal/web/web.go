@@ -29,6 +29,7 @@ import (
 
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/httpapi"
+	"github.com/denyfirst/porch/internal/ociimage"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/promises"
 	"github.com/denyfirst/porch/internal/webprobe"
@@ -625,7 +626,7 @@ func init() {
 			Description: "Porch is a self-hosted scanner: the TLS handshake and certificate, how a site is reached, and what a domain's DNS says about its mail. Every verdict cites the document behind it, and nothing about a scan is recorded. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
 			Script:      true,
-			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks()},
+			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest()},
 		}
 	}
 
@@ -1112,6 +1113,23 @@ func demoDomain() string {
 type porchPage struct {
 	Hosts  []demo.Host
 	Checks []consoleCheck
+
+	// ImageDigest is the release's image, as its compose file pins it.
+	ImageDigest string
+}
+
+// imageDigest is set by scripts/build.sh on the demonstration build, from the
+// image it built for the same release, so the compose file the Porch page
+// shows is the one the release ships. Empty on any other build, where the
+// page shows the repository's placeholder rather than a digest it does not
+// know.
+var imageDigest string
+
+func pageImageDigest() string {
+	if imageDigest == "" {
+		return ociimage.Placeholder
+	}
+	return imageDigest
 }
 
 // docsPage is what assets/docs.html reads.

@@ -70,10 +70,22 @@ sha256sum --ignore-missing -c SHA256SUMS
 
 On macOS, `shasum -a 256 --ignore-missing -c SHA256SUMS`.
 
-From v0.25.1 the list also names `Dockerfile`, `Dockerfile.dockerignore` and
-`docker-compose.yml`, the three files that run the service in a container, so
-that a server needs nothing but the release. The same command checks them: every file it prints must say `OK`,
-and a file it does not print was not downloaded.
+From v0.26.0 the list also names `docker-compose.yml`, which names the
+release's container image by its digest, and `porch-image_<version>.tar`, the
+image itself. The same command checks them: every file it prints must say
+`OK`, and a file it does not print was not downloaded. (v0.25.1 listed a
+`Dockerfile` and `Dockerfile.dockerignore` instead, and built the image on the
+server.)
+
+The compose file is the only file a server has to check. Docker fetches the
+image it names from `ghcr.io/denyfirst/porch` by that digest, and a digest is
+the image's own SHA-256: Docker refuses any bytes that do not hash to it, so a
+registry cannot hand over anything else under that name. The image archive in
+the release is the same image, for a machine that should not reach a
+registry: `docker load -i porch-image_<version>.tar` puts it where the compose
+file finds it by digest. The reproduction workflow rebuilds the archive from
+the tagged source, compares it, and then reads the image back from `ghcr.io`
+anonymously and fails unless every byte is the one the release signed.
 
 On Windows:
 

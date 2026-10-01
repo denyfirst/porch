@@ -327,58 +327,53 @@ flag that widens this.
 ## In a container
 
 The image has **no base system**: no package manager, no shell, no libc.
-There is nothing in it to update and nothing in it to take. It also builds
-nothing — a builder stage would produce bytes nobody has checked, and the
-argument of this project is that the release is signed and reproducible. So
-the image is a wrapper around a binary **you verified**, or built yourself.
+There is nothing in it to update and nothing in it to take. It is the
+release's two Linux binaries and nothing else, built for `amd64` and `arm64`
+by `internal/ociimage` rather than by Docker, so that it comes out byte for
+byte the same wherever it is built. The release workflow publishes it to
+`ghcr.io/denyfirst/porch`, the maintainer rebuilds it and signs only when the
+digest matches, and the release's `docker-compose.yml` names it **by that
+digest**. A registry cannot answer a digest with any other bytes, and Docker
+refuses them if it tries, so the only file a server needs to check is the
+compose file.
 
 ### On a server, step by step
 
-1. Get the release, and nothing else. On the server, in a directory of its
-   own: the service and its command line for the server's processor, the
-   three files that run them, and the signed list of their hashes. No source,
-   no documents and no history go to a machine that runs two binaries, and
-   nothing is built there, so the server needs Docker and no Go.
+1. Get the compose file and the signed list that covers it, and check them.
+   On the server, in a directory of its own. Nothing is built there, so the
+   server needs Docker and nothing else: no Go, no source, no binaries.
 
    ```sh
    mkdir -p porch && cd porch
-   V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
-   A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
-   for f in "porchd_${V}_linux_${A}" "porch-scan_${V}_linux_${A}" Dockerfile Dockerfile.dockerignore docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
+   for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/latest/download/${f}"; done
+   curl -fsSL https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers -o allowed_signers
+   ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS
    ```
 
-   `A` is the processor: `amd64` for most servers, `arm64` for ARM ones. A
-   processor the release is not built for has no file to download, and `curl
-   -f` stops there rather than fetching something that will not run.
+   The last line has to print `Good "file" signature for
+   releases@denyfirst.dev` and `docker-compose.yml: OK`. Anything else is a
+   stop. [`docs/verify.md`](verify.md) says what each part proves, and why the
+   key comes from the repository rather than from the release.
 
-   Then check them, in that directory, as [`docs/verify.md`](verify.md) says:
-   the signature over `SHA256SUMS`, then every file against it. From v0.25.1
-   the list carries the three container files as well as the binaries, so the
-   same two commands check all of them. Stop at the first that fails.
+   Building the image yourself instead: the `Dockerfile` in the repository
+   builds the same contents from binaries you built, as *Get a binary* above
+   says. Its digest will not be the release's — a Docker build stamps times —
+   so name it in the compose file in place of the `ghcr.io` line, with
+   `pull_policy: never`.
 
-   `Dockerfile.dockerignore` is what keeps `porch-data` — the secret and the
-   sealed key — out of what the image build is sent. Without it the whole
-   directory goes to the builder, and a build run with `sudo` leaves a copy of
-   the secret in Docker's build cache.
-
-   Building it yourself instead: build on any machine with Go, as *Get a
-   binary* above says, and copy `porchd`, `porch-scan` and the three files to
-   the server. Nothing else is needed there.
-
-2. Name the binaries, and make the data directory for the user the container
-   runs as. There is no shell in the image to do this from inside:
+2. Make the data directory for the user the container runs as, and start it.
+   There is no shell in the image to make the directory from inside:
 
    ```sh
-   mv porchd_*_linux_* porchd && mv porch-scan_*_linux_* porch-scan
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
-   ```
-
-3. Start it:
-
-   ```sh
-   docker compose up -d --build
+   docker compose up -d
    docker compose logs
    ```
+
+   Docker pulls the image the compose file names, anonymously, from
+   `ghcr.io`. If this machine has signed in to `ghcr.io` with `docker login`,
+   the pull is made as that account, and GitHub learns which account installed
+   it; `docker logout ghcr.io` first if that matters.
 
    The first start writes a verification secret to `porch-data/secret` and
    says so. Keep that file: it is what every domain's record is derived from,
@@ -388,7 +383,7 @@ the image is a wrapper around a binary **you verified**, or built yourself.
    writes it nowhere else, but Docker keeps the log until the container is
    recreated, which is one reason to change the password straight away.
 
-4. Open it. The example publishes the service on the server's own loopback,
+3. Open it. The example publishes the service on the server's own loopback,
    so nothing is reachable from outside. From your computer:
 
    ```sh
@@ -397,15 +392,30 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 
    and open `http://localhost:8080`.
 
-5. Sign in with the password from the log, then change it under **This
+4. Sign in with the password from the log, then change it under **This
    installation**. Everything the installation serves, pages and API alike,
    is behind it.
 
-6. Check a name. The first time, the page shows a TXT record to add at your
+5. Check a name. The first time, the page shows a TXT record to add at your
    DNS provider — `_porch-challenge.<domain>` and its value — and a button to
    check again once it is published. After that the checks run, and they run
    for every name under that domain without asking again, for as long as the
    record is there. Delete the record and the domain is refused again.
+
+### Upgrading
+
+Step 1 again, in the same directory, and then `docker compose up -d`. The
+data directory stays, so does the password, and so does every record you
+published. Docker pulls the new digest and replaces the container.
+
+An installation from v0.25.1 or before built its image on the server. Once the
+new compose file is in place, the binaries, `Dockerfile` and
+`Dockerfile.dockerignore` in its directory can go, and what its old builds
+left in Docker's cache should too:
+
+```sh
+sudo docker builder prune -a -f
+```
 
 ### The command line, on the server
 

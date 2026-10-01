@@ -56,6 +56,19 @@ for target in $targets; do
     done
 done
 
+# The container image, out of the Linux binaries above, and the compose file
+# that starts it by its digest.
+#
+# Built by internal/ociimage rather than by Docker, because a Docker build
+# stamps times and compresses as its version does, and two builds of the same
+# binaries then name two digests. This one writes every byte itself, so the
+# image reproduces like the binaries do: the release workflow pushes it, the
+# maintainer's -Compare rebuilds it and signs only if it matches, and the
+# compose file the signature covers names it by digest, which a registry
+# cannot answer with anything else. go run, not a flag on go build: the tool
+# builds no release binary, so the release build command stays in one place.
+digest="$(go run ./internal/ociimage/porch-image build -tag "${tag}" -dist "${out}" -compose docker-compose.yml)"
+
 # The build that runs on denyfirst.dev.
 #
 # It is the same program with one list compiled in: it connects only to hosts
@@ -69,22 +82,19 @@ done
 # it is a thing one server runs, and offering it for five platforms would
 # invite somebody to install a crippled scanner by mistake. The name says what
 # it is for the same reason.
+#
+# It carries the image's digest, so the compose file its Porch page shows is
+# the one this release ships.
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -buildvcs=false -tags demo \
-        -ldflags "-s -w -X main.version=${tag}" \
+        -ldflags "-s -w -X main.version=${tag} -X github.com/denyfirst/porch/internal/web.imageDigest=${digest}" \
         -o "${out}/porchd-demonstration_${tag}_linux_amd64" "./cmd/porchd"
 
-# And the three files that run the service, so that a server needs nothing but
-# the release. Dockerfile.dockerignore keeps the server's data directory, which
-# holds the verification secret, out of what the image build is sent.
-#
-# Until v0.25.1 the way to them was a clone of this repository onto the
-# server, which put the whole source tree, its documents and its history on a
-# machine that runs one binary. Listed in SHA256SUMS they are covered by the
-# same signature as the binary beside them, where a clone of the default
-# branch is covered by nothing a reader checks. Copied as they are, so a
-# reproduction produces the same bytes: .gitattributes gives every checkout
-# LF line endings, Windows included.
-cp Dockerfile Dockerfile.dockerignore docker-compose.yml "${out}/"
+# A server needs nothing else from the release: the compose file above, which
+# names the image by digest, and the signed list that covers it. Until v0.25.1
+# the way to run the service was a clone of this repository onto the server;
+# v0.25.1 shipped the binaries with a Dockerfile and built the image there.
+# Neither is needed now, and the Dockerfile stays in the repository for
+# whoever builds their own.
 
 ls -la "$out"

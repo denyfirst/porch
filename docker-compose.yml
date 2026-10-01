@@ -10,16 +10,20 @@
 #
 # docs/self-host.md walks through the rest, including a public address with a
 # certificate.
+#
+# The image is named by its digest, never by a tag. The copy of this file in a
+# release carries that release's digest, written by scripts/build.sh from the
+# image it built, and the release's signature covers this file — so what is
+# started is exactly what was signed, and a registry cannot hand over anything
+# else under the same name. The copy in the repository carries zeros there,
+# so a checkout run as it is fails to pull rather than pulling something.
 
 services:
   porch:
-    build: .
-    image: porch
-
-    # Built here, from the binaries you checked, and never pulled: "porch" is
-    # this image's local name, and a registry asked for it would be a
-    # stranger's image under it.
-    pull_policy: build
+    # The two binaries of the release and nothing else: no base system, no
+    # shell, no package manager. Built by porch-image, byte for byte the same
+    # wherever it is built, and compared by the maintainer before signing.
+    image: ghcr.io/denyfirst/porch@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
     # Proof of control is on. The secret is created in the data directory on
     # the first start and kept there; every domain is then asked to publish
@@ -101,11 +105,10 @@ services:
   # nothing in it — not the secret, not the password, not a kept report. Start
   # the service once first: that is what makes the secret.
   #
-  # A profile, so "docker compose up" leaves it alone, and never pulled, so a
-  # run before the image is built fails rather than fetching one.
+  # A profile, so "docker compose up" leaves it alone. The same image, by the
+  # same digest.
   scan:
-    image: porch
-    pull_policy: never
+    image: ghcr.io/denyfirst/porch@sha256:0000000000000000000000000000000000000000000000000000000000000000
     profiles: ["cli"]
     entrypoint: ["/porch-scan", "-verification-secret-file", "/data/secret"]
     volumes:

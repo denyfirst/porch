@@ -223,3 +223,19 @@ jobs:
           echo "If the toolchain and the build script agree and the hashes still"
           echo "do not, that is the case this check exists for."
           exit 1
+
+      - name: Check the registry serves the image the release signed
+        run: |
+          set -euo pipefail
+
+          # The comparison above proves the image archive in the release is
+          # the one this source builds. This proves the registry hands an
+          # installation exactly that image, read anonymously as Docker reads
+          # it: every manifest and blob the compose file's digest reaches,
+          # byte for byte. A tag cut before the image existed has none.
+          archive="rebuilt/porch-image_${TAG}.tar"
+          if [ ! -f "${archive}" ]; then
+            echo "${TAG} predates the release image; nothing to check"
+            exit 0
+          fi
+          go run ./internal/ociimage/porch-image check -archive "${archive}"

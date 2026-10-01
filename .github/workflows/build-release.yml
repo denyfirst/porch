@@ -69,8 +69,15 @@ jobs:
 
     # Write, because this creates a draft release. Narrower is not possible:
     # the release API has no read-only way to stage assets.
+    #
+    # Packages, because this publishes the release's container image. It can
+    # push an image and do nothing with it: an image is reached only through
+    # the compose file that names its digest, and that file reaches nobody
+    # until the maintainer has rebuilt the image, compared the digest and
+    # signed the list that covers it.
     permissions:
       contents: write
+      packages: write
 
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
@@ -209,6 +216,34 @@ jobs:
           # release gate and a merge gate that disagree about what is known.
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: Publish the image by digest, and read it back as a stranger would
+        env:
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # A tag cut before the image existed has none to publish.
+          archive="dist/porch-image_${TAG}.tar"
+          if [ ! -f "${archive}" ]; then
+            echo "${TAG} predates the release image; nothing to publish"
+            exit 0
+          fi
+
+          # By digest and with no tag. A tag is a name a registry can point at
+          # anything, and the compose file does not use one, so publishing one
+          # would offer a way to run this image that the signature does not
+          # cover. The token is read from the environment by the tool and
+          # sent to ghcr.io alone.
+          go run ./internal/ociimage/porch-image push -archive "${archive}"
+
+          # Then anonymously, as an installation pulls. A package GHCR made
+          # private on its first publication fails here, before a release can
+          # name an image nobody can fetch: make it public under the
+          # package's settings and run this workflow again.
+          REGISTRY_USERNAME= REGISTRY_PASSWORD= \
+            go run ./internal/ociimage/porch-image check -archive "${archive}"
 
       - name: Stage a draft release
         env:
