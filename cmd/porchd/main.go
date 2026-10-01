@@ -397,14 +397,19 @@ func run() int {
 		scope.RequireSigned = true
 	}
 
-	// An open service is refused anywhere but loopback.
+	// A service without proof is refused, wherever it listens.
 	//
 	// docs/scope.md said proof was on by default for a service and the code
 	// did not (audit A01): a porchd bound to a public interface with no secret
-	// scanned whatever anyone asked. Loopback stays open, because only this
-	// machine can reach it; anything else needs proof, and nothing turns that
-	// off — -open did, until 2026-09-29, and removedFlags says why it went.
-	if err := openAllowed(*listen, scope != nil || demo.Enabled); err != nil {
+	// scanned whatever anyone asked. Loopback stayed open after that, on the
+	// ground that only this machine can reach it — and on 2026-09-29 that
+	// ground was found to be thinner than it reads: another user on the
+	// machine, another container, a web application with an SSRF in it and a
+	// reverse proxy set up in a hurry all reach loopback too. Nothing turns
+	// this off; -open did, and removedFlags says why it went. The
+	// demonstration's hosts are compiled in, which is a narrower boundary
+	// than any proof.
+	if err := proofRequired(scope != nil || demo.Enabled); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
@@ -1230,7 +1235,9 @@ func reach(scoped bool) string {
 	if scoped {
 		return "scans only domains it has been shown control of"
 	}
-	return "scans whatever it is pointed at"
+	// Not a configuration porchd starts in: proofRequired refuses it. Said
+	// here for -version, which answers without starting.
+	return "will not start: it scans only domains it has been shown control of, and was given no -verification-secret-file"
 }
 
 // verificationScope reads the deployment secret, or reports why it could not.
@@ -1316,18 +1323,15 @@ func createSecret(path string) error {
 	return nil
 }
 
-// openAllowed refuses a service that would scan anything on an address other
-// than loopback.
-//
-// An address that does not parse is treated as reachable, as beyondLoopback
-// says why, so this refuses it before the listener gets the chance to.
-func openAllowed(listen string, scoped bool) error {
-	if scoped || !beyondLoopback(listen) {
+// proofRequired refuses a service that would scan a domain nobody proved,
+// wherever it listens.
+func proofRequired(scoped bool) error {
+	if scoped {
 		return nil
 	}
-	return errors.New("porchd will not listen beyond loopback without proof of control: " +
-		"anyone who can reach it could point it at any host, from this machine's address. " +
-		"Add -verification-secret-file")
+	return errors.New("porchd scans only domains it has been shown control of: " +
+		"anyone who can reach it — on this machine or beyond it — could otherwise point it at " +
+		"any host, from this machine's address. Add -verification-secret-file")
 }
 
 // removedFlags refuses the two flags that turned the rules above off, and

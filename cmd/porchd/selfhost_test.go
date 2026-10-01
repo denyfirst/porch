@@ -332,8 +332,11 @@ func TestTheReachLineSaysWhetherAScopeIsConfigured(t *testing.T) {
 		t.Fatalf("a deployment that requires proof of control says the same thing as one that "+
 			"does not: %q", open)
 	}
-	if !strings.Contains(open, "whatever it is pointed at") {
-		t.Errorf("an unbounded deployment does not say it is unbounded: %q", open)
+	// Since 2026-09-29 porchd does not start unbounded, so -version asked
+	// without a secret says that rather than describing a service that will
+	// never run.
+	if !strings.Contains(open, "will not start") || !strings.Contains(open, "-verification-secret-file") {
+		t.Errorf("-version without a secret does not say the service will not start, or why: %q", open)
 	}
 	if !strings.Contains(bounded, "shown control of") {
 		t.Errorf("a bounded deployment does not say what bounds it: %q", bounded)

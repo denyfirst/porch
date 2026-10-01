@@ -108,6 +108,7 @@ func TestTheFlagsThatOpenedAServiceAreRefused(t *testing.T) {
 func TestAPasswordAndAPlainResultsDirectoryAreRefusedTogether(t *testing.T) {
 	dir := t.TempDir()
 	code, said := start(t, "-listen", "127.0.0.1:0",
+		"-verification-secret-file", filepath.Join(dir, "secret"),
 		"-access-file", filepath.Join(dir, "access"),
 		"-results-dir", filepath.Join(dir, "plain"))
 	if code != 2 || !strings.Contains(said, "-results-dir keeps results in the clear") {

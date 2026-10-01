@@ -1238,7 +1238,7 @@ same two facts.
 `TestSignedProofOnlyNeedsProofAndReachesTheScope`, `TestDomainsSaysWhetherTheProofWasSigned`,
 `TestProofLookupsInFlightAreBounded`, `TestTheProofDefaultsToTheNameItself`,
 `TestAMissingSecretIsCreatedAndThenKept`,
-`TestTheSecretIsCreatedByStartingAndNotByAsking`, `TestAnOpenServiceStaysOnLoopback`,
+`TestTheSecretIsCreatedByStartingAndNotByAsking`, `TestAServiceWithoutProofDoesNotStart`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestTheProofDialogIsOfferedOnlyWhereProofIsRequired`, `TestTheConsoleAsksForProofBeforeItRuns`,
 `TestOnlyTheEndpointsThatOpenNothingAskWithoutScanning`, `TestAServedFileIsNotReportedAsProofForEveryCheck`,

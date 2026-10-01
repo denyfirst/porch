@@ -98,25 +98,35 @@ func TestTheSecretIsCreatedByStartingAndNotByAsking(t *testing.T) {
 	}
 }
 
-// A service that scans anything listens on loopback, and nothing else.
-func TestAnOpenServiceStaysOnLoopback(t *testing.T) {
-	for _, listen := range []string{"127.0.0.1:8080", "[::1]:8080", "localhost:8080", "127.1.2.3:9"} {
-		if err := openAllowed(listen, false); err != nil {
-			t.Errorf("%s was refused: %v", listen, err)
-		}
+// A service that scans anything does not start, on loopback or anywhere else.
+//
+// Loopback was the one place porchd served without proof, on the ground that
+// only this machine can reach it. Another user on the machine, another
+// container, a web application with an SSRF in it and a reverse proxy set up
+// in a hurry reach loopback too, and on 2026-09-29 that was reason enough.
+func TestAServiceWithoutProofDoesNotStart(t *testing.T) {
+	if err := proofRequired(false); err == nil {
+		t.Error("a service with no proof required was allowed")
 	}
-	for _, listen := range []string{"0.0.0.0:8443", ":8443", "[::]:8443", "192.0.2.10:443", "scanner.example:443"} {
-		if err := openAllowed(listen, false); err == nil {
-			t.Errorf("%s, with no proof required, was allowed", listen)
+	if err := proofRequired(true); err != nil {
+		t.Errorf("a service with proof required was refused: %v", err)
+	}
+	// The demonstration starts with no secret by design: its hosts are
+	// compiled in, a narrower boundary than any proof, and the call below
+	// passes demo.Enabled for exactly that.
+	for _, listen := range []string{"127.0.0.1:0", "localhost:0", "[::1]:0", "0.0.0.0:0"} {
+		if demoBuild() {
+			break
 		}
-		if err := openAllowed(listen, true); err != nil {
-			t.Errorf("%s with proof required was refused: %v", listen, err)
+		code, said := start(t, "-listen", listen)
+		if code != 2 || !strings.Contains(said, "shown control of") {
+			t.Errorf("%s with no secret: exit %d, %q", listen, code, said)
 		}
 	}
 
 	// Asked before anything listens.
 	source := repoFile(t, "cmd/porchd/main.go")
-	check := strings.Index(source, "openAllowed(*listen, scope != nil || demo.Enabled)")
+	check := strings.Index(source, "proofRequired(scope != nil || demo.Enabled)")
 	serve := strings.Index(source, `net.Listen("tcp", *listen)`)
 	if check < 0 || serve < 0 || check > serve {
 		t.Error("the open-service check is not made before listening")

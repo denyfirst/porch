@@ -53,7 +53,7 @@ porchd -listen 0.0.0.0:8443 -verification-secret-file /etc/porch/secret
 ```
 
 The file is created on the first start if it is not there. Without it, `porchd`
-refuses to listen anywhere but loopback, and no flag changes that.
+does not start — on loopback or anywhere else — and no flag changes that.
 
 `porchd -version` says which of the two you have, so a deploy can read it
 rather than trust a filename:
