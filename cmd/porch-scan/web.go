@@ -12,6 +12,7 @@ import (
 
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
+	"github.com/denyfirst/porch/internal/verify"
 	"github.com/denyfirst/porch/internal/webprobe"
 	"github.com/denyfirst/porch/internal/webscan"
 )
@@ -107,8 +108,9 @@ func webScanner(timeout time.Duration, allowPrivate bool) *webscan.Scanner {
 }
 
 // runWeb measures how each target is reached over HTTP.
-func runWeb(ctx context.Context, targets []string, timeout time.Duration, allowPrivate, asJSON bool, store *results.Store) int {
+func runWeb(ctx context.Context, scope *verify.Scope, targets []string, timeout time.Duration, allowPrivate, asJSON bool, store *results.Store) int {
 	scanner := webScanner(timeout, allowPrivate)
+	scanner.Verify = scope
 
 	// reports rather than results: internal/results is the store, and a local
 	// name shadowing a package is a name somebody later reads as the package.

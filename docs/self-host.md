@@ -156,10 +156,27 @@ library, so there is no third-party supply chain to audit here.
 ## The command line
 
 ```sh
+./porch-scan -verification-token example.com   # the TXT record to publish, once
 ./porch-scan example.com
 ./porch-scan -json example.com
-./porch-scan -allow-private 10.0.0.5
+./porch-scan -allow-private intranet.example.com
 ```
+
+**Every domain is proven first**, as on the service. The first run makes a
+secret under your configuration directory (`-verification-secret-file` names
+another), and every record you publish is derived from it:
+`-verification-token` prints the `_porch-challenge` TXT records for a name and
+each domain above it, and any one of them proves the name. The record is read
+from the zone's own servers, reached from the root over TCP port 53, so it
+counts as soon as they serve it and no resolver on this machine is asked. The
+web check also takes the file at `/.well-known/porch-challenge`, as the
+service does.
+
+An address is refused, because no record can prove one; so is a single label
+such as `intranet`. A host on a private address is checked with
+`-allow-private` and named by a domain proven in public DNS. The secret is
+yours: another user on the machine has their own, and proving a domain to them
+proves nothing to you.
 
 The exit status is the worst verdict found — `0` strong, `1` weak, `2`
 insecure, `3` the scan could not be completed — so it gates a pipeline without
@@ -362,8 +379,8 @@ do that while scanning whatever it is given: it will not start without
 A password is the same: beyond loopback `porchd` wants `-access-file`, and the
 image and the compose file give it. Neither can be turned off — `-open` and
 `-without-password` did that until 2026-09-29, and an installation started with
-either is now told they were removed. To check a name nobody has proven, run
-`porch-scan` in a terminal.
+either is now told they were removed. Nothing checks a name nobody has
+proven: `porch-scan` asks for the same record, from a secret of its own.
 
 **Why showing the record is safe.** The value is derived from this
 installation's secret and the one domain. It proves something only once it is

@@ -59,22 +59,32 @@ opens. Nobody else's data is on your machine, and none of yours is on ours.
 
 ```sh
 go build ./cmd/porch-scan
+./porch-scan -verification-token example.com   # the TXT record to publish, once
 ./porch-scan example.com
 ```
 
 ```
 porch-scan example.com
-porch-scan example.com:8443 another.example.com
+porch-scan example.com:8443 www.example.com
 porch-scan -json example.com
-porch-scan -allow-private 10.0.0.5
+porch-scan -allow-private intranet.example.com
 ```
+
+It checks only domains proven to it, as the service does. The first run makes
+a secret for you under your configuration directory; `-verification-token`
+prints the `_porch-challenge` TXT record a domain publishes to be checked from
+your machine, and a record at a domain covers every name under it. A target
+that is not proven is refused with the record that would prove it.
 
 The exit status is the worst verdict found, so it can gate a pipeline: `0`
 when everything is strong, `1` on a weak finding, `2` on an insecure one, and
 `3` when the scan could not be completed.
 
-The command line accepts bare addresses and any port. The hosted service does
-neither, and the reasons are in [`internal/scan/scan.go`](internal/scan/scan.go).
+The command line accepts any port, and with `-allow-private` a name that
+resolves to a private address. It does not accept a bare address, because no
+record can prove one: name the host by a domain you have proven. The reasons
+the hosted service is narrower still are in
+[`internal/scan/scan.go`](internal/scan/scan.go).
 
 ### The service
 
@@ -125,9 +135,10 @@ scan runs on your machine, from your address.
 The hosted service says it records nothing and you have to believe it. Here
 there is nothing to believe: this project is not in the path.
 
-The restrictions that exist to stop a stranger using somebody else'"'"'s server
-through ours do not apply to your own network — private addresses, any port,
-bare addresses, whichever host you point it at.
+The restrictions that exist to stop a stranger using somebody else's server
+through ours do not apply to your own network — private addresses and any
+port. One does, everywhere: a domain is checked only once it has been proven
+to the copy checking it, because this is a tool for your own estate.
 
 **[`docs/self-host.md`](docs/self-host.md)** has the procedure: verifying a
 release before running it, the command line, the service, and a container

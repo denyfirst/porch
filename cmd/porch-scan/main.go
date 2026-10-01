@@ -7,11 +7,15 @@
 //
 // Usage:
 //
+//	porch-scan -verification-token example.com
 //	porch-scan example.com
-//	porch-scan example.com:8443 another.example
+//	porch-scan example.com:8443 www.example.com
 //	porch-scan -json example.com
-//	porch-scan -allow-private 10.0.0.5
-//	porch-scan 93.184.216.34
+//	porch-scan -allow-private intranet.example.com
+//
+// Every domain is proven to this machine before it is checked, by a TXT record
+// derived from a secret kept under this user's configuration directory, and
+// read from the zone's own servers (proof.go). -verification-token prints it.
 //
 // Exit status is the worst verdict found, so the command can gate a pipeline:
 // 0 when everything measured was strong, 1 on a weak finding, 2 on an insecure
@@ -47,6 +51,7 @@ import (
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/smtptls"
 	"github.com/denyfirst/porch/internal/tlsprobe"
+	"github.com/denyfirst/porch/internal/verify"
 )
 
 // version is the release this binary was built from, set by scripts/build.sh
@@ -393,6 +398,14 @@ func run() int {
 		showHistory = flag.Bool("history", false,
 			"print what -results-dir has kept for each target and exit; makes no\n"+
 				"\tconnection and resolves nothing")
+
+		// Every target is checked against it: see proof.go.
+		secretFile = flag.String("verification-secret-file", defaultSecretPath(),
+			"file holding this user's verification secret, created if absent; every\n"+
+				"\tdomain checked has to publish the record derived from it")
+
+		verifyTokenFor = flag.String("verification-token", "",
+			"print the TXT records that prove the named domain to this machine, then exit")
 	)
 
 	showVersion := flag.Bool("version", false, "print the release and policy versions, then exit")
@@ -404,6 +417,9 @@ func run() int {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "porch-scan inspects how a host is reached: its TLS configuration\nand certificates, or the way a website answers over HTTP.\n\n")
+		if !demo.Enabled {
+			fmt.Fprintf(os.Stderr, "It checks only domains proven to this machine: -verification-token\nprints the TXT record a domain publishes to be checked from here.\n\n")
+		}
 		fmt.Fprintf(os.Stderr, "Usage:\n  %s [flags] host[:port] ...\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
@@ -429,6 +445,33 @@ func run() int {
 	if *showLimits {
 		limits, page := limitsFor(*check)
 		printLimits(os.Stdout, limits, page)
+		return exitOK
+	}
+
+	// The records a domain publishes to be checked from here, printed on
+	// request. Needs no network: the value is derived from the secret and the
+	// name, and nothing is asked.
+	if *verifyTokenFor != "" {
+		if demo.Enabled {
+			// Refused rather than ignored: a flag accepted and silently
+			// dropped is somebody believing it did something.
+			fmt.Fprintln(os.Stderr, "-verification-token: this build checks only the hosts compiled into it, and asks for no proof")
+			return exitError
+		}
+		scope, created, err := proofScope(*secretFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return exitError
+		}
+		if created {
+			fmt.Fprintf(os.Stderr, "a new verification secret was written to %s\n", *secretFile)
+		}
+		host, err := targetHost(*verifyTokenFor)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "-verification-token: %v\n", err)
+			return exitError
+		}
+		printRecords(os.Stdout, scope.Secret, host)
 		return exitOK
 	}
 
@@ -458,18 +501,38 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Every target proven before anything is scanned (proof.go), and the same
+	// scope handed to each check, which asks again where it connects. Not on
+	// the demonstration, whose hosts are compiled in: a narrower boundary than
+	// any proof.
+	var scope *verify.Scope
+	if !demo.Enabled {
+		s, created, err := proofScope(*secretFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return exitError
+		}
+		if created {
+			fmt.Fprintf(os.Stderr, "a new verification secret was written to %s; every domain has to publish its record\n", *secretFile)
+		}
+		if code := proveTargets(ctx, s, *check, targets, os.Stderr); code != exitOK {
+			return code
+		}
+		scope = s
+	}
+
 	switch *check {
 	case checkWeb:
-		return runWeb(ctx, targets, *timeout, *allowPrivate, *asJSON, store)
+		return runWeb(ctx, scope, targets, *timeout, *allowPrivate, *asJSON, store)
 	case checkMail:
 		if err := checkSelectors(*dkimSelectors); err != nil {
 			fmt.Fprintln(os.Stderr, "-dkim-selector: "+err.Error())
 			return 2
 		}
-		return runMail(ctx, targets, *timeout, *resolver, *asJSON, store,
+		return runMail(ctx, scope, targets, *timeout, *resolver, *asJSON, store,
 			selectorsFrom(*dkimSelectors, *dkimCommon), *heloName)
 	case checkDNS:
-		return runDNS(ctx, targets, *timeout, *resolver, *asJSON, store)
+		return runDNS(ctx, scope, targets, *timeout, *resolver, *asJSON, store)
 	case checkNames:
 		// Not stored. The others keep a verdict per target so that a history
 		// can say when a grade moved; this produces no verdict, and filing an
@@ -499,6 +562,7 @@ func run() int {
 		}
 
 		return runNames(ctx, targets, namesOptions{
+			Proof:            scope,
 			Ranges:           walk,
 			Known:            given,
 			Timeout:          *timeout,
@@ -515,6 +579,7 @@ func run() int {
 	}
 
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)
+	scanner.Verify = scope
 
 	return runTLS(ctx, scanner, targets, *timeout, *asJSON, store)
 }

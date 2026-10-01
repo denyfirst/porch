@@ -23,6 +23,7 @@ import (
 	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/ptrnames"
+	"github.com/denyfirst/porch/internal/verify"
 	"github.com/denyfirst/porch/internal/zonenames"
 )
 
@@ -61,6 +62,10 @@ import (
 // in — and one a test in another build file gets wrong silently, which has
 // happened twice.
 type namesOptions struct {
+	// Proof is what every domain listed has to be proven to. Nil only on the
+	// demonstration, whose estate is compiled in.
+	Proof *verify.Scope
+
 	// Timeout bounds each question this mode asks.
 	Timeout time.Duration
 
@@ -163,6 +168,16 @@ func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 
 	worst := 0
 	for i, domain := range domains {
+		// Asked here as well as before the run, because this is where the
+		// connections are made: a caller that skipped the check before
+		// would otherwise list an estate nobody proved.
+		if opt.Proof != nil {
+			if err := opt.Proof.Covers(ctx, domain, verify.AnyPort); err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", domain, err)
+				worst = max(worst, 2)
+				continue
+			}
+		}
 		sources := inventory.Sources{
 			Logs:    searcher.SearchEstate(ctx, domain),
 			Records: records.Under(ctx, domain),

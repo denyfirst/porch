@@ -90,8 +90,9 @@ type Scanner struct {
 	Resolver Resolver
 
 	// Verify is the proof of control this deployment requires before it will
-	// scan a name. Nil means none is required, which is what the command line
-	// wants and what a service must not have.
+	// scan a name. Nil means none is required, which only a demonstration
+	// build, whose hosts are compiled in, and a test may have: the service and
+	// the command line both set it.
 	Verify *verify.Scope
 
 	// AskServers asks the servers the zone names directly, which is the only

@@ -17,10 +17,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -1258,19 +1256,9 @@ func verificationScope(path, resolver string) (*verify.Scope, error) {
 		return nil, nil
 	}
 
-	// #nosec G304 -- operator-supplied path, never request-supplied
-	secret, err := os.ReadFile(path)
+	secret, err := verify.ReadSecret(path)
 	if err != nil {
-		return nil, fmt.Errorf("the verification secret could not be read: %w", err)
-	}
-
-	secret = []byte(strings.TrimSpace(string(secret)))
-	if len(secret) < 32 {
-		// Short enough to guess is short enough to forge every token this
-		// deployment will ever check, and a deployment whose tokens can be
-		// forged is one anyone can add a domain to.
-		return nil, errors.New("the verification secret is shorter than 32 bytes; generate one with " +
-			"head -c 32 /dev/urandom | base64 > the file")
+		return nil, err
 	}
 
 	return &verify.Scope{
@@ -1299,27 +1287,13 @@ var secretOut io.Writer = os.Stderr
 // there. An existing file is left alone, whatever it holds: reading and judging
 // it is verificationScope's job.
 func createSecret(path string) error {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return fmt.Errorf("a verification secret could not be generated: %w", err)
-	}
-
-	// #nosec G304 -- operator-supplied path, never request-supplied
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return nil
-	}
+	created, err := verify.CreateSecret(path)
 	if err != nil {
-		return fmt.Errorf("the verification secret could not be created: %w", err)
+		return err
 	}
-	if _, err := f.Write([]byte(base64.StdEncoding.EncodeToString(raw) + "\n")); err != nil {
-		f.Close() //nolint:errcheck,gosec // the write error is the one worth reporting
-		return fmt.Errorf("the verification secret could not be written: %w", err)
+	if created {
+		fmt.Fprintln(secretOut, "a new verification secret was written; every domain has to publish its record again")
 	}
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("the verification secret could not be written: %w", err)
-	}
-	fmt.Fprintln(secretOut, "a new verification secret was written; every domain has to publish its record again")
 	return nil
 }
 
@@ -1355,8 +1329,8 @@ func removedFlags(args []string) error {
 		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 		switch name {
 		case "open":
-			return errors.New("-open was removed: porchd beyond loopback always requires " +
-				"-verification-secret-file. To check a name nobody has proven, run porch-scan")
+			return errors.New("-open was removed: porchd always requires " +
+				"-verification-secret-file, loopback included, and so does porch-scan")
 		case "without-password":
 			return errors.New("-without-password was removed: porchd beyond loopback always " +
 				"requires -access-file")

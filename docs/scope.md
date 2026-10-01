@@ -40,12 +40,16 @@ two is where a boundary would be lost.
 |---|---|---|---|
 | **the demonstration** — denyfirst.dev | this project | a stranger | a list compiled into the binary (N6) |
 | **a self-hosted service** — `porchd` | an organisation | whoever holds its password | proof of control of each domain, and the password — both required beyond loopback |
-| **the command line** — `porch-scan` | one person | that person | nothing, by design |
+| **the command line** — `porch-scan` | one person | that person | proof of control of each domain, from a secret of their own |
 
-The command line needs nothing. Whoever runs it already has the machine, the
-scan leaves from their own address, and nobody else can reach it. A default
-that restricted anything there would quietly limit somebody scanning their own
-network, which is what the tool is for.
+The command line needed nothing until 2026-09-29, on the argument that whoever
+runs it already has the machine, the scan leaves from their own address, and
+nobody else can reach it. That settles who can reach it and not what
+denyfirst distributes, which is a tool for checking your own estate. So it asks
+for the same record a service does, derived from a secret it keeps per user,
+and refuses an address, which no record can prove. A host on a private address
+is still checked with `-allow-private`, named by a domain proven in public DNS
+(N9).
 
 The demonstration is settled. The list is compiled in, the gate is the build
 tag rather than the length of the list, and a binary says which hosts it will
@@ -85,7 +89,7 @@ established at run time. Five properties decide whether it works.
 
 | | default | why |
 |---|---|---|
-| `porch-scan`, in a terminal | off | whoever runs it already has the machine |
+| `porch-scan`, in a terminal | **on**; nothing turns it off | what the release does is the promise, wherever it runs |
 | `porchd`, a service | **on**, loopback included; nothing turns it off | anything anyone can reach must not scan arbitrary hosts, and more than its operator reaches loopback |
 
 A protection that must be switched on is one that is eventually forgotten,
@@ -376,8 +380,7 @@ argument is wrong and this paragraph is why.
 **It does not make a bare address scannable.** Verification is name-based:
 there is no zone to put a record in for `10.0.0.5`. A name that resolves to a
 private address can be verified and then scanned — that composes. An IP typed
-as a target cannot, and stays where it is today: available on the command
-line, which runs on the operator's own machine, and absent from the service.
+as a target cannot, on the service or, since 2026-09-29, on the command line.
 
 **It does not travel down a redirect.** A verified zone authorises the hosts in
 it, and a `Location` header names whatever the server that answered chose to

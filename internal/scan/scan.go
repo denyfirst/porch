@@ -244,11 +244,11 @@ type Scanner struct {
 	// Verify is the proof of control this deployment requires before it will
 	// scan a name.
 	//
-	// Nil means none is required, which is what the command line wants:
-	// whoever runs it already has the machine, the scan leaves from their own
-	// address, and nobody else can reach it. A service is the other case and
-	// sets this, because anything anyone can reach must not scan arbitrary
-	// hosts.
+	// Nil means none is required, which only a demonstration build, whose
+	// hosts are compiled in, and a test may have. The service sets it because
+	// anything anyone can reach must not scan arbitrary hosts; the command
+	// line sets it too, since 2026-09-29, because what denyfirst distributes
+	// is a tool for checking your own estate, wherever it runs (N9).
 	//
 	// A pointer rather than a value, so that "not required" is a state the
 	// zero value cannot be mistaken for. A Scope with no secret refuses

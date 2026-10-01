@@ -972,9 +972,8 @@ address.
 
 ### N9 — A deployment scans only estates it has been shown control of
 
-The command line needs no boundary: whoever runs it has the machine, the scan
-leaves from their own address, and nobody else can reach it. A service is the
-other case entirely, and until this existed it had nothing at all. A
+A service needed a boundary first, and until this existed it had nothing at
+all. A
 `porchd` bound to an interface is reachable by a careless colleague, by a
 compromised CI job, and by an SSRF into the scanner — and every scan any of
 them starts puts the operator's address in a stranger's logs. That is N6's
@@ -1071,9 +1070,45 @@ belief about their network was the whole of the boundary. A second copy started
 on another port of a server that ran a proven installation, with both flags,
 served every name to everyone who could reach it, from the same address. Both
 flags are gone, and an installation started with either is told why rather than
-started (`TestTheFlagsThatOpenedAServiceAreRefused`). Checking a name nobody
-has proven is what `porch-scan` is for, run by the person at the terminal, who
-is the one answerable for it.
+started (`TestTheFlagsThatOpenedAServiceAreRefused`). No release checks a
+name nobody has proven any more: the command line asks too, below.
+
+**The command line asks for the same proof, since 2026-09-29.** It needed none,
+on the argument that whoever runs it has the machine, the scan leaves from
+their own address, and nobody else can reach it. All true, and an answer to a
+different question — who can reach the program, rather than what denyfirst
+distributes. A release that checks whatever name is typed into it is a tool for
+looking at anybody's estate with this project's name on it, and the project
+undertakes to be a tool for looking at your own. So `porch-scan` keeps a secret
+per user — `porch/secret` under the user's configuration directory, made on
+the first run in a directory only they can enter, readable by them alone — and
+every target is proven before anything is checked, by the record the service
+asks for, read the same way from the zone's own servers and never through a
+resolver (`TestEveryTargetIsProvenBeforeAnythingIsChecked`,
+`TestTheCommandLineKeepsItsOwnSecretAndAsksNoResolver`,
+`TestTheCommandLineProvesBeforeItChoosesACheck`). A target that is not proven
+is refused with the records that would prove it; `-verification-token` prints
+them without asking anything. A lookup that failed is not a missing record,
+and is not reported as one (`TestAProofThatCouldNotBeReadIsNotAPass`). The web
+check takes the served file as the service does, and no other check does
+(`TestOnlyTheWebCheckAcceptsTheServedFile`).
+
+Proving before the run is the part a person reads, so that the answer to "why
+did nothing happen" is a record to publish. It is not the guard. Each check is
+handed the same scope and asks again where it connects, so a mode added later,
+or a `run()` rearranged, is refused by the check itself
+(`TestEveryCheckAsksForProofWhereItConnects`); within one run the zone is asked
+once per name (`TestARunAsksTheZoneOncePerName`), and the next run asks again.
+
+An address is refused: it has no zone this can read, and a reverse zone is
+published by whoever holds the range rather than whoever types the address. So
+is a single label, before anything is asked, because asking the root about an
+internal name sends it to the root servers for nothing
+(`TestAnAddressIsNotCheckedFromTheCommandLine`). A host with a private address
+is still reached with `-allow-private`, named by a domain proven in public DNS.
+What this does not claim is written here so nobody else has to: the source is
+published, and anybody determined can delete these lines and build it again,
+or use a tool that asks nothing. The promise is about what the release does.
 
 **The page shows the record to publish, and that is safe because of the token,
 not despite it.** `POST /api/v1/verify` answers whether a name is proven and,
@@ -1715,9 +1750,13 @@ DNS record proving to themselves that they owned their own domain. That is
 friction bought with no safety, and friction bought with no safety is how a rule
 comes to be turned off altogether.
 
-A service nobody else can reach is the command line with a browser in front of
-it, and the command line has never asked for proof (A30). A service anybody else
-can reach is the case the rule is for. Where verification *is* configured it is
+A service nobody else can reach was the command line with a browser in front
+of it, and the command line did not ask for proof (A30). Since 2026-09-29 both
+do (N9): `porchd` does not start without a scope, and the command line proves
+every target, so the reachability rule here is reached only by a `Server` built
+with no `Verify` — which nothing this project ships builds, and which stays
+because a program embedding the package is an entry point too. A service anybody
+else can reach is the case the rule is for. Where verification *is* configured it is
 enforced wherever the service listens, because setting it up is an operator
 saying what they want, and a copy that quietly stopped enforcing it because of
 the address it bound to would be answering a question they had already answered.

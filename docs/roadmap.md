@@ -36,13 +36,13 @@ proves `www.example.com` and every name added later, because a TXT record
 proves control of a zone. The pages ask for the name's own record unless the
 operator picks a domain above it, and say what that gives away (A04, D05).
 
-**The command line needs no proof.** Proof and a password protect a service:
-somebody else's machine and address, used by whoever reaches it. `porch-scan`
-runs on the machine of the person asking, from their address, under their
-responsibility, as `openssl` and `curl` do. A restriction there would be one
-line anyone could delete from source that is published to be read, and
-pretending otherwise would be the kind of claim this project does not make
-(A30).
+**The command line asks for proof too**, since 2026-09-29. It did not, on the
+argument that it runs on the machine of the person asking, from their address,
+under their responsibility, as `openssl` and `curl` do. That is who can reach
+it; what denyfirst distributes is a tool for checking your own estate, and the
+release now keeps that promise in a terminal as well. The restriction is still
+lines anyone could delete from published source, and N9 says so rather than
+claiming otherwise (A30).
 
 ---
 
@@ -136,7 +136,7 @@ right:
 
 | | default | why |
 |---|---|---|
-| `porch-scan`, in a terminal | off | whoever runs it already has the machine; nobody else can reach it |
+| `porch-scan`, in a terminal | **on** | what the release does is the promise, wherever it runs (N9) |
 | `porchd`, a service | **on** | anything anyone can reach must not scan arbitrary hosts |
 
 Architecturally it is a sibling of `internal/demo`: the same boundary, asked
