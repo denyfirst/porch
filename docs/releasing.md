@@ -165,7 +165,8 @@ git checkout main
 git pull
 git tag -s v0.2.0-rc1 -m "Dry run of the release procedure. Not a release."
 git push origin v0.2.0-rc1
-gh run watch (gh run list --workflow=build-release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+do { Start-Sleep 5; $id = gh run list --workflow=build-release.yml --limit 1 --branch v0.2.0-rc1 --json databaseId --jq '.[].databaseId' } until ($id)
+gh run watch $id
 ```
 
 Then the maintainer's half, without publishing anything:
@@ -256,7 +257,8 @@ git rev-parse "v0.2.0^{commit}"
 git rev-parse main
 
 git push origin v0.2.0
-gh run watch (gh run list --workflow=build-release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+do { Start-Sleep 5; $id = gh run list --workflow=build-release.yml --limit 1 --branch v0.2.0 --json databaseId --jq '.[].databaseId' } until ($id)
+gh run watch $id
 ```
 
 `gh run watch` with no argument lists every recent run and waits for one to be
@@ -281,7 +283,7 @@ release built from source that does not pass its own tests is a release nobody
 gated.
 
 ```powershell
-$id = gh run list --workflow=build-release.yml --limit 1 --json databaseId --jq '.[0].databaseId'
+$id = gh run list --workflow=build-release.yml --limit 1 --branch v0.2.0 --json databaseId --jq '.[].databaseId'
 gh run view $id --log | Select-String "Refuse to stage"
 ```
 
@@ -339,9 +341,18 @@ the previous release's, already green. On 2026-10-01 that is what was watched,
 and it reported success for a run that had nothing to do with the release.
 
 ```powershell
-do { Start-Sleep 5; $id = gh run list --workflow=reproduce.yml --limit 1 --json databaseId,headBranch --jq '.[] | select(.headBranch == "v0.2.0") | .databaseId' } until ($id)
+do { Start-Sleep 5; $id = gh run list --workflow=reproduce.yml --limit 1 --branch v0.2.0 --json databaseId --jq '.[].databaseId' } until ($id)
 gh run watch $id
 ```
+
+Every run is found the same way, by `--branch` and the tag, which is what a
+run started by a tag or a release carries as its branch. Not by a `jq` filter
+naming the tag: Windows PowerShell 5.1 strips the double quotes inside an
+argument it hands to a program, so `select(.headBranch == "v0.2.0")` reached
+`jq` with the tag unquoted and failed to parse — on 2026-10-01, the evening it
+was first written down. And `.[].databaseId` rather than `.[0].databaseId`,
+because before the run exists the second prints `null`, which ends the wait
+on a run that is not there.
 
 A red mark there is public, which is the point. It is also the only thing that
 demonstrates the property this whole arrangement exists for, so it is worth
