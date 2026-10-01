@@ -381,16 +381,24 @@ refused, each host has a budget, and a scan sends what a browser or a mail
 server would.
 
 **It is asked every time.** Nothing remembers that a domain was proven: every
-check asks DNS again, so taking the record out ends the proof. How soon
-depends on the resolver, which may answer from its cache until the record's
-time to live runs out; a short TTL on the record makes removal quick. A lookup
-that fails is not taken as proof, and the check is refused with a sentence
-saying the record could not be looked up.
+check asks the zone's own servers again, so taking the record out ends the
+proof as soon as those servers stop serving it — no resolver's cache stands in
+between. A lookup that fails is not taken as proof, and the check is refused
+with a sentence saying the record could not be looked up.
 
 **Starting over.** Every record is derived from the secret in
 `porch-data/secret`. Delete it and restart, and a new one is made: every
 record published so far stops proving anything, and each domain has to publish
 its new value, which Domains shows.
+
+**Where the record is read.** From the zone's own servers, not from a
+resolver. porchd walks from the root servers, whose addresses it carries, down
+to the servers that hold the domain, and asks them; a resolver on this machine,
+or the one `-resolver` names, is not asked for the record at all, so a resolver
+that lies cannot prove a domain. The walk leaves over TCP port 53 to name
+servers anywhere on the internet: a firewall that allows the server only its
+own resolver refuses every proof, with a sentence saying the record could not
+be looked up.
 
 **Signed or not.** Domains says whether the resolver reported the record
 DNSSEC-signed. That is the resolver's word, not porch's own check, and it is

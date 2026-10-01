@@ -323,3 +323,54 @@ func TestSignedProofIsReportedAndCanBeRequired(t *testing.T) {
 		t.Errorf("strict with a resolver that cannot say: %v", err)
 	}
 }
+
+// Where the zone's own servers are asked, only their answer proves anything,
+// and a resolver's is not taken in its place.
+//
+// On 2026-09-29 a resolver started on the same machine as a proven
+// installation answered for a domain nobody there controlled, carrying the
+// expected token. Here the resolver forges the token for every name; the
+// authority answers only for the domain that published it.
+func TestTheZonesOwnServersDecideAndNotAResolver(t *testing.T) {
+	ctx := context.Background()
+	forged := published{
+		Label + ".victim.test": {Token(secret, "victim.test")},
+		Label + ".owned.test":  {Token(secret, "owned.test")},
+	}
+	zone := published{Label + ".owned.test": {Token(secret, "owned.test")}}
+
+	s := Scope{Secret: secret, Resolver: forged, Authority: zone}
+	if err := s.Covers(ctx, "owned.test", AnyPort); err != nil {
+		t.Errorf("a domain its own servers vouch for was refused: %v", err)
+	}
+	if err := s.Covers(ctx, "victim.test", AnyPort); !errors.Is(err, ErrNotVerified) {
+		t.Errorf("a resolver's forged record proved a domain: %v", err)
+	}
+
+	// With nothing but the authority, it still proves.
+	alone := Scope{Secret: secret, Authority: zone}
+	if err := alone.Covers(ctx, "owned.test", AnyPort); err != nil {
+		t.Errorf("an authority with no resolver beside it proved nothing: %v", err)
+	}
+
+	// Signed proof asks for both: the zone's servers carrying the token, and
+	// the resolver reporting it validated. Either alone is not enough.
+	signedResolver := signing{
+		published: published{
+			Label + ".owned.test":  {Token(secret, "owned.test")},
+			Label + ".victim.test": {Token(secret, "victim.test")},
+		},
+		signed: map[string]bool{Label + ".owned.test": true, Label + ".victim.test": true},
+	}
+	strict := Scope{Secret: secret, Resolver: signedResolver, Authority: zone, RequireSigned: true}
+	if signed, err := strict.CoversSigned(ctx, "owned.test", AnyPort); err != nil || !signed {
+		t.Errorf("signed and held by the zone was not proof: %v, %v", signed, err)
+	}
+	if err := strict.Covers(ctx, "victim.test", AnyPort); !errors.Is(err, ErrNotVerified) {
+		t.Errorf("a signed record the zone's servers do not carry proved a domain: %v", err)
+	}
+	unsigned := Scope{Secret: secret, Resolver: forged, Authority: zone, RequireSigned: true}
+	if err := unsigned.Covers(ctx, "owned.test", AnyPort); !errors.Is(err, ErrNotVerified) {
+		t.Errorf("an unsigned record was proof where signed proof was required: %v", err)
+	}
+}

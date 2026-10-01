@@ -985,6 +985,32 @@ arrangement rebuilt inside somebody's own network, which is the thing
 this deployment expects for that domain. Publishing it needs control of the
 zone, which is what is being proven.
 
+**And it is read from the zone's own servers, never through a resolver.** It
+was read through this machine's resolver, or the one `-resolver` named, and a
+resolver says whatever it is configured to say. On 2026-09-29 a resolver
+started on the same server as a proven installation answered for a domain
+nobody there controlled, carrying the token the installation expected, and the
+domain was scanned. Any resolver between a deployment and a zone — one handed
+out by DHCP, one with a poisoned cache, one on a path somebody sits on — was
+the proof's weakest point. The record is now read by walking from the root
+servers, whose addresses the binary carries, down each delegation to the
+servers holding the zone: one label at a time, so the root and the top-level
+domain never learn which name is being proven (RFC 9156); over TCP through the
+guard that refuses private and loopback destinations, since a zone names its
+own servers; with an address a referral carries used only for a server inside
+the zone that sent it; with a record believed only where its owner is the name
+asked about, and an alias followed by a walk of its own. The walk is bounded at
+forty-eight questions. What it cannot stop is somebody who answers in place of
+the zone's servers on this machine's own network, for a zone that is not
+signed; `-verification-requires-dnssec` then asks the resolver's signed bit as
+well, and a record counts only where both carry it
+(`TestTheChallengeIsReadFromTheZonesOwnServersAndNoResolver`,
+`TestGlueFromOutsideItsZoneIsNotBelieved`,
+`TestAnAliasIsWalkedFromTheRootAndNotBelieved`,
+`TestAWalkThatNeverEndsIsBounded`,
+`TestTheZonesOwnServersDecideAndNotAResolver`,
+`TestTheServiceReadsTheChallengeFromTheZone`).
+
 **Or a file at `/.well-known/porch-challenge`**, for teams without access
 to their own DNS — which is a common enough arrangement that refusing them
 would mean refusing the estates this tool is for.
@@ -1149,7 +1175,8 @@ the resolver reported the proving record DNSSEC-validated, and Domains shows it
 in those words, because the AD bit is the resolver's claim and worth what the
 path to it is worth — the objection the CAA report makes about the same bit.
 `-verification-requires-dnssec` accepts only signed records and never the file,
-for an operator whose resolver is theirs. Freshness, a failed lookup, and
+for an operator whose resolver is theirs; since 2026-09-29 the record must also
+be carried by the zone's own servers, reached from the root. Freshness, a failed lookup, and
 starting over with a new secret are in `docs/self-host.md`; nothing is cached,
 so a record taken out ends the proof as soon as the resolver lets it go.
 

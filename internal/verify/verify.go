@@ -119,8 +119,25 @@ type Scope struct {
 	// alternative is a scanner that accepts any record it finds.
 	Secret []byte
 
-	// Resolver reads the challenge. Nil means nothing can be proven.
+	// Resolver reads the challenge where Authority is nil. Where Authority is
+	// set, it is asked only for the signed bit, and only when RequireSigned
+	// wants one. Nil, with no Authority, means nothing can be proven.
 	Resolver Resolver
+
+	// Authority reads the challenge from the zone's own servers, reached from
+	// the root, and asks no resolver. Where set, it is where every record is
+	// read from.
+	//
+	// A resolver says whatever it is configured to say. On 2026-09-29 one
+	// started on the same server as a proven installation answered for a
+	// domain nobody there controlled, with the token that installation
+	// expected, and the domain was scanned. Whatever resolver sits between
+	// this deployment and the zone — this machine's, one DHCP handed out, one
+	// with a poisoned cache — was the proof's weakest link.
+	//
+	// Where RequireSigned is set, a record counts only when both carry it:
+	// the zone's servers, and the resolver reporting it DNSSEC-validated.
+	Authority Resolver
 
 	// Fetcher reads the file half of the challenge, for teams without access
 	// to their own DNS.
@@ -145,9 +162,27 @@ type ValidatingResolver interface {
 	LookupChallengeValidated(ctx context.Context, name string) (values []string, validated bool, err error)
 }
 
-// lookup asks the resolver, and whether the answer was signed where it can
-// say.
+// lookup reads the challenge, and whether the answer was signed where
+// something can say.
 func (s Scope) lookup(ctx context.Context, name string) ([]string, bool, error) {
+	if s.Authority != nil {
+		values, _, err := s.Authority.LookupChallenge(ctx, name)
+		if err != nil || !s.RequireSigned {
+			return values, false, err
+		}
+		v, ok := s.Resolver.(ValidatingResolver)
+		if !ok {
+			return values, false, nil
+		}
+		signed, validated, err := v.LookupChallengeValidated(ctx, name)
+		if err != nil {
+			return nil, false, err
+		}
+		return inBoth(values, signed), validated, nil
+	}
+	if s.Resolver == nil {
+		return nil, false, nil
+	}
 	if v, ok := s.Resolver.(ValidatingResolver); ok {
 		return v.LookupChallengeValidated(ctx, name)
 	}
@@ -219,7 +254,7 @@ func (s Scope) Covers(ctx context.Context, host string, surface Surface) error {
 // travelled with — an attacker who can forge the one can set the other. The
 // Domains page says which it was, in those words (audit 2026-09-16, A06).
 func (s Scope) CoversSigned(ctx context.Context, host string, surface Surface) (signed bool, err error) {
-	if len(s.Secret) == 0 || s.Resolver == nil {
+	if len(s.Secret) == 0 || (s.Resolver == nil && s.Authority == nil) {
 		// Not an error about the host. A deployment configured to require
 		// proof and given no way to check it must refuse rather than admit,
 		// but the reason is local and the message says which it is.
@@ -287,6 +322,20 @@ func (s Scope) CoversSigned(ctx context.Context, host string, surface Surface) (
 	}
 
 	return false, ErrNotVerified
+}
+
+// inBoth is the values two answers agree on, compared as the token is.
+func inBoth(a, b []string) []string {
+	var out []string
+	for _, x := range a {
+		for _, y := range b {
+			if strings.EqualFold(strings.TrimSpace(x), strings.TrimSpace(y)) {
+				out = append(out, x)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // fold reduces a name the way every other comparison in this project does.

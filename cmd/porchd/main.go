@@ -226,14 +226,15 @@ func run() int {
 				"\tcertificate is being looked at, from this address and when — so it is\n"+
 				"\tonly a disclosure to make about your own estate")
 
-		// Signed proof only, for an operator whose resolver is theirs. The AD
-		// bit is the resolver's word and worth what the path to it is worth,
-		// so this is a choice about a resolver, not a switch that makes DNS
-		// safe (audit 2026-09-16, A06).
+		// Signed proof only, for an operator whose resolver is theirs. The
+		// record is read from the zone's own servers either way; this adds the
+		// resolver's AD bit, which is its word and worth what the path to it is
+		// worth, so this is a choice about a resolver, not a switch that makes
+		// DNS safe (audit 2026-09-16, A06).
 		requireSigned = flag.Bool("verification-requires-dnssec", false,
-			"accept only a challenge record the resolver reports DNSSEC-validated, and\n"+
-				"\tno challenge file. Worth it only with a validating resolver you trust,\n"+
-				"\tsuch as one on this machine: see -resolver")
+			"accept a challenge record only where the zone's own servers carry it and\n"+
+				"\tthe resolver also reports it DNSSEC-validated, and no challenge file.\n"+
+				"\tWorth it only with a validating resolver you trust: see -resolver")
 
 		verifyToken = flag.String("verification-token", "",
 			"print what the named domain must publish at "+verify.Label+", then exit")
@@ -284,7 +285,8 @@ func run() int {
 		resolver = flag.String("resolver", "",
 			"`address` of the resolver for the lookups this service makes, ip:port; empty\n"+
 				"\treads this machine's own configuration. The addresses scans connect to\n"+
-				"\tare still resolved by the machine")
+				"\tare still resolved by the machine, and a proof of control is read from\n"+
+				"\tthe zone's own servers, never through a resolver")
 
 		// One password in front of the whole installation, and the key its kept
 		// data is encrypted with, sealed by it. See internal/access.
@@ -1241,7 +1243,9 @@ func reach(scoped bool) string {
 // The secret is read from a file rather than a flag: a flag value is in the
 // process list, where every user on the machine reads it.
 //
-// resolver is the -resolver flag: the challenge is read through it when set.
+// resolver is the -resolver flag. The challenge is not read through it: it is
+// read from the zone's own servers, reached from the root, and the resolver is
+// asked only for the signed bit -verification-requires-dnssec wants.
 func verificationScope(path, resolver string) (*verify.Scope, error) {
 	if path == "" {
 		return nil, nil
@@ -1263,8 +1267,14 @@ func verificationScope(path, resolver string) (*verify.Scope, error) {
 	}
 
 	return &verify.Scope{
-		Secret:   secret,
-		Resolver: &dnsclient.Client{Server: resolver},
+		Secret: secret,
+
+		// The challenge is read from the zone's own servers, from the root,
+		// and no resolver's word is taken for it. The resolver stays for the
+		// signed bit -verification-requires-dnssec asks for, and a record then
+		// counts only where both carry it.
+		Authority: &dnsclient.Authority{Client: &dnsclient.Client{Timeout: 3 * time.Second}},
+		Resolver:  &dnsclient.Client{Server: resolver},
 
 		// The file method, for teams without access to their own DNS. It
 		// is consulted only when the zone proof was not found, and only for
