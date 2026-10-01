@@ -126,6 +126,15 @@ would confirm only that they had access.
 
 **`gh`**, authenticated as somebody who can edit releases.
 
+**The image's package, public.** The release workflow publishes the container
+image to `ghcr.io/denyfirst/porch` with its own token, and the first time it
+does, GitHub may create the package private. The workflow then reads the image
+back anonymously, as an installation will, and fails before staging the
+draft: an image nobody can fetch must not be named by a release. Make the
+package public under its settings — and link it to this repository if GitHub
+has not — and run the workflow again for the same tag. It is pushed by digest
+and with no tag; nothing about that changes when it is made public.
+
 **`bash`**, for `-Compare`. Git for Windows ships one and puts only its `cmd\`
 directory on the path, so the script also looks in `C:\Program Files\Git\bin\`.
 

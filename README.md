@@ -150,8 +150,9 @@ to the copy checking it, because this is a tool for your own estate.
 
 **[`docs/self-host.md`](docs/self-host.md)** has the procedure: verifying a
 release before running it, the command line, the service, and a container
-image with no base system whose trust store comes from your machine rather
-than from the image.
+image with no base system, named by its digest under the release's
+signature, whose trust store comes from your machine rather than from the
+image.
 
 ```sh
 git clone https://github.com/denyfirst/porch

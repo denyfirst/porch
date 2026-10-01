@@ -1,6 +1,17 @@
-# The image contains the two binaries you verified, and nothing else: the
-# service, and the command line that runs beside it with the service's secret
-# (see the scan service in docker-compose.yml).
+# The image for whoever builds their own.
+#
+# The release's image is not built from this file. internal/ociimage builds it
+# from the release's binaries so that it comes out byte for byte the same on
+# any machine, and the release's docker-compose.yml names it by that digest
+# (docs/invariants.md, S17). This builds the same contents from binaries you
+# built yourself: its digest will not be the release's, because a Docker build
+# stamps times, so name it in the compose file in place of the ghcr.io line,
+# with pull_policy: never. TestTheImageStartsWhatTheDockerfileStarts keeps the
+# two starting the same thing.
+#
+# It contains the two binaries, and nothing else: the service, and the command
+# line that runs beside it with the service's secret (see the scan service in
+# docker-compose.yml).
 #
 # It has no base system. A container built on alpine or debian carries several
 # hundred packages this project does not audit and cannot reproduce, which
@@ -11,17 +22,10 @@
 #
 # It does not build anything either. A builder stage would produce bytes
 # nobody has checked, and the whole argument of this project is that the
-# release is signed and reproducible. So the binaries come from the release,
-# already verified on your own machine — see docs/verify.md — and the image is
-# a wrapper around bytes you have already decided to trust.
-#
-#   curl -fsSLO https://github.com/denyfirst/porch/releases/download/vX.Y.Z/porchd_vX.Y.Z_linux_amd64
-#   curl -fsSLO https://github.com/denyfirst/porch/releases/download/vX.Y.Z/porch-scan_vX.Y.Z_linux_amd64
-#   # ... verify them, then:
-#   mv porchd_vX.Y.Z_linux_amd64 porchd && mv porch-scan_vX.Y.Z_linux_amd64 porch-scan
-#   docker compose up -d --build
-#
-# Or build it yourself from this checkout, which fetches nothing but Go:
+# release is signed and reproducible. So the binaries are ones you built or
+# verified yourself — see docs/verify.md — and the image is a wrapper around
+# bytes you have already decided to trust. Built from this checkout, which
+# fetches nothing but Go:
 #
 #   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o porchd ./cmd/porchd
 #   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o porch-scan ./cmd/porch-scan

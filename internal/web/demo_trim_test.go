@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/denyfirst/porch/internal/demo"
+	"github.com/denyfirst/porch/internal/ociimage"
 )
 
 // The demonstration keeps no copy of a report and counts nothing for its
@@ -69,8 +70,8 @@ func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
 	// Each carries the id its Copy button names, so the id is allowed and
 	// nothing else is.
 	blocks := regexp.MustCompile(`(?s)<pre><code(?: id="command-[a-z]+")?>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 4 {
-		t.Fatalf("the Porch page has %d command blocks, want 4", len(blocks))
+	if len(blocks) != 3 {
+		t.Fatalf("the Porch page has %d command blocks, want 3", len(blocks))
 	}
 	for _, b := range blocks {
 		// The text a reader sees and Copy writes: the colours are spans, and
@@ -98,8 +99,8 @@ func TestThePorchCommandsAreATerminalWhosePromptIsNotCopied(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocks := regexp.MustCompile(`(?s)<code id="command-[a-z]+">(.*?)</code>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 4 {
-		t.Fatalf("%d command blocks, want 4", len(blocks))
+	if len(blocks) != 3 {
+		t.Fatalf("%d command blocks, want 3", len(blocks))
 	}
 	for _, b := range blocks {
 		text := shownText(b[1])
@@ -130,20 +131,34 @@ func TestThePorchCommandsAreATerminalWhosePromptIsNotCopied(t *testing.T) {
 // line without its comments, and it is offered to be read, not copied: the
 // copy that runs is the signed one.
 func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
-	page, err := assets.ReadFile("assets/porch.html")
+	raw, err := assets.ReadFile("assets/porch.html")
 	if err != nil {
 		t.Fatal(err)
 	}
-	shown := regexp.MustCompile(`(?s)<code id="compose-file">(.*?)</code>`).FindStringSubmatch(string(page))
+	template, err := os.ReadFile("../../docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Rendered with a digest, as the demonstration build is: the page has to
+	// show the compose file the release ships, which is the template with
+	// this release's image digest written in.
+	const digest = "sha256:4559d2b5f26e9bce3f00a8fc63947addee3992a9d2837e1512df258602c4466b"
+	body, err := render(&page{Title: "t", Fragment: "assets/porch.html",
+		Data: porchPage{Hosts: []demo.Host{{Host: "one.test", Shows: "a"}}, Checks: consoleChecks(), ImageDigest: digest}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown := regexp.MustCompile(`(?s)<code id="compose-file">(.*?)</code>`).FindStringSubmatch(string(body))
 	if shown == nil {
 		t.Fatal("the Porch page does not show the compose file")
 	}
-	file, err := os.ReadFile("../../docker-compose.yml")
+	shipped, err := ociimage.Compose(string(template), ociimage.Repository, digest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var want []string
-	for _, line := range strings.Split(strings.ReplaceAll(string(file), "\r\n", "\n"), "\n") {
+	for _, line := range strings.Split(strings.ReplaceAll(shipped, "\r\n", "\n"), "\n") {
 		if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "#") {
 			want = append(want, line)
 		}
@@ -153,8 +168,30 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 		t.Errorf("the page shows a compose file the release does not ship:\n%s\nwant:\n%s",
 			strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if strings.Contains(string(page), `data-copy="compose-file"`) {
+
+	// A build that was not told the digest says so with the placeholder,
+	// rather than showing one it does not know.
+	if pageImageDigest() != ociimage.Placeholder && imageDigest == "" {
+		t.Error("a build with no image digest shows something other than the placeholder")
+	}
+
+	if strings.Contains(string(raw), `data-copy="compose-file"`) {
 		t.Error("the compose file is offered to the clipboard; the one to run is the signed one")
+	}
+	// Open, so it is read before it is run rather than behind a click.
+	if !strings.Contains(string(raw), `<section class="compose-view"`) || strings.Contains(string(raw), `<details class="compose-view"`) {
+		t.Error("the compose file is folded away, or no longer on the page")
+	}
+	// The page is for running the service. The command line is in the guide.
+	if strings.Contains(string(raw), "docker compose run --rm scan") {
+		t.Error("the Porch page offers the command line, which belongs to docs/self-host.md")
+	}
+	// And nothing on it builds an image or picks a binary: the compose file
+	// names the published one.
+	for _, gone := range []string{"--build", "uname -m", "porchd_${V}", "Dockerfile"} {
+		if strings.Contains(shownText(string(raw)), gone) {
+			t.Errorf("the Porch page still gives %q, which the release image replaced", gone)
+		}
 	}
 }
 

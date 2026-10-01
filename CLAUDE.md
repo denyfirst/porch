@@ -258,6 +258,7 @@ in it is there because it has already gone wrong once.
 | `internal/smtptls` | asks each MX for STARTTLS on port 25, and a domain's own MX whether it relays; no message is ever composed (N3, N13) |
 | `internal/dane` | checks an exchanger's DANE records against the certificate it presented, as RFC 7672 has a sender do (N13) |
 | `internal/dmarcreports` | where a DMARC record asks for its reports, and whether the places outside the domain agreed to receive them, as RFC 7489 §7.1 has a receiver check (N13) |
+| `internal/ociimage` | the release's container image, byte for byte the same wherever it is built, pushed and checked by digest (S17) |
 | `internal/demo` | which hosts this deployment may reach, compiled in |
 | `internal/verify` | which domains a deployment has been shown control of (N9) |
 | `internal/challenge` | fetches the file half of that proof, and nothing else |

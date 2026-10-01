@@ -1100,15 +1100,17 @@ compose file's `scan` service runs it with `-verification-secret-file
 mounted read-only, so the command line reads the secret as it is and can write
 nothing there — not the secret, not the sealed key, not a kept report
 (`TestOneRecordCoversTheServiceAndTheCommandLine`,
-`TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing`). It is
-never pulled: a run before the image is built fails rather than fetching
-something called `porch` from a registry. Copying the secret to another
+`TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing`). It
+starts the release's image by the same digest as the service (S17). Copying
+the secret to another
 machine was documented for one day and taken out: the file is the authority
 to check every domain proven to the service, from wherever it is copied, and
 the only way to take it back is a new secret and every record published
 again. A command line elsewhere keeps a secret of its own.
 
-**The image build is never sent the data directory.** The release shipped a
+**The image build is never sent the data directory.** Since S17 a server
+builds nothing; this holds for whoever builds their own image from the
+`Dockerfile`. v0.25.1 shipped a
 Dockerfile without an ignore file, so `docker compose up --build` sent the
 whole directory — `porch-data` with it — to the builder, and run with `sudo` it
 left the secret in BuildKit's cache. Measured on 2026-10-01: a file in
@@ -6961,18 +6963,115 @@ is what is separable — and a second assertion reads the source to confirm
 something still calls it before anything is served, because removing the call
 left every assertion about the decision green.
 
-**The self-hosting page points at the verification procedure rather than
-restating it.** Two copies drift, and the copy nobody is reading is the one
-that goes wrong — the same rule `docs/releasing.md` follows about the build
-command.
+**The self-hosting page checks the signature the way the verification
+procedure does.** It pointed at `docs/verify.md` and restated nothing, on the
+rule that two copies drift and the copy nobody reads is the one that goes
+wrong. The cost was steps that downloaded and started without checking
+anything, behind a link a reader skips. Since the release image (S17) the
+install checks one file — the compose file, which names the image by digest —
+in one line on the Porch page and in the guide, and the drift is held by a
+test instead: that line has to use the key file, identity and namespace
+`docs/verify.md` gives.
 
 *Enforced in:* `Dockerfile`, `docker-compose.yml`, `docs/self-host.md`,
 `cmd/porchd.trustStoreUsable`
 *Guarded by:* `TestTheImageHasNoBaseSystem`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
-`TestSelfHostPointsAtTheVerificationProcedureRatherThanRestatingIt`,
+`TestSelfHostChecksTheSignatureTheWayVerifyMdDoes`,
 `TestTheSelfHostingPageIsReachableAndItsLinksResolve`
+
+---
+
+### S17 — The image a server runs is the one the release signed
+
+Until v0.26.0 a server built its image: the Porch page had it download the
+binary for its processor, a Dockerfile and an ignore file, rename the binary
+and run `docker compose up --build`. Eight lines, each a place to go wrong —
+the ignore file was missing from the release for one version, and the build
+was then sent the secret. A project that publishes an image to a registry asks
+for two lines instead, and the usual cost is that the image is trusted on the
+registry's word: a tag that can be moved, nothing signed, a base system nobody
+audited.
+
+**The image is named by its digest, and the digest is under the signature.**
+The release's `docker-compose.yml` starts `ghcr.io/denyfirst/porch@sha256:…`
+and nothing else: no tag, no build, no other registry
+(`TestTheComposeFilePinsEveryServiceToTheDigest`). A digest is the image's own
+SHA-256, and Docker refuses bytes that do not hash to it, so a registry cannot
+answer it with anything else. The compose file is listed in `SHA256SUMS`, so
+the one file a server checks is the one that names the image. The repository's
+copy carries zeros in place of the digest, so a checkout run as it is fails to
+pull rather than pulling something.
+
+**It is built the same way everywhere, so the maintainer can check it before
+signing.** A Docker build stamps times and compresses as its version does, and
+two builds of the same binaries name two digests. `internal/ociimage` writes
+every byte itself — entries sorted, owners and times fixed, the standard
+library's gzip at a fixed level, configuration with no time in it — so the
+release workflow and the maintainer's machine arrive at the same digest from
+the same binaries (`TestTheSameBinariesMakeTheSameImage`,
+`TestTheImageRecordsNoTime`). That is what keeps the split `build-release.yml`
+describes — the workflow builds and cannot sign, the maintainer signs and does
+not build — for the image as well: the workflow builds and pushes, and
+`release.ps1 -Compare` rebuilds the archive and the compose file and signs only
+if every byte matches. An image the maintainer
+signed without rebuilding would be the workflow's word, and the split would be
+gone. Measured on 2026-10-01: built twice, from binaries with different times,
+modes and umask, the archive and the digest were identical; pushed to a
+registry, pulled by digest and started, it ran as `65534:65534` with proof of
+control and a password on.
+
+**The image is the two binaries and nothing else**, for `amd64` and `arm64`,
+as the Dockerfile always described (`TestTheImageIsTheTwoBinariesAndNothingElse`,
+`TestTheImageStartsWhatTheDockerfileStarts`). The Dockerfile stays, for
+whoever builds their own.
+
+**It is published by digest, after the release's gates, and read back as a
+stranger would.** `build-release.yml` pushes it only after `go vet`, the tests
+and `govulncheck` pass, with the workflow's own token and `packages: write` on
+that one job, and writes no tag. It then reads it back anonymously and fails
+before staging the draft if any byte differs or the package is not public. After
+publication, `reproduce.yml` reads it back again from the rebuilt archive
+(`TestTheReleaseImageIsPublishedByDigestAndChecked`,
+`TestTheImageIsPushedByDigestAndReadBackExactly`,
+`TestARegistryServingOtherBytesFailsTheCheck`).
+
+**The token goes to the registry and nowhere else.** The push follows a bearer
+challenge only to a token endpoint on the registry's own host, and sends a blob
+only to an upload location there; a registry anywhere but this machine is
+spoken to over TLS (`TestTheCredentialsGoNowhereButTheRegistry`,
+`TestAPushWithoutCredentialsIsRefused`). The client is this repository's own,
+on the standard library, because one that re-compressed a layer on the way out
+would change its digest.
+
+**What this costs, said rather than left to be found.** A pull reaches
+`ghcr.io`, which is GitHub, as the release downloads always did; Docker sends a
+little more about the machine than `curl` does — its own version, the kernel's,
+the OS. A machine that has run `docker login ghcr.io` pulls as that account,
+and GitHub then knows which account installed it; the guide says so. The
+release workflow can now publish packages, and what it could do with that is
+push an image no signed compose file names.
+
+**The Porch page shows the compose file the release ships.** The demonstration
+is built after the image and carries its digest, so the file on the page is the
+template with this release's digest written in, and a test renders it and
+compares it with what `Compose` makes (`TestThePorchPageShowsTheComposeFileThatShips`).
+
+*Enforced in:* `internal/ociimage`, `scripts/build.sh`, `docker-compose.yml`,
+`.github/workflows/build-release.yml`, `.github/workflows/reproduce.yml`,
+`internal/web.pageImageDigest`
+*Guarded by:* `TestTheSameBinariesMakeTheSameImage`, `TestTheImageRecordsNoTime`,
+`TestTheImageIsTheTwoBinariesAndNothingElse`,
+`TestTheImageStartsWhatTheDockerfileStarts`,
+`TestALayoutIsReadBackAndATamperedOneIsRefused`,
+`TestTheImageIsPushedByDigestAndReadBackExactly`,
+`TestARegistryServingOtherBytesFailsTheCheck`,
+`TestTheCredentialsGoNowhereButTheRegistry`,
+`TestAPushWithoutCredentialsIsRefused`,
+`TestTheComposeFilePinsEveryServiceToTheDigest`,
+`TestTheReleaseImageIsPublishedByDigestAndChecked`,
+`TestThePorchPageShowsTheComposeFileThatShips`
 
 ---
 

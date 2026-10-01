@@ -127,20 +127,36 @@ func TestTheComposeFileTakesAwayWhatItSays(t *testing.T) {
 	}
 }
 
-// The self-hosting page points at the verification procedure rather than
-// repeating it.
+// The self-hosting page checks the signature the way docs/verify.md does, and
+// points there for what each part proves.
 //
-// Two copies of a verification procedure drift, and the copy nobody is reading
-// is the one that goes wrong. docs/releasing.md has the same rule for the same
-// reason.
-func TestSelfHostPointsAtTheVerificationProcedureRatherThanRestatingIt(t *testing.T) {
+// It used to point there and give no check of its own, on the rule that two
+// copies of a verification procedure drift and the copy nobody reads is the
+// one that goes wrong. The cost was that its steps downloaded and started
+// without checking anything, and a link is the step a reader skips. The
+// install now checks one file, the compose file that names the image by
+// digest, in one line on the page and in the guide — and the drift the rule
+// was about is held here instead: that line has to use the key file, the
+// identity and the namespace docs/verify.md gives.
+func TestSelfHostChecksTheSignatureTheWayVerifyMdDoes(t *testing.T) {
 	doc := repoFile(t, "docs/self-host.md")
 
 	if !strings.Contains(doc, "verify.md") {
 		t.Error("the self-hosting page does not point at docs/verify.md")
 	}
-	if strings.Contains(doc, "ssh-keygen -Y verify") {
-		t.Error("the self-hosting page restates the signature check, which is a second copy to keep in step")
+	procedure := repoFile(t, "docs/verify.md")
+	for _, part := range []string{
+		"https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers",
+		"-I releases@denyfirst.dev",
+		"-n file",
+		"sha256sum --ignore-missing -c SHA256SUMS",
+	} {
+		if !strings.Contains(procedure, part) {
+			t.Fatalf("docs/verify.md no longer gives %q; the guide's check follows it, so look at both", part)
+		}
+		if !strings.Contains(doc, part) {
+			t.Errorf("the guide checks the signature without %q, which docs/verify.md uses", part)
+		}
 	}
 
 	// It has to say the thing that is only true here: the trust store is the
@@ -583,9 +599,11 @@ func TestTheRevocationAddressesFollowTheOperatorsView(t *testing.T) {
 // binary alone.
 func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
 	build := repoFile(t, "scripts/build.sh")
-	if !strings.Contains(build, `cp Dockerfile Dockerfile.dockerignore docker-compose.yml "${out}/"`) {
-		t.Error("scripts/build.sh no longer puts the three container files in the release, " +
-			"so a server has to clone the repository to get them, or builds without the ignore file")
+	if !strings.Contains(build, `go run ./internal/ociimage/porch-image build -tag "${tag}" -dist "${out}" -compose docker-compose.yml`) {
+		t.Error("scripts/build.sh no longer builds the release's image and the compose file that pins it")
+	}
+	if strings.Contains(build, "cp Dockerfile") {
+		t.Error("the release carries a Dockerfile again, for a server to build an image the signature does not name")
 	}
 
 	// The ignore file travels with the Dockerfile, because the build on a
@@ -601,18 +619,22 @@ func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
 			"and a checkout reading it would hide that servers have none")
 	}
 
-	// The binary for the server's own processor: an ARM server given the
-	// amd64 build has a file that will not run.
+	// The compose file and the signed list that covers it, checked before
+	// anything starts: the compose file names the image by digest, so it is
+	// the one file a server has to verify.
 	fetch := []string{
-		`A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')`,
-		`for f in "porchd_${V}_linux_${A}" "porch-scan_${V}_linux_${A}" Dockerfile Dockerfile.dockerignore docker-compose.yml SHA256SUMS SHA256SUMS.sig; do`,
+		`for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/latest/download/${f}"; done`,
+		`ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS`,
 	}
 	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
 		// The page colours its commands with spans; what it says is the text.
-		// Whole lines, because the guide's command line download works the
-		// processor out on a line of its own, and finding the server's line
-		// inside that one would let the server's step lose it unnoticed.
-		body := html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(repoFile(t, path), ""))
+		// Whole lines, so that a line found inside a longer one does not
+		// stand in for it. Only the page is markup: in the guide a "<" is a
+		// shell redirect, and stripping from it would eat the line.
+		body := repoFile(t, path)
+		if strings.HasSuffix(path, ".html") {
+			body = html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(body, ""))
+		}
 		lines := map[string]bool{}
 		for _, line := range strings.Split(body, "\n") {
 			lines[strings.TrimSpace(line)] = true
@@ -673,7 +695,7 @@ func TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing(t *test
 		"read_only: true",
 		"- no-new-privileges:true",
 		"cap_drop:\n- ALL",
-		"pull_policy: never",
+		"image: ghcr.io/denyfirst/porch@sha256:",
 		`profiles: ["cli"]`,
 	} {
 		if !strings.Contains(scan, want) {
@@ -683,11 +705,78 @@ func TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing(t *test
 	if strings.Contains(scan, "ports:") || strings.Contains(scan, "build:") {
 		t.Error("the scan service publishes a port or builds an image of its own")
 	}
-	if !strings.Contains(porch, "pull_policy: build") {
-		t.Error("the service's image may be pulled from a registry rather than built from the release")
+	// Both services start the release's image by its digest, never by a tag.
+	for name, service := range map[string]string{"porch": porch, "scan": scan} {
+		if !regexp.MustCompile(`(?m)^image: ghcr\.io/denyfirst/porch@sha256:[0-9a-f]{64}$`).MatchString(service) {
+			t.Errorf("the %s service does not start the release's image by its digest", name)
+		}
+		if strings.Contains(service, "build:") {
+			t.Errorf("the %s service builds an image the signature does not name", name)
+		}
 	}
 
 	if !regexp.MustCompile(`(?m)^COPY --chmod=0555 porchd porch-scan /$`).MatchString(repoFile(t, "Dockerfile")) {
 		t.Error("the image does not carry the command line beside the service")
+	}
+}
+
+// The release's image is built with the binaries, published by digest only
+// once the release's own gates have passed, read back anonymously before a
+// draft can name it, and read back again by the reproduction after the
+// maintainer has signed. The demonstration carries its digest, so the page
+// shows the compose file the release ships.
+func TestTheReleaseImageIsPublishedByDigestAndChecked(t *testing.T) {
+	build := repoFile(t, "scripts/build.sh")
+	if !strings.Contains(build, `-X github.com/denyfirst/porch/internal/web.imageDigest=${digest}`) {
+		t.Error("the demonstration build does not carry the image's digest")
+	}
+	if strings.Index(build, "porch-image build") > strings.Index(build, "porchd-demonstration_${tag}") {
+		t.Error("the demonstration is built before the image whose digest it carries")
+	}
+
+	release := repoFile(t, ".github/workflows/build-release.yml")
+	gates := strings.Index(release, "Refuse to stage a build with a known vulnerability")
+	push := strings.Index(release, "porch-image push -archive")
+	check := strings.Index(release, "porch-image check -archive")
+	stage := strings.Index(release, "- name: Stage a draft release")
+	if gates < 0 || push < gates || check < push || stage < check {
+		t.Error("the image is not published after the release's gates, read back, and only then staged")
+	}
+	if !strings.Contains(release, "packages: write") {
+		t.Error("the release workflow cannot publish the image")
+	}
+	if strings.Count(release, "packages: write") != 1 {
+		t.Error("more than one job may publish packages")
+	}
+	if strings.Contains(release, "REGISTRY_PASSWORD: ${{ github.token }}") == false {
+		t.Error("the image is published with something other than the workflow's own token")
+	}
+
+	reproduce := repoFile(t, ".github/workflows/reproduce.yml")
+	if !strings.Contains(reproduce, "porch-image check -archive") {
+		t.Error("the reproduction does not check what the registry serves")
+	}
+
+	// And neither step can be switched off by a condition: an `if:` on it
+	// leaves every line above in place and runs nothing.
+	for name, workflow := range map[string]string{
+		"Publish the image by digest, and read it back as a stranger would": release,
+		"Check the registry serves the image the release signed":            reproduce,
+	} {
+		at := strings.Index(workflow, "- name: "+name)
+		if at < 0 {
+			t.Errorf("no step %q", name)
+			continue
+		}
+		step := workflow[at+len("- name: "):]
+		if next := strings.Index(step, "- name: "); next >= 0 {
+			step = step[:next]
+		}
+		if regexp.MustCompile(`(?m)^\s*(if|continue-on-error):`).MatchString(step) {
+			t.Errorf("the step %q runs only on a condition, or may fail without failing the job", name)
+		}
+	}
+	if strings.Contains(reproduce, "packages: write") || strings.Contains(reproduce, "porch-image push") {
+		t.Error("the reproduction can publish an image; it only reads")
 	}
 }
