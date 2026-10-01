@@ -135,8 +135,11 @@
       <h3>Get it</h3>
       <p>On the server: the latest release's compose file, the signed list of
       hashes that covers it, and the check that both are ours. The last line
-      has to print <code>Good "file" signature</code> and
-      <code>docker-compose.yml: OK</code>; anything else is a stop.
+      has to print <code>Good "file" signature</code> with the key
+      <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code> and
+      <code>docker-compose.yml: OK</code>; anything else is a stop. The key
+      comes from GitHub and its fingerprint from this page, so a key changed
+      in one place alone prints a fingerprint that does not match.
       <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">docs/verify.md</a>
       says what each part proves.</p>
       <div class="command terminal">

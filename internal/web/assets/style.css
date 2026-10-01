@@ -2330,6 +2330,10 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink);
 }
 
+/* A fingerprint is one long word, read character by character; it breaks
+   anywhere rather than pushing the column wider than the screen. */
+.steps p code.key-fingerprint { overflow-wrap: anywhere; word-break: break-all; }
+
 @media (max-width: 52rem) {
   .steps li { grid-template-columns: minmax(0, 1fr); }
   .steps .command { grid-column: 1; grid-row: auto; margin-top: 1rem; }

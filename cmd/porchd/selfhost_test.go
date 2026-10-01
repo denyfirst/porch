@@ -4,8 +4,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"html"
@@ -778,5 +780,49 @@ func TestTheReleaseImageIsPublishedByDigestAndChecked(t *testing.T) {
 	}
 	if strings.Contains(reproduce, "packages: write") || strings.Contains(reproduce, "porch-image push") {
 		t.Error("the reproduction can publish an image; it only reads")
+	}
+}
+
+// The install names the fingerprint of the key that signs releases, worked
+// out here from .allowed_signers rather than copied, on the Porch page and in
+// the guide as docs/verify.md does.
+//
+// The key file and the release both come from GitHub, so a signature checked
+// against that key alone proves only that the two agree. The page is served
+// by denyfirst.dev, which GitHub does not run: a key replaced on GitHub alone
+// prints a fingerprint that does not match the one the page shows. A key
+// rotated without the page following fails here rather than on a server.
+func TestTheInstallNamesTheReleaseKeysFingerprint(t *testing.T) {
+	var fingerprints []string
+	for _, line := range nonComments(repoFile(t, ".allowed_signers")) {
+		// principals, options, the key's type, the key, a comment: the key
+		// is the field after its type, wherever the options leave it.
+		fields := strings.Fields(line)
+		at := -1
+		for i, f := range fields {
+			if strings.HasPrefix(f, "ssh-") || strings.HasPrefix(f, "ecdsa-") || strings.HasPrefix(f, "sk-") {
+				at = i
+				break
+			}
+		}
+		if at < 0 || at+1 >= len(fields) {
+			t.Fatalf("an allowed_signers line with no key: %q", line)
+		}
+		blob, err := base64.StdEncoding.DecodeString(fields[at+1])
+		if err != nil {
+			t.Fatalf("the key in .allowed_signers is not base64: %v", err)
+		}
+		sum := sha256.Sum256(blob)
+		fingerprints = append(fingerprints, "SHA256:"+base64.RawStdEncoding.EncodeToString(sum[:]))
+	}
+	if len(fingerprints) == 0 {
+		t.Fatal(".allowed_signers names no key")
+	}
+	for _, fp := range fingerprints {
+		for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md", "docs/verify.md"} {
+			if !strings.Contains(repoFile(t, path), fp) {
+				t.Errorf("%s does not name the release key's fingerprint %s", path, fp)
+			}
+		}
 	}
 }
