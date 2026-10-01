@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -417,5 +419,45 @@ func TestADifferenceInTheComparisonSignsNothing(t *testing.T) {
 	}
 	if last := strings.LastIndex(region, "$different +="); last > refusal[0] {
 		t.Error("release.ps1 refuses before every difference has been counted")
+	}
+}
+
+// No guide sends a reader to a binary that is no longer offered.
+//
+// Every release before v0.25.1 checked names nobody had proven, and on
+// 2026-10-01 their binaries were withdrawn: the tag, SHA256SUMS, its signature
+// and BUILD stay, the binaries do not (N9). docs/verify.md's examples still
+// downloaded v0.1.0's command line that day, which would now be a 404 in the
+// one guide whose every step has to work, and a pointer to the kind of release
+// this project no longer distributes. A list and its signature from an old
+// release are still fine to fetch; a binary is not.
+func TestNoGuideDownloadsAWithdrawnBinary(t *testing.T) {
+	download := regexp.MustCompile(`releases/download/v(\d+)\.(\d+)\.(\d+)[^/\s]*/([A-Za-z0-9_.\-]+)`)
+	var guides []string
+	for _, pattern := range []string{"../../docs/*.md", "../../*.md", "../../internal/web/assets/*.html"} {
+		found, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		guides = append(guides, found...)
+	}
+	if len(guides) == 0 {
+		t.Fatal("no guides were found, so this test checks nothing")
+	}
+	for _, path := range guides {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range download.FindAllStringSubmatch(string(body), -1) {
+			major, _ := strconv.Atoi(m[1])
+			minor, _ := strconv.Atoi(m[2])
+			patch, _ := strconv.Atoi(m[3])
+			withdrawn := major == 0 && (minor < 25 || minor == 25 && patch < 1)
+			record := m[4] == "SHA256SUMS" || m[4] == "SHA256SUMS.sig" || m[4] == "BUILD"
+			if withdrawn && !record {
+				t.Errorf("%s downloads %s, a binary withdrawn with every release before v0.25.1", path, m[0])
+			}
+		}
 	}
 }
