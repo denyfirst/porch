@@ -53,7 +53,7 @@ porchd -listen 0.0.0.0:8443 -verification-secret-file /etc/porch/secret
 ```
 
 The file is created on the first start if it is not there. Without it, `porchd`
-refuses to listen anywhere but loopback unless it is also given `-open`.
+refuses to listen anywhere but loopback, and no flag changes that.
 
 `porchd -version` says which of the two you have, so a deploy can read it
 rather than trust a filename:
@@ -349,11 +349,12 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 
 A container listens beyond loopback by construction, and `porchd` refuses to
 do that while scanning whatever it is given: it will not start without
-`-verification-secret-file` or an explicit `-open`. The image and the compose
-file both turn proof on. `-open` exists for a network nobody else can reach,
-and it is the setting to think about twice. A password is the same: beyond loopback
-`porchd` wants `-access-file`, or `-without-password` said out loud, and the
-image and the compose file give it the first.
+`-verification-secret-file`. The image and the compose file both turn proof on.
+A password is the same: beyond loopback `porchd` wants `-access-file`, and the
+image and the compose file give it. Neither can be turned off — `-open` and
+`-without-password` did that until 2026-09-29, and an installation started with
+either is now told they were removed. To check a name nobody has proven, run
+`porch-scan` in a terminal.
 
 **Why showing the record is safe.** The value is derived from this
 installation's secret and the one domain. It proves something only once it is
@@ -491,7 +492,7 @@ one from Let's Encrypt for `scan.example.com`:
 A `command` replaces the one in the compose file, it is not added to it, so
 every argument has to be there: drop `-access-file` and the password goes, and
 `porchd` then refuses to start on a public address, because it will not serve
-anyone beyond loopback without a password unless told `-without-password`.
+anyone beyond loopback without a password.
 
 The key has to be readable by user 65534. Nothing listens on port 80 — see
 `docs/invariants.md`, P5 — so obtain the certificate with a DNS challenge, or

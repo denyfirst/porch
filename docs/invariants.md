@@ -1032,11 +1032,22 @@ a new secret, created exclusively and readable by its owner alone, so turning
 proof on is one flag; a mistyped path means a new secret and every record
 refused, which fails closed.
 
-**A service beyond loopback requires it.** `porchd` will not listen anywhere
-but loopback without a secret unless it is also given `-open`, and the image and
-the compose file both turn proof on. docs/scope.md said the service default was
-on while the code shipped it off; the 2026-09-16 audit (A01, A02) found a
+**A service beyond loopback requires it, and nothing turns that off.**
+`porchd` will not listen anywhere but loopback without a secret, and the image
+and the compose file both turn proof on. docs/scope.md said the service default
+was on while the code shipped it off; the 2026-09-16 audit (A01, A02) found a
 container example publishing an open scanner.
+
+Until 2026-09-29 `-open` turned it off, and `-without-password` turned off the
+password beside it. Each rested on one sentence in its help text — "only for a
+network nobody else can reach" — which nothing could check, so an operator's
+belief about their network was the whole of the boundary. A second copy started
+on another port of a server that ran a proven installation, with both flags,
+served every name to everyone who could reach it, from the same address. Both
+flags are gone, and an installation started with either is told why rather than
+started (`TestTheFlagsThatOpenedAServiceAreRefused`). Checking a name nobody
+has proven is what `porch-scan` is for, run by the person at the terminal, who
+is the one answerable for it.
 
 **The page shows the record to publish, and that is safe because of the token,
 not despite it.** `POST /api/v1/verify` answers whether a name is proven and,
@@ -1158,8 +1169,9 @@ all of them to the person who ran it. A copy of `porchd` only its operator can
 call, on this machine's loopback or behind their password, is that person with
 a browser in front of the command line, and it showed them a stranger's report
 of their own estate. `operatorView` now decides it: a scope, or a copy nobody
-but the operator can call. A copy started with `-open` and no password still
-answers strangers and still shows only what a visitor sees. The two questions
+but the operator can call. A copy that answers strangers shows only what a
+visitor sees — `porchd` no longer starts one, since `-open` and
+`-without-password` went on 2026-09-29, and the service does not assume it. The two questions
 that name the domain to somebody else — the transparency logs and the
 certificate's responder — stay with the scope, because without one the domain
 may be somebody else's, and the command line asks both only behind a flag for
@@ -3695,8 +3707,9 @@ HTTP to any other address does not work, by design. The server refuses it too, b
 password is read, and does not count a session sent by hand on such a request:
 only TLS, or a request addressed to this machine's own name, which is what the
 browser at the near end of an SSH tunnel sends, carries a password or a session.
-Beyond loopback `porchd` will not serve without `-access-file` unless told
-`-without-password`, and every configuration this project ships carries it; one
+Beyond loopback `porchd` will not serve without `-access-file`, and since
+2026-09-29 nothing turns that off; every configuration this project ships
+carries it; one
 example in the guide dropped it once, because a compose command replaces the
 default rather than adding to it. A plain `-results-dir` beside a password is
 refused at start, since it would keep in the clear, under each checked name,

@@ -103,9 +103,9 @@ constructor now hands the boundary to every check it builds, `UseWebScanner`
 cannot drop it, and the test drives the `POST` routes read out of the source
 rather than a list somebody has to remember to extend.
 
-**The default is on.** Beyond loopback `porchd` will not start without a
-verification secret unless `-open` is said, nor without a password unless
-`-without-password` is; the image and the compose file carry both. The
+**The default is on, and stays on.** Beyond loopback `porchd` will not start
+without a verification secret or without a password, and since 2026-09-29 no
+flag turns either off; the image and the compose file carry both. The
 reviews of 2026-09-16 (A01, A07) and 2026-09-18 (D01) are closed by that, and
 v0.18.0 said so in its release note.
 

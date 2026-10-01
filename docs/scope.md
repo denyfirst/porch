@@ -62,9 +62,10 @@ anything, and then it was *their* address in the scanned party's logs.
 That was not a hypothetical for somebody else. It is the arrangement a careless
 colleague reaches by accident, a compromised CI job reaches on purpose, and an
 SSRF into the scanner reaches for free. Since v0.18.0 `porchd` will not listen
-beyond loopback without `-verification-secret-file` and `-access-file`, unless
-`-open` and `-without-password` are said out loud; what follows is the design
-that made that possible.
+beyond loopback without `-verification-secret-file` and `-access-file`. Until
+2026-09-29 `-open` and `-without-password` turned those off, on the strength of
+a sentence about a network nobody else could reach; they are gone. What follows
+is the design that made that possible.
 
 ---
 
@@ -85,7 +86,7 @@ established at run time. Five properties decide whether it works.
 | | default | why |
 |---|---|---|
 | `porch-scan`, in a terminal | off | whoever runs it already has the machine |
-| `porchd`, a service | **on** beyond loopback; `-open` turns it off | anything anyone can reach must not scan arbitrary hosts |
+| `porchd`, a service | **on** beyond loopback; nothing turns it off | anything anyone can reach must not scan arbitrary hosts |
 
 A protection that must be switched on is one that is eventually forgotten,
 which is the same argument `AllowAnyPort` and `safedial` already make.

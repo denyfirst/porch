@@ -113,8 +113,8 @@ func TestTheComposeFileTakesAwayWhatItSays(t *testing.T) {
 		if !strings.Contains(file, `"-verification-secret-file"`) || !strings.Contains(file, `"/data/secret"`) {
 			t.Errorf("%s does not turn proof of control on", name)
 		}
-		if strings.Contains(file, `"-open"`) {
-			t.Errorf("%s turns proof of control off", name)
+		if strings.Contains(file, `"-open"`) || strings.Contains(file, `"-without-password"`) {
+			t.Errorf("%s names a flag that was removed", name)
 		}
 	}
 	if !strings.Contains(compose, "./porch-data:/data") || !strings.Contains(compose, "chown 65534:65534 porch-data") {

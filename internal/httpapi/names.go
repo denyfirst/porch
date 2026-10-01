@@ -39,9 +39,8 @@ import (
 // assembling it, on request, for people who will not say who they are.
 //
 // So where there is no scope it is answered only by a copy nobody else can
-// reach, and refused everywhere else — the opposite of how the checks behave
-// on a copy started with -open. "Nobody has proven anything" must not mean
-// "everybody may ask".
+// reach, and refused everywhere else. "Nobody has proven anything" must not
+// mean "everybody may ask".
 //
 // # And on the demonstration, only this project's own estate
 //
