@@ -352,7 +352,7 @@ the image is a wrapper around a binary **you verified**, or built yourself.
    -f` stops there rather than fetching something that will not run.
 
    Then check them, in that directory, as [`docs/verify.md`](verify.md) says:
-   the signature over `SHA256SUMS`, then every file against it. From v0.25.0
+   the signature over `SHA256SUMS`, then every file against it. From v0.25.1
    the list carries the three container files as well as the binaries, so the
    same two commands check all of them. Stop at the first that fails.
 

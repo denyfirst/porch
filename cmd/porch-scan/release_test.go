@@ -45,10 +45,20 @@ func TestTheReleaseProcedureIsWrittenDown(t *testing.T) {
 		{"STOP: not on the branch, nothing applied", "the branch check has to be the condition the patch is applied under: printed on its own line it went past twice, and both times the commit landed on main"},
 		{"STOP: not on the branch, nothing committed", "a patch applied by hand after a failed switch reaches the same place, so the commit is guarded too"},
 		{"carries the reason for the change, and nothing else", "a commit message is published and permanent, and an identifier in one cannot be taken back without rewriting main"},
+		{"-Pattern 'Unreleased' -CaseSensitive", "Select-String ignores case, and a sentence of history saying \"were unreleased\" is printed as an alarm that has to be read past"},
+		{`select(.headBranch == "v0.2.0")`, "the newest reproduction run may be the previous release's, already green: on 2026-10-01 it was watched in place of the release's own and reported success"},
 	} {
 		if !strings.Contains(page, required.text) {
 			t.Errorf("docs/releasing.md no longer covers %q — %s", required.text, required.why)
 		}
+	}
+
+	// The notes go on before the release is published: the draft's own text
+	// says it is unsigned, and v0.24.0 and v0.25.0 were both published saying so.
+	notes := strings.Index(page, "gh release edit v0.2.0 --notes-file NOTES.md")
+	publish := strings.Index(page, "gh release edit v0.2.0 --draft=false")
+	if notes < 0 || publish < 0 || notes > publish {
+		t.Error("docs/releasing.md publishes the release before its notes replace the draft's")
 	}
 }
 

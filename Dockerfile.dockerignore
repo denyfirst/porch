@@ -11,7 +11,7 @@
 # Named for the Dockerfile rather than ".dockerignore" so that it can travel in
 # the release: BuildKit reads <Dockerfile>.dockerignore first, and a file whose
 # name starts with a dot is one a download loop and a directory listing both
-# pass over. Before v0.25.0 there was no ignore file at all, and a server that
+# pass over. Before v0.25.1 there was no ignore file at all, and a server that
 # built in its checkout sent the builder its porch-data with everything else.
 *
 !porchd
