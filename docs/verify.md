@@ -70,6 +70,11 @@ sha256sum --ignore-missing -c SHA256SUMS
 
 On macOS, `shasum -a 256 --ignore-missing -c SHA256SUMS`.
 
+From v0.25.0 the list also names `Dockerfile` and `docker-compose.yml`, the two
+files that run the service in a container, so that a server needs nothing but
+the release. The same command checks them: every file it prints must say `OK`,
+and a file it does not print was not downloaded.
+
 On Windows:
 
 ```powershell

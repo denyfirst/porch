@@ -292,22 +292,31 @@ the image is a wrapper around a binary **you verified**, or built yourself.
 
 ### On a server, step by step
 
-1. Get the code and a binary. Either the release, verified — `docs/verify.md` —
-   or built from this checkout on any machine with Go, which fetches nothing
-   else:
+1. Get the release, and nothing else. On the server, in a directory of its
+   own: the binary, the Dockerfile and compose file that run it, and the
+   signed list of their hashes. No source, no documents and no history go to a
+   machine that runs one binary.
 
    ```sh
-   git clone https://github.com/denyfirst/porch
-   cd porch
-   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o porchd ./cmd/porchd
+   mkdir -p porch && cd porch
+   V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
+   for f in "porchd_${V}_linux_amd64" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
    ```
 
-   Built elsewhere, copy `porchd` into the checkout on the server.
+   Then check them, in that directory, as [`docs/verify.md`](verify.md) says:
+   the signature over `SHA256SUMS`, then every file against it. From v0.25.0
+   the list carries the Dockerfile and the compose file as well as the binary,
+   so the same two commands check all three. Stop at the first that fails.
 
-2. Make the data directory and give it to the user the container runs as.
-   There is no shell in the image to do this from inside:
+   Building it yourself instead: build on any machine with Go, as *Get a
+   binary* above says, and copy `porchd`, `Dockerfile` and
+   `docker-compose.yml` to the server. Nothing else is needed there.
+
+2. Name the binary, and make the data directory for the user the container
+   runs as. There is no shell in the image to do this from inside:
 
    ```sh
+   mv porchd_*_linux_amd64 porchd
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
    ```
 

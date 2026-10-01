@@ -126,27 +126,32 @@
       <p class="eyebrow">Get started</p>
       <h2 class="band-title">Your own copy,<br>in three steps.</h2>
     </div>
-    <p class="band-note">Docker on the server, Go on any machine. Nothing is
-    fetched but this source and the standard library.</p>
+    <p class="band-note">Docker on the server, and beside it only what the
+    release signed: the service and the two files that run it. No source goes
+    there.</p>
   </div>
   <ol class="steps">
     <li>
-      <h3>Build it</h3>
-      <p>Get the source and build the service. Built elsewhere, copy
-      <code>porchd</code> into the checkout on the server.</p>
+      <h3>Get it</h3>
+      <p>On the server, the latest release: the binary, the two files that run
+      it, and the signed list of their hashes. Then check all three as
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">docs/verify.md</a>
+      says, before anything runs.</p>
       <div class="command">
-        <pre><code id="command-build">git clone https://github.com/denyfirst/porch
-cd porch
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o porchd ./cmd/porchd</code></pre>
-        <button class="command-copy" type="button" data-copy="command-build" aria-label="Copy the commands to build it">Copy</button>
+        <pre><code id="command-get">mkdir -p porch &amp;&amp; cd porch
+V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
+for f in "porchd_${V}_linux_amd64" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done</code></pre>
+        <button class="command-copy" type="button" data-copy="command-get" aria-label="Copy the commands to get it">Copy</button>
       </div>
     </li>
     <li>
       <h3>Start it</h3>
-      <p>Give the container a data directory, then start it. Proof of control
-      is on from the first start.</p>
+      <p>Once the signature and every hash check out: name the binary, give the
+      container a data directory, and start it. Proof of control and a password
+      are on from the first start, and nothing turns them off.</p>
       <div class="command">
-        <pre><code id="command-start">mkdir -p porch-data &amp;&amp; sudo chown 65534:65534 porch-data
+        <pre><code id="command-start">mv porchd_*_linux_amd64 porchd
+mkdir -p porch-data &amp;&amp; sudo chown 65534:65534 porch-data
 docker compose up -d --build</code></pre>
         <button class="command-copy" type="button" data-copy="command-start" aria-label="Copy the commands to start it">Copy</button>
       </div>
@@ -162,8 +167,8 @@ docker compose up -d --build</code></pre>
     </li>
   </ol>
   <p class="band-footnote">The first check of a domain shows a DNS record to
-  add; the checks run once it is published. A public address, a signed
-  release and everything else are in the
+  add; the checks run once it is published. A public address, building it
+  yourself and everything else are in the
   <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting guide</a>.</p>
 </section>
 

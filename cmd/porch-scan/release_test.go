@@ -255,7 +255,6 @@ func TestEveryCloneIsFollowedByTheDirectoryItMade(t *testing.T) {
 		"../../README.md",
 		"../../docs/self-host.md",
 		"../../docs/verify.md",
-		"../../internal/web/assets/porch.html",
 	} {
 		body, err := os.ReadFile(path)
 		if err != nil {

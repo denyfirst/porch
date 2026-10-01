@@ -1,0 +1,8 @@
+# The image is built from one file, and the build is sent one file.
+#
+# Without this, "docker compose up --build" in a checkout sends the whole
+# directory to the builder — the source, .git, anything left lying in it — and
+# the Dockerfile's single COPY is then the only thing keeping it out of the
+# image. One line added to that Dockerfile later would be enough to undo it.
+*
+!porchd

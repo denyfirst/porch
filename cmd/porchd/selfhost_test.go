@@ -566,3 +566,47 @@ func TestTheRevocationAddressesFollowTheOperatorsView(t *testing.T) {
 			"operatorView decides for every part of a report shown whole only to its owner")
 	}
 }
+
+// A server running the service holds the release and nothing else.
+//
+// The way to the Dockerfile and the compose file was a clone of this
+// repository onto the server, which put the source tree, its documents and
+// its history on a machine that runs one binary — found there on 2026-09-29.
+// The release carries both files now, listed in SHA256SUMS beside the binary,
+// so the one signature covers them. The Porch page and the guide fetch those
+// five files and clone nothing, and a build from a checkout is sent the
+// binary alone.
+func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
+	build := repoFile(t, "scripts/build.sh")
+	if !strings.Contains(build, `cp Dockerfile docker-compose.yml "${out}/"`) {
+		t.Error("scripts/build.sh no longer puts the Dockerfile and the compose file in the release, " +
+			"so a server has to clone the repository to get them")
+	}
+
+	ignore := strings.Fields(strings.Join(nonComments(repoFile(t, ".dockerignore")), "\n"))
+	if strings.Join(ignore, " ") != "* !porchd" {
+		t.Errorf(".dockerignore sends the builder %v, want the binary alone", ignore)
+	}
+
+	fetch := `for f in "porchd_${V}_linux_amd64" Dockerfile docker-compose.yml SHA256SUMS SHA256SUMS.sig; do`
+	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
+		body := repoFile(t, path)
+		if !strings.Contains(body, fetch) {
+			t.Errorf("%s does not fetch the binary, the two files that run it, and the signed list", path)
+		}
+	}
+	if strings.Contains(repoFile(t, "internal/web/assets/porch.html"), "git clone") {
+		t.Error("the Porch page puts the source on the server again")
+	}
+}
+
+// nonComments is a file's lines without comments or blank lines.
+func nonComments(body string) []string {
+	var out []string
+	for _, line := range strings.Split(body, "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
