@@ -402,235 +402,37 @@ saying it had no signature yet — an actively false statement on a release that
 was signed. Check what the page says after editing it, not that the command
 was typed.
 
-Then deploy, which is the section below.
+Then deploy, which the section below describes.
 
 ---
 
 ## Deploying
 
 A release is a set of bytes anybody can verify. A deploy is the separate claim
-that those exact bytes are what now answers on port 443, and nothing above
+that those exact bytes are what now answers at denyfirst.dev, and nothing above
 establishes it.
 
-Until 2026-09-01 this page said *then deploy* and gave one command,
-`porchd -version`. It is not on `PATH` on the machine it was written for,
-so the only instruction that existed failed on the evening it was first
-followed.
+The commands are kept with the rest of what describes that machine, in the
+maintainers' private notes. A public page listing a server's paths, accounts
+and monitoring is a map for whoever would attack it, and nobody verifying a
+release needs any of it. What every deploy does is public, because it is what
+anybody relying on the demonstration is entitled to know:
 
-### Nothing is deployed that was not reproduced
+- **Nothing is deployed that was not reproduced.** `reproduce.yml` has passed
+  for the tag, so the bytes are not one laptop's word.
+- **The server checks the signature itself**, with the commands
+  `docs/verify.md` gives a stranger and the key from this repository, before
+  the file goes anywhere near the live path.
+- **Only the demonstration build runs there** (N6), and the file has to say so
+  before it is installed. The ordinary binary on that machine would be a
+  scanner for anybody's estate, with nothing in its configuration to show it.
+- **The previous binary is kept, named for the release that replaced it**, so
+  going back is one rename.
+- **The running process is checked, not the file**, and the binary carries no
+  file capability: the service is granted the port it needs and nothing else.
 
-Publication is not the last gate. `reproduce.yml` is the only step showing
-these bytes come from this source on a machine that is not the maintainer's,
-so a build that was signed but not reproduced is one that a single laptop
-vouches for.
-
-```sh
-gh run list --workflow=reproduce.yml --limit 1
-```
-
-### The signature is checked again, on the machine that will run it
-
-Verifying on the laptop that did the download establishes something about the
-laptop. The bytes that matter are the ones on the server, so the server checks
-them — with the same commands `docs/verify.md` gives a stranger, which is the
-point of publishing them.
-
-The whole block runs inside a subshell with `set -euo pipefail`, so the first
-failure stops it. Pasted as loose lines it does not: on 2026-09-01 the release
-had not been published yet, three `curl` calls answered 404, and the block
-carried on to copy the running binary over itself as a rollback of the version
-that was already running. Nothing was damaged and nothing was checked either,
-which is the shape of the accident worth preventing. A subshell rather than a
-bare `set -e`, so a failure ends the block and not the login session.
-
-```sh
-(
-set -euo pipefail
-
-V=v0.4.0
-base=https://github.com/denyfirst/porch/releases/download/${V}
-
-# The demonstration build, and not porchd.
-#
-# This server connects only to hosts this project owns (N6). That property is
-# compiled in, so it is a property of the file rather than of anything on this
-# machine: install the ordinary binary here and the public deployment silently
-# becomes a scanner for the whole internet again, with nothing in the unit
-# file, the flags or the logs to say so. The name is long for that reason.
-mkdir -p ~/deploy && cd ~/deploy
-curl -fsSLO "${base}/porchd-demonstration_${V}_linux_amd64"
-curl -fsSLO "${base}/SHA256SUMS"
-curl -fsSLO "${base}/SHA256SUMS.sig"
-curl -fsSLO https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers
-
-ssh-keygen -Y verify \
-  -f .allowed_signers \
-  -I releases@denyfirst.dev \
-  -n file \
-  -s SHA256SUMS.sig \
-  < SHA256SUMS
-
-sha256sum --check --ignore-missing SHA256SUMS
-```
-
-The key comes from the repository and not from the release, because a
-signature verifies against whatever key it is handed: a key shipped beside the
-file it vouches for establishes nothing. The fingerprint `ssh-keygen` prints
-is the one in `docs/verify.md`, and it is the same fingerprint whether a
-stranger checks it or this server does.
-
-Nothing here needs a credential for the repository. The production machine
-holds no token, no deploy key and no write access to anything — it fetches
-public files and checks a signature, which is all a deploy requires.
-
-`/tmp` is mounted `noexec` on this server. The download directory is under the
-deploying user's home for that reason, and the binary is never executed from
-where it lands.
-
-### Install
-
-**The unit is `porchd.service` and the binary is `/opt/porch/porchd`**, renamed
-on 2026-09-20. The release file is `porchd-demonstration`.
-
-What kept the old name is the account and everything around it: the service
-runs as the `denyfirst` user, writes to `/var/lib/denyfirst`, and the alerting,
-the watch timer, fail2ban and the audit rules are all `denyfirst-*`. That is
-correct rather than unfinished — denyfirst is the team, porch is the product,
-and a machine's own tooling belongs to the team. Only the service and its
-binary name the product.
-
-The old unit is still on the machine, disabled. Between 2026-09-18 and the
-rename this page said `/opt/porch/porchd` while the machine had
-`/opt/porch/porchd`, and a deploy stopped at its first line because of
-it; the check below is the answer to that, and it reads the running process
-rather than a filename.
-
-The downloaded file is checked before it goes anywhere near the live path: it
-has to run, and it has to say it is the demonstration build.
-
-```sh
-chmod +x porchd-demonstration_${V}_linux_amd64
-./porchd-demonstration_${V}_linux_amd64 -version
-./porchd-demonstration_${V}_linux_amd64 -version | grep -q '^demonstration: ' \
-  || { echo 'STOP: not the demonstration build'; exit 1; }
-
-sudo install -o root -g root -m 0755 \
-  porchd-demonstration_${V}_linux_amd64 /opt/porch/porchd.new
-sudo cp -a /opt/porch/porchd /opt/porch/porchd.rollback-pre-${V}
-sudo mv /opt/porch/porchd.new /opt/porch/porchd
-sudo systemctl restart porchd
-echo INSTALLED
-)
-```
-
-The rollback is named for the release that replaced it, from `${V}`, so
-nothing in its name is typed by hand. Asking the running binary for its own
-version was the plan here once, and it depends on a `-version` whose output
-older builds did not share. To go back:
-
-```sh
-sudo mv /opt/porch/porchd.rollback-pre-v0.19.0 /opt/porch/porchd
-sudo systemctl restart porchd
-```
-
-`install` sets owner and mode as it writes. `cp` followed by `chmod` leaves a
-window in which the file is in place with the wrong ownership, and that window
-is on the live path.
-
-`mv` inside one filesystem is a rename, so the path never exists half-written.
-Copying onto the live path does, and the moment it is half-written is a moment
-the service might restart.
-
-The file is `root:root`; the service runs as `denyfirst`. The account the
-service runs as cannot rewrite the file it executes, which is the entire
-reason the two are different.
-
-The rollback carries the release in its name. A file called `.bak` is one
-nobody can reason about a week later — there was one on this server from
-2026-08-18, and nothing recorded what it held. Keep one, named.
-
-### The binary carries no capability
-
-Port 443 is reached through the unit:
-
-```
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-```
-
-which grants the capability to this one process as it starts. A file
-capability would grant it to anybody on the machine who runs the file, which
-is a much larger claim than the one that needs making.
-
-```sh
-getcap /opt/porch/porchd
-```
-
-must print nothing. `install` does not carry capabilities across, so this
-holds unless somebody sets one by hand — which is exactly why it is checked
-rather than assumed.
-
-### Look at what the inventory now publishes about us
-
-The demonstration lists this project's own estate on `/names`, and it lists
-whatever the sources find — not a list anybody curated. Every name under
-`denyfirst.dev` that a certificate log, the zone's own records or a host's
-certificate names will appear there, and it will appear the hour after it
-exists.
-
-That is the arrangement rather than an oversight: a filtered inventory would be
-one that lies by omission, which is the thing this mode exists not to do. What
-it needs instead is a pair of eyes at the one moment the estate is known to
-have changed, which is a deploy.
-
-```sh
-curl -s https://denyfirst.dev/api/v1/names/scan \
-  -H 'content-type: application/json' \
-  -d '{"target":"denyfirst.dev"}' | grep -o '"name":"[^"]*"'
-```
-
-Anything there that should not be public does not belong under this domain.
-Move it, rather than teaching the report to hide it.
-
-### Confirm the service, not the file
-
-```sh
-/opt/porch/porchd -version | grep -q '^demonstration: ' \
-  || echo 'STOP: this is not the demonstration build'
-systemctl is-active porchd
-sudo readlink /proc/$(systemctl show -p MainPID --value porchd)/exe
-curl -s https://denyfirst.dev/healthz
-```
-
-The first line is the one that cannot be inferred from anything else. The two
-builds are indistinguishable from outside until one of them refuses something:
-the file is in place, the service answers, the version matches, and the only
-symptom of the wrong one is a public scanner nobody meant to run. `-version`
-says which hosts the binary will connect to, read from the same list the
-scanner enforces, so a binary cannot say one thing and do another.
-
-The first runs the file on disk and says what was installed. It does not say
-what is serving: a restart that failed leaves the previous process alive on
-the previous inode, still answering, while the new file sits in place looking
-correct, and `is-active` still says `active`. The `readlink` line is what
-separates them — it must print `/opt/porch/porchd`, and must not end
-in `(deleted)`.
-
-The last is the running process answering over the network, and it is the
-only one that is evidence about what people actually reach: its `policy`
-field names the rule set now serving, `porch-tls-v7` from v0.16.0 on.
-
-Every command here names the binary by its path. Neither `porchd` nor
-`porchd` is on `PATH`.
-
-### Afterwards
-
-```sh
-rm -rf ~/deploy
-```
-
-The downloaded files are public and are not secret. They are removed because a
-stale binary beside a live one is the copy somebody installs by mistake next
-time.
+Until 2026-10-01 the commands were on this page, and with them the binary's
+path, the service's account, its state directory and the monitoring around it.
 
 ---
 

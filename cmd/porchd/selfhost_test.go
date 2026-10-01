@@ -401,18 +401,22 @@ func TestTheDemonstrationBuildIsReleasedAndDeployed(t *testing.T) {
 		t.Error("the demonstration artifact is not named as the deploy procedure expects")
 	}
 
+	// The deploy commands are private since 2026-10-01 (S15): they named the
+	// machine. The public page says what they do, and these two are what this
+	// invariant rests on — the demonstration build is the one installed, and
+	// the file proves it is before it reaches the live path, rather than its
+	// name being trusted.
 	releasing := repoFile(t, "docs/releasing.md")
+	said := strings.Join(strings.Fields(releasing), " ")
 
-	if !strings.Contains(releasing, "porchd-demonstration_${V}_linux_amd64") {
-		t.Error("the deploy procedure does not install the demonstration binary")
+	if !strings.Contains(said, "Only the demonstration build runs there") {
+		t.Error("the deploy procedure does not say it installs the demonstration binary")
 	}
-	if strings.Contains(releasing, "~/deploy/porchd_${V}_linux_amd64") {
-		t.Error("the deploy procedure still installs the unrestricted binary")
+	if !strings.Contains(said, "the file has to say so before it is installed") {
+		t.Error("the deploy procedure does not say it checks which build it is installing")
 	}
-
-	// And it reads what the binary says rather than trusting the filename.
-	if !strings.Contains(releasing, "grep -q '^demonstration: '") {
-		t.Error("the deploy procedure does not check which build it just installed")
+	if strings.Contains(releasing, "porchd_${V}_linux_amd64") {
+		t.Error("the deploy procedure installs the unrestricted binary")
 	}
 }
 

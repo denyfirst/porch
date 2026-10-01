@@ -79,7 +79,7 @@ func keys(m map[string]bool) []string {
 
 var staticcheckVersion = regexp.MustCompile(`staticcheck@(v[0-9]+\.[0-9]+\.[0-9]+)`)
 
-// The staticcheck CLAUDE.md tells you to run is the one CI runs.
+// The staticcheck CONTRIBUTING.md tells you to run is the one CI runs.
 //
 // It was in neither place for a while, which is how an unused test helper — a
 // U1000 that go vet says nothing about — reached a pull request instead of a
@@ -91,9 +91,9 @@ func TestTheDocumentedStaticcheckIsTheOneCIRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the CI workflow: %v", err)
 	}
-	guide, err := os.ReadFile("../../CLAUDE.md")
+	guide, err := os.ReadFile("../../CONTRIBUTING.md")
 	if err != nil {
-		t.Fatalf("reading CLAUDE.md: %v", err)
+		t.Fatalf("reading CONTRIBUTING.md: %v", err)
 	}
 
 	inCI := staticcheckVersion.FindSubmatch(workflow)
@@ -104,13 +104,13 @@ func TestTheDocumentedStaticcheckIsTheOneCIRuns(t *testing.T) {
 
 	documented := staticcheckVersion.FindSubmatch(guide)
 	if documented == nil {
-		t.Fatalf("CLAUDE.md does not say how to run staticcheck, so the only place it runs is "+
+		t.Fatalf("CONTRIBUTING.md does not say how to run staticcheck, so the only place it runs is "+
 			"CI and every change that trips it finds out from a pull request. CI pins %s",
 			inCI[1])
 	}
 
 	if string(documented[1]) != string(inCI[1]) {
-		t.Errorf("CLAUDE.md runs staticcheck %s and CI runs %s; the gate somebody runs before "+
+		t.Errorf("CONTRIBUTING.md runs staticcheck %s and CI runs %s; the gate somebody runs before "+
 			"pushing has to be the gate that decides", documented[1], inCI[1])
 	}
 }

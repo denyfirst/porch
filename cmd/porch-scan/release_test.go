@@ -167,70 +167,55 @@ func TestEveryRunCommandNamesItsRun(t *testing.T) {
 }
 
 // A release is bytes anybody can verify. A deploy is the separate claim that
-// those bytes are what answers on port 443, and it is made by a person typing
-// commands into a server a few times a year.
+// those bytes are what answers at denyfirst.dev, and it is made by a person
+// typing commands into a server a few times a year.
 //
-// Until 2026-09-01 that sequence was written nowhere. The release page said
-// "then deploy" and gave one command, which does not exist on the machine it
-// was written for — so the whole of S1 to S14 ended at the point where its
-// conclusion had to be carried to production by memory.
-//
-// Each entry below is a step whose absence is not visible from the result. A
-// deploy that skipped every one of them still leaves a service answering
-// correctly, which is why they are written down rather than noticed.
+// The commands are private since 2026-10-01: they named the binary's path, the
+// service's account, its state directory and the monitoring around them, which
+// is a map for whoever would attack that machine and nothing a verifier needs.
+// What every deploy does stays public, because it is what anybody relying on
+// the demonstration is entitled to know — and each entry below is a step whose
+// absence is not visible from the result.
 func TestTheDeployProcedureIsWrittenDown(t *testing.T) {
 	body, err := os.ReadFile("../../docs/releasing.md")
 	if err != nil {
 		t.Fatalf("reading docs/releasing.md: %v", err)
 	}
 	page := string(body)
+	said := strings.Join(strings.Fields(page), " ")
 
 	for _, required := range []struct {
 		text string
 		why  string
 	}{
-		{"--workflow=reproduce.yml --limit 1",
+		{"Nothing is deployed that was not reproduced.",
 			"a build that was signed but not reproduced is one a single laptop vouches for"},
-		{"ssh-keygen -Y verify",
+		{"The server checks the signature itself",
 			"the signature is checked on the machine that will run the file, not only on the one that downloaded it"},
-		{"raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers",
-			"the key comes from the repository; a key shipped beside the file it vouches for establishes nothing"},
-		{"install -o root -g root -m 0755",
-			"owner and mode are set as the file is written, so there is no interval with the wrong ownership on the live path"},
-		{"porchd.rollback-pre-${V}",
-			"a rollback carries the release that replaced it; a .bak from 2026-08-18 is what the alternative looks like"},
-		{"sudo systemctl restart porchd",
-			"the unit is porchd.service since 2026-09-20; before that the page named a path the machine did not have, and the v0.16.0 deploy stopped at its first line"},
-		{"|| { echo 'STOP: not the demonstration build'; exit 1; }",
-			"the downloaded file proves it is the demonstration build before it reaches the live path, and the block stops if it does not"},
-		{"getcap /opt/porch/porchd",
-			"the binary must carry no file capability — the unit grants the port to one process instead"},
-		{"AmbientCapabilities",
-			"where the capability actually comes from"},
-		{"MainPID",
-			"the running process is identified through /proc/<pid>/exe: a failed restart leaves the old inode serving while the new file looks correct"},
-		{"set -euo pipefail",
-			"the deploy block stops at the first failure: pasted as loose lines, three 404s let it carry on and copy the running binary over itself as a rollback of the version already running"},
+		{"Only the demonstration build runs there",
+			"the ordinary binary on that machine would be a scanner for anybody's estate, with nothing in its configuration to show it"},
+		{"The previous binary is kept, named for the release that replaced it",
+			"a rollback carries the release that replaced it; a .bak nobody could account for is what the alternative looks like"},
+		{"The running process is checked, not the file",
+			"a failed restart leaves the old process serving while the new file looks correct"},
 		{`git rev-parse "v0.2.0^{commit}"`,
 			"the tag has to be on the commit just read, and quoted, or PowerShell hands git the tag's first parent — which on a merge commit is the previous tip and looks exactly like the failure this check is for"},
 		{"An existing tag means either that",
 			"an existing tag is a stop: on 2026-09-01 the release carried on past `fatal: tag already exists` and shipped, signed and deployed the commit before the change it was for"},
-		{"noexec",
-			"why the download goes under the deploying user's home rather than /tmp"},
 	} {
-		if !strings.Contains(page, required.text) {
+		if !strings.Contains(said, required.text) {
 			t.Errorf("docs/releasing.md no longer covers %q — %s", required.text, required.why)
 		}
 	}
 
-	// And nothing addresses the names the machine no longer has. The unit was
-	// renamed on 2026-09-20; what kept the old name is the account, the state
-	// directory and the alerting around it, none of which this page gives a
-	// command for. The one sentence saying what the page used to say is the
-	// only place an old path may appear.
-	for _, never := range []string{"systemctl restart denyfirstd", "--value denyfirstd", "/opt/denyfirst/"} {
-		if strings.Count(page, never) > strings.Count(page, "said `"+never) {
-			t.Errorf("docs/releasing.md still gives %q, which names a unit or path the server no longer has", never)
+	// And nothing describes the machine. Each of these was on this page until
+	// 2026-10-01, and each tells somebody looking for a way in where to look.
+	for _, private := range []string{
+		"/opt/", "/var/lib/", "fail2ban", "auditd", "audit rules", "noexec",
+		"AmbientCapabilities", "porchd.service", "systemctl", "MainPID",
+	} {
+		if strings.Contains(page, private) {
+			t.Errorf("docs/releasing.md names %q, which describes the server rather than the release", private)
 		}
 	}
 }

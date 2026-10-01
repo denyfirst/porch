@@ -6938,32 +6938,27 @@ existed failed on the evening it was first followed. This is the defect S13
 records about the release procedure's entry point, in the one procedure S13
 did not cover.
 
-What the procedure now establishes, in order. The release was reproduced
-before it was installed, because a signature and a public build without a
-reproduction say only that one laptop's output is self-consistent. The
-signature is checked again on the server rather than only on the laptop that
-downloaded it, against a key fetched from the repository rather than from the
-release beside it — a signature verifies against whatever key it is handed.
-The file is installed with owner and mode set as it is written and moved into
-place by a rename, so there is no interval in which the live path holds a file
-that is half-written or owned by the wrong account. The service runs as
-`denyfirst` and the file is `root:root`, so the account that executes it
-cannot rewrite it. The binary carries no file capability: the unit grants
-`CAP_NET_BIND_SERVICE` to one process at start, which is a smaller claim than
-granting it to anybody on the machine who runs the file.
+What every deploy establishes, in order. The release was reproduced before it
+was installed, because a signature and a public build without a reproduction
+say only that one laptop's output is self-consistent. The signature is checked
+again on the server rather than only on the laptop that downloaded it, against
+a key fetched from the repository rather than from the release beside it — a
+signature verifies against whatever key it is handed. Only the demonstration
+build is installed there, and the file has to say so first. The file is put in
+place so that the live path never holds one that is half-written or owned by
+the account that runs it, and it carries no file capability. The previous
+binary is kept under the version it holds. And the running process is checked
+rather than the file on disk: a restart that failed leaves the previous process
+alive, still answering, with the new file in place and looking correct.
 
-And the running process is identified through `/proc/<pid>/exe` rather than by
-running the file on disk. `-version` reports what was installed; a restart
-that failed leaves the previous process alive on the previous inode, still
-answering, with the new file in place and looking correct. Those two states
-are indistinguishable from the file, which is the reason the check is not the
-obvious one.
+**The commands are private since 2026-10-01.** They named the binary's path,
+the service's account, its state directory and the monitoring around them —
+nothing a verifier needs, and a map for whoever would attack the machine. They
+are kept with the rest of what describes it. What each deploy does stays on the
+public page, and the public page is held to naming none of the machine
+(`TestTheDeployProcedureIsWrittenDown`).
 
-The rollback is kept under the version it holds. `porchd.bak`, left on
-this server on 2026-08-18 with nothing recording what was in it, is what the
-alternative looks like a week later.
-
-*Enforced in:* `docs/releasing.md`
+*Enforced in:* `docs/releasing.md`, and the private deployment notes
 *Guarded by:* `TestTheDeployProcedureIsWrittenDown`,
 `TestTheServiceIsNamedByThePathItIsAt`
 

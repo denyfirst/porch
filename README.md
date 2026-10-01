@@ -240,7 +240,7 @@ internal/httpapi       the HTTP surface and its limits
 internal/web           the pages
 ```
 
-[`CLAUDE.md`](CLAUDE.md) has the whole map, one row per package, and CI fails
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the whole map, one row per package, and CI fails
 when it misses one.
 
 Two principles run through it.
