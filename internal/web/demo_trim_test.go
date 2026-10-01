@@ -69,8 +69,8 @@ func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
 	// Each carries the id its Copy button names, so the id is allowed and
 	// nothing else is.
 	blocks := regexp.MustCompile(`(?s)<pre><code(?: id="command-[a-z]+")?>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 4 {
-		t.Fatalf("the Porch page has %d command blocks, want 4", len(blocks))
+	if len(blocks) != 3 {
+		t.Fatalf("the Porch page has %d command blocks, want 3", len(blocks))
 	}
 	for _, b := range blocks {
 		// The text a reader sees and Copy writes: the colours are spans, and
@@ -98,8 +98,8 @@ func TestThePorchCommandsAreATerminalWhosePromptIsNotCopied(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocks := regexp.MustCompile(`(?s)<code id="command-[a-z]+">(.*?)</code>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 4 {
-		t.Fatalf("%d command blocks, want 4", len(blocks))
+	if len(blocks) != 3 {
+		t.Fatalf("%d command blocks, want 3", len(blocks))
 	}
 	for _, b := range blocks {
 		text := shownText(b[1])
@@ -155,6 +155,14 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 	}
 	if strings.Contains(string(page), `data-copy="compose-file"`) {
 		t.Error("the compose file is offered to the clipboard; the one to run is the signed one")
+	}
+	// Open, so it is read before it is run rather than behind a click.
+	if !strings.Contains(string(page), `<section class="compose-view"`) || strings.Contains(string(page), `<details class="compose-view"`) {
+		t.Error("the compose file is folded away, or no longer on the page")
+	}
+	// The page is for running the service. The command line is in the guide.
+	if strings.Contains(string(page), "docker compose run --rm scan") {
+		t.Error("the Porch page offers the command line, which belongs to docs/self-host.md")
 	}
 }
 

@@ -183,43 +183,20 @@
   </ol>
 
   <!--
-    Not a fourth step: nothing above needs it. The command line in the same
-    image, given this installation's secret by the compose file, so one record
-    proves a domain to both and nothing proves anything else.
+    The compose file, open on the page so it is read before it is run. It has
+    no Copy button: the copy that runs is the one step 1 downloaded, which the
+    signature covers, and a copy pasted from a web page would be the one file
+    on the server nobody checked — and this is the file that decides what the
+    container may do. Its lines without their comments, and a test holds them
+    to the file that ships.
   -->
-  <ul class="steps steps-extra">
-    <li>
-      <h3>And from the terminal</h3>
-      <p>The command line runs in the same container image, with this
-      installation's secret: the record that proves a domain to the page
-      proves it here, and no other domain can be checked. It checks, prints
-      and exits.</p>
-      <div class="command terminal">
-        <div class="terminal-bar">
-          <span class="terminal-dots" aria-hidden="true"></span>
-          <span class="terminal-where">on the server</span>
-          <button class="command-copy" type="button" data-copy="command-scan" aria-label="Copy the commands to check from the terminal">Copy</button>
-        </div>
-        <pre><code id="command-scan"><span class="ln"><span class="t-c">docker</span> compose run <span class="t-f">--rm</span> scan example.com</span>
-<span class="ln"><span class="t-c">docker</span> compose run <span class="t-f">--rm</span> scan <span class="t-f">-check</span> mail example.com</span></code></pre>
-      </div>
-    </li>
-  </ul>
-
-  <!--
-    The compose file, shown to be read rather than copied: the one that runs
-    is the one in the release, which the signature covers. Its lines without
-    their comments, and a test holds them to the file that ships, so this
-    cannot describe a container the release does not start.
-  -->
-  <details class="compose-view">
-    <summary>Read what you are about to run: <code>docker-compose.yml</code></summary>
-    <p>Already in what step 1 downloaded, and covered by its signature, so
-    there is nothing here to copy. It is here to be read: no image pulled from
-    a registry, the port published on the server's own loopback, nothing in
-    the container writable but its data directory &mdash; and for the command
-    line not even that &mdash; and every capability dropped. The comments in
-    the file say why each line is there.</p>
+  <section class="compose-view" aria-labelledby="compose-title">
+    <h3 id="compose-title">What you are about to run: <code>docker-compose.yml</code></h3>
+    <p>Already in what step 1 downloaded and covered by its signature, so it is
+    shown here to be read rather than copied: no image pulled from a registry,
+    the port published on the server's own loopback, nothing in the container
+    writable but its data directory, and every capability dropped. The
+    comments in the file say why each line is there.</p>
     <div class="terminal">
       <div class="terminal-bar">
         <span class="terminal-dots" aria-hidden="true"></span>
@@ -266,7 +243,7 @@
     <span class="t-key">cap_drop</span>:
       <span class="t-o">-</span> <span class="t-v">ALL</span></code></pre>
     </div>
-  </details>
+  </section>
   <p class="band-footnote">The first check of a domain shows a DNS record to
   add; the checks run once it is published. A public address, building it
   yourself and everything else are in the

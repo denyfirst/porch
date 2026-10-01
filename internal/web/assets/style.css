@@ -2330,18 +2330,14 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink);
 }
 
-/* What follows the three steps without being one: marked, not numbered. */
-.steps-extra { margin-top: 0.8rem; }
-.steps-extra li::before { content: "+"; }
-
 @media (max-width: 52rem) {
   .steps li { grid-template-columns: minmax(0, 1fr); }
   .steps .command { grid-column: 1; grid-row: auto; margin-top: 1rem; }
 }
 
 /*
-  The compose file, folded under the steps. Read rather than copied, so it
-  has no button: the copy that runs is the signed one in the release.
+  The compose file, open under the steps. Read rather than copied, so it has
+  no button: the copy that runs is the signed one in the release.
 */
 .compose-view {
   margin: 1.2rem 0 0;
@@ -2351,12 +2347,13 @@ main > .band:last-child { border-bottom: 0; }
   border-radius: calc(var(--radius) + 2px);
 }
 
-.compose-view > summary {
-  cursor: pointer;
+.compose-view > h3 {
+  margin: 0;
+  font-size: 1.05rem;
   font-weight: 600;
 }
 
-.compose-view > summary code { font-family: var(--mono); font-size: 0.88em; }
+.compose-view > h3 code { font-family: var(--mono); font-size: 0.88em; }
 
 .compose-view > p {
   max-width: var(--measure);
