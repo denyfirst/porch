@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -46,10 +47,24 @@ func TestTheReleaseProcedureIsWrittenDown(t *testing.T) {
 		{"STOP: not on the branch, nothing committed", "a patch applied by hand after a failed switch reaches the same place, so the commit is guarded too"},
 		{"carries the reason for the change, and nothing else", "a commit message is published and permanent, and an identifier in one cannot be taken back without rewriting main"},
 		{"-Pattern 'Unreleased' -CaseSensitive", "Select-String ignores case, and a sentence of history saying \"were unreleased\" is printed as an alarm that has to be read past"},
-		{`select(.headBranch == "v0.2.0")`, "the newest reproduction run may be the previous release's, already green: on 2026-10-01 it was watched in place of the release's own and reported success"},
+		{"--workflow=reproduce.yml --limit 1 --branch v0.2.0 --json databaseId --jq '.[].databaseId'", "the newest reproduction run may be the previous release's, already green: on 2026-10-01 it was watched in place of the release's own and reported success"},
 	} {
 		if !strings.Contains(page, required.text) {
 			t.Errorf("docs/releasing.md no longer covers %q — %s", required.text, required.why)
+		}
+	}
+
+	// Every jq expression survives Windows PowerShell 5.1, which strips the
+	// double quotes inside an argument handed to a program: a filter naming
+	// the tag in quotes failed to parse there on 2026-10-01. And none takes the
+	// first element, which prints null before a run exists and ends a wait on
+	// a run that is not there.
+	for _, m := range regexp.MustCompile(`--jq '([^']*)'`).FindAllStringSubmatch(page, -1) {
+		if strings.Contains(m[1], `"`) {
+			t.Errorf("docs/releasing.md hands jq %q, whose quotes PowerShell 5.1 strips", m[1])
+		}
+		if strings.Contains(m[1], ".[0]") {
+			t.Errorf("docs/releasing.md hands jq %q, which prints null where no run exists yet", m[1])
 		}
 	}
 
