@@ -184,8 +184,8 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 	// nobody goes looking for a second way that skips the signature.
 	said := strings.Join(strings.Fields(shownText(string(raw))), " ")
 	for _, sentence := range []string{
-		"On the server, in one paste: the latest release's compose file, the one shown below,",
-		"There is nothing to copy from here: the copy that runs is the one step 1 checked against the release's signature.",
+		"One paste puts the compose file shown below on the server, with its signed checksums, and checks both.",
+		"Nothing to copy here: the copy that runs is the one step 1 checked.",
 	} {
 		if !strings.Contains(said, sentence) {
 			t.Errorf("the Porch page no longer says %q", sentence)
@@ -258,5 +258,33 @@ func TestEachDenyfirstPhraseIsSaidOnceWhereItBelongs(t *testing.T) {
 	}
 	if n := strings.Count(home, "Independent security and privacy tools"); n != 1 {
 		t.Errorf("the front page says what denyfirst makes %d times, want once", n)
+	}
+}
+
+// The page says how to take an installation away again, in one line, and the
+// guide says the rest: what the directory held, and the DNS record, which
+// stays public after everything else is gone and says the domain was checked
+// with Porch. Long explanations are the guide's; the page names the command.
+func TestThePorchPageSaysHowToRemoveIt(t *testing.T) {
+	page, err := assets.ReadFile("assets/porch.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guide, err := os.ReadFile("../../docs/self-host.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	said := strings.Join(strings.Fields(shownText(string(page))), " ")
+	if !strings.Contains(said, "To remove it, docker compose down --rmi all, then delete the directory and the DNS record.") {
+		t.Error("the Porch page no longer says how to remove an installation")
+	}
+	removing := regexp.MustCompile(`(?s)### Removing it\n(.*?)\n### `).FindStringSubmatch(string(guide))
+	if removing == nil {
+		t.Fatal("docs/self-host.md has no section on removing an installation")
+	}
+	for _, step := range []string{"docker compose down --rmi all", "sudo rm -rf porch", "_porch-challenge", "porch-data"} {
+		if !strings.Contains(removing[1], step) {
+			t.Errorf("removing an installation no longer covers %q", step)
+		}
 	}
 }

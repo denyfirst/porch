@@ -418,8 +418,38 @@ new compose file is in place, the binaries, `Dockerfile` and
 left in Docker's cache should too:
 
 ```sh
+docker image rm porch
 sudo docker builder prune -a -f
 ```
+
+The first removes the image those versions built, and the second what the
+builds left in Docker's cache. Before v0.25.1 that cache could hold a copy of
+`porch-data`, the secret and the sealed password with it, because the build
+was sent the whole directory.
+
+### Removing it
+
+In the installation's directory:
+
+```sh
+docker compose down --rmi all
+cd .. && sudo rm -rf porch
+```
+
+The first stops the container and removes it with the image it ran. The
+second deletes the directory, and with it `porch-data`: the verification
+secret, the sealed password and every report the installation kept. Nothing
+else on the server holds any of them. `sudo`, because the data directory
+belongs to the user the container ran as.
+
+Then delete the `_porch-challenge` TXT record at your DNS provider. With the
+secret gone it proves nothing to anybody, but it stays public, and it tells
+whoever looks that the domain was checked with Porch.
+
+The command line run on its own, outside the container, keeps its secret in
+the user configuration directory: `~/.config/porch` on Linux,
+`~/Library/Application Support/porch` on macOS and `%AppData%\porch` on
+Windows. Delete that directory and the binary.
 
 ### The command line, on the server
 

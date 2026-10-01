@@ -126,23 +126,18 @@
       <p class="eyebrow">Get started</p>
       <h2 class="band-title">Your own copy,<br>in three steps.</h2>
     </div>
-    <p class="band-note">Docker on the server, and nothing else: no Go, no
-    source and no build. The compose file names the image by its digest, and
-    the release's signature covers the compose file.</p>
+    <p class="band-note">Docker on the server, and nothing else. The image is
+    named by its digest, and the compose file that names it is signed.</p>
   </div>
   <ol class="steps">
     <li>
       <h3>Get it</h3>
-      <p>On the server, in one paste: the latest release's compose file, the
-      one shown below, with the signed list of hashes that covers it, and the
-      check that both are ours. The last line
-      has to print <code>Good "file" signature</code> with the key
-      <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code> and
-      <code>docker-compose.yml: OK</code>; anything else is a stop. The key
-      comes from GitHub and its fingerprint from this page, so a key changed
-      in one place alone prints a fingerprint that does not match.
-      <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">docs/verify.md</a>
-      says what each part proves.</p>
+      <p>One paste puts the compose file shown below on the server, with its
+      signed checksums, and checks both. The last line has to print
+      <code>Good "file" signature</code> with the key
+      <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code>
+      and <code>docker-compose.yml: OK</code>. Anything else, stop.
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">What each check proves</a>.</p>
       <div class="command terminal">
         <div class="terminal-bar">
           <span class="terminal-dots" aria-hidden="true"></span>
@@ -157,10 +152,8 @@
     </li>
     <li>
       <h3>Start it</h3>
-      <p>Give the container a data directory, and start it. Docker fetches the
-      image the compose file names by its digest and refuses any other bytes.
-      Proof of control and a password are on from the first start, and
-      nothing turns them off.</p>
+      <p>Make the data directory and start it. Proof of control and a password
+      are always on.</p>
       <div class="command terminal">
         <div class="terminal-bar">
           <span class="terminal-dots" aria-hidden="true"></span>
@@ -196,13 +189,8 @@
   -->
   <section class="compose-view" aria-labelledby="compose-title">
     <h3 id="compose-title">What you are about to run: <code>docker-compose.yml</code></h3>
-    <p>What step 1 puts on your server, shown so it is read before it is run.
-    There is nothing to copy from here: the copy that runs is the one step 1
-    checked against the release's signature. In it, the image named by its
-    digest, so a registry cannot hand over anything else under that name; the
-    port published on the server's own loopback; nothing in the container
-    writable but its data directory; and every capability dropped. The
-    comments in the file say why each line is there.</p>
+    <p>What step 1 puts on your server, to read before it runs. Nothing to copy
+    here: the copy that runs is the one step 1 checked.</p>
     <div class="terminal">
       <div class="terminal-bar">
         <span class="terminal-dots" aria-hidden="true"></span>
@@ -248,10 +236,9 @@
     </div>
   </section>
   <p class="band-footnote">To upgrade, run step 1 again in the same directory,
-  then <code>docker compose up -d</code>: the data directory stays, and so does
-  every record you published. The first check of a domain shows a DNS record
-  to add. A public address, building the image yourself and everything else
-  are in the
+  then <code>docker compose up -d</code>. To remove it,
+  <code>docker compose down --rmi all</code>, then delete the directory and the
+  DNS record. Everything else is in the
   <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting guide</a>.</p>
 </section>
 
