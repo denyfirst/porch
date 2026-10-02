@@ -6607,14 +6607,38 @@ toolchain in CI, in `scripts/build.sh`, or on the server, so one line moves all
 three: an older toolchain downloads the named one through the module mechanism
 and re-execs it, verified against the checksum database.
 
-**1.26.7 rather than 1.27.0, and the reasoning is worth keeping.** Both are
-supported, so the security argument is satisfied either way. 1.27 costs
-something: staticcheck's newest release, 2026.1 (`v0.7.0`), supports Go 1.26,
-and no release yet reads a 1.27 module. Measured on the branch — `Build and
-test` passed on 1.27 while `Static analysis` and `Known vulnerabilities` both
-failed. Trading a static analysis gate for a security benefit that 1.26.7
-already provides is not a trade. Move to 1.27 when staticcheck ships support,
-and check at every review whether it has.
+**1.26.7 rather than 1.27.0 on 2026-08-22, and the reasoning is worth
+keeping.** Both were supported, so the security argument was satisfied either
+way. 1.27 cost something then: staticcheck `v0.7.0` supported Go 1.26 and read
+no 1.27 module. Measured on the branch — `Build and test` passed on 1.27 while
+`Static analysis` and `Known vulnerabilities` both failed. Trading a static
+analysis gate for a security benefit that 1.26.7 already provided was not a
+trade, so the rule was to move when the tools did.
+
+**1.27.1 since 2026-10-02, with staticcheck `v0.8.1` and govulncheck
+`v1.8.0`.** By then 1.26.7 was five weeks behind 1.26.8 and 1.27.1, both
+released on 2026-08-28. The second attempt failed the same two jobs as the
+first, for a different reason: `go install tool@version` builds a tool with the
+oldest toolchain the tool accepts, 1.26 here, and a tool built by an older Go
+cannot type-check code for a newer one — every package "requires newer Go
+version". The first reason was real: staticcheck `v0.7.0`, built with 1.27.1,
+still cannot decode 1.27's export data, checked again that day. Each tool is
+now built with `GOTOOLCHAIN="$(go env GOVERSION)"`, the toolchain go.mod names,
+in every workflow and in `CONTRIBUTING.md`
+(`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`). Measured before the change:
+`go vet` on all three platforms, every test with and without the demonstration
+tag, staticcheck and gosec, all clean on 1.27.1. The three govulncheck pins
+move together, because a release gate and a merge gate that disagree about
+what is known are two different answers (`TestEveryGovulncheckIsTheSameOne`).
+
+**When to move, so the next one is not a judgement call.** A patch release of
+the line in use (1.27.1 to 1.27.2) within a week: it changes no behaviour a
+program relies on, and it is usually security fixes in exactly the packages
+this project is built on. A new line (1.28) once staticcheck and govulncheck
+read it, and before the line in use stops being supported. Always by pull
+request with every gate green; never on a server. `security-watch.yml` checks
+weekly that `go.mod` names the newest patch of a supported line, and fails
+when it does not.
 
 The three GODEBUG settings 1.27 removes — `tlsrsakex`, `tls3des`,
 `tls10server` — all govern defaults, and this scanner sets `MinVersion` and
@@ -6622,9 +6646,11 @@ The three GODEBUG settings 1.27 removes — `tlsrsakex`, `tls3des`,
 detect. Measured: explicit `MinVersion` reaches TLS 1.0 and 1.1, and the
 library still lists seven static-RSA and two 3DES suites.
 
-*Enforced in:* `go.mod`
+*Enforced in:* `go.mod`, `.github/workflows/security-watch.yml`
 *Guarded by:* the `Build and test`, `Static analysis` and `Known
-vulnerabilities` jobs in CI, which is where the 1.27 attempt was caught
+vulnerabilities` jobs in CI, which is where the first 1.27 attempt was caught,
+`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly` and
+`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`
 
 ### S6 — What reaches `main` is what was signed
 

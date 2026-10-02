@@ -152,7 +152,13 @@ jobs:
       # than a version-range guess.
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          # Built by the toolchain go.mod names, and the same in every place a
+          # tool is installed. `go install pkg@version` otherwise builds the
+          # tool with the oldest toolchain the tool itself accepts, and a tool
+          # built by an older Go cannot type-check code for a newer one: every
+          # package fails with "requires newer Go version". It failed the move
+          # to 1.27.1 with versions of both tools that read 1.27 (S7).
+          GOTOOLCHAIN="$(go env GOVERSION)" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           "$(go env GOPATH)/bin/govulncheck" ./...
 
   # A fuzz target that exists and is not in the matrix is a target nobody
@@ -478,7 +484,7 @@ jobs:
 
       - name: Run staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+          GOTOOLCHAIN="$(go env GOVERSION)" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
           "$(go env GOPATH)/bin/staticcheck" ./...
 
   gosec:
@@ -511,7 +517,7 @@ jobs:
       # check, because it is believed.
       - name: Run gosec on every released platform
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          GOTOOLCHAIN="$(go env GOVERSION)" go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           for os in linux darwin windows; do
             echo "gosec GOOS=$os"
             GOOS="$os" "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./... || exit 1

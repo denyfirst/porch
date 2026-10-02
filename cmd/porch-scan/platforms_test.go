@@ -114,3 +114,108 @@ func TestTheDocumentedStaticcheckIsTheOneCIRuns(t *testing.T) {
 			"pushing has to be the gate that decides", documented[1], inCI[1])
 	}
 }
+
+// Every workflow that asks whether a known vulnerability is reachable asks the
+// same govulncheck.
+//
+// Three of them do: CI on every change, the release build before it stages a
+// draft, and the weekly watch against code nobody touched. A release gate and a
+// merge gate pinned to different versions are two answers to what is known,
+// and the one nobody notices is the one that ships. Moved together on
+// 2026-10-02, to v1.8.0, with the toolchain (S7).
+func TestEveryGovulncheckIsTheSameOne(t *testing.T) {
+	pin := regexp.MustCompile(`golang\.org/x/vuln/cmd/govulncheck@(v[0-9]+\.[0-9]+\.[0-9]+)`)
+	seen := map[string]string{}
+	for _, path := range []string{
+		"../../.github/workflows/ci.yml",
+		"../../.github/workflows/build-release.yml",
+		"../../.github/workflows/security-watch.yml",
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := pin.FindAllSubmatch(body, -1)
+		if len(found) == 0 {
+			t.Errorf("%s no longer runs a pinned govulncheck", path)
+		}
+		for _, m := range found {
+			seen[string(m[1])] = path
+		}
+	}
+	if len(seen) > 1 {
+		t.Errorf("the workflows pin different govulncheck versions: %v", seen)
+	}
+}
+
+// Somebody is told, every week, when go.mod falls behind.
+//
+// On 2026-10-02 go.mod named 1.26.7, five weeks after 1.26.8 and 1.27.1 were
+// out, and nothing had said so: the vulnerability watch asks whether a known
+// problem is reachable, not whether the toolchain is one Go still fixes. A
+// script on the production server used to watch for releases instead, which
+// put a toolchain and an outbound check on the one machine that needs neither.
+// The watch is a job in security-watch.yml now, reading the same list the
+// toolchain is fetched from, and failing for both reasons S7 gives: a newer
+// patch of the line in use, and a line Go no longer supports.
+func TestTheToolchainIsWatchedWeekly(t *testing.T) {
+	body, err := os.ReadFile("../../.github/workflows/security-watch.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	watch := string(body)
+	if !regexp.MustCompile(`(?m)^\s+- cron: "[^"]+"`).MatchString(watch) {
+		t.Fatal("security-watch.yml no longer runs on a schedule, so nothing here runs on its own")
+	}
+	job := regexp.MustCompile(`(?s)\n  toolchain:\n.*`).FindString(watch)
+	if job == "" {
+		t.Fatal("security-watch.yml has no job checking that the toolchain is current")
+	}
+	for _, step := range []struct{ text, why string }{
+		{"go.mod", "the version checked is the one the build uses"},
+		{"https://proxy.golang.org/golang.org/toolchain/@v/list", "the list of releases is the one the toolchain is fetched from"},
+		{"tail -n 2", "Go supports the two newest lines, and a line outside them is due now"},
+		{"is no longer supported", "a line Go no longer fixes fails the job"},
+		{"is out.", "a newer patch of the line in use fails the job"},
+	} {
+		if !strings.Contains(job, step.text) {
+			t.Errorf("the toolchain job no longer covers %q: %s", step.text, step.why)
+		}
+	}
+	if strings.Contains(job, "continue-on-error") {
+		t.Error("the toolchain job is allowed to fail without anybody seeing it")
+	}
+}
+
+// Every analysis tool is built by the toolchain go.mod names.
+//
+// `go install tool@version` builds the tool with the oldest toolchain the tool
+// itself accepts, and a tool built by an older Go cannot type-check code for a
+// newer one: it reports that every package "requires newer Go version" and
+// fails. On 2026-10-02 that failed staticcheck and govulncheck on the move to
+// 1.27.1, with versions of both that read 1.27 (S7). A gate that fails for a
+// reason nobody reads is one somebody turns off.
+func TestEveryAnalysisToolIsBuiltByTheModulesToolchain(t *testing.T) {
+	install := regexp.MustCompile(`(?m)^(.*)go install ((?:golang\.org/x/vuln/cmd/govulncheck|honnef\.co/go/tools/cmd/staticcheck|github\.com/securego/gosec/v2/cmd/gosec)@\S+)`)
+	tools := map[string]bool{}
+	for _, path := range []string{
+		"../../.github/workflows/ci.yml",
+		"../../.github/workflows/build-release.yml",
+		"../../.github/workflows/security-watch.yml",
+		"../../CONTRIBUTING.md",
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range install.FindAllStringSubmatch(string(body), -1) {
+			tools[strings.SplitN(m[2], "@", 2)[0]] = true
+			if !strings.Contains(m[1], `GOTOOLCHAIN="$(go env GOVERSION)"`) {
+				t.Errorf("%s builds %s with whatever toolchain go install picks, not the one go.mod names", path, m[2])
+			}
+		}
+	}
+	if len(tools) != 3 {
+		t.Errorf("found %d of the three analysis tools being installed: %v", len(tools), tools)
+	}
+}

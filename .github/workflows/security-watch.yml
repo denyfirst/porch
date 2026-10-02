@@ -45,7 +45,7 @@ jobs:
           # Pinned rather than @latest. The module proxy verifies the download
           # against the checksum database either way, so this is not about
           # trust; it is about two runs a week apart testing the same thing.
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          GOTOOLCHAIN="$(go env GOVERSION)" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           "$(go env GOPATH)/bin/govulncheck" ./...
 
       - name: Explain a failure
@@ -57,3 +57,74 @@ jobs:
           echo "hit is a real path rather than a version-range guess. Raise the"
           echo "go directive in go.mod to the fixed release and open a pull"
           echo "request; the check on that pull request confirms the fix."
+  # Whether go.mod names the newest release of a supported Go line.
+  #
+  # The job above asks whether a known vulnerability is reachable. This one
+  # asks the question before it: whether the toolchain is one Go still fixes.
+  # On 2026-10-02 go.mod named 1.26.7, five weeks after 1.26.8 and 1.27.1 were
+  # released, and nothing had said so. A patch release of the line in use is
+  # due within a week; a line Go no longer supports is due now (S7).
+  #
+  # The list comes from the module proxy, the same place the toolchain itself
+  # is fetched from and verified against the checksum database, rather than
+  # from a page about releases. A separate job, so that a red mark says which
+  # of the two questions failed.
+  toolchain:
+    name: The toolchain is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the default branch
+        run: |
+          git init -q
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "${GITHUB_REF_NAME}"
+          git checkout -q FETCH_HEAD
+
+      - name: Compare go.mod with the releases Go supports
+        run: |
+          set -euo pipefail
+
+          named="$(sed -n 's/^go \([0-9][0-9.]*\)$/\1/p' go.mod)"
+          if [ -z "${named}" ]; then
+            echo "::error::go.mod names no Go version this check can read."
+            exit 1
+          fi
+
+          # Every released toolchain, one line each, final releases only.
+          released="$(curl -fsS --proto '=https' https://proxy.golang.org/golang.org/toolchain/@v/list \
+            | sed -n 's/^v0\.0\.1-go\(1\.[0-9]*\.[0-9]*\)\.linux-amd64$/\1/p' | sort -uV)"
+          if [ -z "${released}" ]; then
+            echo "::error::The list of Go releases could not be read."
+            exit 1
+          fi
+
+          # Go supports the two newest lines.
+          supported="$(printf '%s\n' "${released}" | cut -d. -f1,2 | sort -uV | tail -n 2)"
+          line="${named%.*}"
+          if ! printf '%s\n' "${supported}" | grep -qxF "${line}"; then
+            echo "::error::go.mod names Go ${named}, and Go ${line} is no longer supported. The supported lines are $(echo ${supported})."
+            exit 1
+          fi
+
+          newest="$(printf '%s\n' "${released}" | awk -F. -v l="${line}" '$1"."$2==l' | tail -n 1)"
+          if [ "${named}" != "${newest}" ]; then
+            echo "::error::go.mod names Go ${named}, and ${newest} is out."
+            exit 1
+          fi
+
+          echo "Go ${named} is the newest release of a supported line ($(echo ${supported}))."
+
+      - name: Explain a failure
+        if: failure()
+        run: |
+          echo "go.mod names a Go release that is not the newest of a supported line."
+          echo
+          echo "A patch release of the line in use is due within a week: raise the"
+          echo "go directive to it and open a pull request; every gate on that pull"
+          echo "request runs on the new toolchain. A new line is due once staticcheck"
+          echo "and govulncheck read it, and before the line in use stops being"
+          echo "supported. docs/invariants.md S7 has the reasoning."
