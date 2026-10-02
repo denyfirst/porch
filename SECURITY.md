@@ -1,5 +1,25 @@
 # Security policy
 
+## Supported versions
+
+Only the latest release is supported. A fix ships as a new release, never as
+a patch to an old one.
+
+| Version | Supported |
+|---|---|
+| The latest release | Yes |
+| Earlier releases from v0.25.1 on | No: upgrade to the latest |
+| Releases before v0.25.1 | Withdrawn: they checked names without proof of control, and their binaries are no longer offered |
+
+What every release has been through, each of which anybody can check
+([`docs/verify.md`](docs/verify.md) says how): it is built by a public workflow
+from a signed tag; the workflow refuses to stage it unless its own tests and
+the known-vulnerability check pass; the maintainer signs its list of hashes
+only after rebuilding it and getting the same bytes; and after publication a
+second workflow rebuilds it again and compares. That is what was checked. It
+is not a promise that nothing is wrong, which is what the rest of this page is
+for.
+
 ## Reporting a vulnerability
 
 Please do not open a public issue for security problems.

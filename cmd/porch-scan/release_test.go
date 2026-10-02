@@ -446,3 +446,33 @@ func TestNoGuideDownloadsAWithdrawnBinary(t *testing.T) {
 		}
 	}
 }
+
+// The security policy says which versions are supported, and draws the line
+// where the withdrawn releases end.
+//
+// GitHub shows SECURITY.md as the repository's security policy, and the first
+// question it is opened to answer is whether the version somebody has is one
+// a fix will reach. Every release before v0.25.1 was withdrawn on 2026-10-01
+// (N9), and the policy has to say so in the same place that boundary is drawn
+// for the guides, or the two drift apart.
+func TestTheSecurityPolicySaysWhichVersionsAreSupported(t *testing.T) {
+	body, err := os.ReadFile("../../SECURITY.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := strings.Join(strings.Fields(string(body)), " ")
+	for _, said := range []string{
+		"## Supported versions",
+		"Only the latest release is supported.",
+		"| Releases before v0.25.1 | Withdrawn:",
+	} {
+		if !strings.Contains(policy, said) {
+			t.Errorf("SECURITY.md no longer says %q", said)
+		}
+	}
+	// What was checked, and not a guarantee: a policy that promised nothing
+	// is wrong would be the one claim on the page nobody can check.
+	if !strings.Contains(policy, "It is not a promise that nothing is wrong") {
+		t.Error("SECURITY.md describes what every release went through as more than what was checked")
+	}
+}

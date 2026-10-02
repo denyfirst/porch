@@ -1092,7 +1092,9 @@ are titled as withdrawn, so a copy somebody already has is checked as
 `docs/verify.md` says and each still rebuilds from its tag, but none is offered
 for download. The image of the unreleased v0.26.0-rc1 was deleted from the
 registry the same day. No guide may send a reader to a withdrawn binary
-(`TestNoGuideDownloadsAWithdrawnBinary`).
+(`TestNoGuideDownloadsAWithdrawnBinary`), and the security policy draws the same
+line: only the latest release is supported, and the releases before v0.25.1
+are named as withdrawn (`TestTheSecurityPolicySaysWhichVersionsAreSupported`).
 
 An installation already running an old release is its operator's, and nothing
 here reaches it. Nothing should be able to: a switch that could turn old
@@ -1356,7 +1358,8 @@ same two facts.
 `TestAFileProofDoesNotOpenAnotherName`,
 `TestNoServiceFlagTurnsProofOff`,
 `TestNoCommandLineFlagTurnsProofOff`,
-`TestNoGuideDownloadsAWithdrawnBinary`
+`TestNoGuideDownloadsAWithdrawnBinary`,
+`TestTheSecurityPolicySaysWhichVersionsAreSupported`
 
 ---
 
