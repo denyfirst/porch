@@ -6258,6 +6258,30 @@ meant has never existed under that name.
 `TestBothScanPathsAreServedAndNeitherRedirects`,
 `TestNeitherScanPathAnswersAGet`, `TestOldPathsRedirect`
 
+### W9 — A report fits the screen it is read on
+
+Reach, Mail and DNS draw their evidence as rows of a label and a value.
+Transport draws its own as a list that stacks on a phone. The rows' labels were
+kept on one line, and their values broke only at spaces, so on a phone the
+longest of each set the table's width. On 2026-10-02 a report at 390 pixels
+had a 342-pixel column. "Cross-Origin-Embedder-Policy" held 251 pixels of it on
+every row, the Reach table came to 441 and the page scrolled sideways. It did
+so on every report except Transport.
+
+On a phone a label now wraps at its spaces and hyphens. A value may break
+anywhere, as a certificate's values already could, but only where it does not
+fit. A label may not break anywhere: its column is sized to its narrowest
+content, so it would end up one letter wide. The one table with two columns of
+values, a zone's servers beside their addresses, now has the same gutter as
+the label column. Before, a long name ran into the address next to it.
+
+Measured, not inferred: at 320, 360, 390, 768 and 1280 pixels, Reach, Mail
+and DNS reports shaped like this domain's leave the page without a sideways
+scroll.
+
+*Enforced in:* `internal/web/assets/style.css`
+*Guarded by:* `TestAReportTableFitsAPhone`
+
 ---
 
 ## Disclosure
