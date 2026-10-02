@@ -125,7 +125,7 @@ go test ./...
 for os in linux darwin windows; do GOOS="$os" go vet ./... || break; done
 
 # what CI's "Static analysis" job runs, at the version it pins
-go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
 "$(go env GOPATH)/bin/staticcheck" ./...
 
 # what CI's "Security linter" job runs, at the version it pins — and, like vet,
