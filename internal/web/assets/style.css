@@ -1295,6 +1295,33 @@ code.flag { white-space: nowrap; }
   padding: 0.4rem 0;
   color: var(--ink);
   vertical-align: baseline;
+  /* A value is whatever was read: an IPv6 address, a mailto: address, a
+     header with no spaces in it. Allowed to break where it has to, the way
+     .pairs dd is, so the longest one cannot set the table's width. */
+  overflow-wrap: anywhere;
+}
+
+/* The one table here with two columns of values, the zone's servers and their
+   addresses, had no gap between them: a name as wide as its column ran
+   straight into the address beside it. The same gutter the label column has. */
+.grid td:not(:last-child) { padding-right: 1.2rem; }
+
+/*
+  On a phone the labels wrap too.
+
+  Kept on one line, the longest label set the first column on every row:
+  "Cross-Origin-Embedder-Policy" took 251 of the 342 pixels a 390-pixel phone
+  leaves the report, the table came to 441, and the page scrolled sideways —
+  on every report drawn with this table, which is every check but Transport,
+  whose rows are .pairs and stack. Wrapped at its spaces and hyphens, a label
+  takes the width of its longest word.
+
+  Not `anywhere` here, unlike the value beside it: with the column sized to
+  its narrowest content, that would let a label shrink to one letter a line.
+*/
+@media (max-width: 34rem) {
+  .grid th { white-space: normal; }
+  .grid th, .grid td:not(:last-child) { padding-right: 0.8rem; }
 }
 
 .console-state {
