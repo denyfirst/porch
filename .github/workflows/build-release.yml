@@ -214,7 +214,7 @@ jobs:
           #
           # Pinned to the version CI uses. Two pins that drift apart mean a
           # release gate and a merge gate that disagree about what is known.
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          GOTOOLCHAIN="$(go env GOVERSION)" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           "$(go env GOPATH)/bin/govulncheck" ./...
 
       - name: Publish the image by digest, and read it back as a stranger would

@@ -45,7 +45,7 @@ jobs:
           # Pinned rather than @latest. The module proxy verifies the download
           # against the checksum database either way, so this is not about
           # trust; it is about two runs a week apart testing the same thing.
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          GOTOOLCHAIN="$(go env GOVERSION)" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           "$(go env GOPATH)/bin/govulncheck" ./...
 
       - name: Explain a failure

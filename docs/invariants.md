@@ -6617,7 +6617,15 @@ trade, so the rule was to move when the tools did.
 
 **1.27.1 since 2026-10-02, with staticcheck `v0.8.1` and govulncheck
 `v1.8.0`.** By then 1.26.7 was five weeks behind 1.26.8 and 1.27.1, both
-released on 2026-08-28, and both tools read 1.27. Measured before the change:
+released on 2026-08-28. The second attempt failed the same two jobs as the
+first, for a different reason: `go install tool@version` builds a tool with the
+oldest toolchain the tool accepts, 1.26 here, and a tool built by an older Go
+cannot type-check code for a newer one — every package "requires newer Go
+version". The first reason was real: staticcheck `v0.7.0`, built with 1.27.1,
+still cannot decode 1.27's export data, checked again that day. Each tool is
+now built with `GOTOOLCHAIN="$(go env GOVERSION)"`, the toolchain go.mod names,
+in every workflow and in `CONTRIBUTING.md`
+(`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`). Measured before the change:
 `go vet` on all three platforms, every test with and without the demonstration
 tag, staticcheck and gosec, all clean on 1.27.1. The three govulncheck pins
 move together, because a release gate and a merge gate that disagree about
@@ -6641,7 +6649,8 @@ library still lists seven static-RSA and two 3DES suites.
 *Enforced in:* `go.mod`, `.github/workflows/security-watch.yml`
 *Guarded by:* the `Build and test`, `Static analysis` and `Known
 vulnerabilities` jobs in CI, which is where the first 1.27 attempt was caught,
-`TestEveryGovulncheckIsTheSameOne` and `TestTheToolchainIsWatchedWeekly`
+`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly` and
+`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`
 
 ### S6 — What reaches `main` is what was signed
 

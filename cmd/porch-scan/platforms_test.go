@@ -186,3 +186,36 @@ func TestTheToolchainIsWatchedWeekly(t *testing.T) {
 		t.Error("the toolchain job is allowed to fail without anybody seeing it")
 	}
 }
+
+// Every analysis tool is built by the toolchain go.mod names.
+//
+// `go install tool@version` builds the tool with the oldest toolchain the tool
+// itself accepts, and a tool built by an older Go cannot type-check code for a
+// newer one: it reports that every package "requires newer Go version" and
+// fails. On 2026-10-02 that failed staticcheck and govulncheck on the move to
+// 1.27.1, with versions of both that read 1.27 (S7). A gate that fails for a
+// reason nobody reads is one somebody turns off.
+func TestEveryAnalysisToolIsBuiltByTheModulesToolchain(t *testing.T) {
+	install := regexp.MustCompile(`(?m)^(.*)go install ((?:golang\.org/x/vuln/cmd/govulncheck|honnef\.co/go/tools/cmd/staticcheck|github\.com/securego/gosec/v2/cmd/gosec)@\S+)`)
+	tools := map[string]bool{}
+	for _, path := range []string{
+		"../../.github/workflows/ci.yml",
+		"../../.github/workflows/build-release.yml",
+		"../../.github/workflows/security-watch.yml",
+		"../../CONTRIBUTING.md",
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range install.FindAllStringSubmatch(string(body), -1) {
+			tools[strings.SplitN(m[2], "@", 2)[0]] = true
+			if !strings.Contains(m[1], `GOTOOLCHAIN="$(go env GOVERSION)"`) {
+				t.Errorf("%s builds %s with whatever toolchain go install picks, not the one go.mod names", path, m[2])
+			}
+		}
+	}
+	if len(tools) != 3 {
+		t.Errorf("found %d of the three analysis tools being installed: %v", len(tools), tools)
+	}
+}

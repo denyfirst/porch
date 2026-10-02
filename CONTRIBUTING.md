@@ -125,12 +125,12 @@ go test ./...
 for os in linux darwin windows; do GOOS="$os" go vet ./... || break; done
 
 # what CI's "Static analysis" job runs, at the version it pins
-go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+GOTOOLCHAIN="$(go env GOVERSION)" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
 "$(go env GOPATH)/bin/staticcheck" ./...
 
 # what CI's "Security linter" job runs, at the version it pins — and, like vet,
 # once per platform the release ships
-go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+GOTOOLCHAIN="$(go env GOVERSION)" go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
 for os in linux darwin windows; do
   GOOS="$os" "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./... || break
 done
@@ -152,6 +152,9 @@ CI is a gate every change discovers by failing a pull request. Installing it
 adds nothing to `go.mod`: `go install pkg@version` builds in its own module, so
 the claim that this project has no third-party dependencies is untouched, and
 the version here is the one ci.yml pins so the two cannot disagree.
+`GOTOOLCHAIN="$(go env GOVERSION)"` builds each tool with the toolchain go.mod
+names: built by an older Go, a tool cannot type-check code for a newer one, and
+says so about every package.
 
 That last line is not decoration. `go vet ./...` never reads a file behind a
 build tag for another platform — it is not merely unvetted, it is never
