@@ -888,6 +888,10 @@ h1 {
   display: flex;
   display: list-item flex;
   align-items: baseline;
+  /* The count goes under the title when the two do not fit on one line. At
+     320 pixels "Observed" and "6 measured, not graded" came to 261 pixels in a
+     238-pixel line, and the count ran past the edge of its panel. */
+  flex-wrap: wrap;
   gap: 0.55rem;
   cursor: pointer;
   padding: 0.35rem 0;
@@ -3197,6 +3201,23 @@ main > .band:last-child { border-bottom: 0; }
 .chain .col-address   { width: 50%; }
 .chain .col-transport { width: 20%; }
 .chain .col-response  { width: 30%; }
+
+/*
+  On a phone a fifth of the width is narrower than the word in it.
+
+  At 390 pixels the transport column came to 62 pixels, and "Transport" needs
+  69 and "plaintext" 64: both ran on under "Response" and "308", in both
+  chains, on every phone narrower than 430 pixels. So there the two short
+  columns are given their longest content — "Transport" in the header's
+  spaced capitals, "no response" below — and the address, which may break
+  anywhere, takes what is left. The widths are still on the columns, so the
+  two chains still line up with each other.
+*/
+@media (max-width: 34rem) {
+  .chain .col-address   { width: auto; }
+  .chain .col-transport { width: calc(10.5ch + 0.5rem); }
+  .chain .col-response  { width: 11.5ch; }
+}
 
 /*
   An address is broken mid-word where it has to be. It is not an identifier
