@@ -83,6 +83,15 @@ const (
 	maxLines = 64
 
 	defaultTimeout = 20 * time.Second
+
+	// connectTimeout bounds opening the connection to one address, apart from
+	// the conversation after it. A greeting may be held back on purpose, so the
+	// conversation keeps its twenty seconds; a connection that has not opened
+	// in eight is a port somebody is dropping. Until 2026-10-05 the dial waited
+	// the conversation's twenty for each address, so on a network that blocks
+	// port 25 an exchanger with two addresses held the mail check for thirty
+	// seconds and its request past its deadline (audit 2026-10-05, F11).
+	connectTimeout = 8 * time.Second
 )
 
 // Result is what one exchanger answered.
@@ -604,8 +613,18 @@ func (p *Prober) dialFunc() func(context.Context, string, string) (net.Conn, err
 	if p.Dial != nil {
 		return p.Dial
 	}
-	d := &safedial.Dialer{Timeout: p.timeout(), AllowedPorts: []string{Port}}
-	return d.DialContext
+	return p.dialer().DialContext
+}
+
+// dialer is the guarded dialler a nil Dial selects: port 25 alone, eight
+// seconds to open a connection to one address, and the conversation's own
+// timeout over every address together.
+func (p *Prober) dialer() *safedial.Dialer {
+	return &safedial.Dialer{
+		Timeout:      min(connectTimeout, p.timeout()),
+		TotalTimeout: p.timeout(),
+		AllowedPorts: []string{Port},
+	}
 }
 
 func (p *Prober) timeout() time.Duration {

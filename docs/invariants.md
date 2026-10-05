@@ -191,11 +191,21 @@ after a restart, shown as "not run" (audit 2026-10-05, F10). Those lookups now
 end two seconds before the deadline. What they did not establish is said in
 the report, which is the outcome the scan's own comments had always described.
 
+The mail check had the same fault in its slowest step. The exchangers were
+asked up to the deadline, and the dial to port 25 waited the conversation's
+twenty seconds for each address. On the demonstration's network, which drops
+port 25, an exchanger with two addresses held the check for thirty seconds,
+and the whole mail report could be lost the same way. Opening a connection now
+has eight seconds per address and the conversation's twenty in all. The
+exchangers also stop two seconds short of the deadline, and an exchanger that
+never answered is reported as not reached from here (F11).
+
 *Enforced in:* `internal/safedial` (`Timeout`, `TotalTimeout`, `MaxAddrs`),
 `internal/tlsprobe` (`HandshakeTimeout`, `TotalTimeout`),
 `internal/httpapi` (`RequestTimeout`), `internal/rawhello.Ask` (the context's
 deadline on the connection), `internal/rawhello.ReadReply` (at most the bytes
-an answer needs), `internal/scan.shortOf` (the lookups after the handshakes)
+an answer needs), `internal/scan.shortOf` (the lookups after the handshakes),
+`internal/mailscan.readExchangerTLS`, `internal/smtptls.Prober.dialer`
 *Guarded by:* `TestCallerDeadlineWins`, `TestTotalTimeoutBoundsTheOperation`,
 `TestAskStopsWhenTheContextDoes`, `TestNoMoreIsReadThanTheAnswerNeeds`,
 `TestAskStopsWhenTheContextIsCancelledWithoutADeadline`,
@@ -206,7 +216,9 @@ an answer needs), `internal/scan.shortOf` (the lookups after the handshakes)
 `TestAnOversizedRecordIsNotBelievedWhateverFollows`,
 `TestOnlyAServerHelloIsAnAcceptance`,
 `TestAServerHelloSplitAcrossRecordsIsNotGuessed`,
-`FuzzReadReply`, `TestASlowLogSearchDoesNotCostTheReport`
+`FuzzReadReply`, `TestASlowLogSearchDoesNotCostTheReport`,
+`TestExchangersThatNeverAnswerDoNotCostTheReport`,
+`TestOpeningAConnectionIsBoundedApartFromTheConversation`
 
 ---
 

@@ -119,6 +119,10 @@ const (
 	// questions this scan asks.
 	maxExchangers = 8
 
+	// exchangerReserve is how long before the caller's deadline the
+	// exchangers are given up on, so the report is written and sent in time.
+	exchangerReserve = 2 * time.Second
+
 	// maxTagLength bounds one value read out of a record. These come from a
 	// zone the scanned party controls, so they are chosen by whoever is being
 	// measured.
@@ -923,6 +927,14 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 		facts.ExchangersPartial = true
 	}
 
+	// Short of the caller's deadline, as the TLS check's lookups are (N4). The
+	// exchangers are the slowest thing this check asks, and on a network that
+	// drops port 25 they used to run to the deadline itself: the service then
+	// saw a scan that overran and answered with a timeout in place of the
+	// whole mail report (audit 2026-10-05, F11).
+	ctx, cancel := shortOf(ctx, exchangerReserve)
+	defer cancel()
+
 	prober := s.exchangerProber()
 	relay, canAskRelay := prober.(RelayProber)
 	results := make([]smtptls.Result, len(hosts))
@@ -1038,4 +1050,14 @@ func (s *Scanner) exchangerProber() ExchangerProber {
 func within(host, domain string) bool {
 	host, domain = fold(host), fold(domain)
 	return host == domain || strings.HasSuffix(host, "."+domain)
+}
+
+// shortOf is ctx ending reserve before ctx's own deadline, or ctx unchanged
+// when it has none: internal/scan's, for the same reason.
+func shortOf(ctx context.Context, reserve time.Duration) (context.Context, context.CancelFunc) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return context.WithCancel(ctx)
+	}
+	return context.WithDeadline(ctx, deadline.Add(-reserve))
 }

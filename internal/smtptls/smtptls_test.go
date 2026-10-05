@@ -696,3 +696,29 @@ func TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne(t *testing.T) {
 		t.Errorf("the conversation was %v", open.commands())
 	}
 }
+
+// Opening a connection is bounded apart from the conversation.
+//
+// The dial used to wait the conversation's twenty seconds for each address. A
+// network that drops port 25 then held an exchanger with two addresses for
+// thirty, and the mail check past its request's deadline (audit 2026-10-05,
+// F11). A greeting may be held back on purpose; a connection that has not
+// opened in eight seconds is a port being dropped.
+func TestOpeningAConnectionIsBoundedApartFromTheConversation(t *testing.T) {
+	d := (&Prober{}).dialer()
+	if d.Timeout != connectTimeout || connectTimeout > 10*time.Second {
+		t.Errorf("one address may take %v to open, want %v", d.Timeout, connectTimeout)
+	}
+	if d.TotalTimeout != defaultTimeout {
+		t.Errorf("every address together may take %v, want the conversation's %v", d.TotalTimeout, defaultTimeout)
+	}
+	if len(d.AllowedPorts) != 1 || d.AllowedPorts[0] != Port {
+		t.Errorf("the dialler may reach %v, want port %s alone", d.AllowedPorts, Port)
+	}
+
+	// A caller's shorter timeout is shorter for both.
+	short := (&Prober{Timeout: 3 * time.Second}).dialer()
+	if short.Timeout != 3*time.Second || short.TotalTimeout != 3*time.Second {
+		t.Errorf("a 3s prober dials with %v per address and %v in all", short.Timeout, short.TotalTimeout)
+	}
+}
