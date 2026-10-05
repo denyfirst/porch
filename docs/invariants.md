@@ -180,11 +180,22 @@ A per-attempt timeout multiplies by the number of addresses tried, so there is
 also a total budget, and a cap on how many resolved addresses are attempted. A
 caller's deadline is never extended.
 
+**And the lookups that follow a measurement stop short of the deadline rather
+than at it.** After the handshakes, the TLS check asks four others: the
+revocation list, the responder, the logs and the zone's CAA records. All four
+were asked up to the request's deadline. A log search that used all of it
+returned after the deadline had passed, and the service, which rightly counts
+a scan that overran as a timeout, threw away the transport that had been
+measured in full. On the demonstration this was the first Transport check
+after a restart, shown as "not run" (audit 2026-10-05, F10). Those lookups now
+end two seconds before the deadline. What they did not establish is said in
+the report, which is the outcome the scan's own comments had always described.
+
 *Enforced in:* `internal/safedial` (`Timeout`, `TotalTimeout`, `MaxAddrs`),
 `internal/tlsprobe` (`HandshakeTimeout`, `TotalTimeout`),
 `internal/httpapi` (`RequestTimeout`), `internal/rawhello.Ask` (the context's
 deadline on the connection), `internal/rawhello.ReadReply` (at most the bytes
-an answer needs)
+an answer needs), `internal/scan.shortOf` (the lookups after the handshakes)
 *Guarded by:* `TestCallerDeadlineWins`, `TestTotalTimeoutBoundsTheOperation`,
 `TestAskStopsWhenTheContextDoes`, `TestNoMoreIsReadThanTheAnswerNeeds`,
 `TestAskStopsWhenTheContextIsCancelledWithoutADeadline`,
@@ -195,7 +206,7 @@ an answer needs)
 `TestAnOversizedRecordIsNotBelievedWhateverFollows`,
 `TestOnlyAServerHelloIsAnAcceptance`,
 `TestAServerHelloSplitAcrossRecordsIsNotGuessed`,
-`FuzzReadReply`
+`FuzzReadReply`, `TestASlowLogSearchDoesNotCostTheReport`
 
 ---
 
