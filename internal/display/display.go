@@ -19,6 +19,7 @@ package display
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Mark replaces every character that could act on a display, or make a reader
@@ -27,7 +28,16 @@ import (
 // Replaced rather than dropped. Dropping a zero-width space turns a disguised
 // name into the name it imitates, which does the disguise's work for it; a
 // reader shown a replacement mark can see that something was there.
+//
+// A byte that is not UTF-8 is replaced too. Read as a rune it is U+FFFD and
+// acts on nothing, so until 2026-10-05 it was left as it was — and a lone 0x9B
+// is CSI itself to a terminal reading eight-bit controls, which is the escape
+// this function exists to stop arriving by the other door (audit 2026-10-05,
+// F8). A DNS text record is bytes, not UTF-8, and is one such door.
 func Mark(s string) string {
+	if !utf8.ValidString(s) {
+		s = strings.ToValidUTF8(s, "\ufffd")
+	}
 	if strings.IndexFunc(s, acts) < 0 {
 		return s
 	}

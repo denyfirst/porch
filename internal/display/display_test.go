@@ -15,6 +15,8 @@ func TestNothingCanActOnTheDisplay(t *testing.T) {
 		"goo\u200bgle.example":    "goo\ufffdgle.example",
 		"line\nbreak":             "line\ufffdbreak",
 		"del\x7f":                 "del\ufffd",
+		"eight-bit\x9b2J":         "eight-bit\ufffd2J",
+		"half\xe2\x80":            "half\ufffd",
 	} {
 		if got := Mark(in); got != want {
 			t.Errorf("Mark(%q) = %q, want %q", in, got, want)

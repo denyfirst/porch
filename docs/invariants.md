@@ -5443,11 +5443,35 @@ addresses in a DMARC record and a `security.txt`, the hosts a page links to —
 and an SPF include name had no cleaning at all. One rule now, in
 `internal/display`, applied where each package keeps what it read.
 
+**Applied where each package keeps what it read, and so missed wherever one
+did not.** On 2026-10-05 the rule was turned into a check that does not depend
+on remembering it. Six readers of what a domain publishes are fuzzed, and
+everything each one returns is walked for a character that acts on a display
+(`internal/display/displaytest`). It found two on its first run:
+- a DKIM record's `k=` printed as the key's description, inside "Signing keys
+  were found at";
+- a DMARC destination such as `http:` followed by ESC, kept as a domain.
+
+Both records are often a provider's, behind a CNAME. Following the same
+question by hand found three more:
+- the headers a web check keeps, where the standard library refuses a control
+  byte and lets a C1 control and U+202E through;
+- the addresses of a redirect chain;
+- a DNS text record, which is bytes rather than text and reached the terminal
+  as it stood.
+
+And `Mark` itself let a byte that is not UTF-8 through, because read as a
+rune it is U+FFFD. A lone 0x9B is CSI to a terminal reading eight-bit
+controls, so such bytes are replaced too. A DMARC destination that is not a
+host name is no longer a destination at all: it is asked about in DNS as well
+as shown.
+
 *Enforced in:* `internal/certinfo.sanitise`, applied by `trimmer.text`;
 `internal/certinfo.mixedScriptNote`, `internal/certinfo.confusableScripts`;
 `internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
 `internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
-`internal/markup`, `internal/spf`
+`internal/markup`, `internal/spf`, `internal/dkim`, `internal/webprobe.recorded`,
+`internal/dnsscan`
 *Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`, `TestNothingCanActOnTheDisplay`,
 `TestAContactCannotActOnTheDisplay`, `TestAReportAddressCannotActOnTheDisplay`,
 `TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
@@ -5459,7 +5483,10 @@ and an SPF include name had no cleaning at all. One rule now, in
 `TestAParsedOrdinaryNameRendersExactlyAsItDidBefore`,
 `TestAnExtendedValidationNameIsReadable`,
 `TestAnExtendedValidationSubjectReachesTheReport`,
-`TestAValueThatLooksLikeTheGrammarIsEscaped`
+`TestAValueThatLooksLikeTheGrammarIsEscaped`,
+`TestWhatAServerSentCannotActOnADisplay`, `TestATextRecordCannotActOnADisplay`,
+`FuzzReadPage`, `FuzzParsePolicy`, `FuzzParseSecurityTxt`, `FuzzSPFWalk`,
+`FuzzDKIMRecord`, `FuzzReportDestinations`
 
 ### R20 — A value does not repeat the heading it is printed under
 

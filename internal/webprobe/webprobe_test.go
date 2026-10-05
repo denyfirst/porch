@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/safedial"
+
+	"github.com/denyfirst/porch/internal/display/displaytest"
 )
 
 // local returns a prober that may reach the loopback addresses httptest uses.
@@ -579,4 +581,36 @@ func TestTheScopeAttributesDidNotAddSomewhereForAValue(t *testing.T) {
 	if strings.Contains(fmt.Sprintf("%+v", got[0]), "super-secret-session-value") {
 		t.Errorf("a cookie value reached the report: %+v", got[0])
 	}
+}
+
+// Nothing a server sends in the headers this probe keeps can act on a display.
+//
+// The standard library refuses a control byte in a header and lets a C1
+// control through, which some terminals act on, and a format character such as
+// U+202E, which reverses the text after it on a screen and in a browser alike.
+// Every header kept here is printed, by the command line as it stood, and
+// until 2026-10-05 neither was marked (audit 2026-10-05, F7).
+func TestWhatAServerSentCannotActOnADisplay(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Strict-Transport-Security", "max-age=1\u009b2J")
+		w.Header().Set("Referrer-Policy", "no-referrer\u202eesrever")
+		if r.URL.Path == "/" {
+			w.Header().Set("Location", srv.URL+"/next\u202e")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	p := local()
+	c := p.chain(context.Background(), p.client(), srv.URL+"/", anywhere())
+	if len(c.Hops) != 2 {
+		t.Fatalf("got %d hops, want the redirect and the page: %+v", len(c.Hops), c.Hops)
+	}
+	if got := c.Hops[0].Headers["Strict-Transport-Security"]; len(got) != 1 || !strings.HasPrefix(got[0], "max-age=1") {
+		t.Fatalf("the header was not kept to be checked: %q", got)
+	}
+	displaytest.Clean(t, c)
 }

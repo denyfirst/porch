@@ -206,7 +206,10 @@ func Check(ctx context.Context, r Resolver, domain string) Facts {
 		return facts
 	}
 
-	facts.Raw = record
+	// Marked here as well as where the mail report copies it, so that nothing
+	// this package returns can act on a display whoever reads it next. The
+	// walk below reads the record itself, not this copy.
+	facts.Raw = display.Mark(record)
 	w.evaluate(ctx, domain, record, 0, &facts)
 
 	facts.LookupLimit = facts.Lookups > maxLookups

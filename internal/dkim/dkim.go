@@ -44,6 +44,8 @@ import (
 	"context"
 	"strconv"
 	"strings"
+
+	"github.com/denyfirst/porch/internal/display"
 )
 
 const (
@@ -189,7 +191,13 @@ func read(ctx context.Context, r Resolver, selector string, source Source, domai
 		}
 
 		key.Found = true
-		key.Algorithm = tags["k"]
+		// Marked, because a report repeats it. An unknown k= is printed as
+		// the key's description, and until 2026-10-05 it reached the command
+		// line's terminal as it stood, inside "Signing keys were found at":
+		// an escape sequence in a key record acted on the operator's screen.
+		// The record is often a mail provider's, behind a CNAME, rather than
+		// the operator's own (audit 2026-10-05, F6).
+		key.Algorithm = display.Mark(tags["k"])
 
 		if p, ok := tags["p"]; ok && strings.TrimSpace(p) == "" {
 			// RFC 6376 §3.6.1: an empty p= is a revoked key, not a broken

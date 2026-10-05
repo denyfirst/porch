@@ -99,6 +99,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/markup"
 	"github.com/denyfirst/porch/internal/securitytxt"
 	"github.com/denyfirst/porch/internal/truststore"
@@ -662,7 +663,10 @@ func hostOf(raw string) string {
 
 // fetch performs one request and records what came back.
 func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) Hop {
-	hop := Hop{URL: redactAddress(target), TLS: strings.HasPrefix(target, "https://")}
+	// The address as a report shows it: redacted, and marked like the headers
+	// below, because after the first hop it is one the server chose. The
+	// request goes to target, unchanged.
+	hop := Hop{URL: display.Mark(redactAddress(target)), TLS: strings.HasPrefix(target, "https://")}
 
 	ctx, cancel := context.WithTimeout(ctx, p.requestTimeout())
 	defer cancel()
@@ -849,10 +853,18 @@ func recorded(h http.Header) map[string][]string {
 		// Copied. Values returns the slice the header map holds, and a caller
 		// mutating a report would otherwise reach into the response.
 		out[name] = append([]string(nil), v...)
-		if name == "Location" {
-			for i := range out[name] {
+		for i := range out[name] {
+			if name == "Location" {
 				out[name][i] = redactAddress(out[name][i])
 			}
+			// Marked, because every value kept here is printed. The standard
+			// library refuses a control byte in a header, and it lets through
+			// a C1 control, which some terminals act on, and a format
+			// character such as U+202E, which reverses what is shown after it
+			// on a screen and in a browser alike. Until 2026-10-05 both
+			// reached the report and the command line's terminal as the
+			// server sent them (audit 2026-10-05, F7).
+			out[name][i] = display.Mark(out[name][i])
 		}
 	}
 	return out
