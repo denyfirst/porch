@@ -150,6 +150,14 @@ type page struct {
 	// denyfirst, and says so in the footer. Set by render from the build.
 	Brand bool
 
+	// Organisation marks a page that speaks for denyfirst rather than for
+	// Porch: the front page and the organisation's undertakings. On the
+	// demonstration, which is the denyfirst site, it shows no verdict and its
+	// links and buttons keep the brand red; every other page draws them in
+	// Porch's violet, which no verdict uses. An installation is Porch from end
+	// to end, names its maker only in the footer, and ignores it.
+	Organisation bool
+
 	// Path is the address this page is served at, set at startup from the
 	// table, and Canonical is that address on the demonstration's own host.
 	// Empty on an installation somebody runs, where the layout then sends no
@@ -214,9 +222,10 @@ var pages = map[string]*page{
 		// first screen of a tool is one too many. So the title names the
 		// question rather than the organisation, and the heading inside the page
 		// names the organisation.
-		Title:       "Who makes this, and what they receive — denyfirst",
-		Description: "What the organisation behind Porch undertakes, whatever you run, and how to check each undertaking rather than take it on trust.",
-		Fragment:    "assets/organisation.html",
+		Title:        "Who makes this, and what they receive — denyfirst",
+		Organisation: true,
+		Description:  "What the organisation behind Porch undertakes, whatever you run, and how to check each undertaking rather than take it on trust.",
+		Fragment:     "assets/organisation.html",
 		Data: organisationPage{
 			Organisation: promises.Organisation,
 			Products:     promises.Products,
@@ -599,9 +608,10 @@ func init() {
 	// neither: nobody there needs the product explained to them.
 	if demo.Enabled {
 		pages["/"] = &page{
-			Title:       "denyfirst — independent security and privacy tools",
-			Description: "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
-			Fragment:    "assets/home.html",
+			Title:        "denyfirst — independent security and privacy tools",
+			Organisation: true,
+			Description:  "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
+			Fragment:     "assets/home.html",
 		}
 		// The name inventory is here, and it lists this project's own estate.
 		//

@@ -6167,9 +6167,24 @@ hairline between rows that met the text threshold would be a bar, not a
 hairline. The exclusion is itself checked, so it cannot quietly protect a
 colour that would now pass anyway.
 
+**No control is drawn in a verdict's colour, since 2026-10-05.** Red, amber
+and green say how a host fared. Porch's buttons, links and chosen tab were the
+brand red until then, and measured in Chromium the button and an insecure
+verdict were the same `rgb(179, 32, 46)`; for a reader with protanopia that red
+was also ΔE 10.7 from the strong green, and for deuteranopia 12.1 from the weak
+amber. They are Porch's violet now (`--tool`, `--accent`, `--link`), held at
+least ΔE 20 from every verdict colour in both schemes, for ordinary vision and
+the three common deficiencies (Machado 2009); the closest pair is 33. The brand
+red is the wordmark's, and the accent of the demonstration's two organisation
+pages, which show no verdict. An installation is violet throughout. Rootwell's
+colour is blue, so the violet was also measured against it.
+
 *Enforced in:* `internal/web/assets/style.css`
 *Guarded by:* `TestEveryColourTextIsSetInIsLegible`,
-`TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`
+`TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`,
+`TestPorchsColourIsNeverAVerdictsColour`,
+`TestTheBrandRedIsTheWordmarksAndTheOrganisations`,
+`TestOnlyTheOrganisationsPagesKeepTheRed`
 
 ### W6 — A state is said in words and in colour, never by fading
 
