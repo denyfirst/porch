@@ -6741,6 +6741,22 @@ tag, staticcheck and gosec, all clean on 1.27.1. The three govulncheck pins
 move together, because a release gate and a merge gate that disagree about
 what is known are two different answers (`TestEveryGovulncheckIsTheSameOne`).
 
+**The version is read on a line of its own, since 2026-10-05.** Inside the
+install line, `GOTOOLCHAIN="$(go env GOVERSION)" go install …`, a failure of the
+read is ignored: the shell stops on the exit status of `go install`, not of the
+substitution in front of it. That day the checksum database timed out while the
+runner fetched 1.27.1, the variable came back empty, `go install` fell back to
+1.26.8, and `Known vulnerabilities` reported every package as needing a newer
+Go — the symptom of the bug above, for a cause nobody would look for. Read in a
+statement of its own, the failure stops the step and names the timeout, and
+`${toolchain:?…}` stops a shell that does not stop on errors. Reproduced with
+a `go` that fails the read: the old form ran the install with `GOTOOLCHAIN=''`,
+the new one stops before it. The weekly watch also tells the two failures apart:
+govulncheck exits 3 for a finding and 1 when it could not look, and only a 3 is
+explained as a reachable vulnerability
+(`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`). A security alarm that is
+wrong about why it rang teaches its reader to stop reading it.
+
 **When to move, so the next one is not a judgement call.** A patch release of
 the line in use (1.27.1 to 1.27.2) within a week: it changes no behaviour a
 program relies on, and it is usually security fixes in exactly the packages
@@ -6759,8 +6775,9 @@ library still lists seven static-RSA and two 3DES suites.
 *Enforced in:* `go.mod`, `.github/workflows/security-watch.yml`
 *Guarded by:* the `Build and test`, `Static analysis` and `Known
 vulnerabilities` jobs in CI, which is where the first 1.27 attempt was caught,
-`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly` and
-`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`
+`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly`,
+`TestEveryAnalysisToolIsBuiltByTheModulesToolchain` and
+`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`
 
 ### S6 — What reaches `main` is what was signed
 
