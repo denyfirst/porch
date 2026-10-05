@@ -133,10 +133,12 @@
     <li>
       <h3>Get it</h3>
       <p>One paste puts the compose file shown below on the server, with its
-      signed checksums, and checks both. The last line has to print
+      signed checksums, and checks both. It carries the release key rather
+      than fetching it. The last line has to print
       <code>Good "file" signature</code> with the key
       <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code>
-      and <code>docker-compose.yml: OK</code>. Anything else, stop.
+      and <code>docker-compose.yml: OK</code>. If a check fails, the compose
+      file is removed and the next step has nothing to start.
       <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">What each check proves</a>.</p>
       <div class="command terminal">
         <div class="terminal-bar">
@@ -146,8 +148,8 @@
         </div>
         <pre><code id="command-get"><span class="ln"><span class="t-c">mkdir</span> <span class="t-f">-p</span> porch <span class="t-o">&amp;&amp;</span> <span class="t-c">cd</span> porch</span>
 <span class="ln"><span class="t-c">for</span> f <span class="t-c">in</span> docker-compose.yml SHA256SUMS SHA256SUMS.sig<span class="t-o">;</span> <span class="t-c">do</span> <span class="t-c">curl</span> <span class="t-f">-fsSLO</span> <span class="t-s">"https://github.com/denyfirst/porch/releases/latest/download/${f}"</span><span class="t-o">;</span> <span class="t-c">done</span></span>
-<span class="ln"><span class="t-c">curl</span> <span class="t-f">-fsSL</span> https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers <span class="t-f">-o</span> allowed_signers</span>
-<span class="ln"><span class="t-c">ssh-keygen</span> <span class="t-f">-Y</span> verify <span class="t-f">-f</span> allowed_signers <span class="t-f">-I</span> releases@denyfirst.dev <span class="t-f">-n</span> file <span class="t-f">-s</span> SHA256SUMS.sig &lt; SHA256SUMS <span class="t-o">&amp;&amp;</span> <span class="t-c">sha256sum</span> <span class="t-f">--ignore-missing</span> <span class="t-f">-c</span> SHA256SUMS</span></code></pre>
+<span class="ln"><span class="t-c">echo</span> <span class="t-s">'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR'</span> <span class="t-o">&gt;</span> allowed_signers</span>
+<span class="ln"><span class="t-c">ssh-keygen</span> <span class="t-f">-Y</span> verify <span class="t-f">-f</span> allowed_signers <span class="t-f">-I</span> releases@denyfirst.dev <span class="t-f">-n</span> file <span class="t-f">-s</span> SHA256SUMS.sig &lt; SHA256SUMS <span class="t-o">&amp;&amp;</span> <span class="t-c">sha256sum</span> <span class="t-f">--ignore-missing</span> <span class="t-f">-c</span> SHA256SUMS <span class="t-o">||</span> { <span class="t-c">rm</span> <span class="t-f">-f</span> docker-compose.yml; <span class="t-c">echo</span> <span class="t-s">'STOP: docker-compose.yml did not verify and was removed'</span>; }</span></code></pre>
       </div>
     </li>
     <li>

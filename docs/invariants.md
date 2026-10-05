@@ -7099,10 +7099,22 @@ out from `.allowed_signers` rather than copying it, so a rotated key fails
 here and not on somebody's server
 (`TestTheInstallNamesTheReleaseKeysFingerprint`).
 
+**And since 2026-10-05 it carries the key rather than fetching it, and fails
+closed.** A fingerprint printed beside a command is a check a reader does by
+eye, which is the step most often skipped. The install now writes the key out
+in the command itself, the line `.allowed_signers` holds, so a release signed
+by any other key fails without anybody having to notice. It is still the
+Porch page, served by denyfirst.dev, that carries it. A check that failed also
+used to leave `docker-compose.yml` where step 2 would start it, and only the
+reader stood between a failed signature and a running container. The same
+line now removes the file and says `STOP`, so there is nothing to start
+(`TestTheInstallCarriesTheReleaseKeyAndFailsClosed`).
+
 *Enforced in:* `Dockerfile`, `docker-compose.yml`, `docs/self-host.md`,
 `cmd/porchd.trustStoreUsable`
 *Guarded by:* `TestTheImageHasNoBaseSystem`,
 `TestTheInstallNamesTheReleaseKeysFingerprint`,
+`TestTheInstallCarriesTheReleaseKeyAndFailsClosed`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
 `TestSelfHostChecksTheSignatureTheWayVerifyMdDoes`,
