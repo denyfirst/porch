@@ -89,6 +89,23 @@ jobs:
             target: FuzzCookies
           - package: ./internal/httpapi
             target: FuzzScanHandler
+          # Six readers of what a scanned domain publishes, each checked for
+          # what it returns as well as for not panicking: nothing in it may act
+          # on a display (R10). Added on 2026-10-05, when the check found a
+          # DKIM algorithm and a DMARC destination that reached the terminal
+          # unmarked.
+          - package: ./internal/markup
+            target: FuzzReadPage
+          - package: ./internal/mtasts
+            target: FuzzParsePolicy
+          - package: ./internal/securitytxt
+            target: FuzzParseSecurityTxt
+          - package: ./internal/spf
+            target: FuzzSPFWalk
+          - package: ./internal/dkim
+            target: FuzzDKIMRecord
+          - package: ./internal/dmarcreports
+            target: FuzzReportDestinations
 
     steps:
       - name: Check out the commit under test

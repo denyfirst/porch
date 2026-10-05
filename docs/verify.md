@@ -24,12 +24,15 @@ record of what was released.
 `ssh-keygen` ships with OpenSSH, so nothing needs installing.
 
 ```sh
+# The release you are checking, as its tag. Every command below reads it.
+V=v0.26.3
+
 # The public key that signs releases, from this repository.
 curl -fsSLO https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers
 
 # The list and its signature, from the release.
-curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.26.0/SHA256SUMS
-curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.26.0/SHA256SUMS.sig
+curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/SHA256SUMS"
+curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/SHA256SUMS.sig"
 
 ssh-keygen -Y verify \
   -f .allowed_signers \
@@ -70,7 +73,7 @@ they liked, and the signature would confirm only that the attacker had access.
 ## Check the binary against the list
 
 ```sh
-curl -fsSLO https://github.com/denyfirst/porch/releases/download/v0.26.0/porch-scan_v0.26.0_linux_amd64
+curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/porch-scan_${V}_linux_amd64"
 
 sha256sum --ignore-missing -c SHA256SUMS
 ```
@@ -97,7 +100,8 @@ anonymously and fails unless every byte is the one the release signed.
 On Windows:
 
 ```powershell
-(Get-FileHash -Algorithm SHA256 .\porch-scan_v0.26.0_windows_amd64.exe).Hash.ToLower()
+$V = "v0.26.3"
+(Get-FileHash -Algorithm SHA256 ".\porch-scan_${V}_windows_amd64.exe").Hash.ToLower()
 ```
 
 and compare that line against `SHA256SUMS` by eye.
@@ -138,15 +142,15 @@ There is now one copy of the build command, in `scripts/build.sh`, used by the
 release workflow, by the reproduction workflow, by the signing script and by
 the instructions below. CI fails if a second one appears.
 
-**v0.1.0 is the exception, and the only release so far.** It was cut before the
-script existed and before `BUILD` recorded which script ran, so neither of the
-two checks below has anything to compare against. Read *If the tag predates the
-build record* before following these steps against it.
+**v0.1.0 is the exception.** It was cut before the script existed and before
+`BUILD` recorded which script ran, so neither of the two checks below has
+anything to compare against. Read *If the tag predates the build record* before
+following these steps against it. Every later release has both.
 
 ```sh
 git clone https://github.com/denyfirst/porch
 cd porch
-git checkout v0.1.0
+git checkout "${V}"
 
 # BUILD, from the release, records what produced it: the Go version and the
 # SHA-256 of the build script that ran. A different compiler produces
@@ -160,9 +164,9 @@ sha256sum scripts/build.sh      # must match the buildscript line
 # Through bash rather than as a program: the file is committed without an
 # execute bit and the workflow sets one at build time.
 # Builds every artifact in the release, which is what the workflow does.
-bash scripts/build.sh v0.1.0 dist
+bash scripts/build.sh "${V}" dist
 
-sha256sum dist/porch-scan_v0.1.0_linux_amd64
+sha256sum "dist/porch-scan_${V}_linux_amd64"
 ```
 
 The hash should match the line in `SHA256SUMS`. If it does not, and both the

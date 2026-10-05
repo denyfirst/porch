@@ -346,18 +346,23 @@ compose file.
    ```sh
    mkdir -p porch && cd porch
    for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/latest/download/${f}"; done
-   curl -fsSL https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers -o allowed_signers
-   ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS
+   echo 'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR' > allowed_signers
+   ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }
    ```
 
    The last line has to print `Good "file" signature for
    releases@denyfirst.dev with ED25519 key SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y` and
-   `docker-compose.yml: OK`. Anything else is a stop. The key file comes from
-   the repository, and the Porch page on denyfirst.dev prints the same
-   fingerprint from a server GitHub does not run: a key changed on GitHub
-   alone prints one that does not match. [`docs/verify.md`](verify.md) says
-   what each part proves, and why the key comes from the repository rather
-   than from the release.
+   `docker-compose.yml: OK`. If either check fails, the last line says
+   `STOP` and removes the compose file, so step 2 has nothing to start.
+
+   The key is written out in the command rather than fetched. It is the line
+   in the repository's `.allowed_signers`, and a test holds the two together.
+   Fetched from GitHub, the key came from the same place as the release, so
+   whoever could replace one could replace the other, and only a reader
+   comparing the fingerprint by eye stood in the way. Written out on the
+   Porch page, which denyfirst.dev serves and GitHub does not, a release
+   signed by any other key fails without anybody having to notice.
+   [`docs/verify.md`](verify.md) says what each part proves.
 
    Building the image yourself instead: the `Dockerfile` in the repository
    builds the same contents from binaries you built, as *Get a binary* above

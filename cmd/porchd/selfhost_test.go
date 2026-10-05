@@ -147,8 +147,10 @@ func TestSelfHostChecksTheSignatureTheWayVerifyMdDoes(t *testing.T) {
 		t.Error("the self-hosting page does not point at docs/verify.md")
 	}
 	procedure := repoFile(t, "docs/verify.md")
+	if !strings.Contains(procedure, "https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers") {
+		t.Error("docs/verify.md no longer says where the key file is published")
+	}
 	for _, part := range []string{
-		"https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers",
 		"-I releases@denyfirst.dev",
 		"-n file",
 		"sha256sum --ignore-missing -c SHA256SUMS",
@@ -630,7 +632,7 @@ func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
 	// the one file a server has to verify.
 	fetch := []string{
 		`for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/latest/download/${f}"; done`,
-		`ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS`,
+		`ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }`,
 	}
 	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
 		// The page colours its commands with spans; what it says is the text.
@@ -827,6 +829,54 @@ func TestTheInstallNamesTheReleaseKeysFingerprint(t *testing.T) {
 			if !strings.Contains(repoFile(t, path), fp) {
 				t.Errorf("%s does not name the release key's fingerprint %s", path, fp)
 			}
+		}
+	}
+}
+
+// The install carries the release key rather than fetching it, and a check
+// that fails leaves nothing for the next step to start.
+//
+// Fetched from GitHub, the key came from where the release came from, so
+// whoever could replace one could replace the other, and only a reader
+// comparing the fingerprint by eye stood in the way. Written out on the Porch
+// page, which denyfirst.dev serves, a release signed by another key fails on
+// its own. And a failed check used to leave docker-compose.yml where step 2
+// would start it: now the same line removes it (audit 2026-10-05, F3 and F4).
+func TestTheInstallCarriesTheReleaseKeyAndFailsClosed(t *testing.T) {
+	var lines []string
+	for _, line := range nonComments(repoFile(t, ".allowed_signers")) {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			t.Fatalf("an allowed_signers line too short to hold a key: %q", line)
+		}
+		// The principal, the key's type and the key: what ssh-keygen needs,
+		// without the comment.
+		lines = append(lines, strings.Join(fields[:3], " "))
+	}
+	if len(lines) != 1 {
+		t.Fatalf(".allowed_signers names %d keys; the install writes out exactly one", len(lines))
+	}
+	want := "echo '" + lines[0] + "' > allowed_signers"
+
+	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
+		body := repoFile(t, path)
+		if strings.HasSuffix(path, ".html") {
+			body = html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(body, ""))
+		}
+		found := false
+		for _, line := range strings.Split(body, "\n") {
+			if strings.TrimSpace(line) == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s does not write out the release key from .allowed_signers: want %q", path, want)
+		}
+		if strings.Contains(body, "main/.allowed_signers -o allowed_signers") {
+			t.Errorf("%s still fetches the release key from GitHub", path)
+		}
+		if !strings.Contains(body, "|| { rm -f docker-compose.yml; echo 'STOP:") {
+			t.Errorf("%s leaves the compose file in place when a check fails", path)
 		}
 	}
 }

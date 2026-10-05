@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/display/displaytest"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/verify"
@@ -1403,4 +1404,25 @@ func TestTheAddressTheZoneAboveHandsOutIsReadAndCompared(t *testing.T) {
 			t.Errorf("the finding does not name what the parent left out: %s", f.Rationale)
 		}
 	}
+}
+
+// A text record is shown as published, and nothing in it can act on a display.
+//
+// A text record is bytes, not text. Until 2026-10-05 an escape sequence in one
+// reached the command line's terminal as it stood, and so did a lone 0x9B, which
+// a terminal reading eight-bit controls takes as CSI (audit 2026-10-05, F8).
+func TestATextRecordCannotActOnADisplay(t *testing.T) {
+	got := read(t, &zone{text: []string{
+		"v=spf1 -all",
+		"esc\x1b[2Jhere",
+		"eight-bit\x9b2J",
+		"reversed\u202esdrawkcab",
+	}})
+	if got.Observed == nil || len(got.Observed.Text) != 4 {
+		t.Fatalf("the records were not kept to be shown: %+v", got.Observed)
+	}
+	if got.Observed.Text[0] != "v=spf1 -all" {
+		t.Errorf("an ordinary record was changed: %q", got.Observed.Text[0])
+	}
+	displaytest.Clean(t, got)
 }

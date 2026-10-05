@@ -3844,7 +3844,12 @@ only and refuse a request another site made the browser send, so a form
 elsewhere cannot sign somebody in, out, or change their password. Changing it
 ends every other session, so a password changed because it leaked stops
 working wherever it leaked to. Guessing is held to a burst per address and one
-derivation at a time.
+derivation at a time. An IPv6 address counts by its /64, as a scan's does: until
+2026-10-05 it counted address by address, so a guesser on IPv6 had a fresh
+burst for every guess. And a full table of a thousand networks refuses a
+newcomer rather than forgetting everyone, which used to hand the guesser who
+filled it a fresh burst too. A newcomer then waits at most until the table's
+entries go idle, five minutes; a session already open is not asked.
 
 The demonstration refuses the flag. It is public by design and keeps nothing
 to protect, and a password in front of it would be a claim about a service it
@@ -3874,6 +3879,7 @@ happened, and a failed sign-out stays on the page and says so.
 *Guarded by:* `TestNothingIsReachableWithoutSigningIn`,
 `TestTheRightPasswordOpensASession`, `TestASessionEnds`,
 `TestChangingThePasswordEndsOtherSessions`, `TestGuessingIsLimited`,
+`TestASignInAllowanceIsPerIPv6Network`, `TestAFullSignInTableRefusesRatherThanForgets`,
 `TestAnotherSiteCannotUseTheSessionEndpoints`, `TestTheSessionTableIsBounded`,
 `TestOnlyThePasswordOpensTheKey`, `TestThePasswordAndTheKeyAreNotOnDisk`,
 `TestAnAlteredFileDoesNotOpen`, `TestAnAccessFileIsNeverReplacedByCreate`,
@@ -5437,11 +5443,35 @@ addresses in a DMARC record and a `security.txt`, the hosts a page links to —
 and an SPF include name had no cleaning at all. One rule now, in
 `internal/display`, applied where each package keeps what it read.
 
+**Applied where each package keeps what it read, and so missed wherever one
+did not.** On 2026-10-05 the rule was turned into a check that does not depend
+on remembering it. Six readers of what a domain publishes are fuzzed, and
+everything each one returns is walked for a character that acts on a display
+(`internal/display/displaytest`). It found two on its first run:
+- a DKIM record's `k=` printed as the key's description, inside "Signing keys
+  were found at";
+- a DMARC destination such as `http:` followed by ESC, kept as a domain.
+
+Both records are often a provider's, behind a CNAME. Following the same
+question by hand found three more:
+- the headers a web check keeps, where the standard library refuses a control
+  byte and lets a C1 control and U+202E through;
+- the addresses of a redirect chain;
+- a DNS text record, which is bytes rather than text and reached the terminal
+  as it stood.
+
+And `Mark` itself let a byte that is not UTF-8 through, because read as a
+rune it is U+FFFD. A lone 0x9B is CSI to a terminal reading eight-bit
+controls, so such bytes are replaced too. A DMARC destination that is not a
+host name is no longer a destination at all: it is asked about in DNS as well
+as shown.
+
 *Enforced in:* `internal/certinfo.sanitise`, applied by `trimmer.text`;
 `internal/certinfo.mixedScriptNote`, `internal/certinfo.confusableScripts`;
 `internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
 `internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
-`internal/markup`, `internal/spf`
+`internal/markup`, `internal/spf`, `internal/dkim`, `internal/webprobe.recorded`,
+`internal/dnsscan`
 *Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`, `TestNothingCanActOnTheDisplay`,
 `TestAContactCannotActOnTheDisplay`, `TestAReportAddressCannotActOnTheDisplay`,
 `TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
@@ -5453,7 +5483,10 @@ and an SPF include name had no cleaning at all. One rule now, in
 `TestAParsedOrdinaryNameRendersExactlyAsItDidBefore`,
 `TestAnExtendedValidationNameIsReadable`,
 `TestAnExtendedValidationSubjectReachesTheReport`,
-`TestAValueThatLooksLikeTheGrammarIsEscaped`
+`TestAValueThatLooksLikeTheGrammarIsEscaped`,
+`TestWhatAServerSentCannotActOnADisplay`, `TestATextRecordCannotActOnADisplay`,
+`FuzzReadPage`, `FuzzParsePolicy`, `FuzzParseSecurityTxt`, `FuzzSPFWalk`,
+`FuzzDKIMRecord`, `FuzzReportDestinations`
 
 ### R20 — A value does not repeat the heading it is printed under
 
@@ -7093,10 +7126,22 @@ out from `.allowed_signers` rather than copying it, so a rotated key fails
 here and not on somebody's server
 (`TestTheInstallNamesTheReleaseKeysFingerprint`).
 
+**And since 2026-10-05 it carries the key rather than fetching it, and fails
+closed.** A fingerprint printed beside a command is a check a reader does by
+eye, which is the step most often skipped. The install now writes the key out
+in the command itself, the line `.allowed_signers` holds, so a release signed
+by any other key fails without anybody having to notice. It is still the
+Porch page, served by denyfirst.dev, that carries it. A check that failed also
+used to leave `docker-compose.yml` where step 2 would start it, and only the
+reader stood between a failed signature and a running container. The same
+line now removes the file and says `STOP`, so there is nothing to start
+(`TestTheInstallCarriesTheReleaseKeyAndFailsClosed`).
+
 *Enforced in:* `Dockerfile`, `docker-compose.yml`, `docs/self-host.md`,
 `cmd/porchd.trustStoreUsable`
 *Guarded by:* `TestTheImageHasNoBaseSystem`,
 `TestTheInstallNamesTheReleaseKeysFingerprint`,
+`TestTheInstallCarriesTheReleaseKeyAndFailsClosed`,
 `TestTheComposeFileTakesAwayWhatItSays`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
 `TestSelfHostChecksTheSignatureTheWayVerifyMdDoes`,

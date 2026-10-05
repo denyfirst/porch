@@ -153,7 +153,7 @@ func Read(domain, tag string) Found {
 		rest = strings.TrimSpace(rest)
 
 		at := destinationOf(kind, rest)
-		if at == "" {
+		if !isHostname(at) {
 			out.Dropped++
 			continue
 		}
@@ -168,6 +168,28 @@ func Read(domain, tag string) Found {
 }
 
 // destinationOf is the domain a URI points at.
+// isHostname accepts what can be a host's name and nothing else.
+//
+// The destination is asked about in DNS and repeated in the report, and until
+// 2026-10-05 it was neither checked nor marked: a tag of "http:" followed by an
+// escape sequence reached the command line's terminal as a domain, acting on
+// it (audit 2026-10-05, F6). The record is often a reporting provider's, behind
+// a CNAME at _dmarc. A name that is not one is a destination this cannot read,
+// so it is counted with the others it could not.
+func isHostname(name string) bool {
+	if name == "" || len(name) > 253 {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '.', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func destinationOf(kind, rest string) string {
 	switch kind {
 	case "mailto":

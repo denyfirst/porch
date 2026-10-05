@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -390,5 +391,89 @@ func TestASignInAddressIsForgottenOnceItsAllowanceRefills(t *testing.T) {
 
 	if attemptsForgotten > 6*time.Minute {
 		t.Errorf("addresses are kept %v, longer than the privacy page says", attemptsForgotten)
+	}
+}
+
+// A guesser on IPv6 has one allowance per /64, not one per address.
+//
+// Counted address by address, a subscriber's /64 was 2^64 allowances, and
+// every guess could come from a fresh one: the limit stopped nobody on IPv6.
+// A scan's budget in internal/httpapi was already counted this way.
+func TestASignInAllowanceIsPerIPv6Network(t *testing.T) {
+	key := func(remote string) string {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/session", nil)
+		r.RemoteAddr = remote
+		return clientKey(r)
+	}
+
+	if a, b := key("[2001:db8:1:2::1]:5000"), key("[2001:db8:1:2:ffff::9]:6000"); a != b {
+		t.Errorf("two addresses in one /64 are counted apart: %q and %q", a, b)
+	}
+	if a, b := key("[2001:db8:1:2::1]:5000"), key("[2001:db8:1:3::1]:5000"); a == b {
+		t.Errorf("two /64s share one allowance: %q", a)
+	}
+	if a, b := key("[fe80::1%eth0]:5000"), key("[fe80::2%eth1]:5000"); a != b {
+		t.Errorf("a zone makes a separate allowance: %q and %q", a, b)
+	}
+	if got := key("[::ffff:192.0.2.7]:5000"); got != "192.0.2.7" {
+		t.Errorf("an IPv4 address written as IPv6 is counted as %q, not as itself", got)
+	}
+	if got := key("192.0.2.7:5000"); got != "192.0.2.7" {
+		t.Errorf("an IPv4 address is counted as %q", got)
+	}
+
+	g, _ := behind(t)
+	t.Cleanup(func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if g.sweeper != nil {
+			g.sweeper.Stop()
+		}
+	})
+	for i := range attemptBurst {
+		if !g.allow(key("[2001:db8:1:2::" + strconv.Itoa(i+1) + "]:5000")) {
+			t.Fatalf("attempt %d was refused inside the burst", i+1)
+		}
+	}
+	if g.allow(key("[2001:db8:1:2::beef]:5000")) {
+		t.Error("a fresh address in the same /64 was handed a fresh allowance")
+	}
+}
+
+// A full table refuses a newcomer and forgets nobody.
+//
+// It used to forget everyone, which handed the guesser who filled it a fresh
+// burst along with everybody else. Now the newcomer waits until the oldest
+// entries go idle, and an address that spent its allowance stays spent.
+func TestAFullSignInTableRefusesRatherThanForgets(t *testing.T) {
+	g, _ := behind(t)
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	g.now = func() time.Time { return now }
+	t.Cleanup(func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if g.sweeper != nil {
+			g.sweeper.Stop()
+		}
+	})
+
+	for range attemptBurst {
+		g.allow("192.0.2.1")
+	}
+	for i := 1; len(g.attempts) < maxTracked; i++ {
+		g.allow("198.51." + strconv.Itoa(i/256) + "." + strconv.Itoa(i%256))
+	}
+
+	if g.allow("203.0.113.9") {
+		t.Error("a full table took a newcomer")
+	}
+	if g.allow("192.0.2.1") {
+		t.Error("filling the table handed the guesser who spent their allowance a fresh one")
+	}
+
+	// Once the table's entries have gone idle, a newcomer is taken.
+	now = now.Add(attemptsForgotten)
+	if !g.allow("203.0.113.9") {
+		t.Error("a newcomer is still refused once every entry has gone idle")
 	}
 }

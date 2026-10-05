@@ -348,12 +348,21 @@ func (g *Gate) allow(key string) bool {
 	now := g.now()
 	b, ok := g.attempts[key]
 	if !ok {
+		// A full table refuses a newcomer rather than forgetting everyone.
+		//
+		// Forgetting everyone was the bound until 2026-10-05, on the
+		// argument that the single derivation slot still holds a guesser to
+		// one guess at a time. It also handed every address a fresh burst,
+		// the guesser's own included, to anybody who could arrive from a
+		// thousand networks first. Idle entries are dropped before anything
+		// is refused, so a full table is a thousand networks guessing within
+		// the last five minutes, and a newcomer waits at most that long. A
+		// session already open is not asked.
 		if len(g.attempts) >= maxTracked {
-			// Forgetting everyone is the cheap bound. It hands a guesser
-			// who can spread over a thousand addresses a fresh burst, and
-			// the single derivation slot still holds them to one guess at
-			// a time.
-			g.attempts = map[string]*bucket{}
+			g.sweepLocked()
+		}
+		if len(g.attempts) >= maxTracked {
+			return false
 		}
 		b = &bucket{tokens: attemptBurst, last: now}
 		g.attempts[key] = b
@@ -398,12 +407,30 @@ func (g *Gate) sweepLocked() {
 // would make it (see cmd/porchd). Behind a proxy every sign-in then shares
 // one allowance, which is the side to err on — a header any client can write
 // would hand each guess a fresh one.
+//
+// An IPv6 address counts by its /64, as a scan's does in internal/httpapi.
+// One subscriber is handed a /64 at the least, and counted address by address
+// the allowance was 2^64 allowances: every guess from a fresh address, and
+// the limit no limit at all against anybody on IPv6. It also keeps less of
+// the address in memory than there was.
 func clientKey(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
 	}
-	return host
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	addr = addr.WithZone("").Unmap()
+	if addr.Is4() {
+		return addr.String()
+	}
+	network, err := addr.Prefix(64)
+	if err != nil {
+		return addr.String()
+	}
+	return network.String()
 }
 
 // fromThisPage refuses a request a page on another site made the browser

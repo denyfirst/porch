@@ -56,6 +56,7 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/demo"
+	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/policy"
@@ -239,7 +240,13 @@ func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts
 	facts.ResolverValidated = facts.ResolverValidated || answer.Validated
 
 	if text, err := r.LookupTXT(ctx, domain); err == nil {
-		facts.Text = text.Values
+		// Marked, because these are shown as published, on a page and in the
+		// command line's terminal. A text record is bytes rather than text,
+		// and until 2026-10-05 an escape sequence in one reached the terminal
+		// as it stood (audit 2026-10-05, F8).
+		for _, v := range text.Values {
+			facts.Text = append(facts.Text, display.Mark(v))
+		}
 	}
 }
 
