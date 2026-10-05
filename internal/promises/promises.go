@@ -142,8 +142,8 @@ var Porch = Product{
 			ID: "porch-keeps-no-record-of-a-scan",
 			Says: "An installation keeps no record of who asked for a scan: not the address, not the person. " +
 				"What was scanned, and when, is kept only where whoever runs it said to keep it — on their own disk, " +
-				"or sealed under their own password. The demonstration keeps nothing but the last hour's report " +
-				"of its own hosts, in memory.",
+				"or sealed under their own password. The demonstration keeps nothing but the latest report of each check " +
+				"of its own hosts, in memory, for fifteen minutes.",
 			Checked: "There is no code that could write down who asked, and a test fails if any appears. " +
 				"The published counter is a number with nothing behind it, which is why it can be published at all.",
 		},

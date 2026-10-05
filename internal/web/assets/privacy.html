@@ -67,7 +67,7 @@
 
     <p>
       <strong>The last report of each check</strong>, for each of our own
-      hosts, is held in memory for an hour and handed to everybody who asks in
+      hosts, is held in memory for fifteen minutes and handed to everybody who asks in
       that time. It is a report about our servers, and it says when it was
       made; it is never written to disk, and nothing in it says who asked. A
       report handed over from it is not counted as a scan, because it was not
@@ -243,8 +243,8 @@
     </p>
 
     <p>
-      <strong>Each check runs at most once an hour for each host.</strong> The
-      report is kept and handed to everybody who asks during that hour, and it
+      <strong>Each check runs at most once every fifteen minutes for each host.</strong>
+      The report is kept and handed to everybody who asks during that time, and it
       says when it was made, so an old one does not read as new. A visit
       between those causes no request at all.
     </p>
@@ -358,10 +358,10 @@
     <h3>Load on the servers asked</h3>
 
     <p>
-      Each check runs at most once an hour for each host, whoever asks, and the
+      Each check runs at most once every fifteen minutes for each host, whoever asks, and the
       answer is shared. Beneath that, each host also has its own budget, as
       every installation does, described under <a href="#kept">what is kept</a>.
-      The parties above see this server at most once an hour for each check,
+      The parties above see this server at most once every fifteen minutes for each check,
       which is less than any one visitor refreshing a page would cause.
     </p>
 

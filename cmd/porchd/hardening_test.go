@@ -112,7 +112,7 @@ func TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports(t *testing.T) {
 	source := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
 		"if demo.Enabled {\n\t\tscanner.Logs = &ctsearch.CRTSh{Timeout: timeout}\n\t}",
-		"api.KeepReportsFor(time.Hour)",
+		"api.KeepReportsFor(demoKeep)",
 	} {
 		if !strings.Contains(source, want) {
 			t.Errorf("the demonstration is not wired with %q", want)

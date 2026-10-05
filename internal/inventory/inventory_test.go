@@ -879,3 +879,35 @@ func TestAWalkOfTheAbsenceProofsIsItsOwnSource(t *testing.T) {
 		t.Error("a walk that was cut leaves the inventory reading as complete")
 	}
 }
+
+// The certificates the hosts present do not establish an inventory alone.
+//
+// The hosts asked are the ones the other sources named, so with every other
+// source failed there is nobody to ask: an answer, and an empty one, and until
+// 2026-10-05 enough to call the whole inventory established (audit F12). A
+// source beside it giving the same reading still counts, which is what a
+// comparison by value instead of by position would have got wrong.
+func TestTheHostsCertificatesAloneDoNotEstablishAnInventory(t *testing.T) {
+	failed := Merge("example.test", Sources{
+		Logs:      ctsearch.Estate{Asked: true, Domain: "example.test", Reason: "the monitor could not be reached"},
+		Records:   dnsnames.Found{Asked: true, Reason: "the records could not be read"},
+		Presented: certnames.Found{Asked: true},
+	})
+	if !failed.Presented.Established() {
+		t.Fatal("the fixture's host reading did not answer, so this checks nothing")
+	}
+	if failed.Established() {
+		t.Error("an inventory whose only answer was asking no hosts is established")
+	}
+
+	alongside := Merge("example.test", Sources{
+		Logs:      ctsearch.Estate{Asked: true, Domain: "example.test"},
+		Presented: certnames.Found{Asked: true},
+	})
+	if alongside.Logs != alongside.Presented {
+		t.Fatalf("the fixture's readings differ (%+v, %+v), so this checks nothing", alongside.Logs, alongside.Presented)
+	}
+	if !alongside.Established() {
+		t.Error("a monitor that answered does not establish the inventory when the hosts' reading looks the same")
+	}
+}

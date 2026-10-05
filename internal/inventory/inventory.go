@@ -227,13 +227,24 @@ type Inventory struct {
 	Probed bool `json:"probed,omitempty"`
 }
 
-// Established reports that at least one source was read and answered.
+// Established reports that at least one source that finds names was read and
+// answered.
 //
 // The whole inventory is silence rather than an empty estate without it: an
 // unreachable monitor and a resolver that answered nothing produce the same
 // empty list as a domain with no names, and presenting that as an inventory is
 // the most comfortable wrong answer this mode can give (R4).
+//
+// The certificates the hosts present are not such a source. The hosts asked
+// are the ones the other sources named, so with every other source failed
+// there is nobody to ask, and asking nobody answers truthfully and says
+// nothing. It counted until 2026-10-05: the demonstration's inventory, its
+// monitor unreachable and its records unread, was established on the strength
+// of that empty answer, served as a result, and kept for an hour (audit F12).
 func (i Inventory) Established() bool {
+	// A copy, so this leaves the caller's reading alone; the list of sources
+	// stays the one in Readings rather than a second one kept beside it.
+	i.Presented = Reading{}
 	for _, r := range i.Readings() {
 		if r.Established() {
 			return true

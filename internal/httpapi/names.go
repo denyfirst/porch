@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsnames"
@@ -261,14 +262,25 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 	// Where this installation has no resolver, the records are not read and
 	// the inventory says so rather than reporting an estate that publishes
 	// nothing (R4).
-	var estate ctsearch.Estate
-	if s.names != nil {
-		estate = s.names.SearchEstate(ctx, domain)
-	}
-
+	//
+	// The records first, and each third party with half of what is left. Until
+	// 2026-10-05 the monitor came first with the request's whole deadline, so
+	// one that never answered took all of it: the records were then asked with
+	// no time left, the probe and the certificates had no names to start from,
+	// and the demonstration's inventory came back empty (audit F12). Three
+	// lookups to this installation's own resolver cost a fraction of a second
+	// and cannot be starved now; the monitor and the register are somebody
+	// else's service, and the estate's own hosts keep the other half.
 	var records dnsnames.Found
 	if s.records != nil {
 		records = s.records.Under(ctx, domain)
+	}
+
+	var estate ctsearch.Estate
+	if s.names != nil {
+		asked, cancel := budget.Half(ctx)
+		estate = s.names.SearchEstate(asked, domain)
+		cancel()
 	}
 
 	// The register, where an operator configured one. It is the only source
@@ -277,7 +289,9 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 	// apart rather than adding them to a total.
 	var observed passivedns.Found
 	if s.passive != nil {
-		observed = s.passive.Under(ctx, domain)
+		asked, cancel := budget.Half(ctx)
+		observed = s.passive.Under(asked, domain)
+		cancel()
 	}
 
 	// The zone itself, where this installation was told to ask for one. The
