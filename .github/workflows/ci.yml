@@ -158,7 +158,16 @@ jobs:
           # built by an older Go cannot type-check code for a newer one: every
           # package fails with "requires newer Go version". It failed the move
           # to 1.27.1 with versions of both tools that read 1.27 (S7).
-          GOTOOLCHAIN="$(go env GOVERSION)" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          #
+          # The version is read in a statement of its own. Read inside the
+          # install line, a failure to fetch the toolchain was ignored: on
+          # 2026-10-05 the checksum database timed out, the variable was
+          # empty, go install fell back to 1.26.8, and this job reported every
+          # package as needing a newer Go rather than the timeout. Alone,
+          # the read stops the step on its own error, and `:?` stops a shell
+          # that does not stop on errors.
+          toolchain="$(go env GOVERSION)"
+          GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           "$(go env GOPATH)/bin/govulncheck" ./...
 
   # A fuzz target that exists and is not in the matrix is a target nobody
@@ -484,7 +493,8 @@ jobs:
 
       - name: Run staticcheck
         run: |
-          GOTOOLCHAIN="$(go env GOVERSION)" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          toolchain="$(go env GOVERSION)"
+          GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
           "$(go env GOPATH)/bin/staticcheck" ./...
 
   gosec:
@@ -517,7 +527,8 @@ jobs:
       # check, because it is believed.
       - name: Run gosec on every released platform
         run: |
-          GOTOOLCHAIN="$(go env GOVERSION)" go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          toolchain="$(go env GOVERSION)"
+          GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}" go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           for os in linux darwin windows; do
             echo "gosec GOOS=$os"
             GOOS="$os" "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./... || exit 1

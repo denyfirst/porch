@@ -99,6 +99,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/markup"
 	"github.com/denyfirst/porch/internal/securitytxt"
@@ -547,6 +548,16 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	// is a name that was measured; only a name where every attempt was
 	// declined is a destination this service will not go to.
 	report.BlockedDestination = blockedDestination(report.Secure, report.Plain)
+
+	// The three that follow end short of the deadline rather than at it.
+	// They already said when they ran out of time instead of what they saw,
+	// and nobody using the service could read it: run to the deadline itself,
+	// the check came back after it, and the service answered with a timeout
+	// in place of both chains (audit 2026-10-05, F11). Short of it, the
+	// sentence about this program's clock reaches the report it was written
+	// for, and the chains with it.
+	ctx, cancel = budget.ShortOf(ctx, budget.Reserve)
+	defer cancel()
 
 	// And the one other address this check asks for. It is second because it
 	// is the less important of the two: a deadline that runs out should run

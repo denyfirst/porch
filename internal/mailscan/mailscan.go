@@ -79,6 +79,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/denyfirst/porch/internal/budget"
 	danecheck "github.com/denyfirst/porch/internal/dane"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/display"
@@ -355,8 +356,12 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readTLSReporting(ctx, resolver, domain, &facts)
 	s.readExchangers(ctx, resolver, domain, &facts)
 	dane := s.readTransportSecurity(ctx, resolver, domain, &facts)
-	s.readExchangerTLS(ctx, domain, &facts, dane)
 	s.readDKIM(ctx, resolver, domain, &facts)
+	// Last, because it is the slowest thing asked and the one step that stops
+	// short of the deadline. Asked before the signing keys, it left them the
+	// two seconds it kept back, and a slow resolver then took the report past
+	// the deadline anyway (audit 2026-10-05, F11).
+	s.readExchangerTLS(ctx, domain, &facts, dane)
 
 	graded := policy.GradeMail(facts)
 
@@ -922,6 +927,14 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 		hosts = hosts[:maxExchangers]
 		facts.ExchangersPartial = true
 	}
+
+	// Short of the caller's deadline, as the TLS check's lookups are (N4). The
+	// exchangers are the slowest thing this check asks, and on a network that
+	// drops port 25 they used to run to the deadline itself: the service then
+	// saw a scan that overran and answered with a timeout in place of the
+	// whole mail report (audit 2026-10-05, F11).
+	ctx, cancel := budget.ShortOf(ctx, budget.Reserve)
+	defer cancel()
 
 	prober := s.exchangerProber()
 	relay, canAskRelay := prober.(RelayProber)

@@ -41,15 +41,36 @@ jobs:
           git checkout -q FETCH_HEAD
 
       - name: Run govulncheck
+        id: govulncheck
         run: |
           # Pinned rather than @latest. The module proxy verifies the download
           # against the checksum database either way, so this is not about
           # trust; it is about two runs a week apart testing the same thing.
-          GOTOOLCHAIN="$(go env GOVERSION)" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          "$(go env GOPATH)/bin/govulncheck" ./...
+          toolchain="$(go env GOVERSION)"
+          GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+          # govulncheck exits 3 when it finds a reachable vulnerability, and
+          # otherwise non-zero when it could not look. The two need different
+          # explanations, and a timeout told "a vulnerability is reachable" is
+          # a false alarm that teaches its reader to ignore this job.
+          status=0
+          "$(go env GOPATH)/bin/govulncheck" ./... || status=$?
+          if [ "${status}" -eq 3 ]; then
+            echo "found=true" >> "${GITHUB_OUTPUT}"
+          fi
+          exit "${status}"
+
+      - name: Explain a failure to look
+        if: failure() && steps.govulncheck.outputs.found != 'true'
+        run: |
+          echo "Nothing was checked: the toolchain, the tool or the vulnerability"
+          echo "database could not be fetched, or the code could not be loaded."
+          echo "The error is in the steps above. Re-run the workflow; a second"
+          echo "failure the same way is not a network blip, and this week's"
+          echo "question is still unanswered until it passes."
 
       - name: Explain a failure
-        if: failure()
+        if: failure() && steps.govulncheck.outputs.found == 'true'
         run: |
           echo "A vulnerability is reachable from this code."
           echo

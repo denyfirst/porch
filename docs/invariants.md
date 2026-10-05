@@ -180,11 +180,40 @@ A per-attempt timeout multiplies by the number of addresses tried, so there is
 also a total budget, and a cap on how many resolved addresses are attempted. A
 caller's deadline is never extended.
 
+**And the lookups that follow a measurement stop short of the deadline rather
+than at it.** After the handshakes, the TLS check asks four others: the
+revocation list, the responder, the logs and the zone's CAA records. All four
+were asked up to the request's deadline. A log search that used all of it
+returned after the deadline had passed, and the service, which rightly counts
+a scan that overran as a timeout, threw away the transport that had been
+measured in full. On the demonstration this was the first Transport check
+after a restart, shown as "not run" (audit 2026-10-05, F10). Those lookups now
+end two seconds before the deadline. What they did not establish is said in
+the report, which is the outcome the scan's own comments had always described.
+
+The mail check had the same fault in its slowest step. The exchangers were
+asked up to the deadline, and the dial to port 25 waited the conversation's
+twenty seconds for each address. On the demonstration's network, which drops
+port 25, an exchanger with two addresses held the check for thirty seconds,
+and the whole mail report could be lost the same way. Opening a connection now
+has eight seconds per address and the conversation's twenty in all. The
+exchangers also stop two seconds short of the deadline, and an exchanger that
+never answered is reported as not reached from here. They are asked last, so
+that nothing is asked in the time they keep back (F11).
+
+The web check had the same shape after its two chains. Its security contact,
+IPv6 address and other form already said when they ran out of time, and the
+service never showed it: run to the deadline itself, the probe came back after
+it. They too now stop short of it. The rule lives in one place,
+`internal/budget`, rather than in three copies.
+
 *Enforced in:* `internal/safedial` (`Timeout`, `TotalTimeout`, `MaxAddrs`),
 `internal/tlsprobe` (`HandshakeTimeout`, `TotalTimeout`),
 `internal/httpapi` (`RequestTimeout`), `internal/rawhello.Ask` (the context's
 deadline on the connection), `internal/rawhello.ReadReply` (at most the bytes
-an answer needs)
+an answer needs), `internal/budget.ShortOf`, applied by `internal/scan` (the
+lookups after the handshakes), `internal/mailscan.readExchangerTLS` and
+`internal/webprobe.Prober.Probe`; `internal/smtptls.Prober.dialer`
 *Guarded by:* `TestCallerDeadlineWins`, `TestTotalTimeoutBoundsTheOperation`,
 `TestAskStopsWhenTheContextDoes`, `TestNoMoreIsReadThanTheAnswerNeeds`,
 `TestAskStopsWhenTheContextIsCancelledWithoutADeadline`,
@@ -195,7 +224,12 @@ an answer needs)
 `TestAnOversizedRecordIsNotBelievedWhateverFollows`,
 `TestOnlyAServerHelloIsAnAcceptance`,
 `TestAServerHelloSplitAcrossRecordsIsNotGuessed`,
-`FuzzReadReply`
+`FuzzReadReply`, `TestASlowLogSearchDoesNotCostTheReport`,
+`TestExchangersThatNeverAnswerDoNotCostTheReport`,
+`TestOpeningAConnectionIsBoundedApartFromTheConversation`,
+`TestNothingIsAskedAfterTheExchangers`,
+`TestAMeasurementAfterTheChainsDoesNotCostTheReport`,
+`TestTheQuestionsAfterAMeasurementEndShortOfTheDeadline`
 
 ---
 
@@ -6707,6 +6741,22 @@ tag, staticcheck and gosec, all clean on 1.27.1. The three govulncheck pins
 move together, because a release gate and a merge gate that disagree about
 what is known are two different answers (`TestEveryGovulncheckIsTheSameOne`).
 
+**The version is read on a line of its own, since 2026-10-05.** Inside the
+install line, `GOTOOLCHAIN="$(go env GOVERSION)" go install …`, a failure of the
+read is ignored: the shell stops on the exit status of `go install`, not of the
+substitution in front of it. That day the checksum database timed out while the
+runner fetched 1.27.1, the variable came back empty, `go install` fell back to
+1.26.8, and `Known vulnerabilities` reported every package as needing a newer
+Go — the symptom of the bug above, for a cause nobody would look for. Read in a
+statement of its own, the failure stops the step and names the timeout, and
+`${toolchain:?…}` stops a shell that does not stop on errors. Reproduced with
+a `go` that fails the read: the old form ran the install with `GOTOOLCHAIN=''`,
+the new one stops before it. The weekly watch also tells the two failures apart:
+govulncheck exits 3 for a finding and 1 when it could not look, and only a 3 is
+explained as a reachable vulnerability
+(`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`). A security alarm that is
+wrong about why it rang teaches its reader to stop reading it.
+
 **When to move, so the next one is not a judgement call.** A patch release of
 the line in use (1.27.1 to 1.27.2) within a week: it changes no behaviour a
 program relies on, and it is usually security fixes in exactly the packages
@@ -6725,8 +6775,9 @@ library still lists seven static-RSA and two 3DES suites.
 *Enforced in:* `go.mod`, `.github/workflows/security-watch.yml`
 *Guarded by:* the `Build and test`, `Static analysis` and `Known
 vulnerabilities` jobs in CI, which is where the first 1.27 attempt was caught,
-`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly` and
-`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`
+`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly`,
+`TestEveryAnalysisToolIsBuiltByTheModulesToolchain` and
+`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`
 
 ### S6 — What reaches `main` is what was signed
 

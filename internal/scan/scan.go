@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/certinfo"
 	"github.com/denyfirst/porch/internal/crl"
 	"github.com/denyfirst/porch/internal/ctsearch"
@@ -393,6 +394,17 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	}
 	out.TLS = tlsReport
 	out.Verdict = tlsReport.Verdict
+
+	// Everything after the handshakes asks somebody else: the revocation list,
+	// the responder, the logs and the zone's CAA records. Each is a line in the
+	// report and none of them is the transport the report is about, so they
+	// stop short of the caller's deadline rather than at it. Asked up to the
+	// deadline itself, a slow log search used the request's last second, the
+	// service saw a deadline that had passed and answered with a timeout in
+	// place of everything that had been measured — on the demonstration, the
+	// first check after a restart (audit 2026-10-05, F10).
+	ctx, cancel := budget.ShortOf(ctx, budget.Reserve)
+	defer cancel()
 
 	if len(tlsReport.Certificates) > 0 {
 		certReport, err := certinfo.Analyse(tlsReport.Certificates, host, s.now(), s.Roots, s.certOptions())

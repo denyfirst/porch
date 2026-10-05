@@ -195,6 +195,13 @@ func TestTheToolchainIsWatchedWeekly(t *testing.T) {
 // fails. On 2026-10-02 that failed staticcheck and govulncheck on the move to
 // 1.27.1, with versions of both that read 1.27 (S7). A gate that fails for a
 // reason nobody reads is one somebody turns off.
+//
+// The version is read in a statement of its own, the line before the install.
+// Read inside the install line, as it was until 2026-10-05, a failure to fetch
+// the toolchain is ignored: the checksum database timed out, the variable came
+// back empty, go install fell back to 1.26.8, and "Known vulnerabilities"
+// blamed every package rather than the timeout. Alone, the read stops a
+// workflow step on its own error, and `:?` stops a shell that would go on.
 func TestEveryAnalysisToolIsBuiltByTheModulesToolchain(t *testing.T) {
 	install := regexp.MustCompile(`(?m)^(.*)go install ((?:golang\.org/x/vuln/cmd/govulncheck|honnef\.co/go/tools/cmd/staticcheck|github\.com/securego/gosec/v2/cmd/gosec)@\S+)`)
 	tools := map[string]bool{}
@@ -208,14 +215,63 @@ func TestEveryAnalysisToolIsBuiltByTheModulesToolchain(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, m := range install.FindAllStringSubmatch(string(body), -1) {
-			tools[strings.SplitN(m[2], "@", 2)[0]] = true
-			if !strings.Contains(m[1], `GOTOOLCHAIN="$(go env GOVERSION)"`) {
-				t.Errorf("%s builds %s with whatever toolchain go install picks, not the one go.mod names", path, m[2])
+		for _, m := range install.FindAllStringSubmatchIndex(string(body), -1) {
+			prefix, tool := string(body[m[2]:m[3]]), string(body[m[4]:m[5]])
+			tools[strings.SplitN(tool, "@", 2)[0]] = true
+			if !strings.HasPrefix(strings.TrimSpace(prefix), `GOTOOLCHAIN="${toolchain:?`) {
+				t.Errorf("%s builds %s with whatever toolchain go install picks, not the one go.mod names", path, tool)
+				continue
+			}
+			if read := lineBefore(string(body[:m[0]])); read != `toolchain="$(go env GOVERSION)"` {
+				t.Errorf("%s builds %s after %q rather than reading the version on its own line, "+
+					"so a failure to fetch the toolchain is ignored", path, tool, read)
 			}
 		}
 	}
 	if len(tools) != 3 {
 		t.Errorf("found %d of the three analysis tools being installed: %v", len(tools), tools)
+	}
+}
+
+// lineBefore is the last line of text that is not blank or a comment.
+func lineBefore(text string) string {
+	lines := strings.Split(text, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" && !strings.HasPrefix(l, "#") {
+			return l
+		}
+	}
+	return ""
+}
+
+// The weekly watch says a vulnerability is reachable only when one was found.
+//
+// govulncheck exits 3 for a finding and 1 when it could not look: a toolchain
+// or a database it could not fetch, code it could not load. Until 2026-10-05
+// the watch explained every failure as "A vulnerability is reachable from this
+// code", so a network timeout would have been a security alarm, and an alarm
+// that is wrong about why it rang teaches its reader to stop reading it.
+func TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound(t *testing.T) {
+	body, err := os.ReadFile("../../.github/workflows/security-watch.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	watch := string(body)
+	for _, want := range []struct{ text, why string }{
+		{`govulncheck" ./... || status=$?`, "the watch keeps govulncheck's exit code"},
+		{`if [ "${status}" -eq 3 ]; then`, "exit code 3 is the one that means a finding"},
+		{`echo "found=true" >> "${GITHUB_OUTPUT}"`, "a finding is passed to the step that explains it"},
+		{`exit "${status}"`, "the job still fails either way"},
+	} {
+		if !strings.Contains(watch, want.text) {
+			t.Errorf("security-watch.yml no longer has %q: %s", want.text, want.why)
+		}
+	}
+	alarm := regexp.MustCompile(`(?s)if: ([^\n]*)\n\s+run: \|\n\s+echo "A vulnerability is reachable`).FindStringSubmatch(watch)
+	if alarm == nil {
+		t.Fatal("security-watch.yml no longer says what a finding means")
+	}
+	if !strings.Contains(alarm[1], "steps.govulncheck.outputs.found == 'true'") {
+		t.Errorf("the watch says a vulnerability is reachable on %q, which includes failing to look", alarm[1])
 	}
 }
