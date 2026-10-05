@@ -43,3 +43,27 @@ func TestTheQuestionsAfterAMeasurementEndShortOfTheDeadline(t *testing.T) {
 		t.Error("cancelling the caller did not end the shortened context")
 	}
 }
+
+// A third party asked before the measurement gets half of what is left, and
+// the measurement the rest.
+func TestAThirdPartyAskedFirstLeavesHalfTheTime(t *testing.T) {
+	parent, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctx, done := Half(parent)
+	defer done()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("half a deadline is no deadline")
+	}
+	if left := time.Until(deadline); left > 5*time.Second || left < 4*time.Second {
+		t.Errorf("the third party was given %v of 10s, want about half", left)
+	}
+
+	// No deadline to halve is no deadline added.
+	free, stop := Half(context.Background())
+	defer stop()
+	if _, ok := free.Deadline(); ok {
+		t.Error("a context with no deadline was given one")
+	}
+}

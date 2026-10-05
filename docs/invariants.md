@@ -214,6 +214,16 @@ deadline on the connection), `internal/rawhello.ReadReply` (at most the bytes
 an answer needs), `internal/budget.ShortOf`, applied by `internal/scan` (the
 lookups after the handshakes), `internal/mailscan.readExchangerTLS` and
 `internal/webprobe.Prober.Probe`; `internal/smtptls.Prober.dialer`
+**A third party asked before a measurement gets half of what is left, since
+2026-10-05 (audit F12).** The names inventory asked its transparency monitor
+first, with the request's whole deadline, and the domain's own records after
+it. crt.sh did not answer the demonstration that afternoon: the records were
+asked with no time left, the probe and the certificate reader had no names to
+start from, and the page said the domain had none. The records are read first
+now — three lookups to this installation's own resolver — and the monitor and
+the register are each asked under `budget.Half`, so the estate's own hosts keep
+the other half however slow somebody else's service is.
+
 *Guarded by:* `TestCallerDeadlineWins`, `TestTotalTimeoutBoundsTheOperation`,
 `TestAskStopsWhenTheContextDoes`, `TestNoMoreIsReadThanTheAnswerNeeds`,
 `TestAskStopsWhenTheContextIsCancelledWithoutADeadline`,
@@ -229,7 +239,9 @@ lookups after the handshakes), `internal/mailscan.readExchangerTLS` and
 `TestOpeningAConnectionIsBoundedApartFromTheConversation`,
 `TestNothingIsAskedAfterTheExchangers`,
 `TestAMeasurementAfterTheChainsDoesNotCostTheReport`,
-`TestTheQuestionsAfterAMeasurementEndShortOfTheDeadline`
+`TestTheQuestionsAfterAMeasurementEndShortOfTheDeadline`,
+`TestAMonitorThatNeverAnswersDoesNotCostTheRecords`,
+`TestAThirdPartyAskedFirstLeavesHalfTheTime`
 
 ---
 
@@ -1555,8 +1567,8 @@ chose the host. Its hosts are compiled in now (N6), so the list it fetches is
 the one our certificate names, and leaving it out made the demonstration say
 "revocation not established" about a certificate every copy somebody runs would
 have checked. The privacy page says what it asks and about whom, and that each
-check runs at most once an hour, the report kept and handed to everybody with
-its age.
+check runs at most once every fifteen minutes (an hour until 2026-10-05), the
+report kept and handed to everybody with its age.
 
 Both builds are driven. A test under the tag fails if the demonstration stops
 fetching, and a test without it fails if the ordinary build does — the second
@@ -1645,7 +1657,7 @@ removed. The **boundary** decides the target, in `admit`, in the same words and
 the same counter as every other endpoint — not a second copy of the check
 inside the handler. The **field is fixed** on the page, because an open field
 that then refuses is what the old deletion was right about. And the answer is
-**kept for an hour and handed to everybody**, so a visit causes no request at
+**kept for fifteen minutes and handed to everybody**, so a visit causes no request at
 all and a page anybody can refresh is not a way to make this installation
 hammer a third party (`keptInventories`). The copy carries the time it was made:
 a kept answer that read as current whatever its age would be the one claim this
@@ -1666,6 +1678,13 @@ The keeping itself is held apart from the deployment that uses it:
 `TestAKeptInventoryIsProducedAgainWhenItAgesOut` for the interval and the date
 it carries, `TestAFailedSearchIsNotKept` because an unreachable monitor for one
 minute must not be an hour of telling everybody nothing was established,
+`TestTheHostsCertificatesAloneDoNotEstablishAnInventory` and
+`TestAnInventoryOnlyTheEmptyHostListAnsweredIsNotKept` because that is what
+happened anyway on 2026-10-05 (audit F12): with the monitor unreachable and the
+records unread, the certificate reader had no host to ask, said so truthfully,
+and that empty answer counted as a source that answered. The hosts it asks are
+the ones the other sources named, so it cannot establish an inventory on its
+own and no longer counts towards one,
 `TestVisitorsArrivingTogetherAskOneQuestion` for the per-domain lock that makes
 the promise true under load, and
 `TestKeepingNothingProducesAnInventoryForEveryCaller` for the ordinary

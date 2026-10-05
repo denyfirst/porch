@@ -92,6 +92,16 @@ const (
 	statsInterval = time.Minute
 )
 
+// demoKeep is how long the demonstration keeps the report of each check of its
+// own hosts, and its inventory, and hands them to everybody who asks.
+//
+// Fifteen minutes since 2026-10-05; an hour before. An hour was a long time to
+// show a report spoiled by a third party's bad minute — the inventory crt.sh
+// did not answer stayed empty for the rest of it — and the load it saves is
+// small either way: one host and one domain, so at most eight questions an
+// hour to the transparency monitor, and fewer to every other party.
+const demoKeep = 15 * time.Minute
+
 func main() {
 	os.Exit(run())
 }
@@ -552,23 +562,23 @@ func run() int {
 	// has not changed, and a page anybody can refresh would be a way to make
 	// this installation hammer a third party.
 	//
-	// An hour: long enough that a monitor sees a handful of questions a day,
-	// short enough that what each name is doing is still worth reading. The
-	// answer carries the time it was made, so nobody has to take that on
+	// For demoKeep: long enough that a monitor sees a handful of questions an
+	// hour, short enough that what each name is doing is still worth reading.
+	// The answer carries the time it was made, so nobody has to take that on
 	// trust.
 	if demo.Enabled {
 		api.SearchNames(&ctsearch.CRTSh{Timeout: *requestTimeout})
 		api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})
-		api.KeepInventoryFor(time.Hour)
+		api.KeepInventoryFor(demoKeep)
 
 		// And a kept copy of every check's report, for the same reason and one
 		// more. The demonstration shows the whole report of its own estate, so
 		// a scan there asks a transparency monitor, the authority's revocation
 		// list, the mail exchangers on port 25 and the servers of the zone
 		// above as well as the host; a page anybody can refresh would make it
-		// press on every one of them. Kept, each check runs at most once an
-		// hour for each host, and the answer says when it was made.
-		api.KeepReportsFor(time.Hour)
+		// press on every one of them. Kept, each check runs at most once every
+		// fifteen minutes for each host, and the answer says when it was made.
+		api.KeepReportsFor(demoKeep)
 	}
 
 	// The register, the same way: named or not asked. It is wired even where

@@ -447,7 +447,8 @@ function summary(data) {
   if (address) meta.push(address);
   if (data.policy) meta.push("graded by " + data.policy);
   // A kept copy says how old it is. The demonstration runs each check at most
-  // once an hour and hands the report to everybody who asks in that hour, and
+  // once every fifteen minutes and hands the report to everybody who asks in
+  // that time, and
   // a copy without its age would read as a measurement of now.
   if (data.producedAt && !data.producedAt.startsWith("0001-01-01")) {
     meta.push("measured " + producedAt(data.producedAt));
