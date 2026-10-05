@@ -45,13 +45,13 @@ func TestEveryDocumentIsOnTheDocsPage(t *testing.T) {
 		if n := strings.Count(foot, "<a "); n != 3 {
 			t.Errorf("%s: the footer carries %d links, want three", path, n)
 		}
-		if !strings.Contains(foot, `href="/docs">Docs</a>`) {
+		if !strings.Contains(foot, `href="`+porchLink("/docs")+`">Docs</a>`) {
 			t.Errorf("%s: the footer does not lead to /docs", path)
 		}
 		// The masthead on the demonstration, the rail on an installation: either
 		// way before the page begins.
 		head, _, _ := strings.Cut(body, "<main>")
-		if !strings.Contains(head, `href="/docs"`) {
+		if !strings.Contains(head, `href="`+porchLink("/docs")+`"`) {
 			t.Errorf("%s: the header does not lead to /docs", path)
 		}
 	}
@@ -115,14 +115,16 @@ func TestProductsAreAMenuNotABar(t *testing.T) {
 	_, brand, _ := strings.Cut(layout, `<header class="masthead">`)
 	brand, _, _ = strings.Cut(brand, "</header>")
 
-	if strings.Count(brand, `href="/porch"`) != 1 || !strings.Contains(brand, `<ul class="nav-menu-list">`) {
+	// The source, so the links are as the template writes them: Porch's page
+	// is the root of Porch's own name since 2026-10-05.
+	if strings.Count(brand, `href="{{.PorchBase}}/"`) != 1 || !strings.Contains(brand, `<ul class="nav-menu-list">`) {
 		t.Error("Porch is not listed under the Products menu")
 	}
 	bar := regexp.MustCompile(`(?s)<ul class="nav-menu-list">.*?</ul>`).ReplaceAllString(brand, "")
-	if strings.Contains(bar, `href="/porch"`) {
+	if strings.Contains(bar, `href="{{.PorchBase}}/"`) {
 		t.Error("a product sits in the bar itself")
 	}
-	for _, want := range []string{`href="/">Home</a>`, `<a class="nav-menu-button" href="/#products">Products</a>`, `href="/docs">Docs</a>`} {
+	for _, want := range []string{`href="{{.SiteBase}}/">Home</a>`, `<a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>`, `href="{{.PorchBase}}/docs">Docs</a>`} {
 		if !strings.Contains(brand, want) {
 			t.Errorf("the demonstration's header lacks %s", want)
 		}

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -29,21 +30,59 @@ func TestACrawlerIsToldWhatThisDeploymentIs(t *testing.T) {
 		return
 	}
 
-	if !strings.Contains(body, "Allow: /") || !strings.Contains(body, "Sitemap: "+SiteURL+"/sitemap.xml") {
-		t.Errorf("the demonstration does not offer itself: %q", body)
-	}
-	if sitemap.Code != 200 || !strings.Contains(sitemap.Header().Get("Content-Type"), "xml") {
-		t.Fatalf("sitemap: %d %s", sitemap.Code, sitemap.Header().Get("Content-Type"))
-	}
-	listed := sitemap.Body.String()
-	for path := range rendered {
-		if !strings.Contains(listed, "<loc>"+SiteURL+path+"</loc>") {
-			t.Errorf("the sitemap leaves out %s", path)
+	// Two names since 2026-10-05, and each offers itself and lists the pages
+	// it serves. Between them every page is listed once, at the address it
+	// states as its own, and each listed address answers without a redirect.
+	listedAll := 0
+	for _, crawler := range []struct{ host, base string }{
+		{organisationHost, SiteURL},
+		{porchHost, PorchURL},
+	} {
+		robots := getOn(t, "GET", crawler.host, "/robots.txt").Body.String()
+		if !strings.Contains(robots, "Allow: /") || !strings.Contains(robots, "Sitemap: "+crawler.base+"/sitemap.xml") {
+			t.Errorf("%s does not offer itself: %q", crawler.host, robots)
+		}
+		sitemap := getOn(t, "GET", crawler.host, "/sitemap.xml")
+		if sitemap.Code != 200 || !strings.Contains(sitemap.Header().Get("Content-Type"), "xml") {
+			t.Fatalf("%s sitemap: %d %s", crawler.host, sitemap.Code, sitemap.Header().Get("Content-Type"))
+		}
+		for _, loc := range regexp.MustCompile(`<loc>([^<]+)</loc>`).FindAllStringSubmatch(sitemap.Body.String(), -1) {
+			listedAll++
+			if !strings.HasPrefix(loc[1], crawler.base+"/") {
+				t.Errorf("%s's sitemap lists %s, on the other name", crawler.host, loc[1])
+				continue
+			}
+			if w := getOn(t, "GET", crawler.host, strings.TrimPrefix(loc[1], crawler.base)); w.Code != 200 {
+				t.Errorf("%s's sitemap lists %s, which answers %d", crawler.host, loc[1], w.Code)
+			}
 		}
 	}
-	if strings.Count(listed, "<loc>") != len(rendered) {
-		t.Errorf("the sitemap lists %d addresses and the site has %d", strings.Count(listed, "<loc>"), len(rendered))
+	for path := range rendered {
+		home := organisationHost
+		if !organisationPaths[path] {
+			home = porchHost
+		}
+		if !strings.Contains(getOn(t, "GET", home, "/sitemap.xml").Body.String(), "<loc>"+statedAddress(path)+"</loc>") {
+			t.Errorf("the sitemaps leave out %s", path)
+		}
 	}
+	if listedAll != len(rendered) {
+		t.Errorf("the sitemaps list %d addresses and the site has %d", listedAll, len(rendered))
+	}
+}
+
+// statedAddress is the address a demonstration page states as its own,
+// written out here rather than taken from canonicalURL, so that a mistake
+// there is not repeated in what checks it: the organisation's two pages on
+// its name, Porch's page at the root of Porch's, and every other on Porch's.
+func statedAddress(path string) string {
+	switch path {
+	case "/", "/organisation":
+		return SiteURL + path
+	case "/porch":
+		return PorchURL + "/"
+	}
+	return PorchURL + path
 }
 
 // Every page on the demonstration says which address it is and repeats its
@@ -64,8 +103,8 @@ func TestEveryPageSaysWhichAddressItIs(t *testing.T) {
 			continue
 		}
 		for _, want := range []string{
-			`<link rel="canonical" href="` + SiteURL + path + `">`,
-			`<meta property="og:url" content="` + SiteURL + path + `">`,
+			`<link rel="canonical" href="` + statedAddress(path) + `">`,
+			`<meta property="og:url" content="` + statedAddress(path) + `">`,
 			`<meta property="og:title" content="` + p.Title + `">`,
 			`<meta property="og:site_name" content="denyfirst">`,
 		} {

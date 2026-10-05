@@ -133,7 +133,7 @@ func (f *Fetcher) FetchChallenge(ctx context.Context, host string) (string, erro
 // UserAgent identifies the request the way every other one this project makes
 // is identified. An operator finding it in their own access log should be able
 // to tell it from a scan.
-const UserAgent = "porch/1 (+https://denyfirst.dev/web/method; verification)"
+const UserAgent = "porch/1 (+https://porch.denyfirst.dev/web/method; verification)"
 
 // dialFunc is the connection this fetcher opens with.
 //

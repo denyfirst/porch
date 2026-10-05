@@ -55,7 +55,7 @@ func TestAPasswordIsAskedForOnTheSameReadingOfAnAddress(t *testing.T) {
 // and a guard built and not handed to the server guards nothing.
 func TestTheHostGuardIsInFrontOfEverything(t *testing.T) {
 	source := repoFile(t, "cmd/porchd/main.go")
-	gate := strings.Index(source, "handler = gate.Wrap(root)")
+	gate := strings.Index(source, "handler = gate.Wrap(handler)")
 	guard := strings.Index(source, "handler = api.GuardHost(handler)")
 	server := strings.Index(source, "Handler: handler,")
 	if gate < 0 || guard < 0 || server < 0 {

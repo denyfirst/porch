@@ -666,12 +666,17 @@ func run() int {
 	})
 	root.Handle("/", web.Handler())
 
+	// On the demonstration, a request for one of its two names that belongs
+	// to the other is sent there — the API with the pages, so that nothing of
+	// Porch's answers from the organisation's address. An installation is one
+	// name and passes straight through. See web.Hosts.
+	var handler http.Handler = web.Hosts(root)
+
 	// The gate goes in front of everything, pages and API alike, so a route
 	// added later is behind it without anybody remembering to put it there.
 	// Only the sign-in page and what it draws with are open.
-	var handler http.Handler = root
 	if gate != nil {
-		handler = gate.Wrap(root)
+		handler = gate.Wrap(handler)
 	}
 
 	// And in front of the gate, the one check every request meets: over plain

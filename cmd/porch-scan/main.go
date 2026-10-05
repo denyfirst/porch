@@ -1004,11 +1004,11 @@ var noteSections = []struct {
 // they were some. They are named here and printed in full by -limits, which
 // needs no network and no page.
 const (
-	tlsMethodPage = "https://denyfirst.dev/tls/method"
-	webMethodPage = "https://denyfirst.dev/web/method"
+	tlsMethodPage = "https://porch.denyfirst.dev/tls/method"
+	webMethodPage = "https://porch.denyfirst.dev/web/method"
 
-	mailMethodPage = "https://denyfirst.dev/mail/method"
-	dnsMethodPage  = "https://denyfirst.dev/dns/method"
+	mailMethodPage = "https://porch.denyfirst.dev/mail/method"
+	dnsMethodPage  = "https://porch.denyfirst.dev/dns/method"
 )
 
 func printNotes(w io.Writer, notes []policy.Note, page string) {

@@ -775,7 +775,7 @@ about what may be read. So:
   own pages now, because its own are the only ones it reaches (N6).
 
 **Which deployment reached a log reader is now part of the promise.** The user
-agent names `https://denyfirst.dev/web/method` from every installation, so that
+agent names `https://porch.denyfirst.dev/web/method` from every installation, so that
 page describes both: the demonstration reads only its own pages, and an
 installation somebody runs themselves may have read the page. A flat sentence there would
 have been true of one and false of the one in the reader's log, which is worse
@@ -6054,10 +6054,11 @@ A search for this project returned what it was months ago: a TLS checker
 called denyfirst. The pages had changed and nothing on them said so — no
 canonical address, no page title naming the tool, nothing pointing a crawler
 at what exists now. So each page on the demonstration carries its own address
-on `denyfirst.dev`, repeats its title and description in the tags a link
+— on `denyfirst.dev` or `porch.denyfirst.dev`, whichever serves it (W8a) — repeats its title and description in the tags a link
 preview reads, and names both the tool and the maker: Porch is what it is,
-denyfirst is who publishes it. `/sitemap.xml` is the page table itself rather
-than a list kept in step by hand, and a test fails when the two differ.
+denyfirst is who publishes it. Each name's `/sitemap.xml` is its part of the
+page table rather than a list kept in step by hand, and a test fails when the
+two differ.
 
 An installation somebody runs carries none of it. Its pages are on its own
 address, and a canonical address pointing here would tell a search engine that
@@ -6368,6 +6369,53 @@ meant has never existed under that name.
 `TestEveryAddressThisProjectSendsOutResolves`,
 `TestBothScanPathsAreServedAndNeitherRedirects`,
 `TestNeitherScanPathAnswersAGet`, `TestOldPathsRedirect`
+
+
+### W8a — The organisation and Porch each answer at their own name
+
+Since 2026-10-05 the demonstration is two names on one binary.
+`denyfirst.dev` is the organisation: its front page, its undertakings
+(`/organisation`), and the contacts RFC 9116 points at — `security.txt`, the
+PGP key, and `releases@denyfirst.dev`, which signs every release and is pinned
+in every install. `porch.denyfirst.dev` is Porch: its page at `/`, its checks,
+their method pages, its documents, its privacy page and terms, and its API.
+
+The reasons are the ones W8 gave for a check's own address, one level up. A
+second product would otherwise live under the first one's name or move it.
+A name each is a separate origin, so a browser keeps their pages apart and a
+fault in one product's script cannot read the other's. And the address a report
+is shared at says which tool wrote it.
+
+Nothing printed before the split stops working. One binary serves both names,
+and an address that belongs to the other one is answered with a permanent
+redirect to the same path and query there: 301 for GET and HEAD, 308 for
+anything else, so a POST to the API at the old name keeps its method and body.
+The target is one of two constant addresses with the request's own path after
+it, so it cannot be steered off this site. Any other name or an address — a
+test, a local run — is served everything, as one name was; so is every name on
+an installation, which is one name, its operator's. Both names serve the
+stylesheet, the scripts, the icon and `/healthz`: the last is about the
+machine rather than either product, and a deploy check that asks the
+organisation's name for it expects "ok", not a redirect.
+
+Each page states the address it is served at, and each name's sitemap lists
+its own pages and nothing else; between them every page is listed once and
+answers there without a redirect. The layout links across the two by their
+full address on the demonstration, and by path on an installation. The user
+agents every installation sends, and `porch-scan`'s pointers to the method
+pages, name `porch.denyfirst.dev`, and so does the sentence on the privacy page
+about the reverse DNS of the demonstration's address: `scanner.denyfirst.dev`
+was a third name for the same machine, and the one an administrator who looks
+it up should land on is the page about the tool that reached them.
+
+*Enforced in:* `internal/web/hosts.go`, `internal/web.render`,
+`internal/web.buildPlain`, `internal/web/assets/layout.html`, `cmd/porchd.run`
+*Guarded by:* `TestTheOrganisationAndPorchEachAnswerAtTheirOwnName`,
+`TestTheRedirectsStayOnThisSite`, `TestAnyOtherNameIsServedEverything`,
+`TestEveryPageIsAnsweredAtTheAddressItStates`,
+`TestACrawlerIsToldWhatThisDeploymentIs`, `TestEveryPageSaysWhichAddressItIs`,
+`TestEveryAddressThisProjectSendsOutResolves`,
+`TestTheGateIsInFrontOfEverything`
 
 ### W9 — A report fits the screen it is read on
 
