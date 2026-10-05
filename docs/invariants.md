@@ -3551,6 +3551,13 @@ the only numbers an operator has to watch.
 The allowance spent by a refusal is the read one, so the original reason still
 holds: a cross-site request cannot touch the scan budget.
 
+"Another site" includes another name on this one since 2026-10-05.
+`Sec-Fetch-Site: same-site` was let through while the demonstration's pages and
+its scanner had different names. They share one now, and the allowance a
+sibling name was trusted with reached every name under the domain — names added
+later, names somebody else hosts, and a forgotten record taken over by whoever
+holds its address now (`TestCrossSiteRequestsAreRefused`).
+
 That last sentence was, until it was tested, only a sentence. Every test around
 it passed with the two checks in either order, because in either order the
 request is refused, with 403, counted as `cross_site`. What the order decides
@@ -3560,7 +3567,7 @@ refusing that visitor for reasons they cannot see.
 
 *Enforced in:* `internal/httpapi.Server.handleScan`, the read limiter at the
 top
-*Guarded by:* `TestRefusalsBeforeTheScanAreLimited`,
+*Guarded by:* `TestCrossSiteRequestsAreRefused`, `TestRefusalsBeforeTheScanAreLimited`,
 `TestReadAndScanBudgetsAreSeparate`,
 `TestPollingReadsDoesNotSpendTheScanAllowance`,
 `TestACrossSiteRefusalDoesNotSpendTheVisitorsScanBudget`
@@ -3860,7 +3867,15 @@ says so.
 
 **A session is a cookie no script can read and no other site can send**:
 HttpOnly, SameSite=Strict and Secure, twelve hours at most, held on the
-server by its hash and forgotten on restart. Secure always, so the
+server by its hash and forgotten on restart. Since 2026-10-05 it is also one
+**no other name under the same domain can plant**: it is called
+`__Host-porch_session`, and a browser stores a cookie of that name only when it
+is Secure, has `Path=/` and names no `Domain`. Without the prefix, any sibling —
+`porch.example.com` beside a wiki, a status page, a record left pointing at a
+deleted server — can set a cookie of the same name for the whole domain, and
+the browser sends both. Measured in Chromium before the change: the prefix is
+accepted over https and at `http://localhost`, which is the SSH tunnel, and a
+cookie of that name carrying a `Domain` is refused. Secure always, so the
 password and the session travel only over TLS or to localhost, which is how
 the SSH tunnel in the self-hosting guide reaches it; signing in over plain
 HTTP to any other address does not work, by design. The server refuses it too, before the
@@ -3924,6 +3939,7 @@ happened, and a failed sign-out stays on the page and says so.
 `TestEveryPageBehindAPasswordOffersAWayOut`, `TestTheSessionScriptDoesOnlyThat`,
 `TestAFileSealedAtALowerWorkFactorIsRefused`, `TestAPublicPathIsExact`,
 `TestAPasswordChangeNeedsALiveSession`, `TestOnlyThisPageMaySignIn`,
+`TestTheSessionCookieCannotBePlantedByANeighbour`,
 `TestAKeptReportComesBackWhole`, `TestNothingOnDiskIsReadable`,
 `TestWithoutTheKeyNothingIsKeptOrRead`, `TestAReportMovedToAnotherNameDoesNotOpen`,
 `TestDeleteRemovesTheReportAndOnlyIt`, `TestTheHistoryIsNewestFirstAndBounded`,

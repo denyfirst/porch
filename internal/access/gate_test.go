@@ -269,6 +269,47 @@ func TestOnlyThisPageMaySignIn(t *testing.T) {
 	}
 }
 
+// No other name under the same domain can plant the session cookie.
+//
+// A cookie without the __Host- prefix can be set for the whole domain by any
+// name under it, and the browser then sends both: a neighbour signs a visitor
+// out, or into a session of the neighbour's choosing. The prefix holds only
+// while the cookie is Secure, has Path=/ and names no Domain — a browser
+// drops it otherwise — so all four are asserted, on the cookie that opens a
+// session and on the one that ends it.
+func TestTheSessionCookieCannotBePlantedByANeighbour(t *testing.T) {
+	_, h := behind(t)
+	c, w := signIn(t, h, testPassword)
+	if c == nil {
+		t.Fatalf("no session cookie named %q: %d", CookieName, w.Code)
+	}
+	out := do(h, http.MethodDelete, "/api/v1/session", "", c, nil)
+	for what, rec := range map[string]*httptest.ResponseRecorder{"signing in": w, "signing out": out} {
+		set := rec.Header().Values("Set-Cookie")
+		if len(set) == 0 {
+			t.Errorf("%s set no cookie", what)
+			continue
+		}
+		for _, line := range set {
+			attrs := strings.Split(line, ";")
+			if !strings.HasPrefix(strings.TrimSpace(attrs[0]), "__Host-") {
+				t.Errorf("%s set %q without the __Host- prefix, so another name can set it too", what, attrs[0])
+			}
+			has := map[string]bool{}
+			for _, a := range attrs[1:] {
+				a = strings.ToLower(strings.TrimSpace(a))
+				has[a] = true
+				if strings.HasPrefix(a, "domain=") {
+					t.Errorf("%s set a Domain (%s), which a __Host- cookie may not have", what, a)
+				}
+			}
+			if !has["secure"] || !has["path=/"] {
+				t.Errorf("%s set %q without Secure and Path=/, so a browser drops it", what, line)
+			}
+		}
+	}
+}
+
 // A password never crosses the network in the clear: plain HTTP to a public
 // name is refused before the password is read, and a session set by hand on
 // such a request does not count. TLS works, and so does localhost, which is
