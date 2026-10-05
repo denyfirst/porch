@@ -82,7 +82,16 @@ const contentSecurityPolicy = "default-src 'none'; " +
 // Only the demonstration says it. An installation somebody runs is on their
 // address, not ours, and pointing it here would tell a search engine their
 // pages are copies of ours.
-const SiteURL = "https://denyfirst.dev"
+//
+// SiteURL is the organisation's address since 2026-10-05: the front page, the
+// organisation's undertakings, and the contacts RFC 9116 points at. Porch's
+// pages and its API are at PorchURL, a name of their own, so that a second
+// product beside it has one too and neither speaks from the other's address.
+// What is at each is decided by organisationPaths and the Hosts handler.
+const (
+	SiteURL  = "https://denyfirst.dev"
+	PorchURL = "https://porch.denyfirst.dev"
+)
 
 // SecurityTxtPath is where RFC 9116 requires the file to be served, and where
 // the demonstration serves ours. An installation serves nothing there; see
@@ -150,12 +159,27 @@ type page struct {
 	// denyfirst, and says so in the footer. Set by render from the build.
 	Brand bool
 
+	// Organisation marks a page that speaks for denyfirst rather than for
+	// Porch: the front page and the organisation's undertakings. On the
+	// demonstration, which is the denyfirst site, it shows no verdict and its
+	// links and buttons keep the brand red; every other page draws them in
+	// Porch's violet, which no verdict uses. An installation is Porch from end
+	// to end, names its maker only in the footer, and ignores it.
+	Organisation bool
+
 	// Path is the address this page is served at, set at startup from the
 	// table, and Canonical is that address on the demonstration's own host.
 	// Empty on an installation somebody runs, where the layout then sends no
 	// canonical address and no social tags at all.
 	Path      string
 	Canonical string
+
+	// SiteBase and PorchBase are what the layout puts in front of a link to
+	// the organisation's pages and to Porch's: the two addresses on the
+	// demonstration, where they are different names, and nothing on an
+	// installation, where every page is its own. Set by render.
+	SiteBase  string
+	PorchBase string
 
 	// Body is filled in at startup. It is template.HTML because the fragment
 	// is a file in this repository rather than anything a user supplied.
@@ -214,9 +238,10 @@ var pages = map[string]*page{
 		// first screen of a tool is one too many. So the title names the
 		// question rather than the organisation, and the heading inside the page
 		// names the organisation.
-		Title:       "Who makes this, and what they receive — denyfirst",
-		Description: "What the organisation behind Porch undertakes, whatever you run, and how to check each undertaking rather than take it on trust.",
-		Fragment:    "assets/organisation.html",
+		Title:        "Who makes this, and what they receive — denyfirst",
+		Organisation: true,
+		Description:  "What the organisation behind Porch undertakes, whatever you run, and how to check each undertaking rather than take it on trust.",
+		Fragment:     "assets/organisation.html",
 		Data: organisationPage{
 			Organisation: promises.Organisation,
 			Products:     promises.Products,
@@ -599,9 +624,10 @@ func init() {
 	// neither: nobody there needs the product explained to them.
 	if demo.Enabled {
 		pages["/"] = &page{
-			Title:       "denyfirst — independent security and privacy tools",
-			Description: "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
-			Fragment:    "assets/home.html",
+			Title:        "denyfirst — independent security and privacy tools",
+			Organisation: true,
+			Description:  "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
+			Fragment:     "assets/home.html",
 		}
 		// The name inventory is here, and it lists this project's own estate.
 		//
@@ -668,8 +694,11 @@ func render(p *page) ([]byte, error) {
 	}
 
 	p.Brand = demo.Enabled
-	if p.Brand && p.Path != "" {
-		p.Canonical = SiteURL + p.Path
+	if p.Brand {
+		p.SiteBase, p.PorchBase = SiteURL, PorchURL
+		if p.Path != "" {
+			p.Canonical = canonicalURL(p.Path)
+		}
 	}
 	p.SignedIn = signedIn && p.Section != "login"
 	if p.Section == "" {
@@ -951,12 +980,24 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// porch.denyfirst.dev's front page is Porch's, and its crawler files
+	// list its own pages; see hosts.go.
+	porch := siteOf(r.Host) == porchSite
+	if porch && r.URL.Path == "/" {
+		write(w, r, "text/html; charset=utf-8", rendered[porchRoot])
+		return
+	}
+
 	if body, found := rendered[r.URL.Path]; found {
 		write(w, r, "text/html; charset=utf-8", body)
 		return
 	}
 
-	if text, found := plain[r.URL.Path]; found {
+	crawler := plain
+	if porch {
+		crawler = plainPorch
+	}
+	if text, found := crawler[r.URL.Path]; found {
 		write(w, r, text.contentType, text.body)
 		return
 	}
@@ -1143,12 +1184,19 @@ type docsPage struct {
 	Demo  bool
 }
 
-// plain holds the two files a crawler reads, built at startup beside the
-// pages.
-var plain = map[string]struct {
+// plainFile is a file a crawler reads.
+type plainFile struct {
 	contentType string
 	body        []byte
-}{}
+}
+
+// plain holds the two files a crawler reads, built at startup beside the
+// pages, and plainPorch the same two for porch.denyfirst.dev, which lists its
+// own pages and names its own sitemap.
+var (
+	plain      = map[string]plainFile{}
+	plainPorch = map[string]plainFile{}
+)
 
 // buildPlain writes robots.txt and, on the demonstration, a sitemap.
 //
@@ -1164,33 +1212,41 @@ var plain = map[string]struct {
 // it, and asking costs nothing.
 func buildPlain() {
 	robots := "User-agent: *\nDisallow: /\n"
-	if demo.Enabled {
-		paths := make([]string, 0, len(rendered))
-		for path := range rendered {
-			paths = append(paths, path)
-		}
-		sort.Strings(paths)
+	plain["/robots.txt"] = plainFile{"text/plain; charset=utf-8", []byte(robots)}
+	if !demo.Enabled {
+		return
+	}
 
+	// Each name lists the pages it serves, at the address each states as its
+	// own, so nothing in either sitemap is a redirect.
+	var organisation, porch []string
+	for path := range rendered {
+		if organisationPaths[path] {
+			organisation = append(organisation, canonicalURL(path))
+		} else {
+			porch = append(porch, canonicalURL(path))
+		}
+	}
+	for _, crawler := range []struct {
+		files map[string]plainFile
+		base  string
+		urls  []string
+	}{
+		{plain, SiteURL, organisation},
+		{plainPorch, PorchURL, porch},
+	} {
+		sort.Strings(crawler.urls)
 		var sitemap strings.Builder
 		sitemap.WriteString(xml.Header)
 		sitemap.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-		for _, path := range paths {
-			sitemap.WriteString("  <url><loc>" + SiteURL + path + "</loc></url>\n")
+		for _, u := range crawler.urls {
+			sitemap.WriteString("  <url><loc>" + u + "</loc></url>\n")
 		}
 		sitemap.WriteString("</urlset>\n")
-
-		plain["/sitemap.xml"] = struct {
-			contentType string
-			body        []byte
-		}{"application/xml; charset=utf-8", []byte(sitemap.String())}
-
-		robots = "User-agent: *\nAllow: /\n\nSitemap: " + SiteURL + "/sitemap.xml\n"
+		crawler.files["/sitemap.xml"] = plainFile{"application/xml; charset=utf-8", []byte(sitemap.String())}
+		crawler.files["/robots.txt"] = plainFile{"text/plain; charset=utf-8",
+			[]byte("User-agent: *\nAllow: /\n\nSitemap: " + crawler.base + "/sitemap.xml\n")}
 	}
-
-	plain["/robots.txt"] = struct {
-		contentType string
-		body        []byte
-	}{"text/plain; charset=utf-8", []byte(robots)}
 }
 
 // organisationPage is what assets/organisation.html reads.

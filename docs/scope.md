@@ -516,7 +516,7 @@ plan.** N7 has the detail; what follows is why each line is the line.
   no body at all until 2026-09-28; it reaches a compiled-in list of this
   project's own hosts, so it reads its own pages now.
 - **The page a log reader is sent to had to say both.** The user agent names
-  `https://denyfirst.dev/web/method` from every installation, so one flat
+  `https://porch.denyfirst.dev/web/method` from every installation, so one flat
   sentence there would be true of the demonstration and false of the scan in
   the reader's log. It describes both deployments now. This was foreseen in the
   paragraph this one replaced, and it is the part that would have been quietly

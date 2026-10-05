@@ -112,13 +112,15 @@ func TestEveryAddressThisProjectSendsOutResolves(t *testing.T) {
 	}{
 		{"the web probe's user agent", webprobe.DefaultUserAgent},
 	} {
-		path := pathOfDenyfirstURL(t, tc.sent)
+		path := pathOfPorchURL(t, tc.sent)
 		if path == "" {
 			t.Errorf("%s names no address on this site: %q", tc.what, tc.sent)
 			continue
 		}
 
-		w := get(t, path)
+		// Asked of Porch's own name, which is where an administrator who
+		// follows the address arrives.
+		w := getOn(t, "GET", porchHost, path)
 		if w.Code == http.StatusOK {
 			continue
 		}
@@ -133,12 +135,14 @@ func TestEveryAddressThisProjectSendsOutResolves(t *testing.T) {
 	}
 }
 
-// pathOfDenyfirstURL pulls the path out of the first denyfirst.dev address in
-// a string, which is the shape a user agent comment uses.
-func pathOfDenyfirstURL(t *testing.T, s string) string {
+// pathOfPorchURL pulls the path out of the first porch.denyfirst.dev address
+// in a string, which is the shape a user agent comment uses. Porch's pages
+// have their own name since 2026-10-05, and a user agent names the page about
+// the tool that sent it.
+func pathOfPorchURL(t *testing.T, s string) string {
 	t.Helper()
 
-	const marker = "https://denyfirst.dev"
+	const marker = PorchURL
 	i := strings.Index(s, marker)
 	if i < 0 {
 		return ""
@@ -213,7 +217,7 @@ func TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt(t *testing.T) {
 		t.Errorf("GET / on the demonstration returned %d to %q, want the front page",
 			w.Code, w.Header().Get("Location"))
 	}
-	if !strings.Contains(w.Body.String(), `href="/porch"`) {
+	if !strings.Contains(w.Body.String(), `href="`+PorchURL+`/"`) {
 		t.Error("the front page does not lead to the product")
 	}
 }
@@ -405,8 +409,9 @@ func TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits(t *testing.T) {
 		// new page is reached from /docs, which lists every document, and from
 		// the first paragraph of each privacy page, which is where somebody
 		// asking the question is already looking.
-		if strings.Join(got, " ") != "/docs /privacy /terms" {
-			t.Errorf("%s: the footer links %v, want /docs /privacy /terms", path, got)
+		want := porchLink("/docs") + " " + porchLink("/privacy") + " " + porchLink("/terms")
+		if strings.Join(got, " ") != want {
+			t.Errorf("%s: the footer links %v, want %s", path, got, want)
 		}
 		if strings.Contains(foot, "How a report is read") {
 			t.Errorf("%s: the footer still offers one check's limits", path)

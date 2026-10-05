@@ -1,8 +1,9 @@
 /*
   porch, by denyfirst
   -------------------
-  A dark, quiet surface with one red accent, and the same page in light for
-  whoever prefers it. The colour scheme follows the system until the reader
+  A dark, quiet surface with one accent, and the same page in light for
+  whoever prefers it. The accent is Porch's violet; denyfirst's red is the
+  wordmark's, and the accent of the organisation's own pages. The colour scheme follows the system until the reader
   picks one with the switch in the header; theme.js remembers that choice and
   nothing else.
 
@@ -24,14 +25,28 @@
   --rule:        #d9d9df;
 
   /* Links. The accent, deepened for a light page. */
-  --link:        #a41d2a;
+  --link:        #5f35b5;
 
-  /* The brand red of the wordmark. */
+  /* The brand red of the wordmark, and of nothing else on Porch's pages. */
   --brand:       #c42b3a;
 
+  /* Porch's colour: the current place, a chosen check, the live mark. Violet
+     since 2026-10-05. It was the brand red, and a button, a link and a chosen
+     tab were then the colour of an insecure verdict — measured, the same
+     rgb(179, 32, 46) — on the one page whose job is to make that colour mean
+     something. Red, amber and green say how a host fared, so no control is
+     drawn in any of them (TestPorchsColourIsNeverAVerdictsColour). */
+  --tool:        #6b3fc4;
+
   /* A button's face. Its label is white in both schemes. */
-  --accent:       #b3202e;
-  --accent-hover: #8f1a25;
+  --accent:       #6b3fc4;
+  --accent-hover: #5a32a8;
+
+  /* The organisation's own pages carry no verdict, and keep the brand red for
+     their links and buttons (body[data-owner="organisation"]). */
+  --brand-link:         #a41d2a;
+  --brand-accent:       #b3202e;
+  --brand-accent-hover: #8f1a25;
 
   --strong:      #1f6a44;
   --weak:        #845900;
@@ -74,10 +89,14 @@
     --ink-soft:   #b4b5be;
     --ink-faint:  #999ba6;
     --rule:       #2c2d33;
-    --link:       #f28b94;
+    --link:       #b9a2ff;
     --brand:      #ed4552;
-    --accent:       #c72f3d;
-    --accent-hover: #d23443;
+    --tool:       #b9a2ff;
+    --accent:       #7e57d9;
+    --accent-hover: #6c46c8;
+    --brand-link:         #f28b94;
+    --brand-accent:       #c72f3d;
+    --brand-accent-hover: #d23443;
     --strong:     #6fbf92;
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
@@ -94,10 +113,14 @@
   --ink-soft:   #b4b5be;
   --ink-faint:  #999ba6;
   --rule:       #2c2d33;
-  --link:       #f28b94;
+  --link:       #b9a2ff;
   --brand:      #ed4552;
-  --accent:       #c72f3d;
-  --accent-hover: #d23443;
+  --tool:       #b9a2ff;
+  --accent:       #7e57d9;
+  --accent-hover: #6c46c8;
+  --brand-link:         #f28b94;
+  --brand-accent:       #c72f3d;
+  --brand-accent-hover: #d23443;
   --strong:     #6fbf92;
   --weak:       #d9a23c;
   --insecure:   #ff7c86;
@@ -176,6 +199,17 @@ a:hover { text-decoration-thickness: 2px; }
   begins, which is the whole of what the name says.
 */
 .wordmark-deny, .wordmark-stop { color: var(--brand); }
+
+/* denyfirst's own pages on the demonstration — the front page and the
+   organisation — speak for the organisation rather than for Porch, and show no
+   verdict, so their controls keep the brand red. Set by the layout from
+   page.Organisation; an installation is Porch's violet throughout. */
+body[data-owner="organisation"] {
+  --tool:         var(--brand);
+  --link:         var(--brand-link);
+  --accent:       var(--brand-accent);
+  --accent-hover: var(--brand-accent-hover);
+}
 
 .masthead-nav {
   display: flex;
@@ -1995,7 +2029,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   height: 6px;
   margin: 0 0.6rem 0.12em 0;
   border-radius: 50%;
-  background: var(--brand);
+  background: var(--tool);
 }
 
 .hero-rule {
@@ -2020,7 +2054,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   left: 0;
   width: 4rem;
   height: 2px;
-  background: var(--brand);
+  background: var(--tool);
 }
 
 .card-top {
@@ -2033,7 +2067,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 .card-symbol {
   font-size: 1.9rem;
   line-height: 1;
-  color: var(--brand);
+  color: var(--tool);
 }
 
 .card-link {
@@ -2069,7 +2103,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--brand);
+  background: var(--tool);
 }
 
 .docs-hero {
@@ -2497,7 +2531,7 @@ main > .band:last-child { border-bottom: 0; }
   pointer-events: none;
   background-image:
     radial-gradient(circle 16rem at var(--lens-x) var(--lens-y),
-      color-mix(in srgb, var(--brand) 5%, transparent), transparent 75%),
+      color-mix(in srgb, var(--tool) 5%, transparent), transparent 75%),
     radial-gradient(circle, color-mix(in srgb, var(--ink-faint) 22%, transparent) 1px, transparent 1.6px);
   background-size: 100% 100%, 24px 24px;
   -webkit-mask-image:
@@ -2595,8 +2629,8 @@ main > .band:last-child { border-bottom: 0; }
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--brand);
-  border: 1px solid color-mix(in srgb, var(--brand) 40%, var(--rule));
+  color: var(--tool);
+  border: 1px solid color-mix(in srgb, var(--tool) 40%, var(--rule));
   border-radius: 3px;
   white-space: nowrap;
 }
@@ -2633,8 +2667,8 @@ main > .band:last-child { border-bottom: 0; }
 
 .rail-item[aria-current="page"] {
   color: var(--ink);
-  background: color-mix(in srgb, var(--brand) 10%, var(--paper));
-  border-color: color-mix(in srgb, var(--brand) 35%, var(--rule));
+  background: color-mix(in srgb, var(--tool) 10%, var(--paper));
+  border-color: color-mix(in srgb, var(--tool) 35%, var(--rule));
 }
 
 .rail-glyph {
@@ -2643,7 +2677,7 @@ main > .band:last-child { border-bottom: 0; }
   color: var(--ink-faint);
 }
 
-.rail-item[aria-current="page"] .rail-glyph { color: var(--brand); }
+.rail-item[aria-current="page"] .rail-glyph { color: var(--tool); }
 
 .rail-foot {
   margin-top: auto;
@@ -2929,7 +2963,7 @@ main > .band:last-child { border-bottom: 0; }
 .check-grid .check-says { font-size: 0.88rem; line-height: 1.5; }
 
 .check-grid .check:has(input:checked) {
-  border-color: color-mix(in srgb, var(--brand) 45%, var(--rule));
+  border-color: color-mix(in srgb, var(--tool) 45%, var(--rule));
 }
 
 /*
@@ -2959,7 +2993,7 @@ main > .band:last-child { border-bottom: 0; }
 
 .check-grid .check-elsewhere:hover,
 .checks .check-elsewhere:hover {
-  border-color: color-mix(in srgb, var(--brand) 45%, var(--rule));
+  border-color: color-mix(in srgb, var(--tool) 45%, var(--rule));
 }
 
 /* A phone: four across and nothing else. The documents are in the footer,
@@ -3260,6 +3294,7 @@ main > .band:last-child { border-bottom: 0; }
     --ink-faint:  #5c6270;
     --rule:       #c9ccd4;
     --brand:      #c42b3a;
+    --tool:       #6b3fc4;
     color-scheme: light;
   }
 

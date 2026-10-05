@@ -29,7 +29,14 @@
 //
 // Only the organisation's own conduct: what it receives, what it holds, what it
 // publishes, how what it publishes can be checked. Nothing about what any
-// particular product measures.
+// particular product measures, and nothing about how one is built: an
+// organisation undertaking that only one product can keep is how a second
+// product either breaks the organisation's word or is bent to fit it. Until
+// 2026-10-05 nothing-from-third-parties said no dependency is fetched to build
+// anything denyfirst publishes, which is true of Porch and a choice about
+// Porch; it is Porch's undertaking now, unchanged in what it promises about
+// Porch, and the organisation's list names no product, file or repository
+// (TestTheOrganisationNamesNoProduct).
 //
 // That line is not tidiness. This organisation has more than one product and
 // they are built by different hands; an undertaking here that described a
@@ -72,15 +79,17 @@ var Organisation = []Promise{
 			"nothing is issued to a person and nothing is revoked.",
 	},
 	{
-		ID:   "nothing-from-third-parties",
-		Says: "Nothing denyfirst publishes carries third-party code. No dependency is fetched to build it, and no page loads anything from anywhere else — no analytics, no fonts, no content delivery network, no tag of any kind.",
-		Checked: "go.mod carries no require block, so a build fetches nothing. " +
-			"A browser's network panel on any page here shows one stylesheet and at most two scripts, all from the server you are reading.",
+		// It also said "Nothing denyfirst publishes carries third-party code. No
+		// dependency is fetched to build it" until 2026-10-05. That half is
+		// porch-builds-from-its-own-source-alone now; see the package comment.
+		ID:      "nothing-from-third-parties",
+		Says:    "No page denyfirst publishes loads anything from anywhere else — no analytics, no fonts, no content delivery network, no tag of any kind.",
+		Checked: "A browser's network panel on any page shows every request going to the server you are reading, and to nowhere else.",
 	},
 	{
 		ID:   "checkable-rather-than-believed",
 		Says: "What denyfirst publishes is meant to be checked rather than believed. The source is public; a release is built on a machine that cannot sign it and signed on a machine that does not build it; and a workflow rebuilds the tag to the same bytes.",
-		Checked: "docs/releasing.md is the procedure, and every step in it is there because it has gone wrong once. " +
+		Checked: "Each product publishes its release procedure beside its source. " +
 			"The rebuild runs in public and its output is a list of hashes anybody can compare with the files they downloaded.",
 	},
 	{
@@ -90,9 +99,11 @@ var Organisation = []Promise{
 			"A product that reworded one of these would fail its own tests.",
 	},
 	{
-		ID:      "faults-have-an-address",
-		Says:    "A fault in anything denyfirst publishes has a published address to report it to, and that address says when it stops being current.",
-		Checked: "/.well-known/security.txt on this site, which RFC 9116 defines, names the contact and carries an expiry date.",
+		ID:   "faults-have-an-address",
+		Says: "A fault in anything denyfirst publishes has a published address to report it to, and that address says when it stops being current.",
+		// It said "on this site" until 2026-10-05, and this list is shown by
+		// every installation too, none of which serves denyfirst's file.
+		Checked: "https://denyfirst.dev/.well-known/security.txt, which RFC 9116 defines, names the contact and carries an expiry date.",
 	},
 }
 
@@ -141,6 +152,15 @@ var Porch = Product{
 			Says: "A scan reads what a server volunteers and sends nothing that could change anything. No authentication is attempted, no address is invented, no exploit or malformed packet is sent, and no mail is ever composed.",
 			Checked: "The method pages list every connection a scan makes and every address it asks for, " +
 				"each beside the document that defines it.",
+		},
+		{
+			// The organisation's until 2026-10-05, as half of
+			// nothing-from-third-parties: how a product is built is a choice
+			// about that product.
+			ID:   "porch-builds-from-its-own-source-alone",
+			Says: "Porch carries no third-party code. It is built from its own source and Go's standard library, and no dependency is fetched to build it.",
+			Checked: "go.mod carries no require block, so a build fetches nothing but the Go toolchain, which the checksum database verifies. " +
+				"docs/releasing.md is the release procedure, and every step in it is there because it has gone wrong once.",
 		},
 		{
 			ID:      "porch-says-what-it-did-not-measure",

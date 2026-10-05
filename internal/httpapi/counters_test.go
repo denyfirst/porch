@@ -369,11 +369,19 @@ func TestCrossSiteRequestsAreRefused(t *testing.T) {
 		t.Errorf("cross_site counted %d times, want 1", got)
 	}
 
+	// Another name under the same domain is refused too. Since 2026-10-05
+	// the demonstration's pages and its API share one name, and a sibling —
+	// one added later, one hosted elsewhere, one taken over through a record
+	// left pointing at a deleted server — is not this page.
+	if w := send("same-site"); w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a request from another name on this site", w.Code)
+	}
+
 	// The page itself, and clients that are not browsers, must still work.
 	// An absent header is a client that is not subject to this at all.
-	for _, site := range []string{"same-origin", "same-site", "none", ""} {
+	for _, site := range []string{"same-origin", "none", ""} {
 		if w := send(site); w.Code == http.StatusForbidden {
-			t.Errorf("Sec-Fetch-Site %q was refused; only cross-site should be", site)
+			t.Errorf("Sec-Fetch-Site %q was refused; only another site or another name should be", site)
 		}
 	}
 }

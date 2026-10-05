@@ -17,7 +17,17 @@ import (
 )
 
 // CookieName is the one cookie an installation sets, and only on sign-in.
-const CookieName = "porch_session"
+//
+// The __Host- prefix is the browser's promise that the cookie was set by this
+// name and no other: Secure, Path=/ and no Domain, or it is not stored at all.
+// Without it, any other name under the same parent — porch.example.com beside
+// a wiki, a status page, a forgotten record still pointing at a deleted
+// server — can set a cookie of the same name for the whole domain, and the
+// browser sends both. That is how a neighbour signs a visitor out, or into a
+// session the neighbour chose. Measured in Chromium on 2026-10-05: the prefix
+// is accepted over https and at http://localhost, which is the SSH tunnel the
+// guide uses, and a cookie of this name with a Domain is refused.
+const CookieName = "__Host-porch_session"
 
 // SessionLife is how long a sign-in lasts, whatever is done with it. Twelve
 // hours is a working day with room; the next one starts with the password.

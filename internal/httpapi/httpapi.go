@@ -787,8 +787,13 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request, parse func(string
 		// navigation, and a client that does not send it is not one a page on
 		// another site can steer.
 		"none",        // typed in, or opened from a bookmark
-		"same-origin", // this page
-		"same-site":   // another name on this site — scanner.denyfirst.dev
+		"same-origin": // this page
+	// Not "same-site", which is every other name under the same registrable
+	// domain. It was allowed when the demonstration's pages and its scanner
+	// had different names, and since 2026-10-05 nothing here calls the API
+	// from another name. Every sibling was trusted with the visitor's
+	// allowance — including names added later, names hosted by somebody else,
+	// and a forgotten record taken over by whoever now holds its address.
 	default:
 		s.refuse(w, http.StatusForbidden, "cross_site",
 			"This endpoint is not available to other sites. Use it from this page, "+

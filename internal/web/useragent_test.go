@@ -44,7 +44,7 @@ func TestEveryRequestThisProjectMakesNamesTheTool(t *testing.T) {
 		// of the promise. Checked in full by
 		// TestEveryAddressThisProjectSendsOutResolves; named here so a change
 		// that dropped the address fails beside the one that dropped the name.
-		if !strings.Contains(tc.sent, "https://denyfirst.dev/") {
+		if !strings.Contains(tc.sent, PorchURL+"/") {
 			t.Errorf("%s names no page explaining what it sends: %q", tc.what, tc.sent)
 		}
 	}

@@ -775,7 +775,7 @@ about what may be read. So:
   own pages now, because its own are the only ones it reaches (N6).
 
 **Which deployment reached a log reader is now part of the promise.** The user
-agent names `https://denyfirst.dev/web/method` from every installation, so that
+agent names `https://porch.denyfirst.dev/web/method` from every installation, so that
 page describes both: the demonstration reads only its own pages, and an
 installation somebody runs themselves may have read the page. A flat sentence there would
 have been true of one and false of the one in the reader's log, which is worse
@@ -3260,6 +3260,19 @@ identifiers being stable and unique, because anything referring to an
 undertaking refers to its identifier rather than its wording: the sentence may
 be improved and the promise is still the same promise.
 
+**The organisation's list names no product, no file and no site.** It is what
+a second product inherits unchanged, and every installation shows it, so a
+sentence in it about how one product is built is a promise the next product
+breaks or is bent to keep. Until 2026-10-05 `nothing-from-third-parties` said
+no dependency is fetched to build anything denyfirst publishes, with `go.mod` as
+the proof: true of Porch, and a choice about Porch. That half is
+`porch-builds-from-its-own-source-alone` now, unchanged in what it promises
+about Porch, and the organisation keeps what is about its conduct — no page
+loads anything from anywhere else. `faults-have-an-address` pointed at the
+`security.txt` "on this site", which every installation showing the list does
+not serve; it names `https://denyfirst.dev/.well-known/security.txt` now
+(`TestTheOrganisationNamesNoProduct`).
+
 **Nothing served to a visitor carries these sentences in its own words.**
 `TestTheUndertakingsAreNotCopiedIntoAnyPage` walks every `.html`, `.js` and
 non-test `.go` file and refuses a distinctive run of words from any of them.
@@ -3551,6 +3564,13 @@ the only numbers an operator has to watch.
 The allowance spent by a refusal is the read one, so the original reason still
 holds: a cross-site request cannot touch the scan budget.
 
+"Another site" includes another name on this one since 2026-10-05.
+`Sec-Fetch-Site: same-site` was let through while the demonstration's pages and
+its scanner had different names. They share one now, and the allowance a
+sibling name was trusted with reached every name under the domain — names added
+later, names somebody else hosts, and a forgotten record taken over by whoever
+holds its address now (`TestCrossSiteRequestsAreRefused`).
+
 That last sentence was, until it was tested, only a sentence. Every test around
 it passed with the two checks in either order, because in either order the
 request is refused, with 403, counted as `cross_site`. What the order decides
@@ -3560,7 +3580,7 @@ refusing that visitor for reasons they cannot see.
 
 *Enforced in:* `internal/httpapi.Server.handleScan`, the read limiter at the
 top
-*Guarded by:* `TestRefusalsBeforeTheScanAreLimited`,
+*Guarded by:* `TestCrossSiteRequestsAreRefused`, `TestRefusalsBeforeTheScanAreLimited`,
 `TestReadAndScanBudgetsAreSeparate`,
 `TestPollingReadsDoesNotSpendTheScanAllowance`,
 `TestACrossSiteRefusalDoesNotSpendTheVisitorsScanBudget`
@@ -3860,7 +3880,15 @@ says so.
 
 **A session is a cookie no script can read and no other site can send**:
 HttpOnly, SameSite=Strict and Secure, twelve hours at most, held on the
-server by its hash and forgotten on restart. Secure always, so the
+server by its hash and forgotten on restart. Since 2026-10-05 it is also one
+**no other name under the same domain can plant**: it is called
+`__Host-porch_session`, and a browser stores a cookie of that name only when it
+is Secure, has `Path=/` and names no `Domain`. Without the prefix, any sibling —
+`porch.example.com` beside a wiki, a status page, a record left pointing at a
+deleted server — can set a cookie of the same name for the whole domain, and
+the browser sends both. Measured in Chromium before the change: the prefix is
+accepted over https and at `http://localhost`, which is the SSH tunnel, and a
+cookie of that name carrying a `Domain` is refused. Secure always, so the
 password and the session travel only over TLS or to localhost, which is how
 the SSH tunnel in the self-hosting guide reaches it; signing in over plain
 HTTP to any other address does not work, by design. The server refuses it too, before the
@@ -3924,6 +3952,7 @@ happened, and a failed sign-out stays on the page and says so.
 `TestEveryPageBehindAPasswordOffersAWayOut`, `TestTheSessionScriptDoesOnlyThat`,
 `TestAFileSealedAtALowerWorkFactorIsRefused`, `TestAPublicPathIsExact`,
 `TestAPasswordChangeNeedsALiveSession`, `TestOnlyThisPageMaySignIn`,
+`TestTheSessionCookieCannotBePlantedByANeighbour`,
 `TestAKeptReportComesBackWhole`, `TestNothingOnDiskIsReadable`,
 `TestWithoutTheKeyNothingIsKeptOrRead`, `TestAReportMovedToAnotherNameDoesNotOpen`,
 `TestDeleteRemovesTheReportAndOnlyIt`, `TestTheHistoryIsNewestFirstAndBounded`,
@@ -6025,10 +6054,11 @@ A search for this project returned what it was months ago: a TLS checker
 called denyfirst. The pages had changed and nothing on them said so — no
 canonical address, no page title naming the tool, nothing pointing a crawler
 at what exists now. So each page on the demonstration carries its own address
-on `denyfirst.dev`, repeats its title and description in the tags a link
+— on `denyfirst.dev` or `porch.denyfirst.dev`, whichever serves it (W8a) — repeats its title and description in the tags a link
 preview reads, and names both the tool and the maker: Porch is what it is,
-denyfirst is who publishes it. `/sitemap.xml` is the page table itself rather
-than a list kept in step by hand, and a test fails when the two differ.
+denyfirst is who publishes it. Each name's `/sitemap.xml` is its part of the
+page table rather than a list kept in step by hand, and a test fails when the
+two differ.
 
 An installation somebody runs carries none of it. Its pages are on its own
 address, and a canonical address pointing here would tell a search engine that
@@ -6151,9 +6181,24 @@ hairline between rows that met the text threshold would be a bar, not a
 hairline. The exclusion is itself checked, so it cannot quietly protect a
 colour that would now pass anyway.
 
+**No control is drawn in a verdict's colour, since 2026-10-05.** Red, amber
+and green say how a host fared. Porch's buttons, links and chosen tab were the
+brand red until then, and measured in Chromium the button and an insecure
+verdict were the same `rgb(179, 32, 46)`; for a reader with protanopia that red
+was also ΔE 10.7 from the strong green, and for deuteranopia 12.1 from the weak
+amber. They are Porch's violet now (`--tool`, `--accent`, `--link`), held at
+least ΔE 20 from every verdict colour in both schemes, for ordinary vision and
+the three common deficiencies (Machado 2009); the closest pair is 33. The brand
+red is the wordmark's, and the accent of the demonstration's two organisation
+pages, which show no verdict. An installation is violet throughout. Rootwell's
+colour is blue, so the violet was also measured against it.
+
 *Enforced in:* `internal/web/assets/style.css`
 *Guarded by:* `TestEveryColourTextIsSetInIsLegible`,
-`TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`
+`TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`,
+`TestPorchsColourIsNeverAVerdictsColour`,
+`TestTheBrandRedIsTheWordmarksAndTheOrganisations`,
+`TestOnlyTheOrganisationsPagesKeepTheRed`
 
 ### W6 — A state is said in words and in colour, never by fading
 
@@ -6324,6 +6369,53 @@ meant has never existed under that name.
 `TestEveryAddressThisProjectSendsOutResolves`,
 `TestBothScanPathsAreServedAndNeitherRedirects`,
 `TestNeitherScanPathAnswersAGet`, `TestOldPathsRedirect`
+
+
+### W8a — The organisation and Porch each answer at their own name
+
+Since 2026-10-05 the demonstration is two names on one binary.
+`denyfirst.dev` is the organisation: its front page, its undertakings
+(`/organisation`), and the contacts RFC 9116 points at — `security.txt`, the
+PGP key, and `releases@denyfirst.dev`, which signs every release and is pinned
+in every install. `porch.denyfirst.dev` is Porch: its page at `/`, its checks,
+their method pages, its documents, its privacy page and terms, and its API.
+
+The reasons are the ones W8 gave for a check's own address, one level up. A
+second product would otherwise live under the first one's name or move it.
+A name each is a separate origin, so a browser keeps their pages apart and a
+fault in one product's script cannot read the other's. And the address a report
+is shared at says which tool wrote it.
+
+Nothing printed before the split stops working. One binary serves both names,
+and an address that belongs to the other one is answered with a permanent
+redirect to the same path and query there: 301 for GET and HEAD, 308 for
+anything else, so a POST to the API at the old name keeps its method and body.
+The target is one of two constant addresses with the request's own path after
+it, so it cannot be steered off this site. Any other name or an address — a
+test, a local run — is served everything, as one name was; so is every name on
+an installation, which is one name, its operator's. Both names serve the
+stylesheet, the scripts, the icon and `/healthz`: the last is about the
+machine rather than either product, and a deploy check that asks the
+organisation's name for it expects "ok", not a redirect.
+
+Each page states the address it is served at, and each name's sitemap lists
+its own pages and nothing else; between them every page is listed once and
+answers there without a redirect. The layout links across the two by their
+full address on the demonstration, and by path on an installation. The user
+agents every installation sends, and `porch-scan`'s pointers to the method
+pages, name `porch.denyfirst.dev`, and so does the sentence on the privacy page
+about the reverse DNS of the demonstration's address: `scanner.denyfirst.dev`
+was a third name for the same machine, and the one an administrator who looks
+it up should land on is the page about the tool that reached them.
+
+*Enforced in:* `internal/web/hosts.go`, `internal/web.render`,
+`internal/web.buildPlain`, `internal/web/assets/layout.html`, `cmd/porchd.run`
+*Guarded by:* `TestTheOrganisationAndPorchEachAnswerAtTheirOwnName`,
+`TestTheRedirectsStayOnThisSite`, `TestAnyOtherNameIsServedEverything`,
+`TestEveryPageIsAnsweredAtTheAddressItStates`,
+`TestACrawlerIsToldWhatThisDeploymentIs`, `TestEveryPageSaysWhichAddressItIs`,
+`TestEveryAddressThisProjectSendsOutResolves`,
+`TestTheGateIsInFrontOfEverything`
 
 ### W9 — A report fits the screen it is read on
 

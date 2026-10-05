@@ -68,8 +68,8 @@ func TestEveryPageCarriesTheSameShell(t *testing.T) {
 		for _, required := range append(shell,
 			`class="wordmark"`,
 			`class="colophon"`,
-			`href="/privacy"`,
-			`href="/terms"`,
+			`href="`+porchLink("/privacy")+`"`,
+			`href="`+porchLink("/terms")+`"`,
 		) {
 			if !strings.Contains(body, required) {
 				t.Errorf("%s is missing %s from the shared layout", path, required)
@@ -366,7 +366,7 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		"abuse@denyfirst.dev",
 		"handshake",
 		"excluded",
-		"scanner.denyfirst.dev",
+		"porch.denyfirst.dev",
 
 		// Somebody reading it as a privacy policy.
 		"three minutes",

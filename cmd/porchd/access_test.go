@@ -62,7 +62,8 @@ func TestAMissingAccessFileIsCreatedAndItsPasswordSaidOnce(t *testing.T) {
 func TestTheGateIsInFrontOfEverything(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
-		"handler = gate.Wrap(root)",
+		"var handler http.Handler = web.Hosts(root)",
+		"handler = gate.Wrap(handler)",
 		"Handler: handler,",
 		"web.Configure(web.Installation{",
 		"Verified:          scope != nil,",
@@ -74,6 +75,12 @@ func TestTheGateIsInFrontOfEverything(t *testing.T) {
 	}
 	if strings.Contains(src, "Handler: root,") {
 		t.Error("the server is handed the mux directly, around the gate")
+	}
+	// The demonstration's redirect between its two names is inside the gate,
+	// not around it: what the gate guards is everything the mux answers,
+	// redirects included (web.Hosts).
+	if strings.Index(src, "web.Hosts(root)") > strings.Index(src, "handler = gate.Wrap(handler)") {
+		t.Error("the gate is wrapped before the redirect between names, so the redirect is in front of it")
 	}
 
 	compose := repoFile(t, "docker-compose.yml")
@@ -142,7 +149,7 @@ func TestTheHistoryExistsOnlyBehindThePassword(t *testing.T) {
 			t.Errorf("main.go uses %q outside the branch that makes the gate", never)
 		}
 	}
-	if !strings.Contains(src, "if gate != nil {\n\t\thandler = gate.Wrap(root)\n\t}") {
+	if !strings.Contains(src, "if gate != nil {\n\t\thandler = gate.Wrap(handler)\n\t}") {
 		t.Error("the gate is not what the server is handed")
 	}
 }
