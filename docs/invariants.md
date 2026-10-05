@@ -3844,7 +3844,12 @@ only and refuse a request another site made the browser send, so a form
 elsewhere cannot sign somebody in, out, or change their password. Changing it
 ends every other session, so a password changed because it leaked stops
 working wherever it leaked to. Guessing is held to a burst per address and one
-derivation at a time.
+derivation at a time. An IPv6 address counts by its /64, as a scan's does: until
+2026-10-05 it counted address by address, so a guesser on IPv6 had a fresh
+burst for every guess. And a full table of a thousand networks refuses a
+newcomer rather than forgetting everyone, which used to hand the guesser who
+filled it a fresh burst too. A newcomer then waits at most until the table's
+entries go idle, five minutes; a session already open is not asked.
 
 The demonstration refuses the flag. It is public by design and keeps nothing
 to protect, and a password in front of it would be a claim about a service it
@@ -3874,6 +3879,7 @@ happened, and a failed sign-out stays on the page and says so.
 *Guarded by:* `TestNothingIsReachableWithoutSigningIn`,
 `TestTheRightPasswordOpensASession`, `TestASessionEnds`,
 `TestChangingThePasswordEndsOtherSessions`, `TestGuessingIsLimited`,
+`TestASignInAllowanceIsPerIPv6Network`, `TestAFullSignInTableRefusesRatherThanForgets`,
 `TestAnotherSiteCannotUseTheSessionEndpoints`, `TestTheSessionTableIsBounded`,
 `TestOnlyThePasswordOpensTheKey`, `TestThePasswordAndTheKeyAreNotOnDisk`,
 `TestAnAlteredFileDoesNotOpen`, `TestAnAccessFileIsNeverReplacedByCreate`,
