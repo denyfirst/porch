@@ -2,9 +2,12 @@ package mailscan
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/dkim"
+	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/smtptls"
 )
 
@@ -47,5 +50,47 @@ func TestExchangersThatNeverAnswerDoNotCostTheReport(t *testing.T) {
 		if x.Measured || x.Reason == "" {
 			t.Errorf("an exchanger that never answered is not said to be unmeasured: %+v", x)
 		}
+	}
+}
+
+// slowKeys answers a signing-key question only after three seconds, as a slow
+// resolver does, and everything else at once.
+type slowKeys struct{ *zone }
+
+func (z slowKeys) LookupTXT(ctx context.Context, name string) (dnsclient.TXTAnswer, error) {
+	if strings.Contains(name, "._domainkey.") {
+		select {
+		case <-time.After(3 * time.Second):
+		case <-ctx.Done():
+		}
+	}
+	return z.zone.LookupTXT(ctx, name)
+}
+
+// The exchangers are asked last, so nothing is asked in the time they keep back.
+//
+// They stop two seconds short of the deadline. The signing keys used to be
+// read after them, in those two seconds, and a resolver slow to answer took
+// the mail report past the deadline the exchangers had kept clear of.
+func TestNothingIsAskedAfterTheExchangers(t *testing.T) {
+	skipUnderDemo(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	got, err := (&Scanner{
+		Resolver:       slowKeys{stsZone("mx1.example.net")},
+		ReadExchangers: true,
+		Exchangers:     stalledExchangers{},
+		DKIMSelectors:  []dkim.Selector{{Name: "mail"}},
+	}).Scan(ctx, "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("something was asked after the exchangers, in the time they keep back, " +
+			"and the report came back after the deadline")
+	}
+	if got.Observed == nil || !got.Observed.DKIMLooked {
+		t.Error("the signing keys were not looked for")
 	}
 }

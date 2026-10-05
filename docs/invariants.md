@@ -198,14 +198,22 @@ port 25, an exchanger with two addresses held the check for thirty seconds,
 and the whole mail report could be lost the same way. Opening a connection now
 has eight seconds per address and the conversation's twenty in all. The
 exchangers also stop two seconds short of the deadline, and an exchanger that
-never answered is reported as not reached from here (F11).
+never answered is reported as not reached from here. They are asked last, so
+that nothing is asked in the time they keep back (F11).
+
+The web check had the same shape after its two chains. Its security contact,
+IPv6 address and other form already said when they ran out of time, and the
+service never showed it: run to the deadline itself, the probe came back after
+it. They too now stop short of it. The rule lives in one place,
+`internal/budget`, rather than in three copies.
 
 *Enforced in:* `internal/safedial` (`Timeout`, `TotalTimeout`, `MaxAddrs`),
 `internal/tlsprobe` (`HandshakeTimeout`, `TotalTimeout`),
 `internal/httpapi` (`RequestTimeout`), `internal/rawhello.Ask` (the context's
 deadline on the connection), `internal/rawhello.ReadReply` (at most the bytes
-an answer needs), `internal/scan.shortOf` (the lookups after the handshakes),
-`internal/mailscan.readExchangerTLS`, `internal/smtptls.Prober.dialer`
+an answer needs), `internal/budget.ShortOf`, applied by `internal/scan` (the
+lookups after the handshakes), `internal/mailscan.readExchangerTLS` and
+`internal/webprobe.Prober.Probe`; `internal/smtptls.Prober.dialer`
 *Guarded by:* `TestCallerDeadlineWins`, `TestTotalTimeoutBoundsTheOperation`,
 `TestAskStopsWhenTheContextDoes`, `TestNoMoreIsReadThanTheAnswerNeeds`,
 `TestAskStopsWhenTheContextIsCancelledWithoutADeadline`,
@@ -218,7 +226,10 @@ an answer needs), `internal/scan.shortOf` (the lookups after the handshakes),
 `TestAServerHelloSplitAcrossRecordsIsNotGuessed`,
 `FuzzReadReply`, `TestASlowLogSearchDoesNotCostTheReport`,
 `TestExchangersThatNeverAnswerDoNotCostTheReport`,
-`TestOpeningAConnectionIsBoundedApartFromTheConversation`
+`TestOpeningAConnectionIsBoundedApartFromTheConversation`,
+`TestNothingIsAskedAfterTheExchangers`,
+`TestAMeasurementAfterTheChainsDoesNotCostTheReport`,
+`TestTheQuestionsAfterAMeasurementEndShortOfTheDeadline`
 
 ---
 

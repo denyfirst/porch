@@ -366,3 +366,43 @@ func TestADeadlineDuringTheIPv6HandshakeIsNotTheLocalNetworksFault(t *testing.T)
 		t.Errorf("a handshake that never completed reads as an answer: %+v", got)
 	}
 }
+
+// A measurement after the chains that never answers does not take the report
+// past the caller's deadline.
+//
+// The three after the chains already said when they ran out of time. Asked up
+// to the caller's deadline itself, the probe came back after it, and the
+// service, which counts a scan that overran as a timeout, sent nothing: not
+// the sentence about the clock, and not the chains either (audit 2026-10-05,
+// F11). They now stop short of it.
+func TestAMeasurementAfterTheChainsDoesNotCostTheReport(t *testing.T) {
+	p, addr := twoNameServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/security.txt" {
+			hang(r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	p.LookupIPv6 = func(context.Context, string) ([]netip.Addr, error) { return nil, nil }
+	p.Dial = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", addr)
+	}
+	p.RequestTimeout = 20 * time.Second
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	report, err := p.Probe(ctx, "example.com", func(context.Context, string) string { return "" })
+	if err != nil {
+		t.Fatalf("probing: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("the probe came back after the caller's deadline, so the service would " +
+			"answer with a timeout and drop both chains")
+	}
+	if !answered(report.Secure) {
+		t.Fatal("the secure chain was not measured")
+	}
+	if got := report.SecurityTxt.Reason; !strings.Contains(got, "ran out of time") {
+		t.Errorf("the security contact reads %q rather than saying the scan ran out of time", got)
+	}
+}

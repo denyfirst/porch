@@ -254,6 +254,7 @@ in it is there because it has already gone wrong once.
 | `internal/policy` | every rule, versioned, each citing the document it rests on |
 | `internal/display` | makes a string somebody else chose safe to put in front of a person (R10) |
 | `internal/scan`, `internal/webscan`, `internal/mailscan`, `internal/dnsscan` | a check: measure, then grade |
+| `internal/budget` | ends the questions asked after a measurement short of the request's deadline, so a slow third party cannot cost the report (N4) |
 | `internal/spf` | walks a sender policy and counts what evaluating it costs |
 | `internal/dkim` | reads signing keys under selectors somebody named |
 | `internal/mtasts` | fetches the MTA-STS policy a zone announces, behind proof (N13) |

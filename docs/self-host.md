@@ -311,6 +311,15 @@ rather than being quietly replaced by the machine's own:
 Some providers refuse an EHLO that names no real host. A name that resolves to
 the address the scan leaves from is the one least likely to be turned away.
 
+Many cloud providers block outbound port 25 by default. The mail report then
+says the exchangers could not be reached from here, which is a fact about this
+machine's network and not about the domain. Opening a connection is given eight
+seconds an address, so a blocked port costs that and no more, and the rest of
+the report is unaffected. Opening the port is a decision about the machine,
+not about Porch: a server that can send to port 25 can be made to send spam if
+anything on it is compromised, so where it is opened, allow it only for the
+account the service runs as.
+
 **Your own exchangers are also asked whether they relay.** An exchanger inside
 the domain being checked — `mail.example.com` under `example.com` — is asked
 whether it forwards mail for a domain it does not serve, which is what an open

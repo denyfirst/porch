@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/certinfo"
 	"github.com/denyfirst/porch/internal/crl"
 	"github.com/denyfirst/porch/internal/ctsearch"
@@ -36,11 +37,6 @@ import (
 const (
 	// DefaultPort is assumed when the target names no port.
 	DefaultPort = "443"
-
-	// lookupReserve is how long before the caller's deadline the lookups
-	// after the handshakes give up, so that the report is written and sent
-	// in time. What follows them is arithmetic on what was read.
-	lookupReserve = 2 * time.Second
 
 	// maxHostLen is the longest a DNS name may be, from RFC 1035.
 	maxHostLen = 253
@@ -407,7 +403,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	// service saw a deadline that had passed and answered with a timeout in
 	// place of everything that had been measured — on the demonstration, the
 	// first check after a restart (audit 2026-10-05, F10).
-	ctx, cancel := shortOf(ctx, lookupReserve)
+	ctx, cancel := budget.ShortOf(ctx, budget.Reserve)
 	defer cancel()
 
 	if len(tlsReport.Certificates) > 0 {
@@ -1337,16 +1333,4 @@ func (s *Scanner) revocationFetched() bool {
 // — and a decision made twice is a decision that can be made differently.
 func (s *Scanner) certOptions() certinfo.Options {
 	return certinfo.Options{ShowRevocationURLs: s.ShowRevocationURLs}
-}
-
-// shortOf is ctx ending reserve before ctx's own deadline, or ctx unchanged
-// when it has none. A deadline already within the reserve gives a context
-// that is already done, so a lookup asked with it gives up at once and the
-// report says it did not happen.
-func shortOf(ctx context.Context, reserve time.Duration) (context.Context, context.CancelFunc) {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return context.WithCancel(ctx)
-	}
-	return context.WithDeadline(ctx, deadline.Add(-reserve))
 }

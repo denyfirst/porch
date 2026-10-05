@@ -79,6 +79,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/denyfirst/porch/internal/budget"
 	danecheck "github.com/denyfirst/porch/internal/dane"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/display"
@@ -118,10 +119,6 @@ const (
 	// domain publishing four hundred exchangers would otherwise decide how many
 	// questions this scan asks.
 	maxExchangers = 8
-
-	// exchangerReserve is how long before the caller's deadline the
-	// exchangers are given up on, so the report is written and sent in time.
-	exchangerReserve = 2 * time.Second
 
 	// maxTagLength bounds one value read out of a record. These come from a
 	// zone the scanned party controls, so they are chosen by whoever is being
@@ -359,8 +356,12 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readTLSReporting(ctx, resolver, domain, &facts)
 	s.readExchangers(ctx, resolver, domain, &facts)
 	dane := s.readTransportSecurity(ctx, resolver, domain, &facts)
-	s.readExchangerTLS(ctx, domain, &facts, dane)
 	s.readDKIM(ctx, resolver, domain, &facts)
+	// Last, because it is the slowest thing asked and the one step that stops
+	// short of the deadline. Asked before the signing keys, it left them the
+	// two seconds it kept back, and a slow resolver then took the report past
+	// the deadline anyway (audit 2026-10-05, F11).
+	s.readExchangerTLS(ctx, domain, &facts, dane)
 
 	graded := policy.GradeMail(facts)
 
@@ -932,7 +933,7 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 	// drops port 25 they used to run to the deadline itself: the service then
 	// saw a scan that overran and answered with a timeout in place of the
 	// whole mail report (audit 2026-10-05, F11).
-	ctx, cancel := shortOf(ctx, exchangerReserve)
+	ctx, cancel := budget.ShortOf(ctx, budget.Reserve)
 	defer cancel()
 
 	prober := s.exchangerProber()
@@ -1050,14 +1051,4 @@ func (s *Scanner) exchangerProber() ExchangerProber {
 func within(host, domain string) bool {
 	host, domain = fold(host), fold(domain)
 	return host == domain || strings.HasSuffix(host, "."+domain)
-}
-
-// shortOf is ctx ending reserve before ctx's own deadline, or ctx unchanged
-// when it has none: internal/scan's, for the same reason.
-func shortOf(ctx context.Context, reserve time.Duration) (context.Context, context.CancelFunc) {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return context.WithCancel(ctx)
-	}
-	return context.WithDeadline(ctx, deadline.Add(-reserve))
 }
