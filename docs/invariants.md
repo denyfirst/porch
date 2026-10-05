@@ -3260,6 +3260,19 @@ identifiers being stable and unique, because anything referring to an
 undertaking refers to its identifier rather than its wording: the sentence may
 be improved and the promise is still the same promise.
 
+**The organisation's list names no product, no file and no site.** It is what
+a second product inherits unchanged, and every installation shows it, so a
+sentence in it about how one product is built is a promise the next product
+breaks or is bent to keep. Until 2026-10-05 `nothing-from-third-parties` said
+no dependency is fetched to build anything denyfirst publishes, with `go.mod` as
+the proof: true of Porch, and a choice about Porch. That half is
+`porch-builds-from-its-own-source-alone` now, unchanged in what it promises
+about Porch, and the organisation keeps what is about its conduct — no page
+loads anything from anywhere else. `faults-have-an-address` pointed at the
+`security.txt` "on this site", which every installation showing the list does
+not serve; it names `https://denyfirst.dev/.well-known/security.txt` now
+(`TestTheOrganisationNamesNoProduct`).
+
 **Nothing served to a visitor carries these sentences in its own words.**
 `TestTheUndertakingsAreNotCopiedIntoAnyPage` walks every `.html`, `.js` and
 non-test `.go` file and refuses a distinctive run of words from any of them.

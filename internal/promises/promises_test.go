@@ -79,6 +79,31 @@ func TestNoProductRedefinesWhatTheOrganisationUndertakes(t *testing.T) {
 	}
 }
 
+// The organisation's list names no product, and nothing only one product has.
+//
+// It is shown by every product and every installation of one, and it is what a
+// second product inherits unchanged. A sentence in it about a file in this
+// repository, or about how Porch is built, is a promise the next product either
+// breaks or is bent to keep — which is what it held until 2026-10-05, when
+// "no dependency is fetched to build it" was the organisation's word and a
+// choice about Porch. And nothing in it may point at "this site": an
+// installation is not denyfirst's site, and said so about a file it does not
+// serve.
+func TestTheOrganisationNamesNoProduct(t *testing.T) {
+	forbidden := []string{"go.mod", "go.sum", "docs/", "internal/", "cmd/", ".go ", "this site", "on this page"}
+	for _, product := range Products {
+		forbidden = append(forbidden, strings.ToLower(product.Name))
+	}
+	for _, p := range Organisation {
+		text := strings.ToLower(p.Says + " " + p.Checked)
+		for _, word := range forbidden {
+			if strings.Contains(text, word) {
+				t.Errorf("the organisation's %s mentions %q, which only one product or one site has", p.ID, word)
+			}
+		}
+	}
+}
+
 // The sentences live in one place and are not copied into the markup.
 //
 // The argument for splitting the organisation from the product was that a
