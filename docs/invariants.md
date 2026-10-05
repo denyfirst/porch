@@ -6279,8 +6279,27 @@ Measured, not inferred: at 320, 360, 390, 768 and 1280 pixels, Reach, Mail
 and DNS reports shaped like this domain's leave the page without a sideways
 scroll.
 
+That check measured the page and missed what happened inside it. Nothing
+crossed the edge of the screen, but the next day a phone showed two of
+Reach's columns drawn over each other. A chain's columns are shares of its
+width, and at 390 pixels a fifth was 62 pixels. "Transport" needs 69 and
+"plaintext" 64, so both ran on under "Response" and "308" in both chains. On a
+phone the two short columns now take the width of their longest content, and
+the address, which may break anywhere, takes the rest. The widths are still
+declared on the columns, so the two chains still line up (W3). At 320 pixels a
+notes section's count ran 23 pixels past its panel. It now goes under the
+title.
+
+Measured the second time cell by cell, which is what the first check should
+have been. At 320, 340, 360, 390, 412, 430 and 768 pixels, every report was
+checked, Transport included, from a real scan of a local server. No element's
+text runs past its own box, except the cipher tables, which scroll inside
+their own container by design. No cell's text crosses into the next cell.
+
 *Enforced in:* `internal/web/assets/style.css`
-*Guarded by:* `TestAReportTableFitsAPhone`
+*Guarded by:* `TestAReportTableFitsAPhone`,
+`TestAChainsShortColumnsHoldTheirWordsOnAPhone`,
+`TestANotesCountWrapsRatherThanRunningOff`
 
 ---
 
