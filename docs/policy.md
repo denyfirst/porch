@@ -5,9 +5,10 @@ is why the two are separate, where each lives, and what a second product has to
 do to inherit the first.
 
 The text itself is not here. It is in
-[`internal/promises`](../internal/promises/promises.go), and it is served at
-`/organisation`. A document that restated it would be the exact fault the split
-was made to avoid.
+[`internal/promises`](../internal/promises/promises.go). The organisation's is
+served at `/organisation`, and Porch's at `/undertakings`, beneath the
+organisation's carried unchanged. A document that restated it would be the
+exact fault the split was made to avoid.
 
 ---
 
@@ -56,15 +57,16 @@ comfortable entry to add and the only worthless one.
 
 ## What holds it together
 
-Three tests, in `internal/promises` and `internal/web`:
+Six tests, in `internal/promises` and `internal/web`:
 
 | | |
 |---|---|
 | `TestEveryUndertakingCanBeCheckedAndIsNamed` | every entry has a stable identifier, says something, and says how to check it; no identifier is used twice |
 | `TestNoProductRedefinesWhatTheOrganisationUndertakes` | no product addition carries an organisation identifier, and every addition is named for the product it belongs to |
 | `TestTheUndertakingsAreNotCopiedIntoAnyPage` | nothing served to a visitor carries these sentences in its own words; the pages range over the one place they live |
-| `TestThePageAboutTheOrganisationCarriesEveryUndertaking` | the rendered page carries every undertaking and every way of checking one, each addressable by its identifier |
-| `TestThePrivacyPageSendsAReaderToTheOrganisation` | a reader who arrived with the other question is pointed across, above the jump list rather than below it |
+| `TestThePageAboutTheOrganisationCarriesEveryUndertaking` | the organisation's page carries every one of its undertakings and every way of checking one, each addressable by its identifier, links to each product's own page, and carries none of a product's additions |
+| `TestPorchsPageCarriesTheOrganisationsListAndItsOwnUnderneath` | Porch's page carries the organisation's list unchanged and Porch's additions underneath, and says where the organisation's is canonical |
+| `TestThePrivacyPageSendsAReaderToTheUndertakings` | a reader who arrived with the other question is pointed across, above the jump list rather than below it |
 
 The last one exists because a split nobody is pointed across is a page that was
 hidden rather than separated. The footer here is deliberately three links long —
@@ -87,8 +89,9 @@ has to do:
    restating one.
 3. **Say how each is checked.** Not "we do not log" but where the absence of
    logging can be seen.
-4. **Point across.** Its privacy page says where the organisation's undertakings
-   are, above the jump list.
+4. **Point across.** Its privacy page says where its undertakings page is,
+   above the jump list, and the organisation's page gains a link to that page —
+   the link, and not the product's undertakings.
 
 And one thing it must not do: add an undertaking to the organisation's list
 because it happens to be true of that product. The organisation's list grows
@@ -99,12 +102,19 @@ product at once — which is the whole point of it being one list.
 
 | | |
 |---|---|
-| `/organisation` | what denyfirst undertakes, and what each product adds |
+| `/organisation` | what denyfirst undertakes, and where each product's own page is |
+| `/undertakings` | the organisation's undertakings unchanged, and what Porch adds underneath |
 | `/privacy` | what this service keeps, what a scan does, how to stop one |
 | `/terms` | what you agree to, and what is not promised |
 | `internal/promises` | the one place the undertakings are written |
 
 The self-hosted build serves its own privacy page, describing that installation
-from how it was started, and the same `/organisation` page: what the makers
-receive is the same question wherever the copy runs, and the answer is the same
-nothing.
+from how it was started, and the same `/organisation` and `/undertakings` pages:
+what the makers receive is the same question wherever the copy runs, and the
+answer is the same nothing.
+
+On the demonstration the organisation's page is on `denyfirst.dev` and Porch's
+on `porch.denyfirst.dev`. Each product's undertakings are on its own name
+because the address they are read at says whose word they are; the
+organisation's page lists the products and links to each, and carries none of
+their additions.

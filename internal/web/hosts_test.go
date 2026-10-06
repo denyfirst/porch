@@ -79,6 +79,7 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 		{"GET", organisationHost, "/tls", 301, PorchURL + "/tls"},
 		{"GET", organisationHost, "/tls/method?from=report", 301, PorchURL + "/tls/method?from=report"},
 		{"HEAD", organisationHost, "/privacy", 301, PorchURL + "/privacy"},
+		{"GET", organisationHost, "/undertakings", 301, PorchURL + "/undertakings"},
 		{"GET", organisationHost, "/porch", 301, PorchURL + "/"},
 		{"GET", organisationHost, "/no-such-page", 301, PorchURL + "/no-such-page"},
 		// A call to the API keeps its method and body.
@@ -87,6 +88,7 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 		// Porch's own.
 		{"GET", porchHost, "/tls", 200, ""},
 		{"GET", porchHost, "/privacy", 200, ""},
+		{"GET", porchHost, "/undertakings", 200, ""},
 		{"GET", porchHost, "/style.css", 200, ""},
 		{"POST", porchHost, "/api/v1/scan", 200, ""},
 

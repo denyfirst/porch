@@ -1,0 +1,48 @@
+<article class="prose">
+
+    <h1>What Porch<br>undertakes.</h1>
+
+    <p class="lede">
+      Two lists. The first is the organisation&rsquo;s, which every product
+      carries unchanged; the second is what Porch adds to it, each narrower than
+      the first and never wider. Beside each one is how to establish it for
+      yourself rather than take it on trust.
+    </p>
+
+    <p>
+      The organisation&rsquo;s list is also on
+      <a href="{{.SiteBase}}/organisation">its own page</a>, which is where its
+      text is canonical. It is carried here too, from the same place in the
+      source rather than retyped, so that this page is the whole answer on its
+      own &mdash; including on a copy of Porch that cannot reach anywhere else.
+      What a particular check sends and what this
+      {{if .Demo}}service{{else}}installation{{end}} keeps are on
+      <a href="/privacy">the privacy page</a>.
+    </p>
+
+    <nav class="jump">
+      <a href="#organisation">The organisation&rsquo;s</a>
+      <a href="#porch">What Porch adds</a>
+    </nav>
+
+    <h2 id="organisation">The organisation&rsquo;s, whatever you run</h2>
+
+    <dl class="undertakings">
+      {{range .Organisation}}
+      <dt id="{{.ID}}">{{.Says}}</dt>
+      <dd><strong>How you check it.</strong> {{.Checked}}</dd>
+      {{end}}
+    </dl>
+
+    <h2 id="porch">What Porch adds</h2>
+
+    <p>{{.Product.What}}</p>
+
+    <dl class="undertakings">
+      {{range .Product.Adds}}
+      <dt id="{{.ID}}">{{.Says}}</dt>
+      <dd><strong>How you check it.</strong> {{.Checked}}</dd>
+      {{end}}
+    </dl>
+
+  </article>
