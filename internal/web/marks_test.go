@@ -149,11 +149,40 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 		}
 	}
 
+	// The rail's column goes with the rail. Until 2026-10-06 it stayed, and an
+	// installation's report printed fifteen ems wide down the left of the sheet.
+	if !strings.Contains(block, ".workspace { display: block;") {
+		t.Error("on paper the workspace keeps the rail's column, and the report prints in it")
+	}
+
+	// Paper gets neither header nor rail, so the sheet is headed with Porch's
+	// own mark, and the mark is on every page a report can be printed from.
+	if !strings.Contains(block, ".print-mark {\n    display: block;") ||
+		!strings.Contains(cssRule(t, sheet, ".print-mark"), "display: none") {
+		t.Error("the printed report carries no mark, or the screen shows the printed one")
+	}
+	layout, err := assets.ReadFile("assets/layout.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(layout), `{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span></p>`) {
+		t.Error("Porch's pages do not carry the mark a printed report is headed with")
+	}
+
 	// The way around the installation and the things that are pressed do not
 	// belong to the document.
 	hidden := []string{
 		".rail", ".theme-toggle", ".work-heading",
 		".summary-actions", ".composer", ".checks", ".colophon-links",
+		".ask > h1", ".ask-form",
+	}
+
+	// And the dark scheme is the screen's alone, so a report printed from a
+	// dark system is not pale ink on white paper.
+	if !strings.Contains(sheet, "@media screen and (prefers-color-scheme: dark) {") ||
+		!strings.Contains(sheet, "@media screen {\n  :root[data-theme=\"dark\"] {") ||
+		strings.Contains(sheet, "@media (prefers-color-scheme: dark)") {
+		t.Error("the dark scheme reaches paper")
 	}
 	for _, class := range hidden {
 		if !strings.Contains(block, class) {

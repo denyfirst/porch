@@ -28,7 +28,8 @@
 <script src="/theme.js"></script>
 </head>
 <body{{if .Brand}}{{if .Organisation}} data-owner="organisation"{{end}} data-site="demo"{{else}} class="workspace{{if eq .Section "login"}} workspace-signin{{end}}"{{end}}>
-
+{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span></p>
+{{end}}
 {{if not .Brand}}
 <!--
   An installation somebody runs is a workspace, not a site: a rail with what
