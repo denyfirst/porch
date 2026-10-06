@@ -115,3 +115,33 @@ func TestProductsAreAMenuNotABar(t *testing.T) {
 		t.Error("the menu is open before anybody asks for it")
 	}
 }
+
+// The marks the README shows are drawn shapes and nothing else.
+//
+// They are SVG, and an SVG can carry a script, a link or a reference to a file
+// elsewhere. These were made from the typeface's outlines and hold paths and a
+// title; this keeps anything that runs or fetches out of them.
+func TestTheReadmesMarksAreOnlyShapes(t *testing.T) {
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"porch-light.svg", "porch-dark.svg"} {
+		if !strings.Contains(string(readme), "docs/assets/"+name) {
+			t.Errorf("the README does not show %s", name)
+		}
+		raw, err := os.ReadFile("../../docs/assets/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mark := strings.ToLower(string(raw))
+		for _, banned := range []string{"<script", "href", "<image", "<use", "<foreignobject", "<style", "url(", "javascript:", " on"} {
+			if strings.Contains(mark, banned) {
+				t.Errorf("%s contains %q", name, banned)
+			}
+		}
+		if !strings.Contains(mark, "<title>porch.</title>") {
+			t.Errorf("%s does not name itself for a reader who cannot see it", name)
+		}
+	}
+}

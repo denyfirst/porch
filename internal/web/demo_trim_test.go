@@ -241,7 +241,9 @@ func TestThePorchPageShowsOneHostAndOffersSeveral(t *testing.T) {
 //
 // Each phrase once, where it belongs: the footer carried "Independent
 // security and privacy tools" beside the promise while the hero said "team",
-// and the section about the team was headed only "denyfirst".
+// and the section about the team was headed only "denyfirst". Its label is
+// short, "The team", because the long one broke over two lines on a phone;
+// the paragraph under it says what kind of team.
 func TestEachDenyfirstPhraseIsSaidOnceWhereItBelongs(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("the front page is the demonstration's")
@@ -249,7 +251,7 @@ func TestEachDenyfirstPhraseIsSaidOnceWhereItBelongs(t *testing.T) {
 	home := get(t, "/").Body.String()
 	for _, want := range []string{
 		`<p class="eyebrow eyebrow-dot">Independent security and privacy tools</p>`,
-		`<p class="eyebrow">03 / Independent security &amp; privacy team</p>`,
+		`<p class="eyebrow">03 / The team</p>`,
 		`<p class="colophon-line">Cites everything. Records nothing.</p>`,
 	} {
 		if !strings.Contains(home, want) {

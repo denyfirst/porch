@@ -100,7 +100,7 @@ func schemes(t *testing.T, sheet string) map[string]map[string]string {
 	for k, v := range light {
 		dark[k] = v
 	}
-	for k, v := range parse(block("@media (prefers-color-scheme: dark)")) {
+	for k, v := range parse(block("@media screen and (prefers-color-scheme: dark)")) {
 		dark[k] = v
 	}
 

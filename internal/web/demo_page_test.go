@@ -201,25 +201,98 @@ func TestTheFrontPageSaysHowToReportAVulnerability(t *testing.T) {
 	if got := groupedFingerprint("75B7A18A89715E3775DBCA2EA8D994D1221AA045"); got != "75B7 A18A 8971 5E37 75DB  CA2E A8D9 94D1 221A A045" {
 		t.Errorf("the fingerprint is grouped as %q, not as gpg prints it", got)
 	}
+}
 
-	// The three facts beside it are SECURITY.md's, which a reporter reads
-	// before writing: a promise made in one place and not the other is the
-	// one that gets broken.
-	raw, err := os.ReadFile("../../SECURITY.md")
-	if err != nil {
-		t.Fatal(err)
+// Each of the front page's three rules says how a reader checks it, and the
+// one that points at a document points at the one that exists.
+//
+// A rule with nothing beside it is a claim; the section was rebuilt on
+// 2026-10-06 so that each one carries its proof, and this keeps it that way.
+func TestEachRuleOnTheFrontPageSaysHowToCheckIt(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
 	}
-	policy := strings.Join(strings.Fields(string(raw)), " ")
-	for claim, backing := range map[string]string{
-		"<li>Private reports only</li>":       "Please do not open a public issue for security problems.",
-		"<li>Anonymous reports accepted</li>": "Anonymous and pseudonymous reports are accepted without question.",
-		"<li>Disclosed within 90 days</li>":   "Coordinated disclosure, 90 days by default. If a fix ships earlier, disclosure happens earlier.",
+	page := get(t, "/").Body.String()
+	_, rules, ok := strings.Cut(page, `<ol class="rules">`)
+	if !ok {
+		t.Fatal("the front page has no list of rules")
+	}
+	rules, _, _ = strings.Cut(rules, "</ol>")
+	if n := strings.Count(rules, "<li>"); n != 3 {
+		t.Errorf("the front page lists %d rules, and says it has three", n)
+	}
+	if n := strings.Count(rules, `<span class="rule-proof-label">How you check it</span>`); n != 3 {
+		t.Errorf("%d of the rules say how to check them, not all three", n)
+	}
+	if !strings.Contains(rules, `href="`+ChecksURL+`"`) {
+		t.Error("the rule about scope does not link the document that lists every connection")
+	}
+}
+
+// The facts under the opening and the lines on the team's card are true of
+// this site and this repository, and each line that can link the file that
+// shows it does.
+//
+// "001 — denyfirst" stood there until 2026-10-06: a serial number that meant
+// nothing and that a reader asked about. What replaced it is checkable, so it
+// is checked. The card names nobody; it says how the team is known instead,
+// by the key that signs every release, and that key has to be the one the
+// verification guide tells a reader to expect.
+func TestTheFrontPagesFactsHold(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	res := get(t, "/")
+	if res.Header().Get("Set-Cookie") != "" {
+		t.Error("the front page says it sets no cookies, and sets one")
+	}
+	page := res.Body.String()
+	for _, want := range []string{"<span>No cookies</span>", "<span>No trackers</span>", "<span>Open source</span>"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the opening does not say %s", want)
+		}
+	}
+
+	read := func(name string) string {
+		t.Helper()
+		body, err := os.ReadFile("../../" + name)
+		if err != nil {
+			t.Fatalf("the front page links %s, which is not in the repository: %v", name, err)
+		}
+		return string(body)
+	}
+	const repo = "https://github.com/denyfirst/porch/blob/main/"
+	const key = "SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y"
+	for _, line := range []struct{ term, file, says string }{
+		{"Known by", "docs/verify.md", "<code>" + key + "</code>"},
+		{"Releases", "docs/verify.md", "Signed and reproducible"},
+		{"Licence", "LICENSE", "AGPL-3.0"},
+		{"Dependencies", "go.mod", "None"},
 	} {
-		if !strings.Contains(page, claim) {
-			t.Errorf("the front page's security section does not say %s", claim)
+		want := "<dt>" + line.term + `</dt><dd><a href="` + repo + line.file + `">` + line.says + "</a></dd>"
+		if !strings.Contains(page, want) {
+			t.Errorf("the team's card does not say %s", want)
 		}
-		if !strings.Contains(policy, backing) {
-			t.Errorf("SECURITY.md no longer says %q, which the front page's %s rests on", backing, claim)
-		}
+		read(line.file)
+	}
+	if !strings.Contains(page, "<dt>Investors</dt><dd>None</dd>") {
+		t.Error("the team's card does not say it has no investors")
+	}
+
+	verify := read("docs/verify.md")
+	if !strings.Contains(verify, "Good \"file\" signature for releases@denyfirst.dev with ED25519 key "+key) {
+		t.Error("the key on the team's card is not the one the verification guide expects")
+	}
+	if !strings.Contains(verify, "Builds are reproducible.") {
+		t.Error("docs/verify.md no longer says how a release is rebuilt")
+	}
+	if licence := read("LICENSE"); !strings.Contains(licence, "GNU AFFERO GENERAL PUBLIC LICENSE") || !strings.Contains(licence, "Version 3") {
+		t.Error("the licence is not the AGPL-3.0 the card names")
+	}
+	if strings.Contains(read("go.mod"), "require") {
+		t.Error("go.mod requires a module, and the card says there are no dependencies")
+	}
+	if !strings.Contains(strings.Join(strings.Fields(read("SECURITY.md")), " "), "This is an unfunded project") {
+		t.Error("SECURITY.md no longer says the project is unfunded, and the card says it has no investors")
 	}
 }

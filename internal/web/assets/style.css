@@ -13,6 +13,26 @@
   both schemes (contrast_test.go), so a token below is a promise, not a taste.
 */
 
+/*
+  One typeface for every page: Schibsted Grotesk, a variable font from 400 to
+  900, under the SIL Open Font License 1.1. It is served from this server, as
+  everything else is, so the privacy page's "no external fonts" stays true;
+  font_test.go holds its hash, so it changes only when somebody means it to.
+
+  It replaced the system's own fonts, which drew the marks differently on every
+  computer. Chosen over rounder faces because its capital I and small l differ,
+  and a tool that shows domain names cannot let paypal.com and paypaI.com look
+  the same. Characters it does not have, such as the arrows, come from the
+  system's fonts.
+*/
+@font-face {
+  font-family: "Schibsted Grotesk";
+  src: url("/schibsted-grotesk.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --paper:       #f7f7f8;
   --paper-sunk:  #ececf0;
@@ -72,7 +92,7 @@
   --term-str:    #a6dc85;
   --term-var:    #f2c97d;
 
-  --sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
+  --sans: "Schibsted Grotesk", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
           -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo,
           Consolas, monospace;
@@ -86,8 +106,11 @@
   color-scheme: light;
 }
 
-/* The design's own scheme: the system's choice, unless the switch said light. */
-@media (prefers-color-scheme: dark) {
+/* The design's own scheme: the system's choice, unless the switch said light.
+   On screen only: paper gets the light scheme whatever the screen was set to,
+   and before this said so, a report printed from a dark system came out with
+   its mark and half its text in pale ink on white. */
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --paper:      #101114;
     --paper-sunk: #18191d;
@@ -114,30 +137,32 @@
   }
 }
 
-/* And the switch, when it said dark on a light system. */
-:root[data-theme="dark"] {
-  --paper:      #101114;
-  --paper-sunk: #18191d;
-  --ink:        #f0f0f2;
-  --ink-soft:   #b4b5be;
-  --ink-faint:  #999ba6;
-  --rule:       #2c2d33;
-  --link:       #b9a2ff;
-  --brand:      #ed4552;
-  --tool:       #b9a2ff;
-  --accent:       #7e57d9;
-  --accent-hover: #6c46c8;
-  --porch-accent:       #7e57d9;
-  --porch-accent-hover: #6c46c8;
-  --porch-link:         #b9a2ff;
-  --brand-link:         #f28b94;
-  --brand-accent:       #c72f3d;
-  --brand-accent-hover: #d23443;
-  --strong:     #6fbf92;
-  --weak:       #d9a23c;
-  --insecure:   #ff7c86;
-  --edge:       rgba(240, 240, 242, 0.18);
-  color-scheme: dark;
+/* And the switch, when it said dark on a light system. On screen only too. */
+@media screen {
+  :root[data-theme="dark"] {
+    --paper:      #101114;
+    --paper-sunk: #18191d;
+    --ink:        #f0f0f2;
+    --ink-soft:   #b4b5be;
+    --ink-faint:  #999ba6;
+    --rule:       #2c2d33;
+    --link:       #b9a2ff;
+    --brand:      #ed4552;
+    --tool:       #b9a2ff;
+    --accent:       #7e57d9;
+    --accent-hover: #6c46c8;
+    --porch-accent:       #7e57d9;
+    --porch-accent-hover: #6c46c8;
+    --porch-link:         #b9a2ff;
+    --brand-link:         #f28b94;
+    --brand-accent:       #c72f3d;
+    --brand-accent-hover: #d23443;
+    --strong:     #6fbf92;
+    --weak:       #d9a23c;
+    --insecure:   #ff7c86;
+    --edge:       rgba(240, 240, 242, 0.18);
+    color-scheme: dark;
+  }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -195,7 +220,7 @@ a:hover { text-decoration-thickness: 2px; }
   font-family: var(--sans);
   font-size: 1.95rem;
   font-weight: 750;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.04em;
   line-height: 1.1;
   color: var(--ink);
   text-decoration: none;
@@ -214,6 +239,9 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* Porch's own mark on its pages: the name, and a stop in its violet. */
 .wordmark-porch-stop { color: var(--tool); }
+
+/* The mark a printed report is headed with; the screen has the header. */
+.print-mark { display: none; }
 
 /* denyfirst's own pages on the demonstration — the front page and the
    organisation — speak for the organisation rather than for Porch, and show no
@@ -1640,6 +1668,33 @@ code.flag { white-space: nowrap; }
 .band[id] { scroll-margin-top: 1rem; }
 
 /*
+  Bands are told apart by their ground rather than by lines: every other one
+  sits on the sunk surface, from one edge of the window to the other, and each
+  band's label starts with a short stroke of the accent. The shadow and the
+  clip widen the ground without widening the content or the page.
+*/
+.band-tint {
+  background: var(--paper-sunk);
+  box-shadow: 0 0 0 100vmax var(--paper-sunk);
+  clip-path: inset(0 -100vmax);
+}
+
+.band-tint,
+.band:has(+ .band-tint) { border-bottom: 0; }
+
+.band-head .eyebrow::before,
+.band-split > .eyebrow::before,
+.team-text > .eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin: 0 0.65rem 0.2rem 0;
+  vertical-align: middle;
+  background: var(--accent);
+}
+
+/*
   The note beside a band's title is centred on the heading beside it.
 
   It hung from the heading's bottom edge. A note of three short lines beside a
@@ -1692,6 +1747,135 @@ code.flag { white-space: nowrap; }
   margin: 1.4rem 0;
   font-size: 1.02rem;
   color: var(--ink-soft);
+}
+
+/*
+  The about band: who makes this, drawn as the card a member of the team
+  would wear, with the slot a lanyard goes through. It names nobody and shows
+  no face. What it shows instead is how the team is known: the key that signs
+  every release, and the files that back each other line. The fine diagonal
+  ground is the pattern printed on documents meant to be hard to copy.
+*/
+.team {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+  gap: 2.5rem 4rem;
+  align-items: center;
+}
+
+.team-card {
+  position: relative;
+  padding: 2.4rem 1.6rem 1.3rem;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in srgb, var(--tool) 7%, transparent) 0 1px, transparent 1px 9px),
+    var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-top: 4px solid var(--tool);
+  border-radius: 14px;
+  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
+  transform: rotate(-1deg);
+  transition: transform 220ms ease-out;
+}
+
+.team-card:hover { transform: rotate(0deg); }
+
+.team-card::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  width: 3.2rem;
+  height: 0.55rem;
+  transform: translateX(-50%);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.team-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.team-card-mark {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.team-card-tag {
+  padding: 0.2rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.team-card-rows { margin: 0; }
+
+.team-card-rows > div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.2rem 1rem;
+  padding: 0.65rem 0;
+  border-top: 1px dashed var(--rule);
+}
+
+.team-card-rows dt {
+  padding-top: 0.15rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.team-card-rows dd { margin: 0; font-size: 0.95rem; color: var(--ink); }
+
+.team-card-rows a { color: var(--ink); text-decoration-color: var(--rule); }
+
+.team-card-rows a:hover { text-decoration-color: var(--accent); }
+
+.team-card-rows code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.team-card-foot {
+  margin: 0.6rem 0 0;
+  padding-top: 0.9rem;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule);
+}
+
+@media (max-width: 52rem) {
+  .team { grid-template-columns: 1fr; }
+  .team-card { transform: none; }
+}
+
+/* On a phone the key, the one long line, takes the card's width under its
+   label; the short lines keep their label beside them. */
+@media (max-width: 40rem) {
+  .team-card { padding-inline: 1.2rem; }
+  .team-card-rows > div { grid-template-columns: 6.5rem minmax(0, 1fr); }
+  .team-card-rows > .team-card-key { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-card, .team-card:hover { transition: none; transform: none; }
 }
 
 .cards {
@@ -1757,33 +1941,75 @@ a.card:hover { border-color: var(--link); }
   border-color: var(--accent);
 }
 
-.columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.5rem 2.5rem;
+/*
+  The front page's three rules, each beside how a reader checks it.
+
+  A row has the product card's columns, its gap and its inset, so the red edge
+  of each check here falls on the same line as the violet edges of the card's
+  list above it, at every width (demo_page_test.go measures the rules against
+  the card). Changing one without the other breaks that line.
+*/
+.rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.columns article {
-  padding-top: 1.2rem;
+.rules > li {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  column-gap: 2.5rem;
+  row-gap: 1rem;
+  align-items: center;
+  padding: 1.6rem calc(2rem + 1px);
   border-top: 1px solid var(--rule);
 }
 
-.columns h3 {
-  margin: 0.8rem 0 0.6rem;
-  font-size: 1.2rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.rules > li:last-child { border-bottom: 1px solid var(--rule); }
+
+.rule-main {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: center;
 }
 
-.columns p { margin: 0; color: var(--ink-soft); font-size: 0.96rem; }
+/* The number, drawn in outline so it reads as a mark rather than a heading. */
+.rule-no {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--accent);
+}
 
-.columns .index {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+.rules h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.rules p { margin: 0; color: var(--ink-soft); }
+
+.rule-proof {
+  padding: 0.55rem 0.8rem;
+  font-size: 0.92rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+
+.rule-proof-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--link);
+  color: var(--ink-faint);
 }
 
 .porch-hero {
@@ -2066,6 +2292,30 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   color: var(--ink-faint);
 }
 
+/* The facts the opening rests on, each one a reader can check here. */
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem 1.2rem;
+}
+
+.hero-facts span::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.45rem;
+  vertical-align: 0.1em;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+@media (max-width: 40rem) {
+  .hero-rule { flex-direction: column; }
+  .hero-facts { justify-content: flex-start; }
+}
+
 .hero-rule::before {
   content: "";
   position: absolute;
@@ -2126,7 +2376,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   margin: 1rem 0 0;
   font-size: 2.6rem;
   font-weight: 750;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.04em;
   line-height: 1.1;
 }
 
@@ -2182,28 +2432,12 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
 
-/* Beside a band's title, the few facts a reader wants before the rest. */
-.band-aside {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0.4rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.92rem;
-  color: var(--ink-soft);
-}
-
-.band-aside li {
-  padding-left: 0.8rem;
-  border-left: 2px solid var(--accent);
-}
-
 /* How to report a vulnerability, on the front page. */
 .security-box {
   max-width: 44rem;
   margin-top: 1.4rem;
   padding: 1.6rem 1.8rem;
-  background: var(--paper-sunk);
+  background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: calc(var(--radius) + 2px);
 }
@@ -2234,6 +2468,9 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 @media (max-width: 52rem) {
   .product-feature { grid-template-columns: 1fr; padding: 1.5rem; }
   .product-feature-name { font-size: 2.2rem; }
+  .rules > li { grid-template-columns: 1fr; padding: 1.4rem calc(1.5rem + 1px); }
+  .rule-main { grid-template-columns: 3.2rem minmax(0, 1fr); gap: 0.9rem; align-items: start; }
+  .rule-no { font-size: 2.3rem; }
 }
 
 .check-panel-top {
@@ -2394,7 +2631,7 @@ main > .band:last-child { border-bottom: 0; }
 .colophon-mark .colophon-brand {
   font-size: 1.35rem;
   font-weight: 750;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
 }
 
 /*
@@ -3441,8 +3678,9 @@ main > .band:last-child { border-bottom: 0; }
 
     A report printed from the dark scheme is a black rectangle: it empties a
     cartridge, and on most printers the pale text on it comes out grey on grey.
-    The values are the light ones from :root, restated rather than referenced,
-    because the dark ones are set on an attribute this cannot unset.
+    The dark scheme is set for the screen alone, so paper already has the
+    light values; they are restated here as well, so that a report on paper
+    never rests on one media query being right.
   */
   :root, :root[data-theme="dark"] {
     --paper:      #ffffff;
@@ -3471,11 +3709,22 @@ main > .band:last-child { border-bottom: 0; }
     rule that does nothing and reads as one that does.
   */
   .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading,
-  .summary-actions, .composer, .checks, .colophon-links {
+  .summary-actions, .composer, .checks, .colophon-links,
+  .ask > h1, .ask-form {
     display: none !important;
   }
 
   .workspace-main, .console, .console-results { padding: 0; margin: 0; max-width: none; }
+
+  /* The workspace is a grid with a column for the rail. Hiding the rail on
+     paper left the column, and the report took it: a whole installation's
+     report printed fifteen ems wide down the left of the sheet. On paper the
+     page is one column. */
+  .workspace { display: block; min-height: 0; }
+
+  /* The sheet's own margins are the page's; the screen's gutters and the
+     space above the demonstration's form, which is not printed, are not. */
+  main, .ask { padding: 0; }
 
   /*
     A table is read across, so it is not broken across sheets where that can be
@@ -3498,6 +3747,21 @@ main > .band:last-child { border-bottom: 0; }
     box-shadow: none;
   }
   .terminal-dots, .command-copy { display: none; }
+
+  /* Paper gets neither the header nor the rail, and with them went the only
+     mark on the page; a report handed on should say what made it. Porch's
+     mark heads the sheet, and the footer still names its maker. */
+  .print-mark {
+    display: block;
+    margin: 0 0 6mm;
+    padding-bottom: 3mm;
+    font-size: 20pt;
+    font-weight: 750;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
 
   @page { margin: 18mm 16mm; }
 }

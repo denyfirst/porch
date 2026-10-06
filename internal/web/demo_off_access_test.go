@@ -80,7 +80,7 @@ func TestTheSignInPageShowsNothingBehindTheGate(t *testing.T) {
 func TestOnlyTheSignInPageAndWhatItNeedsArePublic(t *testing.T) {
 	got := PublicPaths()
 	sort.Strings(got)
-	want := []string{"/login", "/porch-icon.svg", "/session.js", "/style.css", "/theme.js"}
+	want := []string{"/login", "/porch-icon.svg", "/schibsted-grotesk.woff2", "/session.js", "/style.css", "/theme.js"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("public paths are %v, want %v", got, want)
 	}
