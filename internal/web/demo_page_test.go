@@ -3,7 +3,6 @@
 package web
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -201,25 +200,30 @@ func TestTheFrontPageSaysHowToReportAVulnerability(t *testing.T) {
 	if got := groupedFingerprint("75B7A18A89715E3775DBCA2EA8D994D1221AA045"); got != "75B7 A18A 8971 5E37 75DB  CA2E A8D9 94D1 221A A045" {
 		t.Errorf("the fingerprint is grouped as %q, not as gpg prints it", got)
 	}
+}
 
-	// The three facts beside it are SECURITY.md's, which a reporter reads
-	// before writing: a promise made in one place and not the other is the
-	// one that gets broken.
-	raw, err := os.ReadFile("../../SECURITY.md")
-	if err != nil {
-		t.Fatal(err)
+// Each of the front page's three rules says how a reader checks it, and the
+// one that points at a document points at the one that exists.
+//
+// A rule with nothing beside it is a claim; the section was rebuilt on
+// 2026-10-06 so that each one carries its proof, and this keeps it that way.
+func TestEachRuleOnTheFrontPageSaysHowToCheckIt(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
 	}
-	policy := strings.Join(strings.Fields(string(raw)), " ")
-	for claim, backing := range map[string]string{
-		"<li>Private reports only</li>":       "Please do not open a public issue for security problems.",
-		"<li>Anonymous reports accepted</li>": "Anonymous and pseudonymous reports are accepted without question.",
-		"<li>Disclosed within 90 days</li>":   "Coordinated disclosure, 90 days by default. If a fix ships earlier, disclosure happens earlier.",
-	} {
-		if !strings.Contains(page, claim) {
-			t.Errorf("the front page's security section does not say %s", claim)
-		}
-		if !strings.Contains(policy, backing) {
-			t.Errorf("SECURITY.md no longer says %q, which the front page's %s rests on", backing, claim)
-		}
+	page := get(t, "/").Body.String()
+	_, rules, ok := strings.Cut(page, `<ol class="rules">`)
+	if !ok {
+		t.Fatal("the front page has no list of rules")
+	}
+	rules, _, _ = strings.Cut(rules, "</ol>")
+	if n := strings.Count(rules, "<li>"); n != 3 {
+		t.Errorf("the front page lists %d rules, and says it has three", n)
+	}
+	if n := strings.Count(rules, `<span class="rule-proof-label">How you check it</span>`); n != 3 {
+		t.Errorf("%d of the rules say how to check them, not all three", n)
+	}
+	if !strings.Contains(rules, `href="`+ChecksURL+`"`) {
+		t.Error("the rule about scope does not link the document that lists every connection")
 	}
 }

@@ -1660,6 +1660,32 @@ code.flag { white-space: nowrap; }
 .band[id] { scroll-margin-top: 1rem; }
 
 /*
+  Bands are told apart by their ground rather than by lines: every other one
+  sits on the sunk surface, from one edge of the window to the other, and each
+  band's label starts with a short stroke of the accent. The shadow and the
+  clip widen the ground without widening the content or the page.
+*/
+.band-tint {
+  background: var(--paper-sunk);
+  box-shadow: 0 0 0 100vmax var(--paper-sunk);
+  clip-path: inset(0 -100vmax);
+}
+
+.band-tint,
+.band:has(+ .band-tint) { border-bottom: 0; }
+
+.band-head .eyebrow::before,
+.band-split > .eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin: 0 0.65rem 0.2rem 0;
+  vertical-align: middle;
+  background: var(--accent);
+}
+
+/*
   The note beside a band's title is centred on the heading beside it.
 
   It hung from the heading's bottom edge. A note of three short lines beside a
@@ -1777,33 +1803,75 @@ a.card:hover { border-color: var(--link); }
   border-color: var(--accent);
 }
 
-.columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.5rem 2.5rem;
+/*
+  The front page's three rules, each beside how a reader checks it.
+
+  A row has the product card's columns, its gap and its inset, so the red edge
+  of each check here falls on the same line as the violet edges of the card's
+  list above it, at every width (demo_page_test.go measures the rules against
+  the card). Changing one without the other breaks that line.
+*/
+.rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.columns article {
-  padding-top: 1.2rem;
+.rules > li {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  column-gap: 2.5rem;
+  row-gap: 1rem;
+  align-items: center;
+  padding: 1.6rem calc(2rem + 1px);
   border-top: 1px solid var(--rule);
 }
 
-.columns h3 {
-  margin: 0.8rem 0 0.6rem;
-  font-size: 1.2rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.rules > li:last-child { border-bottom: 1px solid var(--rule); }
+
+.rule-main {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: center;
 }
 
-.columns p { margin: 0; color: var(--ink-soft); font-size: 0.96rem; }
+/* The number, drawn in outline so it reads as a mark rather than a heading. */
+.rule-no {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--accent);
+}
 
-.columns .index {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+.rules h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.rules p { margin: 0; color: var(--ink-soft); }
+
+.rule-proof {
+  padding: 0.55rem 0.8rem;
+  font-size: 0.92rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+
+.rule-proof-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--link);
+  color: var(--ink-faint);
 }
 
 .porch-hero {
@@ -2202,28 +2270,12 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
 
-/* Beside a band's title, the few facts a reader wants before the rest. */
-.band-aside {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0.4rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.92rem;
-  color: var(--ink-soft);
-}
-
-.band-aside li {
-  padding-left: 0.8rem;
-  border-left: 2px solid var(--accent);
-}
-
 /* How to report a vulnerability, on the front page. */
 .security-box {
   max-width: 44rem;
   margin-top: 1.4rem;
   padding: 1.6rem 1.8rem;
-  background: var(--paper-sunk);
+  background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: calc(var(--radius) + 2px);
 }
@@ -2254,6 +2306,9 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 @media (max-width: 52rem) {
   .product-feature { grid-template-columns: 1fr; padding: 1.5rem; }
   .product-feature-name { font-size: 2.2rem; }
+  .rules > li { grid-template-columns: 1fr; padding: 1.4rem calc(1.5rem + 1px); }
+  .rule-main { grid-template-columns: 3.2rem minmax(0, 1fr); gap: 0.9rem; align-items: start; }
+  .rule-no { font-size: 2.3rem; }
 }
 
 .check-panel-top {
