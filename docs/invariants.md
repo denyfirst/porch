@@ -3251,25 +3251,10 @@ do.
 
 So `internal/promises` holds the organisation's undertakings once, and each
 product holds its own additions. `/organisation` renders the organisation's and
-names each product with a link to its own page; Porch's is `/undertakings`,
-which renders the organisation's list unchanged and Porch's additions
-underneath. `docs/policy.md` is the reasoning and the instructions for a second
-product.
-
-**Each product's undertakings are on that product's own page, not the
-organisation's.** Until 2026-10-05 `/organisation` carried Porch's additions as
-a section, and on the demonstration that page is on `denyfirst.dev`: a reader on
-`porch.denyfirst.dev` was sent to the organisation's name to find what Porch
-itself promises, and a second product's promises would have been rendered by
-this repository's code — one product promising on behalf of another. The
-address an undertaking is read at says whose word it is.
-`TestThePageAboutTheOrganisationCarriesEveryUndertaking` refuses a product's
-addition on the organisation's page and requires the link to Porch's, and
-`TestPorchsPageCarriesTheOrganisationsListAndItsOwnUnderneath` requires every
-undertaking of both lists on Porch's page, the organisation's first, as
-`a-product-may-only-promise-less` says each product's page carries them. Carried
-rather than linked, so that a copy of Porch that cannot reach `denyfirst.dev`
-still says everything it undertakes.
+links each product's page; Porch's is `/undertakings`, which renders Porch's
+additions and links back. Each page says one list, once.
+`TestThePageAboutTheOrganisationCarriesEveryUndertaking` and
+`TestPorchsPageCarriesItsOwnUndertakings` hold that.
 
 **Only the organisation's own conduct belongs in the organisation's list**: what
 it receives, what it holds, what it publishes, how that can be checked. Nothing
@@ -6403,7 +6388,7 @@ meant has never existed under that name.
 `TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt`,
 `TestEveryInternalLinkResolves`, `TestEachCheckCallsItsOwnPaths`,
 `TestEachScanPageDeclaresItsCheck`,
-`TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits`,
+`TestEachFooterLinksItsOwnSitesDocuments`,
 `TestEveryAddressThisProjectSendsOutResolves`,
 `TestBothScanPathsAreServedAndNeitherRedirects`,
 `TestNeitherScanPathAnswersAGet`, `TestOldPathsRedirect`

@@ -387,14 +387,10 @@ func TestEachScanPageDeclaresItsCheck(t *testing.T) {
 	}
 }
 
-// The footer leads to the documents, and to no one check's limits.
-//
-// It carried "How a report is read", pointing at the limits of the check a
-// page was about and at the Transport limits everywhere else. Once there were
-// three checks and pages that run all of them, a single link there was right
-// on a minority of pages. The method pages are reached from the reports that
-// need them and from /docs, which lists all three.
-func TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits(t *testing.T) {
+// Each site's footer links its own documents: the organisation's pages its
+// undertakings and contacts, every other page Porch's documents. No footer
+// offers one check's limits.
+func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 	for path, body := range rendered {
 		_, foot, ok := strings.Cut(string(body), `<footer class="colophon">`)
 		if !ok {
@@ -406,13 +402,10 @@ func TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits(t *testing.T) {
 		for _, l := range links {
 			got = append(got, l[1])
 		}
-		// Three, and the page added on 2026-09-25 saying what the organisation
-		// undertakes is deliberately not a fourth. Two tests pin this count
-		// because the footer once carried six links and nobody read them; the
-		// new page is reached from /docs, which lists every document, and from
-		// the first paragraph of each privacy page, which is where somebody
-		// asking the question is already looking.
-		want := porchLink("/docs") + " " + porchLink("/privacy") + " " + porchLink("/terms")
+		want := porchLink("/docs") + " " + porchLink("/privacy") + " " + porchLink("/terms") + " " + porchLink("/undertakings")
+		if p, ok := pages[path]; ok && demo.Enabled && p.Organisation {
+			want = SiteURL + "/organisation " + SiteURL + SecurityTxtPath + " " + SiteURL + PGPKeyPath
+		}
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s: the footer links %v, want %s", path, got, want)
 		}

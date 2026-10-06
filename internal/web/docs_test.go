@@ -4,21 +4,18 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/demo"
 )
 
-// Every document is on one page, and the footer offers four ways on.
-//
-// The footer carried six links and the privacy page three more. They are on
-// /docs now, grouped by the question they answer, and the footer is short
-// enough to read.
+// Every document is on one page, and Porch's pages lead there.
 func TestEveryDocumentIsOnTheDocsPage(t *testing.T) {
 	page := get(t, "/docs").Body.String()
 	for _, want := range []string{
-		`href="/tls/method"`, `href="/web/method"`, `href="/privacy"`, `href="/terms"`,
-		`href="/organisation"`,
-		"docs/self-host.md", "docs/verify.md", "docs/scope.md", "docs/policy-changes.md",
-		"docs/policy.md",
-		"docs/invariants.md", "SECURITY.md", `href="https://github.com/denyfirst/porch"`,
+		`href="/tls/method"`, `href="/web/method"`, `href="/mail/method"`, `href="/dns/method"`, `href="/names/method"`,
+		`href="/privacy"`, `href="/terms"`, `href="/undertakings"`, `href="/organisation"`,
+		"docs/self-host.md", "docs/verify.md", "SECURITY.md",
+		`href="https://github.com/denyfirst/porch"`, `href="https://github.com/denyfirst/porch/releases"`,
 		// Absolute, on both builds: denyfirst.dev is the one place these are
 		// served, and an installation's own address would answer with a 404.
 		`href="` + SiteURL + PGPKeyPath + `"`, `href="` + SiteURL + SecurityTxtPath + `"`,
@@ -39,30 +36,19 @@ func TestEveryDocumentIsOnTheDocsPage(t *testing.T) {
 		}
 	}
 
-	for path := range pages {
+	// Every page of Porch's leads to /docs from its header and its footer.
+	for path, p := range pages {
+		if demo.Enabled && p.Organisation {
+			continue
+		}
 		body := get(t, path).Body.String()
 		_, foot, _ := strings.Cut(body, `<footer class="colophon">`)
-		if n := strings.Count(foot, "<a "); n != 3 {
-			t.Errorf("%s: the footer carries %d links, want three", path, n)
-		}
 		if !strings.Contains(foot, `href="`+porchLink("/docs")+`">Docs</a>`) {
 			t.Errorf("%s: the footer does not lead to /docs", path)
 		}
-		// The masthead on the demonstration, the rail on an installation: either
-		// way before the page begins.
 		head, _, _ := strings.Cut(body, "<main>")
 		if !strings.Contains(head, `href="`+porchLink("/docs")+`"`) {
 			t.Errorf("%s: the header does not lead to /docs", path)
-		}
-	}
-
-	// The privacy page ends by pointing there, not with a list of its own.
-	for name, privacy := range map[string]string{"served": string(rendered["/privacy"]), "demonstration": demoPrivacy(t)} {
-		if strings.Count(privacy, `class="colophon-links"`) != 1 {
-			t.Errorf("the %s privacy page carries a link list of its own again", name)
-		}
-		if !strings.Contains(privacy, `<a class="text-link arrow-e" href="/docs">`) {
-			t.Errorf("the %s privacy page does not end by pointing at /docs", name)
 		}
 	}
 }

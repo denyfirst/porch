@@ -39,7 +39,7 @@ const VERDICT_ORDER = { insecure: 3, weak: 2, strong: 1 };
 const CHECKS = {
   tls: {
     label: "Transport",
-    says: "the handshake and the certificate behind it",
+    says: "TLS versions, ciphers and the certificate",
     endpoint: "/api/v1/tls/scan",
     methodPage: "/tls/method",
     working: "Opening handshakes at every TLS version. This takes a few seconds.",
@@ -47,7 +47,7 @@ const CHECKS = {
   },
   web: {
     label: "Reach",
-    says: "how the site is reached over HTTP and HTTPS",
+    says: "HTTPS redirects, HSTS, cookies and headers",
     endpoint: "/api/v1/web/scan",
     methodPage: "/web/method",
     working: "Reading how the site answers, over HTTPS and over plaintext.",
@@ -55,7 +55,7 @@ const CHECKS = {
   },
   dns: {
     label: "DNS",
-    says: "how the domain itself is served, and whether its DNSSEC chain holds",
+    says: "name servers, DNSSEC and zone transfers",
 
     endpoint: "/api/v1/dns/scan",
     methodPage: "/dns/method",
@@ -76,7 +76,7 @@ const CHECKS = {
   // the endpoint, the working line and the builder are all read there.
   names: {
     label: "Names",
-    says: "which names under the domain its certificates, its own records and its zone publish",
+    says: "names under the domain, from certificates and DNS",
 
     endpoint: "/api/v1/names/scan",
     methodPage: "/names/method",
@@ -85,7 +85,7 @@ const CHECKS = {
   },
   mail: {
     label: "Mail",
-    says: "what the domain's DNS says about its mail",
+    says: "SPF, DKIM, DMARC, MTA-STS and the mail servers",
 
     endpoint: "/api/v1/mail/scan",
     methodPage: "/mail/method",

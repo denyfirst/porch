@@ -28,29 +28,17 @@
 
       {{if .Demo}}
       <p class="field-help" id="field-help">
-        This demonstration lists <strong>{{.Target}}</strong> and nothing else.
-        The hosts it may touch are compiled into the binary, so the field is
-        fixed rather than open: a page that took any domain and then refused it
-        would be advertising something this deployment does not do. Run the tool
-        yourself to list your own.
-        No name is invented. The names come from a public register of
-        certificates, from the records this domain publishes, and from the
-        certificates its own hosts present.
-        <a href="/names/method">What is asked, who is asked, and what it cannot
-        show</a> is written out in full.
+        This demo lists <strong>{{.Target}}</strong> only. Run the tool
+        yourself to list your own. Names come from public certificates, this domain&rsquo;s
+        DNS records and its hosts&rsquo; certificates. None is guessed.
+        <a href="/names/method">How it works</a>.
       </p>
       {{else}}
       <p class="field-help" id="field-help">
-        A bare domain. No name is invented and nothing is sent to your hosts:
-        the names come from a public register of certificates, published by
-        whoever obtained them, and from the mail, sender policy and delegation
-        records your domain publishes for anybody to read.
-        Where this installation can be reached by anybody but you, it produces
-        an inventory only for a domain you have proven control of &mdash; it
-        lists an estate rather than measuring a host, and the party being listed
-        cannot see it happen.
-        <a href="/names/method">What is asked, and what it cannot show</a> is
-        written out in full.
+        A bare domain. No name is guessed and nothing is sent to your hosts.
+        If others can reach this installation, it lists only a domain you have
+        proven control of.
+        <a href="/names/method">How it works</a>.
       </p>
       {{end}}
 
@@ -78,13 +66,10 @@
             aria-describedby="ranges-help">
         </div>
         <p class="field-help" id="ranges-help">
-          Optional. Read for the names their reverse records answer to, which
-          finds a host from the other direction: one in no certificate, in no
-          record this domain publishes, and in no register. Nothing is sent to
-          the addresses themselves. A range wider than /20 (/116 for IPv6), or
-          more than 4,096 addresses across all of them, is refused rather than
-          cut short.
-          <a href="/names/method">What is asked, and the limits on a range.</a>
+          Optional. Finds hosts by their reverse DNS. Nothing is sent to the
+          addresses. A range wider than /20 (/116 for IPv6), or more than
+          4,096 addresses in total, is refused.
+          <a href="/names/method">The limits on a range.</a>
         </p>
       </div>
       {{end}}
@@ -125,15 +110,11 @@
           <span class="field-note" id="known-file-note"></span>
         </div>
         <p class="field-help" id="known-help">
-          Optional. One to a line, or separated by commas. They are taken as
-          given — nothing here invents a name — then resolved and reported
-          beside what the sources found, so a host of yours that no public
-          source names is a row you can see. A file is read in this browser and
-          never uploaded: what leaves this page is the names themselves, in the
-          same request as the domain. Blank lines and lines beginning with #
-          are skipped. Up to 1,000 names; a longer list is a wordlist
-          rather than an estate, and this mode does not try wordlists.
-          <a href="/names/method">What is asked, and why a list is not a wordlist.</a>
+          Optional. One per line, or separated by commas. Blank lines and
+          lines beginning with # are skipped. A file is read in this browser
+          and never uploaded; the names are sent in the
+          same request as the domain. Up to 1,000 names.
+          <a href="/names/method">How names are used.</a>
         </p>
       </div>
       {{end}}
@@ -142,10 +123,8 @@
 
     <noscript>
       <p class="noscript">
-        Listing names needs JavaScript, because the answer is fetched and
-        rendered in the page. The same list is available from the command line
-        tool with <code class="flag">-check names</code>, a single file in every
-        release that needs nothing installed.
+        Listing names needs JavaScript. Or use the command line tool with
+        <code class="flag">-check names</code>.
       </p>
     </noscript>
   </section>

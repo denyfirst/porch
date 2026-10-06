@@ -1,24 +1,10 @@
 <article class="prose">
 
-    <h1>What denyfirst<br>never receives.</h1>
+    <h1>What denyfirst<br>undertakes.</h1>
 
     <p class="lede">
-      This page is about the people, not the tool. Whatever you run from here,
-      these are the undertakings of the organisation that published it — and
-      beside each one, how to establish it for yourself rather than take it on
-      trust.
+      These hold for everything we publish. Each one says how you can check it.
     </p>
-
-    <p>
-      They are separate from any product's page on purpose. Somebody deciding
-      whether to run a tool wants to know what it does to the machine it runs
-      on; somebody deciding whether to trust whoever wrote it wants to know what
-      those people get. One page answering both makes every sentence something
-      you have to read twice to work out which question it belongs to, and the
-      answers that matter most end up buried in the details of a single check.
-    </p>
-
-    <h2 id="organisation">The organisation</h2>
 
     <dl class="undertakings">
       {{range .Organisation}}
@@ -27,46 +13,14 @@
       {{end}}
     </dl>
 
-    <h2 id="products">What each product adds</h2>
+    <h2 id="products">Products</h2>
 
-    <p>
-      A product may undertake to keep less than the list above requires. It may
-      never undertake more, and it may not restate one of those undertakings in
-      its own words: an addition that redefined one would be how a weaker
-      promise arrives wearing a stronger promise's name.
-    </p>
-
-    <p>
-      What each adds is on that product's own page, under the list above
-      carried unchanged, and not here. A product's restrictions are that
-      product's word, and the address they are read at says whose word it is;
-      a list of every product's on this page would be one product's code
-      promising on behalf of another's.
-    </p>
+    <p>Each product adds its own undertakings on its own page.</p>
 
     <ul>
       {{range .Products}}
       <li><a href="{{.Page}}">{{.Name}}</a> &mdash; {{.What}}</li>
       {{end}}
     </ul>
-
-    <h2 id="elsewhere">What this page does not cover</h2>
-
-    <p>
-      What a particular check sends, what an installation of it holds, and what
-      a report carries are questions for that product's own pages, because the
-      answers differ between them and a sentence true of one would be a
-      guarantee falsely extended to the other. Porch answers them on
-      <a href="{{.PorchBase}}/privacy">its privacy page</a> and on the pages
-      describing each method.
-    </p>
-
-    <p>
-      Nor does it cover the network. Any service is carried by a provider who
-      can see that connections are made, and runs on hardware somebody else
-      owns; that is true of every tool anywhere and no undertaking here can
-      remove it. What this organisation can do is add nothing to it, which is
-      what the first undertaking above is about.
-    </p>
 
   </article>

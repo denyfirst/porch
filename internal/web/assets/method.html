@@ -1,133 +1,64 @@
 <article class="prose">
 
-    <h1>What this can see,<br>and what it cannot.</h1>
+    <h1>The TLS check.</h1>
 
     <p class="lede">
-      Every report ends with what that particular scan could not settle. This
-      page holds the other kind: the limits of the instrument itself, which
-      are the same for every scan and say nothing about any server. They used
-      to be printed on every report, where a reader had no way to tell them
-      apart from a finding about their own host.
+      How to read its report, and the limits that apply to every scan.
     </p>
 
     <nav class="jump">
       <a href="#reading">How to read a report</a>
-      <a href="#obsolete-suites">Obsolete suites, asked for directly</a>
+      <a href="#obsolete-suites">Obsolete suites</a>
       {{range .Limits}}<a href="#{{.ID}}">{{.Title}}</a>
       {{end}}
     </nav>
 
     <h2 id="reading">How to read a report</h2>
 
-    <p>
-      A report says four kinds of thing, and telling them apart is most of
-      knowing what it means.
-    </p>
+    <ul class="plain">
+      <li><strong>Findings</strong> are graded. Each names a rule and the
+        standard behind it. One insecure option makes the whole configuration
+        insecure, because an attacker picks what to negotiate.</li>
+      <li><strong>Observed</strong> facts are not graded, because no standard
+        sets a line: a post-quantum key exchange, a verified staple, how many
+        names one key covers.</li>
+      <li><strong>Not established</strong> is what this scan could not settle,
+        for example a server that stopped answering.</li>
+      <li><em>Strong</em> needs a complete scan. If a list was cut short, the
+        verdict is <em>ungraded</em> and the command line exits
+        <code>4</code>.</li>
+    </ul>
+
+    <h2 id="obsolete-suites">Obsolete suites</h2>
 
     <p>
-      <strong>Findings</strong> are graded. Each one names a rule, states what
-      was measured, and cites the document it rests on. Grading is worst-case:
-      one insecure option makes a configuration insecure however many strong
-      options sit beside it, because an attacker chooses which to negotiate.
-    </p>
-
-    <p>
-      <strong>Observed</strong> is what the scan established and deliberately
-      does not grade — a post-quantum key exchange the server accepted, a
-      stapled revocation response that verified, how many names one key stands
-      behind. These are results. A verdict is withheld where no document this
-      rule set follows requires one, because a verdict invented here would be
-      this project grading against its own opinion.
-    </p>
-
-    <p>
-      <strong>Not established for this host</strong> is what this scan could
-      not settle, for a reason that lies with the server in front of it: it
-      stopped answering before the suite list ran out, it offers only one
-      protocol version, it sent a field that could not be parsed. These
-      qualify that report's verdict and travel with it.
-    </p>
-
-    <p>
-      <strong>Limits of this method</strong> are below. They are true of every
-      scan, so they are stated once, here, rather than repeated under a
-      heading that made each report look like a failure.
-    </p>
-
-    <p>
-      The distinction that matters most: <em>strong</em> is the verdict that
-      claims an absence, and an absence can only be claimed from a complete
-      measurement. Where a list was cut short the verdict is
-      <em>ungraded</em> rather than <em>strong</em>, and the command line
-      exits <code>4</code> for it rather than <code>0</code>.
-    </p>
-
-    <h2 id="obsolete-suites">Obsolete suites, asked for directly</h2>
-
-    <p>
-      The list of accepted cipher suites is built by offering suites one at a
-      time, through the TLS library this program is written with, Go's. That
-      library leaves the obsolete families out on purpose, so it cannot offer
-      them, and a server that still accepted one would never appear in the
-      list. So each family is asked about on its own, with a hello this
-      program writes byte by byte, offering every suite in the family at
-      once. <em>Refused</em> means the server accepted none of them;
-      <em>accepted</em> names the suite it chose, and grades it like any other.
-      Because the whole family is offered in one hello, an acceptance shows
-      that one of them is accepted, not every one.
+      Go&rsquo;s TLS library cannot offer obsolete suites, so each family is
+      offered in a hello this program writes itself. <em>Refused</em> means the
+      server accepted none of them; <em>accepted</em> names the suite it chose.
     </p>
 
     <dl class="terms">
       <dt>Export-grade</dt>
-      <dd>Suites weakened in the 1990s to 40- and 56-bit keys to satisfy
-      export rules. Breakable today, and the root of attacks such as FREAK
-      and Logjam.</dd>
+      <dd>40- and 56-bit keys from 1990s export rules. Breakable today
+      (FREAK, Logjam).</dd>
       <dt>NULL, no encryption</dt>
-      <dd>Suites that authenticate the server but do not encrypt: everything
-      after the handshake travels in the clear.</dd>
+      <dd>The server is authenticated, but nothing is encrypted.</dd>
       <dt>Finite-field DHE</dt>
-      <dd>Key exchange over classic Diffie-Hellman groups rather than
-      elliptic curves. RFC 10015 prohibits offering or selecting these suites
-      in TLS 1.2; the groups are often weak or shared.</dd>
+      <dd>Classic Diffie-Hellman instead of elliptic curves. RFC 10015
+      prohibits these in TLS 1.2.</dd>
       <dt>Anonymous, no certificate</dt>
-      <dd>Suites in which the server presents no certificate, so anyone on
-      the path can pose as it.</dd>
+      <dd>No certificate, so anyone on the path can pose as the server.</dd>
       <dt>Downgrade signal</dt>
-      <dd>A hello that claims an older version and carries
-      <code>TLS_FALLBACK_SCSV</code>, the mark RFC 7507 defines for a client
-      retrying lower. A server that speaks something newer should refuse it,
-      which stops a connection being pushed down to an older version.
-      <em>Honoured</em> means it was refused. Reported, not graded: the
-      version it would land on is graded in the version table.</dd>
+      <dd>A hello with <code>TLS_FALLBACK_SCSV</code> (RFC 7507).
+      <em>Honoured</em> means the server refused to be pushed to an older
+      version. Reported, not graded.</dd>
     </dl>
 
-    <p>
-      SSL 3.0 is asked for the same way, and is a protocol version rather
-      than a family of suites, so it appears in the version table.
-    </p>
+    <p>SSL 3.0 is asked for the same way and shown in the version table.</p>
 
     {{range .Limits}}
     <h2 id="{{.ID}}">{{.Title}}</h2>
-
     <p>{{.Text}}</p>
     {{end}}
-
-    <h2 id="elsewhere">What else is written down</h2>
-
-    <p>
-      Every property this project holds itself to is in
-      <a href="https://github.com/denyfirst/porch/blob/main/docs/invariants.md">docs/invariants.md</a>,
-      each one naming the test that guards it and, where there was one, the
-      mistake that produced it. What changed between rule sets is in
-      <a href="https://github.com/denyfirst/porch/blob/main/docs/policy-changes.md">docs/policy-changes.md</a>,
-      because a report graded under one version is not comparable with a
-      report graded under another.
-    </p>
-
-    <p>
-      What a scan sends to a server, what is recorded about it here, and how
-      to have a domain excluded are on the
-      <a href="/privacy">privacy page</a>.
-    </p>
 
 </article>

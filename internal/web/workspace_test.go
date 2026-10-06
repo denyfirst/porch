@@ -65,8 +65,8 @@ func TestADocumentIsNamedInTheTopBarWithoutTheMaker(t *testing.T) {
 		t.Skip("the demonstration has no top bar")
 	}
 	for path, want := range map[string]string{
-		"/privacy": "Privacy, and what a scan does",
-		"/docs":    "Documentation",
+		"/privacy": "Privacy",
+		"/docs":    "Docs",
 		"/tls":     "Transport check",
 	} {
 		body := get(t, path).Body.String()

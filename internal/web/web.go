@@ -209,7 +209,7 @@ var pages = map[string]*page{
 	// there the redirect goes and this address does not move.
 	"/tls": {
 		Title:       "Transport check — Porch by denyfirst",
-		Description: "Porch checks what a server's TLS handshake and certificate actually are, graded against cited standards. Nothing about the scan is recorded.",
+		Description: "Checks a server's TLS versions, ciphers and certificate against cited standards.",
 		Fragment:    "assets/index.html",
 		Script:      true,
 
@@ -220,52 +220,29 @@ var pages = map[string]*page{
 		Data: scanPage{Demo: demo.Enabled, Hosts: demo.Hosts()},
 	},
 	"/privacy": {
-		Title:       "Privacy, and what a scan does — denyfirst",
-		Description: "What this service records, what a scan sends, what it never does, and how to have a domain excluded.",
+		Title:       "Privacy — Porch by denyfirst",
+		Description: "What this service keeps, what a scan sends, and how to stop one.",
 		Fragment:    "assets/privacy.html",
 	},
-	// The organisation, separately from any product.
-	//
-	// The two questions a reader arrives with are not the same question, and one
-	// page answering both buries the answers that matter. What the people behind
-	// a tool receive is here; what a particular check sends is on the pages that
-	// describe it. It ranges over internal/promises rather than carrying the
-	// sentences, because a second product would otherwise mean the same
-	// undertakings written twice — and two places drift.
+	// The organisation's undertakings, whatever you run.
 	"/organisation": {
-		// The top bar of an installation shows this, and an installation says
-		// porch in its header with denyfirst in its footer — two names on the
-		// first screen of a tool is one too many. So the title names the
-		// question rather than the organisation, and the heading inside the page
-		// names the organisation.
-		Title:        "Who makes this, and what they receive — denyfirst",
+		Title:        "What the maker undertakes — denyfirst",
 		Organisation: true,
-		Description:  "What the organisation behind Porch undertakes, whatever you run, and how to check each undertaking rather than take it on trust.",
+		Description:  "What denyfirst undertakes for everything it publishes, and how to check each one.",
 		Fragment:     "assets/organisation.html",
 		Data: organisationPage{
 			Organisation: promises.Organisation,
 			Products:     productPages(),
-			PorchBase:    porchBase(),
 		},
 	},
-	// What Porch undertakes, on Porch's own address.
-	//
-	// Porch's additions were a section of /organisation until 2026-10-05,
-	// which on the demonstration is denyfirst.dev: a reader on Porch's name
-	// was sent to the organisation's to find what Porch itself promises, and
-	// a second product would have had its promises rendered by this
-	// repository's code. Each product's page carries the organisation's list
-	// unchanged and its own underneath, which is what the organisation's
-	// a-product-may-only-promise-less says it does.
+	// What Porch adds to the organisation's undertakings, on Porch's own name.
 	undertakingsPath: {
 		Title:       "What Porch undertakes — Porch by denyfirst",
-		Description: "Porch's undertakings beneath the organisation's, unchanged, and how to check each rather than take it on trust.",
+		Description: "What Porch adds to denyfirst's undertakings, and how to check each one.",
 		Fragment:    "assets/undertakings.html",
 		Data: undertakingsPage{
-			Organisation: promises.Organisation,
-			Product:      promises.Porch,
-			SiteBase:     siteBase(),
-			Demo:         demo.Enabled,
+			Product:  promises.Porch,
+			SiteBase: siteBase(),
 		},
 	},
 	// The name inventory, and the page that says what it cannot show.
@@ -281,7 +258,7 @@ var pages = map[string]*page{
 	// text. Every self-hosted copy of v0.23.x did.
 	"/names": {
 		Title:       "The names under your domain — Porch by denyfirst",
-		Description: "Lists the names under a domain that appear in publicly logged certificates and in the domain's own records, says which named each one, and grades nothing.",
+		Description: "Lists the names under a domain from public certificates and its DNS records.",
 		Fragment:    "assets/names.html",
 		Script:      true,
 		Data:        namesPage{},
@@ -293,23 +270,24 @@ var pages = map[string]*page{
 		Section: "names",
 	},
 	"/names/method": {
-		Title:       "What the name inventory reads, and what it cannot see — Porch by denyfirst",
-		Description: "Where each source of names comes from, who is asked, why proof of control is required, and the kinds of name that never appear.",
+		Title:       "The name inventory — Porch by denyfirst",
+		Description: "Where names come from, who is asked, and what the list cannot show.",
 		Fragment:    "assets/names-method.html",
 	},
 
 	"/terms": {
-		Title:       "Terms of use — denyfirst",
-		Description: "What you agree to when you use this service, and what it does not promise.",
+		Title:       "Terms of use — Porch by denyfirst",
+		Description: "What you agree to when you use this, and what a result is not.",
 		Fragment:    "assets/terms.html",
+		Data:        struct{ Demo bool }{demo.Enabled},
 	},
 
 	// Every document in one place. The footer carried six links and the
 	// privacy page three more; they are grouped here by the question they
 	// answer instead.
 	"/docs": {
-		Title:       "Documentation — Porch by denyfirst",
-		Description: "How to read a Porch report, what a check sends, how to run your own copy, and how to reach us.",
+		Title:       "Docs — Porch by denyfirst",
+		Description: "What each check does, what is kept, and how to run your own copy.",
 		Fragment:    "assets/docs.html",
 		Data: docsPage{
 			TLS:   policy.TLSVersion,
@@ -336,8 +314,8 @@ var pages = map[string]*page{
 	// check will not establish, and a page that tried to be both would be
 	// true of neither.
 	"/tls/method": {
-		Title:       "What the transport check can see, and what it cannot — Porch by denyfirst",
-		Description: "How to read a report, and the limits of the method: what every scan here cannot establish, whatever server it looks at.",
+		Title:       "The TLS check — Porch by denyfirst",
+		Description: "How to read a TLS report, and the limits of every scan.",
 		Fragment:    "assets/method.html",
 		Data:        methodPage{Limits: policy.StandingLimits(), Demo: demo.Enabled},
 	},
@@ -352,7 +330,7 @@ var pages = map[string]*page{
 	// against one name.
 	"/web": {
 		Title:       "Reach check — Porch by denyfirst",
-		Description: "Porch checks how a website is reached over HTTP and HTTPS: redirects, transport, and the policy a browser would end up holding. Nothing about the scan is recorded.",
+		Description: "Checks HTTPS redirects, HSTS, cookies and headers.",
 		Fragment:    "assets/web.html",
 		Script:      true,
 		Data:        scanPage{Demo: demo.Enabled, Hosts: demo.Hosts()},
@@ -373,8 +351,8 @@ var pages = map[string]*page{
 	// wants one thing: what reached their server, exactly, and that there is
 	// nothing else to look for.
 	"/web/method": {
-		Title:       "What the reach check sends, and what it cannot see — Porch by denyfirst",
-		Description: "Exactly what a web check sends to a server, how to read the report it produces, and the limits of the method.",
+		Title:       "The web check — Porch by denyfirst",
+		Description: "What the web check sends to a server, and how to read its report.",
 		Fragment:    "assets/web-method.html",
 		Data:        methodPage{Limits: policy.WebStandingLimits(), Demo: demo.Enabled, UserAgent: webprobe.DefaultUserAgent},
 	},
@@ -386,8 +364,8 @@ var pages = map[string]*page{
 	// Transport page's limits. It also answers the question its reports raise
 	// most: why an exchanger's offer was not established.
 	"/mail/method": {
-		Title:       "What the mail check reads, and what it cannot see — Porch by denyfirst",
-		Description: "What the mail check reads and connects to, how to read the report it produces, and the limits of the method.",
+		Title:       "The mail check — Porch by denyfirst",
+		Description: "What the mail check reads, and how to read its report.",
 		Fragment:    "assets/mail-method.html",
 		Data:        methodPage{Limits: policy.MailStandingLimits(), Demo: demo.Enabled},
 	},
@@ -396,8 +374,8 @@ var pages = map[string]*page{
 	// the first thing somebody reading about a scan of their domain wants to
 	// know, so the page says it near the top rather than among the limits.
 	"/dns/method": {
-		Title:       "What the DNS check reads, and what it cannot see — Porch by denyfirst",
-		Description: "What the DNS check reads about a domain's own name servers and its DNSSEC chain, what it grades, and the limits of the method.",
+		Title:       "The DNS check — Porch by denyfirst",
+		Description: "What the DNS check reads, what it grades, and its limits.",
 		Fragment:    "assets/dns-method.html",
 		Data:        methodPage{Limits: policy.DNSStandingLimits(), Demo: demo.Enabled},
 	},
@@ -486,10 +464,10 @@ type consolePage struct {
 // "Full scan" would undo that argument in the one place a user actually looks.
 func consoleChecks() []consoleCheck {
 	return []consoleCheck{
-		{"tls", "Transport", "the handshake and the certificate behind it", policy.TLSVersion, ""},
-		{"web", "Reach", "how the site is reached over HTTP and HTTPS", policy.WebVersion, ""},
-		{"mail", "Mail", "what the domain's DNS says about its mail", policy.MailVersion, ""},
-		{"dns", "DNS", "how the domain itself is served, and whether its DNSSEC chain holds", policy.DNSVersion, ""},
+		{"tls", "Transport", "TLS versions, ciphers and the certificate", policy.TLSVersion, ""},
+		{"web", "Reach", "HTTPS redirects, HSTS, cookies and headers", policy.WebVersion, ""},
+		{"mail", "Mail", "SPF, DKIM, DMARC, MTA-STS and the mail servers", policy.MailVersion, ""},
+		{"dns", "DNS", "name servers, DNSSEC and zone transfers", policy.DNSVersion, ""},
 
 		// The inventory, last, and a door rather than a box.
 		//
@@ -503,8 +481,7 @@ func consoleChecks() []consoleCheck {
 		//
 		// The column where the others carry a rule-set name carries a word,
 		// so nothing on the row claims a verdict is coming.
-		{"names", "Names",
-			"which names under the domain its certificates, its own records and its zone publish",
+		{"names", "Names", "names under the domain, from certificates and DNS",
 			policy.Informational, "/names"},
 	}
 }
@@ -647,7 +624,7 @@ func init() {
 		pages["/"] = &page{
 			Title:        "denyfirst — independent security and privacy tools",
 			Organisation: true,
-			Description:  "denyfirst builds security and privacy tools that show their evidence. Porch checks TLS, web reach and mail policy.",
+			Description:  "denyfirst builds security and privacy tools that keep your data with you. Porch checks TLS, websites, mail and DNS.",
 			Fragment:     "assets/home.html",
 		}
 		// The name inventory is here, and it lists this project's own estate.
@@ -669,8 +646,8 @@ func init() {
 		pages["/names/method"].Data = namesPage{Target: demoDomain(), Demo: true}
 
 		pages["/porch"] = &page{
-			Title:       "Porch — TLS, web and mail checks that cite their sources — denyfirst",
-			Description: "Porch is a self-hosted scanner: the TLS handshake and certificate, how a site is reached, and what a domain's DNS says about its mail. Every verdict cites the document behind it, and nothing about a scan is recorded. See it run on our own domain.",
+			Title:       "Porch — TLS, web, mail and DNS checks — denyfirst",
+			Description: "Porch checks what your servers show the outside world: TLS, website, mail and DNS. Self-hosted. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
 			Script:      true,
 			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest()},
@@ -962,7 +939,7 @@ func workspaceData(verified, keeps bool) consolePage {
 func renderConsole(verified, keeps bool) []byte {
 	p := &page{
 		Title:       ToolName,
-		Description: "Run this project's checks against one name: the handshake and certificate, how the site is reached, and what the domain's DNS says about its mail.",
+		Description: "Check a name: TLS, website, mail and DNS.",
 		Fragment:    "assets/console.html",
 		Script:      true,
 		Section:     "check",
@@ -1116,8 +1093,8 @@ type privacyPage struct {
 // console, and the demonstration keeps its own (audit A21).
 func renderPrivacy(verified, keeps bool, in Installation) []byte {
 	p := &page{
-		Title:       "Privacy, and what a scan does — " + ToolName,
-		Description: "What this installation keeps, what a scan sends, and who else is asked anything.",
+		Title:       "Privacy — " + ToolName,
+		Description: "What this installation keeps, what a scan sends, and who else is asked.",
 		Fragment:    "assets/privacy-selfhost.html",
 		Data: privacyPage{
 			Tool:              ToolName,
@@ -1280,7 +1257,6 @@ func buildPlain() {
 type organisationPage struct {
 	Organisation []promises.Promise
 	Products     []productPage
-	PorchBase    string
 }
 
 // productPage is a product as the organisation's page names it: what it is,
@@ -1308,13 +1284,10 @@ func productPages() []productPage {
 	return out
 }
 
-// undertakingsPage is what assets/undertakings.html reads: the organisation's
-// list, unchanged, and Porch's beneath it.
+// undertakingsPage is what assets/undertakings.html reads.
 type undertakingsPage struct {
-	Organisation []promises.Promise
-	Product      promises.Product
-	SiteBase     string
-	Demo         bool
+	Product  promises.Product
+	SiteBase string
 }
 
 // siteBase and porchBase are what render sets SiteBase and PorchBase to, for
