@@ -314,6 +314,10 @@ body[data-owner="organisation"] {
   letter-spacing: -0.03em;
 }
 
+/* On Porch's pages the maker's name is a link home, drawn as the mark is in
+   the header: no underline under a wordmark. The focus ring still shows it. */
+a.colophon-brand { text-decoration: none; }
+
 /* ── The ask ──────────────────────────────────────────────────────────── */
 
 main {
@@ -2116,12 +2120,17 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   border-color: var(--porch-accent);
 }
 
+/* The card's name is Porch's mark, as its own header draws it. Its stop is
+   Porch's violet here too, where the page's own accent is the brand red. */
 .product-feature-name {
   margin: 1rem 0 0;
-  font-size: 2.4rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 2.6rem;
+  font-weight: 750;
+  letter-spacing: -0.055em;
+  line-height: 1.1;
 }
+
+.product-feature-name .wordmark-porch-stop { color: var(--porch-link); }
 
 .product-feature p {
   margin: 0.6rem 0 1.4rem;
@@ -2173,6 +2182,22 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
 
+/* Beside a band's title, the few facts a reader wants before the rest. */
+.band-aside {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.band-aside li {
+  padding-left: 0.8rem;
+  border-left: 2px solid var(--accent);
+}
+
 /* How to report a vulnerability, on the front page. */
 .security-box {
   max-width: 44rem;
@@ -2208,7 +2233,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 
 @media (max-width: 52rem) {
   .product-feature { grid-template-columns: 1fr; padding: 1.5rem; }
-  .product-feature-name { font-size: 2rem; }
+  .product-feature-name { font-size: 2.2rem; }
 }
 
 .check-panel-top {
