@@ -67,7 +67,8 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 	}{
 		// The organisation's own.
 		{"GET", organisationHost, "/", 200, ""},
-		{"GET", organisationHost, "/organisation", 200, ""},
+		{"GET", organisationHost, "/privacy", 200, ""},
+		{"GET", organisationHost, "/organisation", 301, SiteURL + "/privacy"},
 		{"GET", organisationHost, SecurityTxtPath, 200, ""},
 		{"GET", organisationHost, PGPKeyPath, 200, ""},
 		{"GET", organisationHost, "/style.css", 200, ""},
@@ -78,7 +79,7 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 		// Porch's, asked of the organisation, keeping path and query.
 		{"GET", organisationHost, "/tls", 301, PorchURL + "/tls"},
 		{"GET", organisationHost, "/tls/method?from=report", 301, PorchURL + "/tls/method?from=report"},
-		{"HEAD", organisationHost, "/privacy", 301, PorchURL + "/privacy"},
+		{"HEAD", organisationHost, "/terms", 301, PorchURL + "/terms"},
 		{"GET", organisationHost, "/undertakings", 301, PorchURL + "/undertakings"},
 		{"GET", organisationHost, "/porch", 301, PorchURL + "/"},
 		{"GET", organisationHost, "/no-such-page", 301, PorchURL + "/no-such-page"},
@@ -88,18 +89,18 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 		// Porch's own.
 		{"GET", porchHost, "/tls", 200, ""},
 		{"GET", porchHost, "/privacy", 200, ""},
-		{"GET", porchHost, "/undertakings", 200, ""},
+		{"GET", porchHost, "/undertakings", 301, "/privacy#promises"},
 		{"GET", porchHost, "/style.css", 200, ""},
 		{"POST", porchHost, "/api/v1/scan", 200, ""},
 
 		// The organisation's, asked of Porch.
-		{"GET", porchHost, "/organisation", 301, SiteURL + "/organisation"},
+		{"GET", porchHost, "/organisation", 301, SiteURL + "/privacy"},
 		{"GET", porchHost, SecurityTxtPath, 301, SiteURL + SecurityTxtPath},
 		{"GET", porchHost, PGPKeyPath, 301, SiteURL + PGPKeyPath},
 		{"GET", porchHost, "/porch", 301, PorchURL + "/"},
 
 		// A name is a name however a browser writes it.
-		{"GET", "PORCH.denyfirst.dev.", "/organisation", 301, SiteURL + "/organisation"},
+		{"GET", "PORCH.denyfirst.dev.", "/organisation", 301, SiteURL + "/privacy"},
 		{"GET", "denyfirst.dev:443", "/tls", 301, PorchURL + "/tls"},
 	} {
 		w := getOn(t, tc.method, tc.host, tc.target)

@@ -30,8 +30,11 @@ func privacyAs(t *testing.T, verified, keeps bool) string {
 // somebody else runs, and the last untrue of every one of them.
 func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
 	for _, page := range []string{privacyAs(t, false, false), privacyAs(t, true, true)} {
+		// The one link to the maker's own promises names their site in its
+		// address, and the page names nothing about it.
+		shown := strings.ReplaceAll(page, `href="https://denyfirst.dev/privacy"`, "")
 		for _, never := range []string{"denyfirst.dev", "Hetzner", "Frankfurt", "no certificate authority is asked"} {
-			if strings.Contains(page, never) {
+			if strings.Contains(shown, never) {
 				t.Errorf("the self-hosted page says %q", never)
 			}
 		}
@@ -44,7 +47,7 @@ func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
 				t.Errorf("the self-hosted page does not say %q", want)
 			}
 		}
-		for _, anchor := range []string{"kept", "scans", "stopping", "promises"} {
+		for _, anchor := range []string{"promises", "kept", "scans", "stopping", "warranty"} {
 			if !strings.Contains(page, `id="`+anchor+`"`) || !strings.Contains(page, `href="#`+anchor+`"`) {
 				t.Errorf("the self-hosted page has no section #%s", anchor)
 			}

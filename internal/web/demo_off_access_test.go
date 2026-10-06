@@ -34,7 +34,7 @@ func guardedAs(t *testing.T, path string) string {
 // Behind a password every page offers a way out, and loads the one script
 // that signs out; without one, none does.
 func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
-	paths := []string{"/", "/domains", "/history", "/installation", "/privacy", "/terms", "/undertakings"}
+	paths := []string{"/", "/domains", "/history", "/installation", "/privacy", "/terms"}
 
 	// Without a password first: the guarded rendering is put back only when
 	// the test ends.

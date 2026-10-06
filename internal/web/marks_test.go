@@ -29,8 +29,8 @@ func TestTheWordmarkEndsInTheBrandColour(t *testing.T) {
 	if strings.Contains(markup, `<span class="wordmark-deny">deny</span>first.`) {
 		t.Error("the full stop is still plain text, so no rule can colour it")
 	}
-	if n := strings.Count(markup, `first<span class="wordmark-stop">.</span>`); n != 3 {
-		t.Errorf("the stop is marked up %d times, and the name appears three times in this file", n)
+	if n := strings.Count(markup, `first<span class="wordmark-stop">.</span>`); n != 4 {
+		t.Errorf("the stop is marked up %d times, and the name appears four times in this file", n)
 	}
 }
 

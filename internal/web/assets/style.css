@@ -212,6 +212,9 @@ a:hover { text-decoration-thickness: 2px; }
 */
 .wordmark-deny, .wordmark-stop { color: var(--brand); }
 
+/* Porch's own mark on its pages: the name, and a stop in its violet. */
+.wordmark-porch-stop { color: var(--tool); }
+
 /* denyfirst's own pages on the demonstration — the front page and the
    organisation — speak for the organisation rather than for Porch, and show no
    verdict, so their controls keep the brand red. Set by the layout from

@@ -31,11 +31,22 @@ func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 		}
 
 		if demo.Enabled {
-			if !strings.Contains(head, `<span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>`) {
-				t.Errorf("%s: the demonstration's header does not carry the wordmark:\n%s", path, head)
+			// The organisation's pages carry its wordmark; Porch's carry
+			// Porch's, and name the maker in the footer.
+			if pages[path].Organisation {
+				if !strings.Contains(head, `<span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>`) {
+					t.Errorf("%s: the organisation's header does not carry its wordmark:\n%s", path, head)
+				}
+				if !strings.Contains(foot, `<span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span>`) {
+					t.Errorf("%s: the organisation's footer does not carry its mark", path)
+				}
+				continue
 			}
-			if !strings.Contains(foot, `<span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span>`) {
-				t.Errorf("%s: the demonstration's footer does not name denyfirst", path)
+			if !strings.Contains(head, `porch<span class="wordmark-porch-stop">.</span></a>`) || strings.Contains(head, "wordmark-deny") {
+				t.Errorf("%s: Porch's header does not carry Porch's wordmark alone:\n%s", path, head)
+			}
+			if !strings.Contains(foot, `by <a class="colophon-brand" href="`+SiteURL+`/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>`) {
+				t.Errorf("%s: Porch's footer does not say who made it", path)
 			}
 			continue
 		}

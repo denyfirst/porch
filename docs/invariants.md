@@ -3250,11 +3250,11 @@ than one vague document. Nobody has to be careless for that; it is what copies
 do.
 
 So `internal/promises` holds the organisation's undertakings once, and each
-product holds its own additions. `/organisation` renders the organisation's and
-links each product's page; Porch's is `/undertakings`, which renders Porch's
-additions and links back. Each page says one list, once.
-`TestThePageAboutTheOrganisationCarriesEveryUndertaking` and
-`TestPorchsPageCarriesItsOwnUndertakings` hold that.
+product holds its own additions. `denyfirst.dev/privacy` renders the
+organisation's and links each product's; Porch's privacy page renders Porch's
+first and links back. Each page says one list, once.
+`TestTheOrganisationsPrivacyPageCarriesEveryPromise` and
+`TestPorchsPrivacyPageCarriesItsPromises` hold that.
 
 **Only the organisation's own conduct belongs in the organisation's list**: what
 it receives, what it holds, what it publishes, how that can be checked. Nothing
@@ -3304,20 +3304,11 @@ rather than promising, and forbidding the words here would make the explanations
 worse without protecting a reader. What can drift harmfully is two *pages*
 telling somebody two versions of one undertaking.
 
-**A reader who arrived with the other question is pointed across, above the jump
-list.** A split nobody is pointed across is a page that was hidden rather than
-separated. The pointer is in the prose at the top of each privacy page rather
-than in the footer, because the footer is deliberately three links long — it
-carried six once and nobody read them, and two tests pin the count.
-The pointer is to `/undertakings`, which is on the privacy page's own name and
-carries both lists. `TestThePrivacyPageSendsAReaderToTheUndertakings` holds both
-the pointer and its position, and the two tests above hold that each rendered
-page carries every undertaking it should and every way of checking one, each
-addressable by its identifier.
-
-The self-hosted build serves its own privacy page and the same organisation
-and undertakings pages. What the makers receive is the same question wherever a copy runs, and the
-answer is the same nothing.
+**Porch's promises are the first thing its privacy page says**, first in the
+jump list, so somebody asking what the makers promise does not read about port
+443 first; the organisation's are a link away
+(`TestPorchsPrivacyPageCarriesItsPromises`). An installation is Porch alone and
+links to `denyfirst.dev/privacy` for the maker's.
 
 **A page says what *this* installation does, and a claim about configuration is
 rendered from the configuration.** The self-hosted privacy page carried one

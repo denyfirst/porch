@@ -58,9 +58,9 @@ func TestACrawlerIsToldWhatThisDeploymentIs(t *testing.T) {
 		}
 	}
 	for path := range rendered {
-		home := organisationHost
-		if !organisationPaths[path] {
-			home = porchHost
+		home := porchHost
+		if p := pages[path]; p != nil && p.Organisation {
+			home = organisationHost
 		}
 		if !strings.Contains(getOn(t, "GET", home, "/sitemap.xml").Body.String(), "<loc>"+statedAddress(path)+"</loc>") {
 			t.Errorf("the sitemaps leave out %s", path)
@@ -77,8 +77,10 @@ func TestACrawlerIsToldWhatThisDeploymentIs(t *testing.T) {
 // its name, Porch's page at the root of Porch's, and every other on Porch's.
 func statedAddress(path string) string {
 	switch path {
-	case "/", "/organisation":
-		return SiteURL + path
+	case "/":
+		return SiteURL + "/"
+	case "/organisation":
+		return SiteURL + "/privacy"
 	case "/porch":
 		return PorchURL + "/"
 	}
@@ -131,7 +133,7 @@ func TestTheDemonstrationTitlesNameTheToolAndTheMaker(t *testing.T) {
 			t.Errorf("%s: the description is %d characters: %q", path, len(p.Description), p.Description)
 		}
 	}
-	for _, path := range []string{"/tls", "/web", "/porch", "/undertakings"} {
+	for _, path := range []string{"/tls", "/web", "/porch", "/privacy"} {
 		if !strings.Contains(pages[path].Title, "Porch") {
 			t.Errorf("%s: a page about the tool does not name it: %q", path, pages[path].Title)
 		}

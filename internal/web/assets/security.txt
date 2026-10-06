@@ -50,4 +50,4 @@ Policy: https://github.com/denyfirst/porch/blob/main/SECURITY.md
 # A domain owner asking to be excluded from scanning should write to
 # abuse@denyfirst.dev instead. That is an operational request rather than a
 # vulnerability report and is answered separately.
-# See https://denyfirst.dev/privacy
+# See https://porch.denyfirst.dev/privacy#stopping
