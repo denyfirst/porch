@@ -476,6 +476,8 @@ var files = map[string]servedFile{
 	"/session.js":  {"assets/session.js", "text/javascript; charset=utf-8"},
 	"/hero.js":     {"assets/hero.js", "text/javascript; charset=utf-8"},
 	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
+	// Porch's own icon: a p, and the stop in its violet.
+	"/porch-icon.svg": {"assets/porch-icon.svg", "image/svg+xml"},
 }
 
 // denyfirstFiles are this project's own contacts: where to report a security
@@ -756,7 +758,7 @@ var signedIn bool
 // PublicPaths are what anybody may reach on an installation behind a
 // password: the sign-in page and what it draws and runs with.
 func PublicPaths() []string {
-	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/favicon.svg"}
+	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/porch-icon.svg"}
 }
 
 // renderSignIn is the one page an installation behind a password shows to

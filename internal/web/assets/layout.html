@@ -22,7 +22,7 @@
 {{end}}
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="{{if .Organisation}}/favicon.svg{{else}}/porch-icon.svg{{end}}" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>
 </head>
@@ -37,7 +37,7 @@
 -->
 {{if ne .Section "login"}}
 <aside class="rail">
-  <p class="rail-identity"><a class="wordmark" href="/">porch</a> <span class="rail-tag">Self-host</span></p>
+  <p class="rail-identity"><a class="wordmark" href="/">porch<span class="wordmark-porch-stop">.</span></a> <span class="rail-tag">Self-host</span></p>
   <p class="rail-caption" id="rail-workspace">Workspace</p>
   <nav class="rail-nav" aria-labelledby="rail-workspace">
     <a class="rail-item" href="/"{{if eq .Section "check"}} aria-current="page"{{end}}><span class="rail-glyph" aria-hidden="true">▦</span>New check</a>

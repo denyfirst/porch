@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="porch">
+  <rect width="32" height="32" fill="#16181d"/>
+  <path d="M9 11 V26" stroke="#fbfaf7" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="14.2" cy="15.6" r="5.2" fill="none" stroke="#fbfaf7" stroke-width="2.4"/>
+  <circle cx="24" cy="21" r="2.6" fill="#9b7bf0"/>
+</svg>

@@ -51,7 +51,7 @@ func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 			continue
 		}
 
-		if !strings.Contains(head, `<a class="wordmark" href="/">`+ToolName+`</a>`) {
+		if !strings.Contains(head, `<a class="wordmark" href="/">`+ToolName+`<span class="wordmark-porch-stop">.</span></a>`) {
 			t.Errorf("%s: the header does not name %s:\n%s", path, ToolName, head)
 		}
 		visible := regexp.MustCompile(`href="[^"]*"`).ReplaceAllString(head, "")
