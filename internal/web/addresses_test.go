@@ -33,6 +33,9 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 		// root-level page there is: it is not about a check, and a copy of it
 		// under each one would be four copies of a promise to keep in step.
 		"/organisation": true,
+
+		// What Porch undertakes, which is about every check rather than one.
+		"/undertakings": true,
 	}
 	// The demonstration is the denyfirst site: its front page and the page for
 	// the product are the project's own, at the root, and a self-hosted build

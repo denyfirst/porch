@@ -3249,9 +3249,27 @@ two documents from the same people that do not agree, which is worse evidence
 than one vague document. Nobody has to be careless for that; it is what copies
 do.
 
-So `internal/promises` holds the organisation's undertakings once, each product
-holds its own additions, and `/organisation` renders both. `docs/policy.md` is
-the reasoning and the instructions for a second product.
+So `internal/promises` holds the organisation's undertakings once, and each
+product holds its own additions. `/organisation` renders the organisation's and
+names each product with a link to its own page; Porch's is `/undertakings`,
+which renders the organisation's list unchanged and Porch's additions
+underneath. `docs/policy.md` is the reasoning and the instructions for a second
+product.
+
+**Each product's undertakings are on that product's own page, not the
+organisation's.** Until 2026-10-05 `/organisation` carried Porch's additions as
+a section, and on the demonstration that page is on `denyfirst.dev`: a reader on
+`porch.denyfirst.dev` was sent to the organisation's name to find what Porch
+itself promises, and a second product's promises would have been rendered by
+this repository's code — one product promising on behalf of another. The
+address an undertaking is read at says whose word it is.
+`TestThePageAboutTheOrganisationCarriesEveryUndertaking` refuses a product's
+addition on the organisation's page and requires the link to Porch's, and
+`TestPorchsPageCarriesTheOrganisationsListAndItsOwnUnderneath` requires every
+undertaking of both lists on Porch's page, the organisation's first, as
+`a-product-may-only-promise-less` says each product's page carries them. Carried
+rather than linked, so that a copy of Porch that cannot reach `denyfirst.dev`
+still says everything it undertakes.
 
 **Only the organisation's own conduct belongs in the organisation's list**: what
 it receives, what it holds, what it publishes, how that can be checked. Nothing
@@ -3306,13 +3324,14 @@ list.** A split nobody is pointed across is a page that was hidden rather than
 separated. The pointer is in the prose at the top of each privacy page rather
 than in the footer, because the footer is deliberately three links long — it
 carried six once and nobody read them, and two tests pin the count.
-`TestThePrivacyPageSendsAReaderToTheOrganisation` holds both the pointer and its
-position, and `TestThePageAboutTheOrganisationCarriesEveryUndertaking` holds
-that the rendered page carries every undertaking and every way of checking one,
-each addressable by its identifier.
+The pointer is to `/undertakings`, which is on the privacy page's own name and
+carries both lists. `TestThePrivacyPageSendsAReaderToTheUndertakings` holds both
+the pointer and its position, and the two tests above hold that each rendered
+page carries every undertaking it should and every way of checking one, each
+addressable by its identifier.
 
 The self-hosted build serves its own privacy page and the same organisation
-page. What the makers receive is the same question wherever a copy runs, and the
+and undertakings pages. What the makers receive is the same question wherever a copy runs, and the
 answer is the same nothing.
 
 **A page says what *this* installation does, and a claim about configuration is

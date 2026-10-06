@@ -244,7 +244,28 @@ var pages = map[string]*page{
 		Fragment:     "assets/organisation.html",
 		Data: organisationPage{
 			Organisation: promises.Organisation,
-			Products:     promises.Products,
+			Products:     productPages(),
+			PorchBase:    porchBase(),
+		},
+	},
+	// What Porch undertakes, on Porch's own address.
+	//
+	// Porch's additions were a section of /organisation until 2026-10-05,
+	// which on the demonstration is denyfirst.dev: a reader on Porch's name
+	// was sent to the organisation's to find what Porch itself promises, and
+	// a second product would have had its promises rendered by this
+	// repository's code. Each product's page carries the organisation's list
+	// unchanged and its own underneath, which is what the organisation's
+	// a-product-may-only-promise-less says it does.
+	undertakingsPath: {
+		Title:       "What Porch undertakes — Porch by denyfirst",
+		Description: "Porch's undertakings beneath the organisation's, unchanged, and how to check each rather than take it on trust.",
+		Fragment:    "assets/undertakings.html",
+		Data: undertakingsPage{
+			Organisation: promises.Organisation,
+			Product:      promises.Porch,
+			SiteBase:     siteBase(),
+			Demo:         demo.Enabled,
 		},
 	},
 	// The name inventory, and the page that says what it cannot show.
@@ -695,7 +716,7 @@ func render(p *page) ([]byte, error) {
 
 	p.Brand = demo.Enabled
 	if p.Brand {
-		p.SiteBase, p.PorchBase = SiteURL, PorchURL
+		p.SiteBase, p.PorchBase = siteBase(), porchBase()
 		if p.Path != "" {
 			p.Canonical = canonicalURL(p.Path)
 		}
@@ -1258,5 +1279,56 @@ func buildPlain() {
 // people that disagree — worse evidence than one vague document.
 type organisationPage struct {
 	Organisation []promises.Promise
-	Products     []promises.Product
+	Products     []productPage
+	PorchBase    string
+}
+
+// productPage is a product as the organisation's page names it: what it is,
+// and where its own undertakings are. The undertakings themselves are not
+// carried, because they are that product's word and its page says them.
+type productPage struct {
+	Name, What, Page string
+}
+
+// undertakingsPath is where Porch's undertakings are, on Porch's name.
+const undertakingsPath = "/undertakings"
+
+// productPages is every product in internal/promises with the address of its
+// own page. Porch's is on this site wherever this copy runs. A product this
+// repository does not build has no address here until somebody writes one
+// down, and startup stops rather than link a reader to a guess.
+func productPages() []productPage {
+	var out []productPage
+	for _, p := range promises.Products {
+		if p.Name != promises.Porch.Name {
+			panic("web: " + p.Name + " is in internal/promises with no address for its undertakings")
+		}
+		out = append(out, productPage{Name: p.Name, What: p.What, Page: porchBase() + undertakingsPath})
+	}
+	return out
+}
+
+// undertakingsPage is what assets/undertakings.html reads: the organisation's
+// list, unchanged, and Porch's beneath it.
+type undertakingsPage struct {
+	Organisation []promises.Promise
+	Product      promises.Product
+	SiteBase     string
+	Demo         bool
+}
+
+// siteBase and porchBase are what render sets SiteBase and PorchBase to, for
+// the pages whose own text links across names.
+func siteBase() string {
+	if demo.Enabled {
+		return SiteURL
+	}
+	return ""
+}
+
+func porchBase() string {
+	if demo.Enabled {
+		return PorchURL
+	}
+	return ""
 }

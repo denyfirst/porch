@@ -17,37 +17,84 @@ import (
 // written down — and nothing else would notice.
 func TestThePageAboutTheOrganisationCarriesEveryUndertaking(t *testing.T) {
 	page := get(t, "/organisation").Body.String()
+	carriesList(t, "/organisation", page, promises.Organisation)
 
-	// Compared escaped, the way the template writes it. An apostrophe reaches
-	// the page as &#39;, and comparing the raw sentence would fail on every
-	// undertaking that has one — a test that fails where nothing is wrong is a
-	// test somebody edits until it passes.
-	says := func(s string) bool { return strings.Contains(page, html.EscapeString(s)) }
-
-	for _, p := range promises.Organisation {
-		if !says(p.Says) {
-			t.Errorf("the page does not say %s", p.ID)
-		}
-		if !says(p.Checked) {
-			t.Errorf("the page says %s and not how to check it, which makes it a request to be trusted", p.ID)
-		}
-		// Each is addressable, so that somebody can point at one rather than
-		// quote it.
-		if !strings.Contains(page, `id="`+p.ID+`"`) {
-			t.Errorf("%s cannot be linked to", p.ID)
-		}
-	}
-
+	// It names each product and sends a reader to that product's own page,
+	// and it carries none of what a product adds. Until 2026-10-05 it carried
+	// Porch's too, so a reader on Porch's name was sent to the organisation's
+	// to find what Porch promises, and a second product's promises would have
+	// been rendered by this repository's code.
+	says := escapedIn(page)
 	for _, product := range promises.Products {
 		if !strings.Contains(page, product.Name) || !says(product.What) {
 			t.Errorf("the page does not introduce %s", product.Name)
 		}
 		for _, p := range product.Adds {
-			if !says(p.Says) || !says(p.Checked) {
-				t.Errorf("the page does not carry %s's %s", product.Name, p.ID)
+			if says(p.Says) || strings.Contains(page, `id="`+p.ID+`"`) {
+				t.Errorf("the organisation's page carries %s's %s, which is that product's word and on its own page", product.Name, p.ID)
 			}
 		}
 	}
+	if !strings.Contains(page, `href="`+porchBase()+undertakingsPath+`"`) {
+		t.Errorf("the organisation's page does not lead to Porch's own undertakings at %s", porchBase()+undertakingsPath)
+	}
+}
+
+// Porch's page carries the organisation's list unchanged, and its own
+// underneath.
+//
+// Which is what the organisation's a-product-may-only-promise-less says each
+// product's page does, so a page that dropped the first list, or put Porch's
+// above it, would make one of the organisation's own undertakings false.
+// Carried rather than linked to, so that a copy of Porch that cannot reach
+// denyfirst.dev still says everything it undertakes.
+func TestPorchsPageCarriesTheOrganisationsListAndItsOwnUnderneath(t *testing.T) {
+	page := get(t, undertakingsPath).Body.String()
+	carriesList(t, undertakingsPath, page, promises.Organisation)
+	carriesList(t, undertakingsPath, page, promises.Porch.Adds)
+	if !escapedIn(page)(promises.Porch.What) {
+		t.Errorf("%s does not say what Porch is", undertakingsPath)
+	}
+
+	lastOrganisation := strings.Index(page, `id="`+promises.Organisation[len(promises.Organisation)-1].ID+`"`)
+	firstPorch := strings.Index(page, `id="`+promises.Porch.Adds[0].ID+`"`)
+	if lastOrganisation < 0 || firstPorch < 0 || firstPorch < lastOrganisation {
+		t.Errorf("%s puts Porch's undertakings above the organisation's, which each product's page carries first", undertakingsPath)
+	}
+
+	// And it says where the organisation's list is canonical.
+	if !strings.Contains(page, `href="`+siteBase()+`/organisation"`) {
+		t.Errorf("%s does not lead to the organisation's own page", undertakingsPath)
+	}
+}
+
+// carriesList fails for every undertaking of list the page leaves out, says
+// without saying how to check it, or gives no address to point at.
+func carriesList(t *testing.T, path, page string, list []promises.Promise) {
+	t.Helper()
+	says := escapedIn(page)
+	for _, p := range list {
+		if !says(p.Says) {
+			t.Errorf("%s does not say %s", path, p.ID)
+		}
+		if !says(p.Checked) {
+			t.Errorf("%s says %s and not how to check it, which makes it a request to be trusted", path, p.ID)
+		}
+		// Each is addressable, so that somebody can point at one rather than
+		// quote it.
+		if !strings.Contains(page, `id="`+p.ID+`"`) {
+			t.Errorf("%s: %s cannot be linked to", path, p.ID)
+		}
+	}
+}
+
+// escapedIn says whether page carries a sentence, compared escaped, the way
+// the template writes it. An apostrophe reaches the page as &#39;, and
+// comparing the raw sentence would fail on every undertaking that has one — a
+// test that fails where nothing is wrong is a test somebody edits until it
+// passes.
+func escapedIn(page string) func(string) bool {
+	return func(s string) bool { return strings.Contains(page, html.EscapeString(s)) }
 }
 
 // Whichever privacy page a visitor lands on sends them to the other question.
@@ -57,10 +104,13 @@ func TestThePageAboutTheOrganisationCarriesEveryUndertaking(t *testing.T) {
 // pointed across is a page that was hidden rather than separated — and this
 // project's footer is deliberately three links long, so the pointer has to be
 // in the prose where the question comes up.
-func TestThePrivacyPageSendsAReaderToTheOrganisation(t *testing.T) {
+func TestThePrivacyPageSendsAReaderToTheUndertakings(t *testing.T) {
+	// To Porch's page, which carries the organisation's list as well as its
+	// own, and is on the same name as the privacy page on the demonstration
+	// and on an installation alike.
 	page := get(t, "/privacy").Body.String()
-	if !strings.Contains(page, `href="/organisation"`) {
-		t.Error("the privacy page does not say where the organisation's undertakings are")
+	if !strings.Contains(page, `href="/undertakings"`) {
+		t.Error("the privacy page does not say where the undertakings are")
 	}
 
 	// And the pointer is near the top, before the detail of what a scan does:
@@ -70,13 +120,16 @@ func TestThePrivacyPageSendsAReaderToTheOrganisation(t *testing.T) {
 	if !ok {
 		t.Fatal("the privacy page has no jump list, so where the top ends cannot be told")
 	}
-	if !strings.Contains(lede, `href="/organisation"`) {
-		t.Error("the pointer to the organisation is below the jump list, where somebody asking that question will not see it")
+	if !strings.Contains(lede, `href="/undertakings"`) {
+		t.Error("the pointer to the undertakings is below the jump list, where somebody asking that question will not see it")
 	}
 
-	// The whole of /docs lists every document, and this is one.
-	if !strings.Contains(get(t, "/docs").Body.String(), `href="/organisation"`) {
-		t.Error("/docs does not lead to the organisation's undertakings")
+	// The whole of /docs lists every document, and these are two.
+	docs := get(t, "/docs").Body.String()
+	for _, want := range []string{`href="/undertakings"`, `href="/organisation"`} {
+		if !strings.Contains(docs, want) {
+			t.Errorf("/docs does not lead to %s", want)
+		}
 	}
 
 	// Both privacy pages, read as templates rather than as whatever this build
@@ -94,8 +147,8 @@ func TestThePrivacyPageSendsAReaderToTheOrganisation(t *testing.T) {
 			t.Errorf("%s has no jump list, so where its top ends cannot be told", name)
 			continue
 		}
-		if !strings.Contains(top, `href="/organisation"`) {
-			t.Errorf("%s does not point a reader at the organisation's undertakings above its jump list", name)
+		if !strings.Contains(top, `href="/undertakings"`) {
+			t.Errorf("%s does not point a reader at the undertakings above its jump list", name)
 		}
 	}
 }

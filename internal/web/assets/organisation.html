@@ -33,22 +33,22 @@
       A product may undertake to keep less than the list above requires. It may
       never undertake more, and it may not restate one of those undertakings in
       its own words: an addition that redefined one would be how a weaker
-      promise arrives wearing a stronger promise's name. What follows is
-      narrower than the list above, never a rewording of it.
+      promise arrives wearing a stronger promise's name.
     </p>
 
-    {{range .Products}}
-    <h3 id="{{.Name}}">{{.Name}}</h3>
+    <p>
+      What each adds is on that product's own page, under the list above
+      carried unchanged, and not here. A product's restrictions are that
+      product's word, and the address they are read at says whose word it is;
+      a list of every product's on this page would be one product's code
+      promising on behalf of another's.
+    </p>
 
-    <p>{{.What}}</p>
-
-    <dl class="undertakings">
-      {{range .Adds}}
-      <dt id="{{.ID}}">{{.Says}}</dt>
-      <dd><strong>How you check it.</strong> {{.Checked}}</dd>
+    <ul>
+      {{range .Products}}
+      <li><a href="{{.Page}}">{{.Name}}</a> &mdash; {{.What}}</li>
       {{end}}
-    </dl>
-    {{end}}
+    </ul>
 
     <h2 id="elsewhere">What this page does not cover</h2>
 
@@ -57,8 +57,8 @@
       a report carries are questions for that product's own pages, because the
       answers differ between them and a sentence true of one would be a
       guarantee falsely extended to the other. Porch answers them on
-      <a href="/privacy">its privacy page</a> and on the pages describing each
-      method.
+      <a href="{{.PorchBase}}/privacy">its privacy page</a> and on the pages
+      describing each method.
     </p>
 
     <p>
