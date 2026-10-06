@@ -13,6 +13,26 @@
   both schemes (contrast_test.go), so a token below is a promise, not a taste.
 */
 
+/*
+  One typeface for every page: Schibsted Grotesk, a variable font from 400 to
+  900, under the SIL Open Font License 1.1. It is served from this server, as
+  everything else is, so the privacy page's "no external fonts" stays true;
+  font_test.go holds its hash, so it changes only when somebody means it to.
+
+  It replaced the system's own fonts, which drew the marks differently on every
+  computer. Chosen over rounder faces because its capital I and small l differ,
+  and a tool that shows domain names cannot let paypal.com and paypaI.com look
+  the same. Characters it does not have, such as the arrows, come from the
+  system's fonts.
+*/
+@font-face {
+  font-family: "Schibsted Grotesk";
+  src: url("/schibsted-grotesk.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --paper:       #f7f7f8;
   --paper-sunk:  #ececf0;
@@ -72,7 +92,7 @@
   --term-str:    #a6dc85;
   --term-var:    #f2c97d;
 
-  --sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
+  --sans: "Schibsted Grotesk", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
           -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo,
           Consolas, monospace;
@@ -195,7 +215,7 @@ a:hover { text-decoration-thickness: 2px; }
   font-family: var(--sans);
   font-size: 1.95rem;
   font-weight: 750;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.04em;
   line-height: 1.1;
   color: var(--ink);
   text-decoration: none;
@@ -2126,7 +2146,7 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
   margin: 1rem 0 0;
   font-size: 2.6rem;
   font-weight: 750;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.04em;
   line-height: 1.1;
 }
 
@@ -2394,7 +2414,7 @@ main > .band:last-child { border-bottom: 0; }
 .colophon-mark .colophon-brand {
   font-size: 1.35rem;
   font-weight: 750;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
 }
 
 /*

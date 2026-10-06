@@ -40,8 +40,8 @@ var assets embed.FS
 // contentSecurityPolicy is deliberately not the one the API uses.
 //
 // The API returns JSON and needs nothing at all, so its policy denies
-// everything. A page needs a stylesheet and, on one route, a script, so its
-// policy must be looser. Sharing one policy between them is the usual way a
+// everything. A page needs a stylesheet, its typeface and, on one route, a
+// script, so its policy must be looser. Sharing one policy between them is the usual way a
 // strict header quietly becomes a permissive one: the page forces 'self' into
 // it, and the API silently inherits permission it never needed.
 //
@@ -62,6 +62,7 @@ const contentSecurityPolicy = "default-src 'none'; " +
 	"script-src 'self'; " +
 	"style-src 'self'; " +
 	"img-src 'self'; " +
+	"font-src 'self'; " +
 	"connect-src 'self'; " +
 	"form-action 'none'; " +
 	"frame-ancestors 'none'; " +
@@ -478,7 +479,15 @@ var files = map[string]servedFile{
 	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
 	// Porch's own icon: a p, and the stop in its violet.
 	"/porch-icon.svg": {"assets/porch-icon.svg", "image/svg+xml"},
+	// The one typeface every page is set in, served from here so a reader's
+	// browser asks nobody else for it. Schibsted Grotesk, under the SIL Open
+	// Font License 1.1 (schibsted-grotesk-OFL.txt beside it).
+	FontPath: {"assets/schibsted-grotesk.woff2", "font/woff2"},
 }
+
+// FontPath is where the typeface is served. It is public on an installation
+// behind a password, because the sign-in page is set in it too.
+const FontPath = "/schibsted-grotesk.woff2"
 
 // denyfirstFiles are this project's own contacts: where to report a security
 // problem in it, and the key to encrypt the report to. The demonstration
@@ -758,7 +767,7 @@ var signedIn bool
 // PublicPaths are what anybody may reach on an installation behind a
 // password: the sign-in page and what it draws and runs with.
 func PublicPaths() []string {
-	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/porch-icon.svg"}
+	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/porch-icon.svg", FontPath}
 }
 
 // renderSignIn is the one page an installation behind a password shows to
