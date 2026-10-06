@@ -1,4 +1,9 @@
-# porch
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/porch-dark.svg">
+    <img alt="porch." src="docs/assets/porch-light.svg" width="220">
+  </picture>
+</h1>
 
 A scanner that reads what a server already shows to anyone who asks, cites its
 sources for every verdict, and keeps no records it was not told to keep.
