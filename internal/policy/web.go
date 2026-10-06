@@ -430,9 +430,8 @@ func WebStandingLimits() []StandingLimit {
 		{
 			ID:    "web-root-only",
 			Title: "Only the root was asked",
-			Text: "One request was made, to the root of the site, and no other address on it was " +
-				"asked for. Another page may answer with different headers and load different " +
-				"things, and nothing here describes any page but this one.",
+			Text: "Only the root of the site was requested. Another page may send different headers and " +
+				"load different things.",
 
 			// This said "and only its headers were read" until 2026-09-11, and
 			// that half had to go rather than be reworded.
@@ -449,10 +448,9 @@ func WebStandingLimits() []StandingLimit {
 		{
 			ID:    "web-no-browser",
 			Title: "No browser ran here",
-			Text: "Nothing was executed. Where the page was read, what it says it loads was read out " +
-				"of the markup — so anything a script fetches once it runs, and anything assembled " +
-				"after the page arrives, was not seen. Whether a declared policy is enforced in " +
-				"practice is visible only to a browser, and no browser ran here.",
+			Text: "Nothing was executed. Where the page was read, what it loads was read from its markup, " +
+				"so anything a script fetches later was not seen. Whether a declared policy is enforced " +
+				"is visible only to a browser.",
 
 			// "What a page actually loads ... is visible only to a browser"
 			// until 2026-09-11, which stopped being true the day the markup
@@ -465,8 +463,8 @@ func WebStandingLimits() []StandingLimit {
 		{
 			ID:    "web-one-moment",
 			Title: "One answer, from one machine, at one moment",
-			Text: "A name served by several machines, or one running an experiment, can answer the " +
-				"next visitor differently. This is what one address said once.",
+			Text: "A name served by several machines can answer the next visitor differently. This is what " +
+				"one address said once.",
 		},
 	}
 }

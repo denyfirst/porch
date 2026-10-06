@@ -89,7 +89,7 @@ var Porch = Product{
 		{
 			ID:      "porch-reads-and-does-not-touch",
 			Says:    "A scan only reads what a server already offers. It sends no login attempts, no exploits, no malformed packets and no mail.",
-			Checked: "The method pages list every connection a scan makes.",
+			Checked: "docs/checks.md lists every connection a scan makes.",
 		},
 		{
 			ID:      "porch-builds-from-its-own-source-alone",

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -8,47 +9,32 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 )
 
-// Every document is on one page, and Porch's pages lead there.
-func TestEveryDocumentIsOnTheDocsPage(t *testing.T) {
-	page := get(t, "/docs").Body.String()
-	for _, want := range []string{
-		`href="/tls/method"`, `href="/web/method"`, `href="/mail/method"`, `href="/dns/method"`, `href="/names/method"`,
-		`href="/privacy"`, `href="/terms"`, `href="/undertakings"`, `href="/organisation"`,
-		"docs/self-host.md", "docs/verify.md", "SECURITY.md",
-		`href="https://github.com/denyfirst/porch"`, `href="https://github.com/denyfirst/porch/releases"`,
-		// Absolute, on both builds: denyfirst.dev is the one place these are
-		// served, and an installation's own address would answer with a 404.
-		`href="` + SiteURL + PGPKeyPath + `"`, `href="` + SiteURL + SecurityTxtPath + `"`,
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/docs does not lead to %s", want)
-		}
-	}
-
-	// A link inside a link is not a link a browser can be relied on to follow.
-	cards := regexp.MustCompile(`(?s)<a class="card[^"]*"[^>]*>(.*?)</a>`).FindAllStringSubmatch(page, -1)
-	if len(cards) < 10 {
-		t.Fatalf("only %d cards on /docs", len(cards))
-	}
-	for _, c := range cards {
-		if strings.Contains(c[1], "<a ") {
-			t.Errorf("a card on /docs holds a link of its own: %s", c[1])
-		}
-	}
-
-	// Every page of Porch's leads to /docs from its header and its footer.
+// Porch's documentation is on GitHub, and every page of Porch's leads there
+// from its header and its footer.
+func TestEveryPageLeadsToTheDocs(t *testing.T) {
 	for path, p := range pages {
 		if demo.Enabled && p.Organisation {
 			continue
 		}
 		body := get(t, path).Body.String()
 		_, foot, _ := strings.Cut(body, `<footer class="colophon">`)
-		if !strings.Contains(foot, `href="`+porchLink("/docs")+`">Docs</a>`) {
-			t.Errorf("%s: the footer does not lead to /docs", path)
+		if !strings.Contains(foot, `href="`+DocsURL+`">Docs</a>`) {
+			t.Errorf("%s: the footer does not lead to the docs", path)
 		}
 		head, _, _ := strings.Cut(body, "<main>")
-		if !strings.Contains(head, `href="`+porchLink("/docs")+`"`) {
-			t.Errorf("%s: the header does not lead to /docs", path)
+		if !strings.Contains(head, `href="`+DocsURL+`"`) {
+			t.Errorf("%s: the header does not lead to the docs", path)
+		}
+	}
+
+	// The index the link opens lists every document.
+	raw, err := os.ReadFile("../../docs/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"(checks.md)", "(self-host.md)", "(verify.md)", "(../SECURITY.md)", "(https://github.com/denyfirst/porch/releases)"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("docs/README.md does not link %s", want)
 		}
 	}
 }
@@ -110,7 +96,7 @@ func TestProductsAreAMenuNotABar(t *testing.T) {
 	if strings.Contains(bar, `href="{{.PorchBase}}/"`) {
 		t.Error("a product sits in the bar itself")
 	}
-	for _, want := range []string{`href="{{.SiteBase}}/">Home</a>`, `<a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>`, `href="{{.PorchBase}}/docs">Docs</a>`} {
+	for _, want := range []string{`href="{{.SiteBase}}/">Home</a>`, `<a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>`, `href="` + DocsURL + `">Docs</a>`} {
 		if !strings.Contains(brand, want) {
 			t.Errorf("the demonstration's header lacks %s", want)
 		}

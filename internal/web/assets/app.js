@@ -36,12 +36,15 @@ const VERDICT_ORDER = { insecure: 3, weak: 2, strong: 1 };
   the markup can set and the CSP cannot object to; there is no inline script
   anywhere on this site and this does not add one.
 */
+// How each check works, and its limits: docs/checks.md on GitHub.
+const CHECKS_DOC = "https://github.com/denyfirst/porch/blob/main/docs/checks.md";
+
 const CHECKS = {
   tls: {
     label: "Transport",
     says: "TLS versions, ciphers and the certificate",
     endpoint: "/api/v1/tls/scan",
-    methodPage: "/tls/method",
+    methodPage: CHECKS_DOC + "#tls",
     working: "Opening handshakes at every TLS version. This takes a few seconds.",
     build: (data) => buildTLS(data),
   },
@@ -49,7 +52,7 @@ const CHECKS = {
     label: "Reach",
     says: "HTTPS redirects, HSTS, cookies and headers",
     endpoint: "/api/v1/web/scan",
-    methodPage: "/web/method",
+    methodPage: CHECKS_DOC + "#web",
     working: "Reading how the site answers, over HTTPS and over plaintext.",
     build: (data) => buildWeb(data),
   },
@@ -58,7 +61,7 @@ const CHECKS = {
     says: "name servers, DNSSEC and zone transfers",
 
     endpoint: "/api/v1/dns/scan",
-    methodPage: "/dns/method",
+    methodPage: CHECKS_DOC + "#dns",
     working: "Reading the delegation, the records at the name and the DNSSEC chain.",
     build: (data) => buildDNS(data),
   },
@@ -79,7 +82,7 @@ const CHECKS = {
     says: "names under the domain, from certificates and DNS",
 
     endpoint: "/api/v1/names/scan",
-    methodPage: "/names/method",
+    methodPage: CHECKS_DOC + "#names",
     working: "Asking what has been published under this domain, and what each name is doing now.",
     build: (data) => buildNames(data),
   },
@@ -88,7 +91,7 @@ const CHECKS = {
     says: "SPF, DKIM, DMARC, MTA-STS and the mail servers",
 
     endpoint: "/api/v1/mail/scan",
-    methodPage: "/mail/method",
+    methodPage: CHECKS_DOC + "#mail",
     working: "Reading the sender policy, the DMARC record, the mail exchangers and what protects them.",
     build: (data) => buildMail(data),
   },
@@ -687,7 +690,7 @@ function legacy(tls) {
     "Each family was offered on its own, every suite in it at once. " +
     "Refused means the server accepted none of them. ");
   const why = el("a", "notes-method-link", "Why these are asked separately");
-  why.href = CHECKS.tls.methodPage + "#obsolete-suites";
+  why.href = CHECKS_DOC + "#obsolete-suites";
   note.appendChild(why);
   frag.appendChild(note);
 

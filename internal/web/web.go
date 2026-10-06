@@ -32,7 +32,6 @@ import (
 	"github.com/denyfirst/porch/internal/ociimage"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/promises"
-	"github.com/denyfirst/porch/internal/webprobe"
 )
 
 //go:embed assets
@@ -269,55 +268,12 @@ var pages = map[string]*page{
 		// which part of the workspace it is cannot be marked as another.
 		Section: "names",
 	},
-	"/names/method": {
-		Title:       "The name inventory — Porch by denyfirst",
-		Description: "Where names come from, who is asked, and what the list cannot show.",
-		Fragment:    "assets/names-method.html",
-	},
 
 	"/terms": {
 		Title:       "Terms of use — Porch by denyfirst",
 		Description: "What you agree to when you use this, and what a result is not.",
 		Fragment:    "assets/terms.html",
 		Data:        struct{ Demo bool }{demo.Enabled},
-	},
-
-	// Every document in one place. The footer carried six links and the
-	// privacy page three more; they are grouped here by the question they
-	// answer instead.
-	"/docs": {
-		Title:       "Docs — Porch by denyfirst",
-		Description: "What each check does, what is kept, and how to run your own copy.",
-		Fragment:    "assets/docs.html",
-		Data: docsPage{
-			TLS:   policy.TLSVersion,
-			Web:   policy.WebVersion,
-			Mail:  policy.MailVersion,
-			DNS:   policy.DNSVersion,
-			Names: policy.Informational,
-			Demo:  demo.Enabled,
-		},
-	},
-
-	// A fourth page, on a site that deliberately went from five to three.
-	//
-	// The consolidation was about pages a reader has to choose between: three
-	// explanations split across scanning, privacy and guarantees meant
-	// somebody arriving cold had to already know which one held their answer.
-	// Nobody arrives here cold. This page is reached from a link in the
-	// report it explains, at the moment the question comes up, and it exists
-	// so that four sentences true of every scan stop being printed on every
-	// report — where they read as findings about the reader's own server.
-	//
-	// Under the service and not at the root, because the limits on it are
-	// this instrument's. What a TLS scan cannot establish is not what a mail
-	// check will not establish, and a page that tried to be both would be
-	// true of neither.
-	"/tls/method": {
-		Title:       "The TLS check — Porch by denyfirst",
-		Description: "How to read a TLS report, and the limits of every scan.",
-		Fragment:    "assets/method.html",
-		Data:        methodPage{Limits: policy.StandingLimits(), Demo: demo.Enabled},
 	},
 
 	// The web check, beside the TLS one rather than under it.
@@ -334,50 +290,6 @@ var pages = map[string]*page{
 		Fragment:    "assets/web.html",
 		Script:      true,
 		Data:        scanPage{Demo: demo.Enabled, Hosts: demo.Hosts()},
-	},
-
-	// The address the web check puts in its own user agent.
-	//
-	// N7 says a probe identifies itself and names a page explaining exactly
-	// what it sent, because a probe that hides is one an administrator can
-	// only be alarmed by while one that identifies itself is one they can
-	// make a decision about. webprobe.DefaultUserAgent has named this address
-	// since the check was written, and it answered 404 until the check had a
-	// service surface — at which point the promise started being made to
-	// strangers' access logs for real.
-	//
-	// So this page answers the log reader before it answers the report
-	// reader. Somebody who arrives from a log line did not ask to be here and
-	// wants one thing: what reached their server, exactly, and that there is
-	// nothing else to look for.
-	"/web/method": {
-		Title:       "The web check — Porch by denyfirst",
-		Description: "What the web check sends to a server, and how to read its report.",
-		Fragment:    "assets/web-method.html",
-		Data:        methodPage{Limits: policy.WebStandingLimits(), Demo: demo.Enabled, UserAgent: webprobe.DefaultUserAgent},
-	},
-
-	// The mail check's, added third of the four.
-	//
-	// Its report said "1 limit of this method" and had nowhere to point, and on
-	// the Porch page, which runs every check, the link it drew went to the
-	// Transport page's limits. It also answers the question its reports raise
-	// most: why an exchanger's offer was not established.
-	"/mail/method": {
-		Title:       "The mail check — Porch by denyfirst",
-		Description: "What the mail check reads, and how to read its report.",
-		Fragment:    "assets/mail-method.html",
-		Data:        methodPage{Limits: policy.MailStandingLimits(), Demo: demo.Enabled},
-	},
-
-	// The DNS check's, the fourth. It connects to nothing at all, which is
-	// the first thing somebody reading about a scan of their domain wants to
-	// know, so the page says it near the top rather than among the limits.
-	"/dns/method": {
-		Title:       "The DNS check — Porch by denyfirst",
-		Description: "What the DNS check reads, what it grades, and its limits.",
-		Fragment:    "assets/dns-method.html",
-		Data:        methodPage{Limits: policy.DNSStandingLimits(), Demo: demo.Enabled},
 	},
 }
 
@@ -486,31 +398,6 @@ func consoleChecks() []consoleCheck {
 	}
 }
 
-// methodPage is what assets/method.html ranges over.
-type methodPage struct {
-	Limits []policy.StandingLimit
-
-	// Demo is true in the build that runs on denyfirst.dev.
-	//
-	// The web method page needs it because one of its paragraphs stopped being
-	// true of every installation on 2026-09-11: the demonstration reads no
-	// response body and an installation somebody runs themselves may read the
-	// page. The user agent names one address from every installation, so a log
-	// reader arrives here whichever one reached them — and a page that said
-	// "this deployment reads no body" from a build that does would be a
-	// scanning notice misdescribing the scan.
-	//
-	// It says both either way, and this decides which one it says first.
-	Demo bool
-
-	// UserAgent is what the web check calls itself, on the page that says
-	// what it sent. It was printed under every Reach report instead, where it
-	// was a line about this program in the middle of a report about a server.
-	// Read from webprobe, so the page cannot name a string the probe no
-	// longer sends. Empty on the pages of the other checks.
-	UserAgent string
-}
-
 // moved are paths that used to be pages of their own, or that a reader is
 // likely to guess.
 //
@@ -526,11 +413,23 @@ var moved = map[string]string{
 	"/scanning": "/privacy#scans",
 	"/about":    "/privacy",
 
-	// The method page moved under the service it describes. Permanent: it is
-	// not coming back to the root, and the address is printed in reports that
-	// have already been shared.
-	"/method": "/tls/method",
+	// How the checks work, and the docs, are on GitHub. These addresses are
+	// in user agents, command-line output and reports already shared.
+	"/docs":         DocsURL,
+	"/method":       ChecksURL + "#tls",
+	"/tls/method":   ChecksURL + "#tls",
+	"/web/method":   ChecksURL + "#web",
+	"/mail/method":  ChecksURL + "#mail",
+	"/dns/method":   ChecksURL + "#dns",
+	"/names/method": ChecksURL + "#names",
 }
+
+// DocsURL is where Porch's documentation is, and ChecksURL the document on
+// how each check works, which reports and the command line link to.
+const (
+	DocsURL   = "https://github.com/denyfirst/porch/tree/main/docs"
+	ChecksURL = "https://github.com/denyfirst/porch/blob/main/docs/checks.md"
+)
 
 // standingIn are addresses serving something other than what they will serve,
 // and there are none.
@@ -643,7 +542,6 @@ func init() {
 		// left open, because an open field on a page that then refuses is the
 		// thing the deletion was right about (N12).
 		pages["/names"].Data = namesPage{Target: demoDomain(), Demo: true}
-		pages["/names/method"].Data = namesPage{Target: demoDomain(), Demo: true}
 
 		pages["/porch"] = &page{
 			Title:       "Porch — TLS, web, mail and DNS checks — denyfirst",
@@ -1169,17 +1067,6 @@ func pageImageDigest() string {
 		return ociimage.Placeholder
 	}
 	return imageDigest
-}
-
-// docsPage is what assets/docs.html reads.
-type docsPage struct {
-	TLS, Web, Mail, DNS string
-
-	// Names is what the inventory carries in the place the four checks carry a
-	// rule set: a word saying it grades nothing, not a version nobody could
-	// compare two reports with.
-	Names string
-	Demo  bool
 }
 
 // plainFile is a file a crawler reads.

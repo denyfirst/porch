@@ -1,7 +1,6 @@
 package web
 
 import (
-	"html"
 	"regexp"
 	"strings"
 	"testing"
@@ -249,9 +248,9 @@ func TestTheStandingLimitsAreNamedAndLinked(t *testing.T) {
 		t.Error("the script still renders the standing limits as a section of every report")
 	}
 	for _, required := range []string{
-		`methodPage: "/tls/method"`,
-		`methodPage: "/web/method"`,
-		`methodPage: "/mail/method"`,
+		`methodPage: CHECKS_DOC + "#tls"`,
+		`methodPage: CHECKS_DOC + "#web"`,
+		`methodPage: CHECKS_DOC + "#mail"`,
 		"notes(data.notes, verdict, CHECKS.tls.methodPage)",
 		"notes(data.notes, verdict, CHECKS.web.methodPage)",
 		"notes(data.notes, verdict, CHECKS.mail.methodPage)",
@@ -264,22 +263,12 @@ func TestTheStandingLimitsAreNamedAndLinked(t *testing.T) {
 		}
 	}
 
-	// And the page it points at has to exist and list every one of them.
-	page, ok := rendered["/tls/method"]
-	if !ok {
-		t.Fatal("the report links /tls/method and the site does not serve it")
-	}
-	// Compared against the escaped form. The page is a template and
-	// html/template escapes what it interpolates, so "Go's" arrives as
-	// "Go&#39;s" — which is the escaping working, not the sentence missing.
-	// Two of the four carry an apostrophe and this test failed on exactly
-	// those two before it was told.
+	// And the document it points at lists every one of them, in the words
+	// the program states them (TestEveryStandingLimitIsInTheChecksDocument).
+	doc := checksDoc(t)
 	for _, limit := range policy.StandingLimits() {
-		if !strings.Contains(string(page), html.EscapeString(limit.Text)) {
-			t.Errorf("/method does not carry the limit %q", limit.Title)
-		}
-		if !strings.Contains(string(page), `id="`+limit.ID+`"`) {
-			t.Errorf("/method has no anchor for %q, so a report cannot point at it", limit.ID)
+		if !strings.Contains(doc, limit.Text) {
+			t.Errorf("docs/checks.md does not carry the limit %q", limit.Title)
 		}
 	}
 }

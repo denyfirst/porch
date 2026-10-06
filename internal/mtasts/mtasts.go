@@ -69,7 +69,7 @@ const (
 
 	// UserAgent identifies the request the way every other one this project
 	// makes is identified.
-	UserAgent = "porch/1 (+https://porch.denyfirst.dev/tls/method; mta-sts)"
+	UserAgent = "porch/1 (+https://porch.denyfirst.dev/privacy#stopping; mta-sts)"
 
 	defaultTimeout = 10 * time.Second
 )

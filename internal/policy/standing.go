@@ -44,13 +44,9 @@ var (
 	LimitFirstHop = StandingLimit{
 		ID:    "first-hop-only",
 		Title: "Only the first hop was measured",
-		Text: "Everything here describes the endpoint that answered on the address named at the top of " +
-			"this report. Where a content delivery network, a reverse proxy or a load balancer terminates " +
-			"TLS, that endpoint is the one measured: the link from it to the server behind it is not " +
-			"visible from here, and may negotiate other versions, other suites and another key exchange. " +
-			"A name that resolves to several addresses was measured at one of them; each of the others is " +
-			"asked a single handshake, which shows what a client is given there and not everything that " +
-			"machine would accept.",
+		Text: "The endpoint that answered was measured. Behind a CDN, proxy or load balancer, the link " +
+			"to the server behind it is not visible and may differ. A name with several addresses was " +
+			"measured at one of them; each other address gets one handshake.",
 	}
 
 	LimitCipherSuitesOffered = StandingLimit{
@@ -61,22 +57,20 @@ var (
 		// hand. The sentence is attached on exactly the reports where those
 		// questions are put — both hang on suiteCoverageApplies — so the
 		// rewritten one is true wherever it appears.
-		Text: "Cipher suites were enumerated only among those Go's TLS stack implements. SSL 3.0 and " +
-			"the export-grade, NULL, finite-field DHE and anonymous suites were asked about with a " +
-			"hand-written hello, which establishes whether any of each is accepted and not every one " +
-			"that is. Other suites " +
-			"outside Go's stack, and SSLv2, are not covered. A server that speaks a version but " +
-			"shares no suite with this client answers a handshake the same way as one that refuses " +
-			"the version, so a refusal here is not proof the version is switched off.",
+		Text: "Suites were enumerated among those Go's TLS stack implements. SSL 3.0 and the " +
+			"export-grade, NULL, finite-field DHE and anonymous families were asked with a " +
+			"hand-written hello, which shows whether any suite of a family is accepted, not every " +
+			"one. SSLv2 and other suites are not covered. A version refused here may only share no " +
+			"suite with this client.",
 	}
 
 	LimitTLS13Suites = StandingLimit{
 		ID:    "tls13-suites",
 		Title: "TLS 1.3 suites are asked from the registry",
-		Text: "TLS 1.3 suites are asked one at a time with a hand-written hello offering each suite in " +
-			"the IANA registry, because Go gives a client no way to choose among them. A suite outside " +
-			"the registry is not asked about, and where that hello is not answered the way this scan's " +
-			"own handshake was, only the negotiated suite is listed and the report says so.",
+		Text: "Each TLS 1.3 suite in the IANA registry is asked with a hand-written hello, because Go " +
+			"cannot choose among them. Suites outside the registry are not asked. Where that hello is " +
+			"not answered like the scan's own handshake, only the negotiated suite is listed and the " +
+			"report says so.",
 	}
 
 	// Rewritten when the stores of four clients began to be carried. The
@@ -85,14 +79,12 @@ var (
 	LimitOneTrustStore = StandingLimit{
 		ID:    "one-trust-store",
 		Title: "The verdict rests on one root store",
-		Text: "A chain reported as trusted was verified against one root store, and the verdict rests on " +
-			"that store: on Linux and other unix systems, the store of the machine that ran this scan; on " +
-			"Windows and macOS, the copy of Microsoft's or Apple's store this build carries, because the " +
-			"platform's own verifier fetches what a scanned certificate names. Where the report names them, what Mozilla, " +
-			"Chrome, Microsoft and Apple make of the chain comes from copies of their stores dated in the " +
-			"report: a store changes after that date, and only which roots it includes and Mozilla's " +
-			"dates for distrusting a root are evaluated — other conditions a store places on a root are " +
-			"named, not applied.",
+		Text: "Trust is checked against one root store, and the verdict rests on that store: on Linux " +
+			"and other unix systems, the store of the machine that ran this scan; on Windows and " +
+			"macOS, the copy of Microsoft's or Apple's store this build carries. What Mozilla, " +
+			"Chrome, Microsoft and Apple make of the chain comes from copies of their stores dated in " +
+			"the report. Only which roots they include, and Mozilla's distrust dates, are applied; " +
+			"other conditions are named, not applied.",
 	}
 
 	// What this says was true of every build until one of them started
@@ -111,17 +103,12 @@ var (
 	LimitNoAuthorityAsked = StandingLimit{
 		ID:    "no-authority-asked",
 		Title: "No authority is asked about this certificate",
-		Text: "No certificate authority is asked whether this particular certificate is still " +
-			"valid. That question carries the certificate's serial number, so it would tell the " +
-			"authority which certificate somebody is looking at, and no scan asks it unless " +
-			"whoever runs it says so — -ask-responder, which a service accepts only for a domain " +
-			"it has been shown control of, and where it was asked the report says so in place of " +
-			"this. Revocation is not therefore unexamined: a status response the server stapled " +
-			"into the handshake is read, because reading bytes already in hand asks nobody " +
-			"anything, and where a certificate names a revocation list it is fetched — one list " +
-			"covers thousands of certificates, so the request names none of them. Where neither a " +
-			"staple nor a list settled it, a chain reported as trusted reaches a root and is in " +
-			"date, and may still have been withdrawn.",
+		Text: "No certificate authority is asked about this certificate, because the question carries " +
+			"its serial number and tells the authority which certificate is being looked at. " +
+			"-ask-responder turns that on, only for a domain a service has been shown control of, and " +
+			"the report then says so. A response the server stapled is read, and a revocation list " +
+			"the certificate names is fetched, because one list names no single certificate. Without " +
+			"either, a trusted, in-date chain may still have been withdrawn.",
 	}
 
 	// "Transparency receipts are counted and not verified ... this service
@@ -132,10 +119,9 @@ var (
 	LimitTransparencyReceipts = StandingLimit{
 		ID:    "transparency-receipts",
 		Title: "Transparency receipts are checked against one browser's log list",
-		Text: "A receipt is checked against the key Chrome's log list gives its log, as that list " +
-			"stood on the date the report names. A receipt from a log the list does not name has no " +
-			"key to be checked against, and nothing here decides how many receipts, or from which " +
-			"logs, a particular browser requires.",
+		Text: "Receipts are checked against Chrome's log list as it stood on the date in the report. A " +
+			"receipt from a log the list does not name cannot be checked, and nothing here decides " +
+			"how many receipts a browser requires.",
 	}
 )
 

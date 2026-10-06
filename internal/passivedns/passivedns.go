@@ -58,7 +58,7 @@ import (
 
 // UserAgent names this tool to a register, and names the page that says what
 // it does. The same shape the certificate monitors are given (N7).
-const UserAgent = "porch/1 (+https://porch.denyfirst.dev/names/method)"
+const UserAgent = "porch/1 (+https://porch.denyfirst.dev/privacy#stopping)"
 
 const (
 	// defaultTimeout bounds a whole search, every page of it.

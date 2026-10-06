@@ -112,14 +112,6 @@ func TestThePrivacyPageSendsAReaderToTheUndertakings(t *testing.T) {
 		t.Error("the pointer to the undertakings is below the jump list, where somebody asking that question will not see it")
 	}
 
-	// The whole of /docs lists every document, and these are two.
-	docs := get(t, "/docs").Body.String()
-	for _, want := range []string{`href="/undertakings"`, `href="/organisation"`} {
-		if !strings.Contains(docs, want) {
-			t.Errorf("/docs does not lead to %s", want)
-		}
-	}
-
 	// Both privacy pages, read as templates rather than as whatever this build
 	// happens to serve.
 	//

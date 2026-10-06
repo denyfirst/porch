@@ -31,14 +31,14 @@
         This demo lists <strong>{{.Target}}</strong> only. Run the tool
         yourself to list your own. Names come from public certificates, this domain&rsquo;s
         DNS records and its hosts&rsquo; certificates. None is guessed.
-        <a href="/names/method">How it works</a>.
+        <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#names">How it works</a>.
       </p>
       {{else}}
       <p class="field-help" id="field-help">
         A bare domain. No name is guessed and nothing is sent to your hosts.
         If others can reach this installation, it lists only a domain you have
         proven control of.
-        <a href="/names/method">How it works</a>.
+        <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#names">How it works</a>.
       </p>
       {{end}}
 
@@ -69,7 +69,7 @@
           Optional. Finds hosts by their reverse DNS. Nothing is sent to the
           addresses. A range wider than /20 (/116 for IPv6), or more than
           4,096 addresses in total, is refused.
-          <a href="/names/method">The limits on a range.</a>
+          <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#names">The limits on a range.</a>
         </p>
       </div>
       {{end}}
@@ -114,7 +114,7 @@
           lines beginning with # are skipped. A file is read in this browser
           and never uploaded; the names are sent in the
           same request as the domain. Up to 1,000 names.
-          <a href="/names/method">How names are used.</a>
+          <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#names">How names are used.</a>
         </p>
       </div>
       {{end}}

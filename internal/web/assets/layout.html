@@ -48,7 +48,7 @@
   </nav>
   <p class="rail-caption" id="rail-reference">Reference</p>
   <nav class="rail-nav" aria-labelledby="rail-reference">
-    <a class="rail-item" href="/docs"{{if eq .Section "reference"}} aria-current="page"{{end}}><span class="rail-glyph" aria-hidden="true">≡</span>Docs</a>
+    <a class="rail-item" href="https://github.com/denyfirst/porch/tree/main/docs"><span class="rail-glyph" aria-hidden="true">≡</span>Docs</a>
   </nav>
   <div class="rail-foot">
     <button class="theme-toggle" id="theme-toggle" type="button" hidden>Dark</button>
@@ -79,7 +79,7 @@
         <li><span class="nav-menu-soon"><span class="nav-menu-name">PAM services</span><span class="nav-menu-note">Exploring</span></span></li>
       </ul>
     </div>
-    {{if .Organisation}}<a href="{{.SiteBase}}/organisation">Undertakings</a>{{else}}<a href="{{.PorchBase}}/docs">Docs</a>{{end}}
+    {{if .Organisation}}<a href="{{.SiteBase}}/organisation">Undertakings</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>{{end}}
   </nav>
   <button class="theme-toggle" id="theme-toggle" type="button" hidden>Dark</button>
 </header>
@@ -102,7 +102,7 @@
     {{if ne .Section "login"}}<p class="colophon-links">
       {{if and .Brand .Organisation}}<a href="{{.SiteBase}}/organisation">Undertakings</a>
       <a href="{{.SiteBase}}/.well-known/security.txt">Security</a>
-      <a href="{{.SiteBase}}/pgp-key.txt">PGP key</a>{{else}}<a href="{{.PorchBase}}/docs">Docs</a>
+      <a href="{{.SiteBase}}/pgp-key.txt">PGP key</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
       <a href="{{.PorchBase}}/privacy">Privacy</a>
       <a href="{{.PorchBase}}/terms">Terms</a>
       <a href="{{.PorchBase}}/undertakings">Undertakings</a>{{end}}

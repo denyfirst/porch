@@ -778,22 +778,13 @@ var LimitDNSAsksTheResolver = StandingLimit{
 	ID:    "dns-asks-the-resolver",
 	Title: "Everything here came from one resolver",
 
-	Text: "Almost every answer here came from the resolver this installation uses, so what is " +
-		"reported is what that resolver returns today, which may be an answer it still holds from " +
-		"earlier. Four questions cannot be answered that way and are put to servers directly, over " +
-		"TCP on port 53, where this installation is allowed to ask them: whether each server the " +
-		"zone names answers for the zone as its own; whether each of them will hand the whole zone " +
-		"to anybody who asks; whether a server inside the domain being checked — never one " +
-		"belonging to a provider — also answers questions about domains it has nothing to do with; " +
-		"and, of one server of the zone above this one, which servers it hands out for this domain. " +
-		"Nothing else is sent to them. The transfer is asked for and not taken: the first reply's " +
-		"header says whether the server began one, the connection is closed there, and nothing the " +
-		"zone contains is read or reported. That last answer is one server's, so a zone above whose " +
-		"own servers disagree would be read from " +
-		"whichever of them answered first. The DNSSEC chain is checked here by taking the digest " +
-		"of the keys this zone publishes and comparing it with what the parent holds; whether the " +
-		"signatures over every record verify is the resolver's work, and where it says it did " +
-		"that, the report says so as its word rather than as this program's.",
+	Text: "Most answers came from this installation's resolver, as it returns them today. Four " +
+		"questions go directly to name servers over TCP port 53, where this installation may ask " +
+		"them: whether each answers for the zone, whether each allows a zone transfer, whether a " +
+		"server inside the domain (never a provider's) answers for other domains, and which " +
+		"servers one server of the parent zone hands out. The transfer is closed before any " +
+		"record is read. The DNSSEC chain is checked by comparing the digests of the zone's keys " +
+		"with the parent's; whether every signature verifies is the resolver's word.",
 }
 
 // DNSStandingLimits are true of every DNS check this program runs.

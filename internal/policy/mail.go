@@ -948,17 +948,13 @@ var LimitMailSendsNothing = StandingLimit{
 	// So what is true of every mail scan stays here, and what this particular
 	// scan read about the policy is said by the report that read it. describeSTS
 	// names the reason where there is one.
-	Text: "No message was composed or sent, and nothing that would change state at the other end " +
-		"was attempted: there is no DATA in any of this, so nothing can be delivered or queued. " +
-		"Where a mail exchanger inside the domain was contacted, it was also asked whether it " +
-		"forwards mail for a domain it does not serve — an empty sender, a recipient at a name RFC " +
-		"2606 reserves so that it cannot exist, and a reset before any message. An exchanger run by " +
-		"somebody else is never asked that. Where DANE " +
-		"is published, a binding is checked only against a certificate an exchanger presented to this " +
-		"scan, and DNSSEC is not validated here: whether the records validated is the resolver's word. " +
-		"And a DKIM signing key is read " +
-		"only under a selector this scan was told to look under: DNS cannot list what is beneath a " +
-		"name, so which selectors were tried — if any — is said in the report itself rather than here.",
+	Text: "No message was sent: there is no DATA, so nothing can be delivered or queued. A mail " +
+		"exchanger inside the domain is also asked whether it forwards mail for a domain it does " +
+		"not serve: an empty sender, a recipient at a name RFC 2606 reserves so it cannot exist, " +
+		"and a reset before any message. An exchanger run by somebody else is never asked that. " +
+		"DANE is checked only against a certificate an exchanger presented, and DNSSEC is the " +
+		"resolver's word. A DKIM key is read only under a selector this scan was told to look " +
+		"under, and the report says which.",
 }
 
 // MailStandingLimits are true of every mail check this program runs.

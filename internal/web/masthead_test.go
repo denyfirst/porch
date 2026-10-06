@@ -1,6 +1,7 @@
 package web
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -42,7 +43,8 @@ func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 		if !strings.Contains(head, `<a class="wordmark" href="/">`+ToolName+`</a>`) {
 			t.Errorf("%s: the header does not name %s:\n%s", path, ToolName, head)
 		}
-		if strings.Contains(strings.ToLower(head), "denyfirst") || strings.Contains(head, "Records nothing") {
+		visible := regexp.MustCompile(`href="[^"]*"`).ReplaceAllString(head, "")
+		if strings.Contains(strings.ToLower(visible), "denyfirst") || strings.Contains(head, "Records nothing") {
 			t.Errorf("%s: the header still carries the maker:\n%s", path, head)
 		}
 		if !strings.Contains(foot, `<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span>`) {
