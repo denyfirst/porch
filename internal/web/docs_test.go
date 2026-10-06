@@ -86,6 +86,9 @@ func TestProductsAreAMenuNotABar(t *testing.T) {
 	// first in the file and is not it.
 	_, brand, _ := strings.Cut(layout, `<header class="masthead">`)
 	brand, _, _ = strings.Cut(brand, "</header>")
+	// The navigation, without the wordmark, which on Porch's pages is Porch's
+	// own link home.
+	_, brand, _ = strings.Cut(brand, `<nav class="masthead-nav"`)
 
 	// The source, so the links are as the template writes them: Porch's page
 	// is the root of Porch's own name since 2026-10-05.

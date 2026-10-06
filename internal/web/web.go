@@ -222,27 +222,7 @@ var pages = map[string]*page{
 		Title:       "Privacy — Porch by denyfirst",
 		Description: "What this service keeps, what a scan sends, and how to stop one.",
 		Fragment:    "assets/privacy.html",
-	},
-	// The organisation's undertakings, whatever you run.
-	"/organisation": {
-		Title:        "What the maker undertakes — denyfirst",
-		Organisation: true,
-		Description:  "What denyfirst undertakes for everything it publishes, and how to check each one.",
-		Fragment:     "assets/organisation.html",
-		Data: organisationPage{
-			Organisation: promises.Organisation,
-			Products:     productPages(),
-		},
-	},
-	// What Porch adds to the organisation's undertakings, on Porch's own name.
-	undertakingsPath: {
-		Title:       "What Porch undertakes — Porch by denyfirst",
-		Description: "What Porch adds to denyfirst's undertakings, and how to check each one.",
-		Fragment:    "assets/undertakings.html",
-		Data: undertakingsPage{
-			Product:  promises.Porch,
-			SiteBase: siteBase(),
-		},
+		Data:        porchPrivacy{Porch: promises.Porch},
 	},
 	// The name inventory, and the page that says what it cannot show.
 	//
@@ -291,6 +271,27 @@ var pages = map[string]*page{
 		Script:      true,
 		Data:        scanPage{Demo: demo.Enabled, Hosts: demo.Hosts()},
 	},
+}
+
+// homePage is what assets/home.html reads.
+type homePage struct {
+	Fingerprint string
+}
+
+// groupedFingerprint writes a fingerprint as gpg prints it: groups of four,
+// with a wider gap at the middle.
+func groupedFingerprint(fp string) string {
+	var b strings.Builder
+	for i := 0; i < len(fp); i += 4 {
+		if i > 0 {
+			b.WriteString(" ")
+			if i == len(fp)/2 {
+				b.WriteString(" ")
+			}
+		}
+		b.WriteString(fp[i:min(i+4, len(fp))])
+	}
+	return b.String()
 }
 
 // scanPage is what assets/index.html branches on.
@@ -416,6 +417,7 @@ var moved = map[string]string{
 	// How the checks work, and the docs, are on GitHub. These addresses are
 	// in user agents, command-line output and reports already shared.
 	"/docs":         DocsURL,
+	"/undertakings": "/privacy#promises",
 	"/method":       ChecksURL + "#tls",
 	"/tls/method":   ChecksURL + "#tls",
 	"/web/method":   ChecksURL + "#web",
@@ -474,6 +476,8 @@ var files = map[string]servedFile{
 	"/session.js":  {"assets/session.js", "text/javascript; charset=utf-8"},
 	"/hero.js":     {"assets/hero.js", "text/javascript; charset=utf-8"},
 	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
+	// Porch's own icon: a p, and the stop in its violet.
+	"/porch-icon.svg": {"assets/porch-icon.svg", "image/svg+xml"},
 }
 
 // denyfirstFiles are this project's own contacts: where to report a security
@@ -525,6 +529,19 @@ func init() {
 			Organisation: true,
 			Description:  "denyfirst builds security and privacy tools that keep your data with you. Porch checks TLS, websites, mail and DNS.",
 			Fragment:     "assets/home.html",
+			Data:         homePage{Fingerprint: groupedFingerprint(PGPFingerprint)},
+		}
+		// denyfirst.dev/privacy: the organisation's promises, and this
+		// site's own facts. An installation is Porch alone and links here.
+		pages[orgPrivacy] = &page{
+			Title:        "Privacy — denyfirst",
+			Organisation: true,
+			Description:  "What denyfirst promises for everything it publishes, and how to check each one.",
+			Fragment:     "assets/organisation.html",
+			Data: organisationPage{
+				Organisation: promises.Organisation,
+				Products:     productPages(),
+			},
 		}
 		// The name inventory is here, and it lists this project's own estate.
 		//
@@ -741,7 +758,7 @@ var signedIn bool
 // PublicPaths are what anybody may reach on an installation behind a
 // password: the sign-in page and what it draws and runs with.
 func PublicPaths() []string {
-	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/favicon.svg"}
+	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/porch-icon.svg"}
 }
 
 // renderSignIn is the one page an installation behind a password shows to
@@ -883,6 +900,10 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		write(w, r, "text/html; charset=utf-8", rendered[porchRoot])
 		return
 	}
+	if siteOf(r.Host) == organisationSite && r.URL.Path == "/privacy" {
+		write(w, r, "text/html; charset=utf-8", rendered[orgPrivacy])
+		return
+	}
 
 	if body, found := rendered[r.URL.Path]; found {
 		write(w, r, "text/html; charset=utf-8", body)
@@ -956,6 +977,9 @@ func setHeaders(w http.ResponseWriter, r *http.Request) {
 type privacyPage struct {
 	Tool string
 
+	// Porch is what this tool promises, carried on the page.
+	Porch promises.Product
+
 	// Monitor, Register, ReadsCertificates and AsksResponder say which third
 	// parties this installation asks, and AsksNobodyElse that it asks none of
 	// them. The page said the last of those unconditionally until 2026-09-27.
@@ -996,6 +1020,7 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 		Fragment:    "assets/privacy-selfhost.html",
 		Data: privacyPage{
 			Tool:              ToolName,
+			Porch:             promises.Porch,
 			Monitor:           in.Monitor,
 			Register:          in.Register,
 			ReadsCertificates: in.ReadsCertificates,
@@ -1106,7 +1131,7 @@ func buildPlain() {
 	// own, so nothing in either sitemap is a redirect.
 	var organisation, porch []string
 	for path := range rendered {
-		if organisationPaths[path] {
+		if p := pages[path]; p != nil && p.Organisation {
 			organisation = append(organisation, canonicalURL(path))
 		} else {
 			porch = append(porch, canonicalURL(path))
@@ -1153,9 +1178,6 @@ type productPage struct {
 	Name, What, Page string
 }
 
-// undertakingsPath is where Porch's undertakings are, on Porch's name.
-const undertakingsPath = "/undertakings"
-
 // productPages is every product in internal/promises with the address of its
 // own page. Porch's is on this site wherever this copy runs. A product this
 // repository does not build has no address here until somebody writes one
@@ -1166,15 +1188,15 @@ func productPages() []productPage {
 		if p.Name != promises.Porch.Name {
 			panic("web: " + p.Name + " is in internal/promises with no address for its undertakings")
 		}
-		out = append(out, productPage{Name: p.Name, What: p.What, Page: porchBase() + undertakingsPath})
+		out = append(out, productPage{Name: p.Name, What: p.What, Page: porchBase() + "/privacy#promises"})
 	}
 	return out
 }
 
-// undertakingsPage is what assets/undertakings.html reads.
-type undertakingsPage struct {
-	Product  promises.Product
-	SiteBase string
+// porchPrivacy is what the demonstration's privacy page reads: Porch's
+// promises, which it carries.
+type porchPrivacy struct {
+	Porch promises.Product
 }
 
 // siteBase and porchBase are what render sets SiteBase and PorchBase to, for

@@ -22,7 +22,7 @@
 {{end}}
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="{{if .Organisation}}/favicon.svg{{else}}/porch-icon.svg{{end}}" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>
 </head>
@@ -37,7 +37,7 @@
 -->
 {{if ne .Section "login"}}
 <aside class="rail">
-  <p class="rail-identity"><a class="wordmark" href="/">porch</a> <span class="rail-tag">Self-host</span></p>
+  <p class="rail-identity"><a class="wordmark" href="/">porch<span class="wordmark-porch-stop">.</span></a> <span class="rail-tag">Self-host</span></p>
   <p class="rail-caption" id="rail-workspace">Workspace</p>
   <nav class="rail-nav" aria-labelledby="rail-workspace">
     <a class="rail-item" href="/"{{if eq .Section "check"}} aria-current="page"{{end}}><span class="rail-glyph" aria-hidden="true">▦</span>New check</a>
@@ -62,24 +62,22 @@
 </header>{{end}}
 {{else}}
 <header class="masthead">
-  <a class="wordmark" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>
+  {{if .Organisation}}<a class="wordmark" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>{{else}}<a class="wordmark" href="{{.PorchBase}}/">porch<span class="wordmark-porch-stop">.</span></a>{{end}}
   <nav class="masthead-nav" aria-label="Main">
-    <a href="{{.SiteBase}}/">Home</a>
+    {{if .Organisation}}<a href="{{.SiteBase}}/">Home</a>
     <!--
       Products opens a list on hover or keyboard focus, drawn by the
       stylesheet alone. Without either — a phone — the link goes to the
-      catalog on the front page, which is the same list. A product joins the
-      list here, not the bar, so the bar does not grow with the catalog.
+      catalog on the front page, which is the same list.
     -->
     <div class="nav-menu">
       <a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>
       <ul class="nav-menu-list">
         <li><a href="{{.PorchBase}}/"><span class="nav-menu-name">Porch</span><span class="nav-menu-note">Infrastructure checks</span></a></li>
         <li><span class="nav-menu-soon"><span class="nav-menu-name">Rootwell</span><span class="nav-menu-note">Being built</span></span></li>
-        <li><span class="nav-menu-soon"><span class="nav-menu-name">PAM services</span><span class="nav-menu-note">Exploring</span></span></li>
       </ul>
-    </div>
-    {{if .Organisation}}<a href="{{.SiteBase}}/organisation">Undertakings</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>{{end}}
+    </div>{{else}}<a href="{{.PorchBase}}/#start">Run it yourself</a>
+    <a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>{{end}}
   </nav>
   <button class="theme-toggle" id="theme-toggle" type="button" hidden>Dark</button>
 </header>
@@ -96,16 +94,14 @@
 <footer class="colophon">
   <div class="colophon-row">
     <div class="colophon-by">
-      {{if .Brand}}<p class="colophon-mark"><span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span></p>
-      <p class="colophon-line">Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span> Cites everything. Records nothing.</p>{{end}}
+      {{if and .Brand .Organisation}}<p class="colophon-mark"><span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span></p>
+      <p class="colophon-line">Cites everything. Records nothing.</p>{{else if .Brand}}<p class="colophon-line">by <a class="colophon-brand" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a> Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span> Cites everything. Records nothing.</p>{{end}}
     </div>
     {{if ne .Section "login"}}<p class="colophon-links">
-      {{if and .Brand .Organisation}}<a href="{{.SiteBase}}/organisation">Undertakings</a>
-      <a href="{{.SiteBase}}/.well-known/security.txt">Security</a>
-      <a href="{{.SiteBase}}/pgp-key.txt">PGP key</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
+      {{if and .Brand .Organisation}}<a href="{{.SiteBase}}/privacy">Privacy</a>
+      <a href="{{.SiteBase}}/#security">Security</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
       <a href="{{.PorchBase}}/privacy">Privacy</a>
-      <a href="{{.PorchBase}}/terms">Terms</a>
-      <a href="{{.PorchBase}}/undertakings">Undertakings</a>{{end}}
+      <a href="{{.PorchBase}}/terms">Terms</a>{{end}}
     </p>{{end}}
   </div>
 </footer>

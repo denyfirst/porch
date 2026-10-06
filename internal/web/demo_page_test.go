@@ -173,3 +173,26 @@ func TestTheDemonstrationSaysHowOldAKeptReportIs(t *testing.T) {
 		t.Error("the summary does not say when a kept report was made")
 	}
 }
+
+// The front page tells a reporter where to write and which key to check, and
+// the fingerprint it shows is the one the key file has.
+func TestTheFrontPageSaysHowToReportAVulnerability(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	page := get(t, "/").Body.String()
+	for _, want := range []string{
+		`id="security"`,
+		`href="mailto:security@denyfirst.dev"`,
+		"<code>" + groupedFingerprint(PGPFingerprint) + "</code>",
+		`href="` + PGPKeyPath + `"`,
+		`href="` + SecurityTxtPath + `"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the front page's security section does not carry %s", want)
+		}
+	}
+	if got := groupedFingerprint("75B7A18A89715E3775DBCA2EA8D994D1221AA045"); got != "75B7 A18A 8971 5E37 75DB  CA2E A8D9 94D1 221A A045" {
+		t.Errorf("the fingerprint is grouped as %q, not as gpg prints it", got)
+	}
+}

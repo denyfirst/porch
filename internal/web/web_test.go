@@ -411,7 +411,7 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 func TestJumpLinksHaveTargets(t *testing.T) {
 	body := demoPrivacy(t)
 
-	for _, anchor := range []string{"kept", "logs", "scans", "stopping", "promises"} {
+	for _, anchor := range []string{"promises", "kept", "logs", "scans", "stopping", "warranty"} {
 		if !strings.Contains(body, `href="#`+anchor+`"`) {
 			t.Errorf("no jump link points to #%s", anchor)
 		}

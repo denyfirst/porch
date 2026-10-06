@@ -8,19 +8,29 @@
       scan</a>.
     </p>
 
-    <p>
-      What Porch and denyfirst undertake is on
-      <a href="/undertakings">a separate page</a>.
-    </p>
-
     <nav class="jump">
-      <a href="/undertakings">Undertakings</a>
+      <a href="#promises">What Porch promises</a>
       <a href="#kept">What is kept</a>
       <a href="#logs">Logs</a>
       <a href="#scans">What a scan does</a>
       <a href="#stopping">Stopping a scan</a>
-      <a href="#promises">What is not promised</a>
+      <a href="#warranty">What is not promised</a>
     </nav>
+
+    <h2 id="promises">What Porch promises</h2>
+
+    <p>
+      Each promise says how you can check it. denyfirst&rsquo;s own promises,
+      which hold for everything it publishes, are at
+      <a href="https://denyfirst.dev/privacy">denyfirst.dev/privacy</a>.
+    </p>
+
+    <dl class="undertakings">
+      {{range .Porch.Adds}}
+      <dt id="{{.ID}}">{{.Says}}</dt>
+      <dd><strong>How you check it.</strong> {{.Checked}}</dd>
+      {{end}}
+    </dl>
 
     <h2 id="kept">What is kept</h2>
 
@@ -126,7 +136,7 @@
       address at that domain. We reply within two working days.
     </p>
 
-    <h2 id="promises">What is not promised</h2>
+    <h2 id="warranty">What is not promised</h2>
 
     <p>
       A report describes one moment and is not an audit or a certification.

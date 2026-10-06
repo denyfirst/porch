@@ -28,13 +28,21 @@ import (
 // it is Porch's, and redirected.
 var organisationPaths = map[string]bool{
 	"/":             true,
-	"/organisation": true,
+	"/privacy":      true,
 	SecurityTxtPath: true,
 	"/security.txt": true,
 	PGPKeyPath:      true,
 	"/robots.txt":   true,
 	"/sitemap.xml":  true,
 }
+
+// sharedPaths are on both names, each with its own: the front page, the
+// privacy page and the crawler files.
+var sharedPaths = map[string]bool{"/": true, "/privacy": true, "/robots.txt": true, "/sitemap.xml": true}
+
+// orgPrivacy is the page denyfirst.dev serves at /privacy. Its key in the
+// table is not /privacy, which is Porch's privacy page.
+const orgPrivacy = "/organisation"
 
 // porchRoot is the page porch.denyfirst.dev serves at "/". It is served at
 // /porch where one name carries everything — a test, or the demonstration
@@ -75,10 +83,12 @@ func siteOf(host string) site {
 
 // canonicalURL is the one address a page states as its own.
 func canonicalURL(path string) string {
-	switch {
-	case organisationPaths[path]:
-		return SiteURL + path
-	case path == porchRoot:
+	switch path {
+	case "/":
+		return SiteURL + "/"
+	case orgPrivacy:
+		return SiteURL + "/privacy"
+	case porchRoot:
 		return PorchURL + "/"
 	}
 	return PorchURL + path
@@ -105,6 +115,10 @@ func Hosts(next http.Handler) http.Handler {
 		path := r.URL.Path
 		switch siteOf(r.Host) {
 		case organisationSite:
+			if path == orgPrivacy {
+				elsewhere(w, r, SiteURL, "/privacy")
+				return
+			}
 			if !organisationPaths[path] && !isAsset(path) {
 				if path == porchRoot {
 					path = "/"
@@ -117,7 +131,11 @@ func Hosts(next http.Handler) http.Handler {
 				elsewhere(w, r, PorchURL, "/")
 				return
 			}
-			if organisationPaths[path] && path != "/" && path != "/robots.txt" && path != "/sitemap.xml" {
+			if path == orgPrivacy {
+				elsewhere(w, r, SiteURL, "/privacy")
+				return
+			}
+			if organisationPaths[path] && !sharedPaths[path] {
 				elsewhere(w, r, SiteURL, path)
 				return
 			}

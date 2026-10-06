@@ -6,8 +6,8 @@ do to inherit the first.
 
 The text itself is not here. It is in
 [`internal/promises`](../internal/promises/promises.go). The organisation's is
-served at `/organisation`, and Porch's at `/undertakings`, which links to the
-organisation's.
+served at `denyfirst.dev/privacy`, and Porch's on Porch's privacy page, which
+links to the organisation's.
 
 ---
 
@@ -63,9 +63,8 @@ Six tests, in `internal/promises` and `internal/web`:
 | `TestEveryUndertakingCanBeCheckedAndIsNamed` | every entry has a stable identifier, says something, and says how to check it; no identifier is used twice |
 | `TestNoProductRedefinesWhatTheOrganisationUndertakes` | no product addition carries an organisation identifier, and every addition is named for the product it belongs to |
 | `TestTheUndertakingsAreNotCopiedIntoAnyPage` | nothing served to a visitor carries these sentences in its own words; the pages range over the one place they live |
-| `TestThePageAboutTheOrganisationCarriesEveryUndertaking` | the organisation's page carries every one of its undertakings and every way of checking one, each addressable by its identifier, links to each product's own page, and carries none of a product's additions |
-| `TestPorchsPageCarriesItsOwnUndertakings` | Porch's page carries Porch's additions, repeats none of the organisation's, and links to them |
-| `TestThePrivacyPageSendsAReaderToTheUndertakings` | a reader who arrived with the other question is pointed across, above the jump list rather than below it |
+| `TestTheOrganisationsPrivacyPageCarriesEveryPromise` | denyfirst.dev/privacy carries every one of the organisation's promises and how to check it, links each product's, and carries none of a product's |
+| `TestPorchsPrivacyPageCarriesItsPromises` | Porch's privacy page carries Porch's promises first, repeats none of the organisation's, and links to them |
 
 The last one exists because a split nobody is pointed across is a page that was
 hidden rather than separated. The footer here is deliberately three links long —
@@ -101,14 +100,14 @@ product at once — which is the whole point of it being one list.
 
 | | |
 |---|---|
-| `/organisation` | what denyfirst undertakes, and where each product's own page is |
-| `/undertakings` | what Porch adds, linking to the organisation's |
+| `denyfirst.dev/privacy` | what denyfirst undertakes, and where each product's own promises are |
+| `/privacy` | what Porch adds, first, then what the service keeps |
 | `/privacy` | what this service keeps, what a scan does, how to stop one |
 | `/terms` | what you agree to, and what is not promised |
 | `internal/promises` | the one place the undertakings are written |
 
 The self-hosted build serves its own privacy page, describing that installation
-from how it was started, and the same `/organisation` and `/undertakings` pages:
+from how it was started, with Porch's promises on it and a link to the maker's:
 what the makers receive is the same question wherever the copy runs, and the
 answer is the same nothing.
 

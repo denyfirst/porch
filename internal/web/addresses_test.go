@@ -27,14 +27,6 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 	project := map[string]bool{
 		"/privacy": true,
 		"/terms":   true,
-
-		// What the organisation undertakes, whatever you run. The most
-		// root-level page there is: it is not about a check, and a copy of it
-		// under each one would be four copies of a promise to keep in step.
-		"/organisation": true,
-
-		// What Porch undertakes, which is about every check rather than one.
-		"/undertakings": true,
 	}
 	// The demonstration is the denyfirst site: its front page and the page for
 	// the product are the project's own, at the root, and a self-hosted build
@@ -42,6 +34,7 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 	if demo.Enabled {
 		project["/"] = true
 		project["/porch"] = true
+		project[orgPrivacy] = true
 	}
 
 	// The question this test was written to ask ahead of time. There are three
@@ -394,9 +387,13 @@ func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 		for _, l := range links {
 			got = append(got, l[1])
 		}
-		want := DocsURL + " " + porchLink("/privacy") + " " + porchLink("/terms") + " " + porchLink("/undertakings")
+		want := DocsURL + " " + porchLink("/privacy") + " " + porchLink("/terms")
+		if demo.Enabled {
+			// Porch's pages say who made them, with a link home.
+			want = SiteURL + "/ " + want
+		}
 		if p, ok := pages[path]; ok && demo.Enabled && p.Organisation {
-			want = SiteURL + "/organisation " + SiteURL + SecurityTxtPath + " " + SiteURL + PGPKeyPath
+			want = SiteURL + "/privacy " + SiteURL + "/#security"
 		}
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s: the footer links %v, want %s", path, got, want)

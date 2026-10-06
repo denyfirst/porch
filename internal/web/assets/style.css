@@ -42,6 +42,12 @@
   --accent:       #6b3fc4;
   --accent-hover: #5a32a8;
 
+  /* Porch's violet where the organisation's pages show it: Porch's card on
+     the front page. The organisation's override does not touch these. */
+  --porch-accent:       #6b3fc4;
+  --porch-accent-hover: #5a32a8;
+  --porch-link:         #5f35b5;
+
   /* The organisation's own pages carry no verdict, and keep the brand red for
      their links and buttons (body[data-owner="organisation"]). */
   --brand-link:         #a41d2a;
@@ -94,6 +100,9 @@
     --tool:       #b9a2ff;
     --accent:       #7e57d9;
     --accent-hover: #6c46c8;
+    --porch-accent:       #7e57d9;
+    --porch-accent-hover: #6c46c8;
+    --porch-link:         #b9a2ff;
     --brand-link:         #f28b94;
     --brand-accent:       #c72f3d;
     --brand-accent-hover: #d23443;
@@ -118,6 +127,9 @@
   --tool:       #b9a2ff;
   --accent:       #7e57d9;
   --accent-hover: #6c46c8;
+  --porch-accent:       #7e57d9;
+  --porch-accent-hover: #6c46c8;
+  --porch-link:         #b9a2ff;
   --brand-link:         #f28b94;
   --brand-accent:       #c72f3d;
   --brand-accent-hover: #d23443;
@@ -199,6 +211,9 @@ a:hover { text-decoration-thickness: 2px; }
   begins, which is the whole of what the name says.
 */
 .wordmark-deny, .wordmark-stop { color: var(--brand); }
+
+/* Porch's own mark on its pages: the name, and a stop in its violet. */
+.wordmark-porch-stop { color: var(--tool); }
 
 /* denyfirst's own pages on the demonstration — the front page and the
    organisation — speak for the organisation rather than for Porch, and show no
@@ -2077,6 +2092,124 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 .card-link:hover { transform: translateY(-3px); }
 
 .cards-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* The front page's products: Porch, the one available, as a wide card in its
+   own violet; what is coming in a quiet row beneath it. */
+.product-feature {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 1.5rem 2.5rem;
+  align-items: center;
+  padding: 2rem;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--paper-sunk);
+  border: 1px solid var(--porch-accent);
+  border-radius: calc(var(--radius) + 2px);
+  transition: transform 180ms ease-out;
+}
+
+.product-feature:hover { transform: translateY(-3px); }
+
+.product-feature .badge-live {
+  color: var(--porch-link);
+  border-color: var(--porch-accent);
+}
+
+.product-feature-name {
+  margin: 1rem 0 0;
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.product-feature p {
+  margin: 0.6rem 0 1.4rem;
+  max-width: 34rem;
+  font-size: 1.02rem;
+  color: var(--ink-soft);
+}
+
+.product-feature .button {
+  background: var(--porch-accent);
+  border-color: var(--porch-accent);
+  color: #ffffff;
+}
+
+.product-feature:hover .button {
+  background: var(--porch-accent-hover);
+  border-color: var(--porch-accent-hover);
+}
+
+.product-checks {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-checks li {
+  padding: 0.55rem 0.8rem;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--porch-accent);
+  border-radius: 4px;
+}
+
+.product-soon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  margin-top: 1rem;
+  padding: 1rem 1.2rem;
+  border: 1px dashed var(--rule);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+.product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
+
+/* How to report a vulnerability, on the front page. */
+.security-box {
+  max-width: 44rem;
+  margin-top: 1.4rem;
+  padding: 1.6rem 1.8rem;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.security-box p { margin: 0 0 1rem; color: var(--ink-soft); }
+
+.fingerprint {
+  margin: 0.3rem 0 1.2rem;
+  padding: 0.8rem 1rem;
+  font-family: var(--mono);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.security-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 52rem) {
+  .product-feature { grid-template-columns: 1fr; padding: 1.5rem; }
+  .product-feature-name { font-size: 2rem; }
+}
 
 .check-panel-top {
   display: flex;
