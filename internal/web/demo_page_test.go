@@ -3,6 +3,7 @@
 package web
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -225,5 +226,56 @@ func TestEachRuleOnTheFrontPageSaysHowToCheckIt(t *testing.T) {
 	}
 	if !strings.Contains(rules, `href="`+ChecksURL+`"`) {
 		t.Error("the rule about scope does not link the document that lists every connection")
+	}
+}
+
+// The facts under the opening and the marks in the about band are true of
+// this site and this repository, and each mark links the file that shows it.
+//
+// "001 — denyfirst" stood there until 2026-10-06: a serial number that meant
+// nothing and that a reader asked about. What replaced it is checkable, so it
+// is checked.
+func TestTheFrontPagesFactsHold(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	res := get(t, "/")
+	if res.Header().Get("Set-Cookie") != "" {
+		t.Error("the front page says it sets no cookies, and sets one")
+	}
+	page := res.Body.String()
+	for _, want := range []string{"<span>No cookies</span>", "<span>No trackers</span>", "<span>Open source</span>"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the opening does not say %s", want)
+		}
+	}
+
+	read := func(name string) string {
+		t.Helper()
+		body, err := os.ReadFile("../../" + name)
+		if err != nil {
+			t.Fatalf("the front page links %s, which is not in the repository: %v", name, err)
+		}
+		return string(body)
+	}
+	for mark, file := range map[string]string{
+		"AGPL-3.0":            "LICENSE",
+		"Signed releases":     "docs/verify.md",
+		"Reproducible builds": "docs/verify.md",
+		"No third-party code": "go.mod",
+	} {
+		if !strings.Contains(page, `<a href="https://github.com/denyfirst/porch/blob/main/`+file+`">`+mark+`</a>`) {
+			t.Errorf("the about band's %q does not link %s", mark, file)
+		}
+		read(file)
+	}
+	if licence := read("LICENSE"); !strings.Contains(licence, "GNU AFFERO GENERAL PUBLIC LICENSE") || !strings.Contains(licence, "Version 3") {
+		t.Error("the licence is not the AGPL-3.0 the front page names")
+	}
+	if strings.Contains(read("go.mod"), "require") {
+		t.Error("go.mod requires a module, and the front page says there is no third-party code")
+	}
+	if verify := read("docs/verify.md"); !strings.Contains(verify, "SHA256SUMS.sig") || !strings.Contains(verify, "Builds are reproducible.") {
+		t.Error("docs/verify.md no longer shows how a release is signed and rebuilt")
 	}
 }
