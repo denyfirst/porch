@@ -396,7 +396,7 @@ func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 		}
 		want := DocsURL + " " + porchLink("/privacy") + " " + porchLink("/terms") + " " + porchLink("/undertakings")
 		if p, ok := pages[path]; ok && demo.Enabled && p.Organisation {
-			want = SiteURL + "/organisation " + SiteURL + SecurityTxtPath + " " + SiteURL + PGPKeyPath
+			want = SiteURL + "/privacy " + SiteURL + "/#security"
 		}
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s: the footer links %v, want %s", path, got, want)

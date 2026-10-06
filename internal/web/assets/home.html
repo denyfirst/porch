@@ -23,28 +23,29 @@
     </div>
   </div>
 
-  <div class="cards">
-    <a class="card card-live card-link" href="https://porch.denyfirst.dev/">
-      <span class="card-top"><span class="card-symbol" aria-hidden="true">⌁</span><span class="badge badge-live">Available</span></span>
-      <h3 class="card-name arrow-ne">Porch</h3>
-      <p>Checks your TLS, website, mail and DNS. Runs on your own server.</p>
-      <span class="card-foot">Infrastructure checks</span>
-    </a>
-    <article class="card">
-      <span class="card-top"><span class="card-symbol" aria-hidden="true">≋</span><span class="badge">Being built</span></span>
-      <h3 class="card-name">Rootwell</h3>
-      <p>A self-hosted workspace for certificates and keys. Private keys never
-      leave your machine.</p>
-      <span class="card-foot">Certificates and keys</span>
-    </article>
-    <article class="card">
-      <span class="card-top"><span class="card-symbol" aria-hidden="true">⊞</span><span class="badge">Exploring</span></span>
-      <h3 class="card-name">PAM services</h3>
-      <p>Privileged access management. Not defined yet.</p>
-      <span class="card-foot">Privileged access</span>
-    </article>
+  <a class="product-feature" href="https://porch.denyfirst.dev/">
+    <div>
+      <span class="badge badge-live">Available</span>
+      <h3 class="product-feature-name">Porch</h3>
+      <p>Checks what your servers show the outside world. Runs on your own
+      server, and keeps your data with you.</p>
+      <span class="button arrow-ne">Try it on our domain</span>
+    </div>
+    <ul class="product-checks" aria-label="What Porch checks">
+      <li>TLS and certificates</li>
+      <li>Website: HTTPS, HSTS, headers</li>
+      <li>Mail: SPF, DKIM, DMARC, MTA-STS</li>
+      <li>DNS: name servers and DNSSEC</li>
+      <li>Names under your domain</li>
+    </ul>
+  </a>
+
+  <div class="product-soon">
+    <p class="eyebrow">Coming</p>
+    <h3>Rootwell</h3>
+    <p>A self-hosted workspace for certificates and keys.
+    Rootwell is not available yet, and no date is promised.</p>
   </div>
-  <p class="band-footnote">Rootwell and PAM are not available yet, and no date is promised.</p>
 </section>
 
 <section class="band" id="principles">
@@ -80,6 +81,24 @@
     <p class="band-prose">denyfirst is an independent team that puts privacy
     first. Our code is open source and has no third-party dependencies.</p>
     <a class="text-link arrow-ne" href="https://github.com/denyfirst/porch">Source on GitHub</a>
+  </div>
+</section>
+
+<section class="band band-split" id="security">
+  <p class="eyebrow">04 / Security</p>
+  <div>
+  <h2 class="band-title">Found a vulnerability?</h2>
+  <div class="security-box">
+    <p>Write to <a href="mailto:security@denyfirst.dev">security@denyfirst.dev</a>,
+    encrypted to our key if you can. We reply within 72 hours.</p>
+    <p class="field-label">Key fingerprint</p>
+    <p class="fingerprint"><code>{{.Fingerprint}}</code></p>
+    <p class="security-links">
+      <a href="/pgp-key.txt">Download the key</a>
+      <a href="/.well-known/security.txt">security.txt</a>
+      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Check the fingerprint on GitHub</a>
+    </p>
+  </div>
   </div>
 </section>
 

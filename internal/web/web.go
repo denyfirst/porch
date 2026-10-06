@@ -293,6 +293,27 @@ var pages = map[string]*page{
 	},
 }
 
+// homePage is what assets/home.html reads.
+type homePage struct {
+	Fingerprint string
+}
+
+// groupedFingerprint writes a fingerprint as gpg prints it: groups of four,
+// with a wider gap at the middle.
+func groupedFingerprint(fp string) string {
+	var b strings.Builder
+	for i := 0; i < len(fp); i += 4 {
+		if i > 0 {
+			b.WriteString(" ")
+			if i == len(fp)/2 {
+				b.WriteString(" ")
+			}
+		}
+		b.WriteString(fp[i:min(i+4, len(fp))])
+	}
+	return b.String()
+}
+
 // scanPage is what assets/index.html branches on.
 type scanPage struct {
 	// Demo is true in the build that runs on denyfirst.dev.
@@ -525,6 +546,7 @@ func init() {
 			Organisation: true,
 			Description:  "denyfirst builds security and privacy tools that keep your data with you. Porch checks TLS, websites, mail and DNS.",
 			Fragment:     "assets/home.html",
+			Data:         homePage{Fingerprint: groupedFingerprint(PGPFingerprint)},
 		}
 		// The name inventory is here, and it lists this project's own estate.
 		//
