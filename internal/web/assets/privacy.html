@@ -1,22 +1,16 @@
 <article class="prose">
 
-    <h1>What this keeps,<br>and what it does.</h1>
+    <h1>Privacy.</h1>
 
     <p class="lede">
-      Counts, and nothing that points back to anybody. Not the hostname you
-      asked about, not your address, not the time. Verdicts are counted &mdash;
-      how many scans came back strong &mdash; and nothing ties one to who asked
-      or what they asked about. This deployment scans only the hosts this
-      project owns; if you found this page because a scan reached your server,
-      the section on <a href="#stopping">stopping a scan</a> says whose it was.
+      This demo scans only the hosts this project owns. It keeps counts, not
+      people. If a scan reached your server, see <a href="#stopping">stopping a
+      scan</a>.
     </p>
 
     <p>
-      This page is about this service. What Porch undertakes, beneath what the
-      organisation behind it undertakes whatever you run, is
-      <a href="/undertakings">a separate page</a> — because what a tool does to
-      your machine and what its makers receive are two questions, and one page
-      answering both buries the second.
+      What Porch and denyfirst undertake is on
+      <a href="/undertakings">a separate page</a>.
     </p>
 
     <nav class="jump">
@@ -30,401 +24,113 @@
 
     <h2 id="kept">What is kept</h2>
 
+    <ul class="plain">
+      <li><strong>Counts.</strong> Per scan, one number goes up, and one of
+        strong, weak, insecure, or ungraded (ungraded means nothing was measured
+        rather than nothing was wrong). Each check keeps its own block of these,
+        naming the rules that graded them. There is also the day&rsquo;s total,
+        its date so a restart knows whether it is still today, and when counting
+        began.</li>
+      <li><strong>Refusals.</strong> How many requests were turned away and for
+        which reason. The reasons name causes, never people.</li>
+      <li><strong>The latest report</strong> of each check for each of our
+        hosts, in memory, for fifteen minutes. It is never written to disk and
+        does not say who asked.</li>
+      <li><strong>Your address</strong>, in memory, for the rate limit. It is
+        dropped about three minutes after your last request. For IPv6 the limit
+        applies to your network block.</li>
+    </ul>
+
     <p>
-      Counts of scans, and counts of refusals. Every figure below is served in
-      full at <code>/api/v1/stats</code>, so the list can be checked against
-      the thing itself rather than believed, and they are written to a small
-      file so a restart does not reset them.
+      That is the whole record. The counts are public at
+      <code>/api/v1/stats</code> and change at most once a minute, so they
+      cannot be used to time a scan.
     </p>
 
     <p>
-      <strong>Per scan</strong>, one number goes up, and one of four more:
-      strong, weak, insecure, or ungraded &mdash; which means nothing was
-      measured rather than nothing was wrong. A separate figure holds the
-      day&rsquo;s total, with the date it belongs to so that a restart can tell
-      whether it is still today, and one date says when counting began. That is
-      everything this service knows about time.
+      The hostname you ask about is sent in the request body, never in the
+      URL. If a mail address is typed, the part before the <code>@</code> is
+      dropped. A host is refused only after it has been checked
+      at least eight times in a few minutes, so a refusal tells you little
+      about anyone else.
     </p>
 
     <p>
-      <strong>Each check keeps its own block</strong> of those figures, naming
-      the rules that graded them. There are four checks &mdash; the TLS
-      handshake, how a site is reached over HTTP, what a domain&rsquo;s DNS
-      says about its mail, and how the domain itself is served &mdash; and they
-      answer different questions over different evidence, so one number adding
-      them together would describe nothing anybody could check.
-    </p>
-
-    <p>
-      <strong>Per refusal</strong>, how many requests were turned away and for
-      which reason, from a fixed list. The reasons name causes and never
-      requesters: an address asking too often, a name this service will not
-      scan, a target that would not parse. Nothing about who asked or what they
-      asked about is in any of them. They exist because an operator who cannot
-      see a change in the shape of what arrives is asking you to trust somebody
-      who is not watching, and that would be its own kind of carelessness.
-    </p>
-
-    <p>
-      <strong>The last report of each check</strong>, for each of our own
-      hosts, is held in memory for fifteen minutes and handed to everybody who asks in
-      that time. It is a report about our servers, and it says when it was
-      made; it is never written to disk, and nothing in it says who asked. A
-      report handed over from it is not counted as a scan, because it was not
-      one.
-    </p>
-
-    <p>
-      That is the whole record.
-    </p>
-
-    <p>
-      Two scans a second apart and two a month apart leave the same trace.
-      Nothing distinguishes one from another, and nothing connects any of them
-      to a person. The figures are published at <code>/api/v1/stats</code>,
-      because a number nobody can trace back demonstrates the claim better
-      than the claim does.
-    </p>
-
-    <p>
-      The figures served there stand still for a minute at a time. A
-      counter holds no clock, but a counter anyone can read repeatedly becomes
-      one — checking it every second would reveal the moment each scan
-      happened, which somebody could line up against their own records.
-      Freezing it removes that.
-    </p>
-
-    <h3>Your address</h3>
-
-    <p>
-      Held in memory to enforce a rate limit, and dropped about three minutes
-      after your last request. Never written to disk, never in a response. For
-      IPv6 the limit applies to the network block rather than the exact
-      address, because one subscriber is normally given a whole block.
-    </p>
-
-    <h3>The hostname you ask about</h3>
-
-    <p>
-      Sent in the request body, never in the address bar. A hostname in a URL
-      is written to your browser history, to the referrer of anything the page
-      loads next, and to the log of every proxy between you and here.
-      Promising not to record it while putting it in a URL would hand the
-      record to everyone else instead.
-    </p>
-
-    <p>
-      A mail address may be typed where a name is asked for. Everything before
-      the last <code>@</code> is dropped by this page before anything is sent,
-      and dropped again by the service if it arrives: the part before it is a
-      person, and every question a check asks is about the domain.
-    </p>
-
-    <p>
-      There is a limit on how often any one server is checked, which has to
-      recognise a repeat without keeping the name. The hostname is hashed with
-      a key created when the service starts and never written down, then cut
-      to sixteen bits: any one result fits many thousands of the names anybody
-      would think to try, and only the last half minute of them exists at all.
-      Whoever takes this machine finds a handful of numbers and no way to
-      enumerate a name from one.
-    </p>
-
-    <p>
-      Being exact about what that protects: it defends against reading a name
-      out of a number. It was never a defence against somebody testing one
-      name they already suspect, and this page would rather say so than let
-      the shorter claim stand.
-    </p>
-
-    <p>
-      There is a second edge to the same limit, and it is the one worth
-      explaining. A limit answers a question, and an answer is something
-      anybody can ask for &mdash; check a host, be refused, and you have
-      learnt that somebody else checked it. The way that is closed here is not
-      a trick but a threshold: the limit only speaks after a host has been
-      checked eight times in the same short window, and this service handles
-      single figures of checks a day. Ordinary use never reaches it, so the
-      answer to anybody probing is "go ahead", which tells them nothing. To
-      make the limit speak they would have to push it there themselves, from
-      several addresses, which is the very thing they were trying to detect.
-      The measurement destroys what it would measure.
-    </p>
-
-    <p>
-      What is left, stated rather than left to be found: if one host really is
-      being checked eight times inside that window, somebody probing learns
-      that it is busy. That is a fact about a host under load, not about a
-      person, and it is a fact its own administrator can already read in their
-      logs &mdash; which is why this service publishes a reverse name pointing
-      back here. The threshold itself is also varied per host, from a key that
-      exists only in memory and is thrown away when the service restarts, so
-      even that edge is not a fixed line to aim at.
-    </p>
-
-    <p>
-      And the crack that remains, because a page like this is worth nothing if
-      it only lists the parts that came out well. Varying the threshold hides
-      <em>how many</em> times a host was checked; it cannot hide the refusal
-      itself. Anybody who does get refused has learnt one thing for certain:
-      somebody has checked that host at least eight times in the last few
-      minutes. Closing even that would mean raising the threshold again,
-      and the threshold is not free &mdash; every point of it is peak load the
-      scanned server absorbs. Spending somebody else&rsquo;s bandwidth to buy a
-      stranger&rsquo;s privacy is a trade we are not willing to make quietly,
-      so it is written here instead.
-    </p>
-
-    <h3>Nothing from anyone else</h3>
-
-    <p>
-      No analytics, no fonts from elsewhere, no content delivery network, no
-      tag of any kind. A page loads one stylesheet and at most two small
-      scripts, all from this server. Nothing here can report your visit to a third party, which
-      you can confirm in your browser's network panel.
-    </p>
-
-    <p>
-      No cookies. The only thing stored in your browser is whether you chose
-      the light or the dark colour scheme, if you did, and it never leaves it.
-      The clipboard is written in one place: the Copy button beside an install
-      command on the Porch page, which copies that command, as it is shown, and
-      nothing else. A report is never put there.
+      No cookies. Your browser stores only your light or dark choice. Pages
+      load nothing from other sites: no analytics, no external fonts, no CDN.
+      The clipboard is written in one place: the Copy button next to an
+      install command. A report is never put there.
     </p>
 
     <h2 id="logs">Logs</h2>
 
     <p>
-      There is no record of what was scanned, by whom, or when. This is
-      enforced by there being no code that could write one, and a test fails
-      if any appears.
+      There is no record of what was scanned, by whom, or when. The service
+      logs only that it started, that it stopped, and a failure to save the
+      counts. The operating system keeps its usual firewall and login logs,
+      and logs packets with forged source addresses.
     </p>
 
     <p>
-      Being exact about this matters more than sounding absolute. The service
-      prints three lines in its lifetime: that it started, that it stopped,
-      and a failure to save the counter. None describes a request, and the
-      system collects them as it collects anything else a program prints.
-      Below that, the operating system keeps its own records — the firewall
-      counts packets, administrative access is logged, and the kernel notes
-      packets arriving with a forged source address. That last one holds
-      addresses, and it is kept, because a service that could not see an
-      attack on itself would be asking you to trust an operator who is not
-      watching.
-    </p>
-
-    <p>
-      None of it can say which host you asked about. That is only ever known
-      inside a process that does not write it down.
-    </p>
-
-    <h3>Where this runs</h3>
-
-    <p>
-      On a server rented from Hetzner Online GmbH, in Germany. As with any
-      hosted service, the network provider carries the traffic and can see that
-      connections are made, and the machine runs on hardware they own. That is
-      true of every scanner anywhere and is not something this project can
-      remove. Naming them rather than saying "a rented server" costs nothing:
-      anybody could read it from the address this answers on. What this project
-      can do is add nothing to it: whoever took this machine tomorrow would
-      find a program, a certificate, and a file containing a number.
+      The server is rented from Hetzner Online GmbH in Germany. Like any
+      network provider, they can see that connections are made.
     </p>
 
     <h2 id="scans">What a scan does</h2>
 
     <p>
       <strong>This deployment scans only the hosts this project owns.</strong>
-      The list is compiled into the build it runs, so there is nothing to type
-      and no setting that widens it: every connection below goes to one of our
-      servers, or to a party answering a question about them. A report here is
-      shown whole &mdash; everything a copy you run yourself shows you about
-      your own domain, this shows about ours.
-    </p>
-
-    <p>
-      <strong>Each check runs at most once every fifteen minutes for each host.</strong>
-      The report is kept and handed to everybody who asks during that time, and it
-      says when it was made, so an old one does not read as new. A visit
-      between those causes no request at all.
+      The list is built into the program. Each check runs at most once every
+      fifteen minutes for each host; everyone in between gets the kept report.
     </p>
 
     <ul class="plain">
-      <li><strong>Transport</strong>: TLS handshakes &mdash; one per protocol
-        version, one per suite the server turns out to accept, two more to see
-        whether it imposes its own ordering, and one to ask whether it will
-        negotiate a key exchange that resists a future quantum computer, where
-        TLS 1.3 is spoken. Each is closed as soon as its handshake finishes, and
-        no application data is sent over any of them.</li>
-      <li><strong>Reach</strong>: one <code>GET /</code> over HTTPS and one over
-        HTTP, following redirects only to hosts this project owns, and one
-        <code>GET</code> of <code>/.well-known/security.txt</code>. The final
-        page is read once, to one megabyte, and only a short list of facts is
-        kept from it.</li>
-      <li><strong>Mail</strong>: DNS lookups for our sender policy, DMARC, TLS
-        reporting, MTA-STS, exchangers, DANE and signing keys; the MTA-STS
-        policy file; and each of our mail exchangers asked on port 25 whether it
-        offers STARTTLS &mdash; greeting, EHLO, STARTTLS, handshake, QUIT. No
-        message is ever composed.</li>
-      <li><strong>DNS</strong>: lookups for our addresses, name servers, the
-        record at the top of our zone and its DNSSEC chain, and each of our name
-        servers asked directly whether it answers for the zone and whether it
-        would hand the whole zone to anybody &mdash; stopped before a record of
-        it is read.</li>
+      <li><strong>Transport:</strong> TLS handshakes, each closed when the
+        handshake ends.</li>
+      <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, and
+        <code>/.well-known/security.txt</code>.</li>
+      <li><strong>Mail:</strong> DNS lookups, the MTA-STS policy file, and a
+        STARTTLS check on port 25. No mail is sent.</li>
+      <li><strong>DNS:</strong> lookups, and questions to our name servers.
+        A zone transfer is asked for and not read.</li>
     </ul>
 
     <p>
-      No authentication is attempted, no path is guessed, and no exploit or
-      malformed packet is sent. What a report contains is what any client
-      receives on connecting, and what our own zone publishes.
+      No logins, no exploits, no malformed packets, and no private
+      addresses. Every connection resolves the name, checks the address, and
+      connects to that address rather than to the name, so
+      the resolver is asked many times.
     </p>
 
     <p>
-      No private or internal addresses. Every connection resolves the name,
-      checks the address it was given, and then
-      connects to that address rather than to the name &mdash; so a name that
-      answers differently a moment later cannot redirect a connection that was
-      already checked. A scan opens many connections, so
-      the resolver is asked many times rather than once.
-    </p>
-
-    <p>
-      A report can be saved from the page it is shown on, and saving it is
-      between you and your own disk: the bytes are already in your browser,
-      nothing is asked of this service a second time, and nothing about it is
-      recorded here. It is offered as JSON and in no other format, because
-      every name in a report is chosen by the server that was scanned — a
-      spreadsheet would read one beginning with an equals sign as a formula,
-      and a terminal would read an escape sequence in one as an instruction.
-    </p>
-
-    <h3>What is asked of third parties, and about whom</h3>
-
-    <p>
-      Every question below is about us. Nothing you type reaches any of them,
-      because there is nothing to type: the hosts this build may touch are
-      compiled into it.
-    </p>
-
-    <ul class="plain">
-      <li><strong>The authority that issued our certificate</strong> is asked
-        for its revocation list. One list covers thousands of certificates, so
-        the request names none of them.
-        <strong>No certificate authority is asked about one certificate</strong>:
-        the question that names a serial is never asked by this deployment.</li>
-      <li><strong>A certificate transparency monitor</strong>, crt.sh, is asked
-        which certificates exist for our names &mdash; by the TLS check, to find
-        one somebody else obtained, and by the name inventory. What it learns is
-        that somebody is looking at <em>us</em>, which is ours to disclose.</li>
-      <li><strong>The company that runs our mail</strong> sees a greeting and a
-        request for encryption on port 25, from this server.</li>
-      <li><strong>The registry for <code>.dev</code></strong> is asked which
-        servers it says serve our zone, which is what every resolver asks it.</li>
-    </ul>
-
-    <p>
-      That does not mean revocation goes unexamined. What a server sends can
-      include a status response the authority signed earlier and handed to it
-      &mdash; the point of stapling is that the authority learns nothing about
-      who is visiting &mdash; and that response is read: it has to describe
-      this certificate, be current, and carry the authority's signature before
-      a report says anything it claims. Reading bytes already in hand asks
-      nobody anything, which is why it belongs on this page rather than
-      against it.
-    </p>
-
-    <p>
-      This page said <em>no certificate authority is asked anything</em>,
-      <em>no page is requested</em> and <em>transparency logs are not queried</em>
-      until September 2026. Those sentences were written when this deployment
-      scanned whatever it was given, and then they protected somebody: the page
-      read, the list fetched and the name given to a monitor would have been
-      yours. They protect nobody now that the hosts are ours, and what they cost
-      was a demonstration showing less of our own domain than any copy you run
-      shows you of yours. They are replaced rather than quietly dropped, which is
-      what this page is for.
-    </p>
-
-    <h3>Why more than one connection</h3>
-
-    <p>
-      A server does not announce what it supports; it answers what it is
-      offered. Finding out whether an obsolete protocol version is still
-      accepted means offering it and seeing what comes back. That is why the
-      answer can be trusted, and also why the check is not a single
-      connection.
-    </p>
-
-    <h3>Load on the servers asked</h3>
-
-    <p>
-      Each check runs at most once every fifteen minutes for each host, whoever asks, and the
-      answer is shared. Beneath that, each host also has its own budget, as
-      every installation does, described under <a href="#kept">what is kept</a>.
-      The parties above see this server at most once every fifteen minutes for each check,
-      which is less than any one visitor refreshing a page would cause.
+      Others are asked only about us: our certificate authority for its
+      revocation list (no certificate authority is asked about one
+      certificate), crt.sh for our certificates, our mail provider on port 25,
+      and the <code>.dev</code> registry for our name servers.
     </p>
 
     <h2 id="stopping">Stopping a scan</h2>
 
     <p>
-      This deployment connects to nothing but the hosts this project owns and
-      the parties above, about them. If a connection from here reached a server
-      that is not ours, that is a fault, and we want to hear about it.
+      Porch is open source, and anyone can run a copy. Our own scans come from
+      addresses whose reverse DNS is <code>porch.denyfirst.dev</code>, and they
+      reach only our own hosts. A scan from any other address was made by
+      someone else&rsquo;s copy: contact whoever is responsible for that
+      address. What each check sends is in
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md">docs/checks.md</a>.
     </p>
 
     <p>
-      Connections come from addresses that resolve to
-      <code>porch.denyfirst.dev</code> in reverse DNS, the name this page is
-      served from. A scanner that hides is a scanner nobody can ask about.
-    </p>
-
-    <p>
-      A scan from any other address was made by a copy somebody else runs, and
-      is theirs to stop; contact whoever answers for the address it came from.
-      What this project can do about those copies is one thing: a domain can be
-      excluded from every future release. Write to
+      To have your domain excluded from future releases, write to
       <a href="mailto:abuse@denyfirst.dev">abuse@denyfirst.dev</a> from an
-      address at the domain, or from one listed in its WHOIS or
-      <code>security.txt</code>, and it will be excluded. No explanation
-      needed. A reply within two working days.
-    </p>
-
-    <p>
-      The same address reaches a person for anything else: an unexpected
-      pattern, or a question about what was sent.
+      address at that domain. We reply within two working days.
     </p>
 
     <h2 id="promises">What is not promised</h2>
 
     <p>
-      A report describes what a server negotiated at one moment, graded
-      against a published rule set. It is not an audit, not a certification,
-      and not a statement that anything is safe. Every report names the limits
-      of what it covered — read that part, because a short list of findings
-      can mean a well-configured server or a scan that could not see very far.
+      A report describes one moment and is not an audit or a certification.
+      It is offered as it is, without warranty of any kind.
     </p>
-
-    <p>
-      This is offered as it is, without warranty of any kind. It may be wrong.
-      It may be unavailable. It may stop existing. What you do with a result
-      is yours to decide.
-    </p>
-
-    <p>
-      That is not a formality. Claiming otherwise would be the same kind of
-      overstatement this tool exists to identify.
-    </p>
-
-    <h3>None of this needs to be taken on trust</h3>
-
-    <p>
-      The source is public, every guarantee is listed with the test that
-      protects it, and the whole thing runs on a machine you control if you
-      would rather not rely on any of the above.
-    </p>
-
-    <p><a class="text-link arrow-e" href="/docs">The source, the guarantees and their tests, and how
-    to report a vulnerability</a></p>
 
   </article>

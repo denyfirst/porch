@@ -50,25 +50,19 @@
       {{end}}
       {{if .Demo}}
       <p class="field-help" id="field-help">
-        This deployment scans only hosts this project owns. It is here so that
-        you can watch the instrument work and check its verdicts against your
-        own run of it &mdash; not so that it opens connections to somebody
-        else's server on a stranger's behalf, and the
-        <a href="/terms">terms</a> say so plainly.
-        <a href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">Run it yourself</a> to
-        scan anything else.
-        <a href="/web/method">Exactly what is sent</a> is written out in full,
-        and it is one <code>GET</code> of the root over each scheme.
+        This demo scans only hosts this project owns
+        (<a href="/terms">terms</a>).
+        <a href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">Run it yourself</a>
+        to check yours: the scan then leaves your machine, not ours.
+        <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#web">What is sent</a>: one <code>GET</code> of the
+        root over each scheme.
       </p>
       {{else}}
       <p class="field-help" id="field-help">
-        A bare hostname &mdash; this reads the site over HTTP and over HTTPS,
-        the way a browser reaches an address somebody types, so there is no
-        port to choose. Public hosts only. Scan only what you own, administer,
-        or have permission to scan &mdash; the decision is yours and the
-        <a href="/terms">terms</a> say so plainly.
-        <a href="/web/method">Exactly what is sent</a> is written out in full,
-        and it is one <code>GET</code> of the root over each scheme.
+        A bare hostname, read over HTTP and HTTPS. Public hosts only. Scan
+        only what you own or may scan (<a href="/terms">terms</a>).
+        <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#web">What is sent</a>: one <code>GET</code> of the
+        root over each scheme.
       </p>
       {{end}}
     </form>
@@ -86,9 +80,8 @@
 
     <noscript>
       <p class="noscript">
-        Running a scan needs JavaScript, because the result is fetched and
-        rendered in the page. The same check is available from the command line
-        tool, a single file in every release that needs nothing installed.
+        Running a scan needs JavaScript. Or use the command line tool from any
+        release.
       </p>
     </noscript>
   </section>

@@ -25,7 +25,7 @@ import (
 // refuses. So the field is fixed to the estate this deployment owns, which is
 // read from the compiled-in boundary rather than written again beside it.
 func TestTheDemonstrationListsItsOwnEstate(t *testing.T) {
-	for _, path := range []string{"/names", "/names/method"} {
+	for _, path := range []string{"/names"} {
 		w := get(t, path)
 		if w.Code != http.StatusOK {
 			t.Errorf("GET %s on the demonstration returned %d, want 200", path, w.Code)

@@ -132,7 +132,7 @@ func TestTheFrontPageSaysWhatIsNotAvailable(t *testing.T) {
 	if strings.Count(page, `class="badge badge-live"`) != 1 {
 		t.Error("more or fewer than one offering is marked available")
 	}
-	if !strings.Contains(page, "They are not available, and no date is promised.") {
+	if !strings.Contains(page, "not available yet, and no date is promised.") {
 		t.Error("the front page does not say its planned offerings are not available")
 	}
 }

@@ -1,68 +1,40 @@
 package web
 
 import (
+	"os"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/demo"
 )
 
-// Every document is on one page, and the footer offers four ways on.
-//
-// The footer carried six links and the privacy page three more. They are on
-// /docs now, grouped by the question they answer, and the footer is short
-// enough to read.
-func TestEveryDocumentIsOnTheDocsPage(t *testing.T) {
-	page := get(t, "/docs").Body.String()
-	for _, want := range []string{
-		`href="/tls/method"`, `href="/web/method"`, `href="/privacy"`, `href="/terms"`,
-		`href="/organisation"`,
-		"docs/self-host.md", "docs/verify.md", "docs/scope.md", "docs/policy-changes.md",
-		"docs/policy.md",
-		"docs/invariants.md", "SECURITY.md", `href="https://github.com/denyfirst/porch"`,
-		// Absolute, on both builds: denyfirst.dev is the one place these are
-		// served, and an installation's own address would answer with a 404.
-		`href="` + SiteURL + PGPKeyPath + `"`, `href="` + SiteURL + SecurityTxtPath + `"`,
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/docs does not lead to %s", want)
+// Porch's documentation is on GitHub, and every page of Porch's leads there
+// from its header and its footer.
+func TestEveryPageLeadsToTheDocs(t *testing.T) {
+	for path, p := range pages {
+		if demo.Enabled && p.Organisation {
+			continue
 		}
-	}
-
-	// A link inside a link is not a link a browser can be relied on to follow.
-	cards := regexp.MustCompile(`(?s)<a class="card[^"]*"[^>]*>(.*?)</a>`).FindAllStringSubmatch(page, -1)
-	if len(cards) < 10 {
-		t.Fatalf("only %d cards on /docs", len(cards))
-	}
-	for _, c := range cards {
-		if strings.Contains(c[1], "<a ") {
-			t.Errorf("a card on /docs holds a link of its own: %s", c[1])
-		}
-	}
-
-	for path := range pages {
 		body := get(t, path).Body.String()
 		_, foot, _ := strings.Cut(body, `<footer class="colophon">`)
-		if n := strings.Count(foot, "<a "); n != 3 {
-			t.Errorf("%s: the footer carries %d links, want three", path, n)
+		if !strings.Contains(foot, `href="`+DocsURL+`">Docs</a>`) {
+			t.Errorf("%s: the footer does not lead to the docs", path)
 		}
-		if !strings.Contains(foot, `href="`+porchLink("/docs")+`">Docs</a>`) {
-			t.Errorf("%s: the footer does not lead to /docs", path)
-		}
-		// The masthead on the demonstration, the rail on an installation: either
-		// way before the page begins.
 		head, _, _ := strings.Cut(body, "<main>")
-		if !strings.Contains(head, `href="`+porchLink("/docs")+`"`) {
-			t.Errorf("%s: the header does not lead to /docs", path)
+		if !strings.Contains(head, `href="`+DocsURL+`"`) {
+			t.Errorf("%s: the header does not lead to the docs", path)
 		}
 	}
 
-	// The privacy page ends by pointing there, not with a list of its own.
-	for name, privacy := range map[string]string{"served": string(rendered["/privacy"]), "demonstration": demoPrivacy(t)} {
-		if strings.Count(privacy, `class="colophon-links"`) != 1 {
-			t.Errorf("the %s privacy page carries a link list of its own again", name)
-		}
-		if !strings.Contains(privacy, `<a class="text-link arrow-e" href="/docs">`) {
-			t.Errorf("the %s privacy page does not end by pointing at /docs", name)
+	// The index the link opens lists every document.
+	raw, err := os.ReadFile("../../docs/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"(checks.md)", "(self-host.md)", "(verify.md)", "(../SECURITY.md)", "(https://github.com/denyfirst/porch/releases)"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("docs/README.md does not link %s", want)
 		}
 	}
 }
@@ -124,7 +96,7 @@ func TestProductsAreAMenuNotABar(t *testing.T) {
 	if strings.Contains(bar, `href="{{.PorchBase}}/"`) {
 		t.Error("a product sits in the bar itself")
 	}
-	for _, want := range []string{`href="{{.SiteBase}}/">Home</a>`, `<a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>`, `href="{{.PorchBase}}/docs">Docs</a>`} {
+	for _, want := range []string{`href="{{.SiteBase}}/">Home</a>`, `<a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>`, `href="` + DocsURL + `">Docs</a>`} {
 		if !strings.Contains(brand, want) {
 			t.Errorf("the demonstration's header lacks %s", want)
 		}

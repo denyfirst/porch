@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -65,8 +66,7 @@ func TestADocumentIsNamedInTheTopBarWithoutTheMaker(t *testing.T) {
 		t.Skip("the demonstration has no top bar")
 	}
 	for path, want := range map[string]string{
-		"/privacy": "Privacy, and what a scan does",
-		"/docs":    "Documentation",
+		"/privacy": "Privacy",
 		"/tls":     "Transport check",
 	} {
 		body := get(t, path).Body.String()
@@ -75,7 +75,7 @@ func TestADocumentIsNamedInTheTopBarWithoutTheMaker(t *testing.T) {
 		if !strings.Contains(rail, "<span>Reference</span>") || !strings.Contains(rail, "<strong>"+want+"</strong>") {
 			t.Errorf("%s: the top bar does not read Reference / %s", path, want)
 		}
-		if strings.Contains(strings.ToLower(rail), "denyfirst") {
+		if strings.Contains(strings.ToLower(regexp.MustCompile(`href="[^"]*"`).ReplaceAllString(rail, "")), "denyfirst") {
 			t.Errorf("%s: the rail or top bar names the maker", path)
 		}
 	}

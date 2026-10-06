@@ -1,43 +1,73 @@
 package web
 
 import (
-	"html"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/denyfirst/porch/internal/demo"
-	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/webprobe"
 )
 
-// Why the obsolete suites are asked by hand is said on the method page, and
-// the report says only how to read a row and where the rest is.
-//
-// The report used to open the section with "Go cannot offer these", which
-// explained this program's internals to a reader who had asked about their
-// server. The explanation moved; the link to it is what stays behind.
-func TestTheObsoleteSuitesAreExplainedOnTheMethodPage(t *testing.T) {
+// flatten collapses the whitespace a template wraps its prose with, so an
+// assertion is about what a reader sees rather than about where a line broke.
+func flatten(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// checksDoc is docs/checks.md, which reports and the command line link to.
+func checksDoc(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile("../../docs/checks.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return flatten(string(raw))
+}
+
+// The addresses the method pages had still lead somewhere: user agents,
+// command-line output and shared reports carry them.
+func TestTheOldMethodAddressesLeadToTheChecksDocument(t *testing.T) {
+	for path, want := range map[string]string{
+		"/docs":         DocsURL,
+		"/method":       ChecksURL + "#tls",
+		"/tls/method":   ChecksURL + "#tls",
+		"/web/method":   ChecksURL + "#web",
+		"/mail/method":  ChecksURL + "#mail",
+		"/dns/method":   ChecksURL + "#dns",
+		"/names/method": ChecksURL + "#names",
+	} {
+		w := get(t, path)
+		if w.Code != 301 || w.Header().Get("Location") != want {
+			t.Errorf("GET %s: %d to %q, want 301 to %q", path, w.Code, w.Header().Get("Location"), want)
+		}
+	}
+	for _, heading := range []string{"## TLS", "## Web", "## Mail", "## DNS", "## Names", "### Obsolete suites"} {
+		if !strings.Contains(checksDoc(t), heading) {
+			t.Errorf("docs/checks.md has no %q, so a link to its anchor lands nowhere", heading)
+		}
+	}
+}
+
+// Why the obsolete suites are asked by hand is said in the checks document,
+// and the report says only how to read a row and links there.
+func TestTheObsoleteSuitesAreExplainedInTheChecksDocument(t *testing.T) {
 	src := script(t)
 	if strings.Contains(src, "Go cannot offer") {
 		t.Error("the report still explains the library it is built with")
 	}
 	for _, want := range []string{
 		`"Refused means the server accepted none of them. "`,
-		`why.href = CHECKS.tls.methodPage + "#obsolete-suites";`,
+		`why.href = CHECKS_DOC + "#obsolete-suites";`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("the obsolete-suite section no longer contains %s", want)
 		}
 	}
 
-	page := get(t, "/tls/method").Body.String()
-	if !strings.Contains(page, `<h2 id="obsolete-suites">`) || !strings.Contains(page, `href="#obsolete-suites"`) {
-		t.Fatal("the method page has no obsolete-suite section to link to")
-	}
-
-	// Every row the report draws is a term the page defines, in the same
+	// Every row the report draws is a term the document defines, in the same
 	// words, so a reader who follows the link finds the row they came from.
+	doc := checksDoc(t)
 	rows := regexp.MustCompile(`answer\("([^"]+)", l\.`).FindAllStringSubmatch(src, -1)
 	if len(rows) != 4 {
 		t.Fatalf("the report draws %d family rows, want 4", len(rows))
@@ -46,52 +76,28 @@ func TestTheObsoleteSuitesAreExplainedOnTheMethodPage(t *testing.T) {
 	for _, r := range rows {
 		labels = append(labels, r[1])
 	}
-	if !strings.Contains(src, `el("td", null, "Downgrade signal")`) {
-		t.Error("the fallback row is not labelled as the page defines it")
-	}
 	for _, l := range labels {
-		if !strings.Contains(page, "<dt>"+l+"</dt>") {
-			t.Errorf("the method page does not define %q, which the report draws", l)
+		if !strings.Contains(doc, "**"+l+":**") {
+			t.Errorf("docs/checks.md does not define %q, which the report draws", l)
 		}
 	}
 }
 
-// The mail check has a method page, and it is the one its reports point at.
-func TestTheMailCheckHasAMethodPage(t *testing.T) {
-	page := get(t, "/mail/method").Body.String()
-
-	for _, l := range policy.MailStandingLimits() {
-		if !strings.Contains(page, `<h2 id="`+l.ID+`">`) {
-			t.Errorf("the mail method page does not carry the limit %s", l.ID)
+// The mail check's document answers the question its reports raise most.
+func TestTheMailCheckIsDocumented(t *testing.T) {
+	doc := checksDoc(t)
+	for _, want := range []string{"## Mail", "reverse DNS name", "`-helo`"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("docs/checks.md does not say %q", want)
 		}
-	}
-	// The question its reports raise most, answered where the report points.
-	for _, want := range []string{`<h2 id="exchangers">`, "reverse DNS name", "<code class=\"flag\">-helo</code>"} {
-		if !strings.Contains(page, want) {
-			t.Errorf("the mail method page does not say %q", want)
-		}
-	}
-
-	// Which connections this deployment makes differs by build, and the page
-	// says the one that is true of the build serving it.
-	demoSentence := "This deployment makes both, for the one mail domain it"
-	if strings.Contains(page, demoSentence) != demo.Enabled {
-		t.Errorf("the mail method page misdescribes this build's connections (demo %v)", demo.Enabled)
-	}
-
-	// Listed with the other two where a reader looks for them.
-	if docs := get(t, "/docs").Body.String(); !strings.Contains(docs, `href="/mail/method"`) {
-		t.Error("/docs does not list the mail method page")
 	}
 }
 
-// What the web check calls itself is said on its method page, not under
-// every report.
-func TestTheUserAgentIsOnTheMethodPageAndNotTheReport(t *testing.T) {
-	// Unescaped, because html/template writes the plus sign as an entity.
-	page := html.UnescapeString(get(t, "/web/method").Body.String())
-	if !strings.Contains(page, "<code>"+webprobe.DefaultUserAgent+"</code>") {
-		t.Error("the web method page does not say what the probe calls itself")
+// What the web check calls itself is in the checks document, not under every
+// report.
+func TestTheUserAgentIsDocumentedAndNotInTheReport(t *testing.T) {
+	if !strings.Contains(checksDoc(t), "`"+webprobe.DefaultUserAgent+"`") {
+		t.Error("docs/checks.md does not say what the web check calls itself")
 	}
 	src := script(t)
 	if strings.Contains(src, "Requested as") || strings.Contains(src, "observed.userAgent") {

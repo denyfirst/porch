@@ -40,31 +40,19 @@ func TestThePageAboutTheOrganisationCarriesEveryUndertaking(t *testing.T) {
 	}
 }
 
-// Porch's page carries the organisation's list unchanged, and its own
-// underneath.
-//
-// Which is what the organisation's a-product-may-only-promise-less says each
-// product's page does, so a page that dropped the first list, or put Porch's
-// above it, would make one of the organisation's own undertakings false.
-// Carried rather than linked to, so that a copy of Porch that cannot reach
-// denyfirst.dev still says everything it undertakes.
-func TestPorchsPageCarriesTheOrganisationsListAndItsOwnUnderneath(t *testing.T) {
+// Porch's page carries Porch's undertakings, and links to the organisation's
+// rather than repeating them.
+func TestPorchsPageCarriesItsOwnUndertakings(t *testing.T) {
 	page := get(t, undertakingsPath).Body.String()
-	carriesList(t, undertakingsPath, page, promises.Organisation)
 	carriesList(t, undertakingsPath, page, promises.Porch.Adds)
-	if !escapedIn(page)(promises.Porch.What) {
-		t.Errorf("%s does not say what Porch is", undertakingsPath)
+	says := escapedIn(page)
+	for _, p := range promises.Organisation {
+		if says(p.Says) {
+			t.Errorf("%s repeats the organisation's %s, which is on the organisation's page", undertakingsPath, p.ID)
+		}
 	}
-
-	lastOrganisation := strings.Index(page, `id="`+promises.Organisation[len(promises.Organisation)-1].ID+`"`)
-	firstPorch := strings.Index(page, `id="`+promises.Porch.Adds[0].ID+`"`)
-	if lastOrganisation < 0 || firstPorch < 0 || firstPorch < lastOrganisation {
-		t.Errorf("%s puts Porch's undertakings above the organisation's, which each product's page carries first", undertakingsPath)
-	}
-
-	// And it says where the organisation's list is canonical.
 	if !strings.Contains(page, `href="`+siteBase()+`/organisation"`) {
-		t.Errorf("%s does not lead to the organisation's own page", undertakingsPath)
+		t.Errorf("%s does not lead to the organisation's undertakings", undertakingsPath)
 	}
 }
 
@@ -122,14 +110,6 @@ func TestThePrivacyPageSendsAReaderToTheUndertakings(t *testing.T) {
 	}
 	if !strings.Contains(lede, `href="/undertakings"`) {
 		t.Error("the pointer to the undertakings is below the jump list, where somebody asking that question will not see it")
-	}
-
-	// The whole of /docs lists every document, and these are two.
-	docs := get(t, "/docs").Body.String()
-	for _, want := range []string{`href="/undertakings"`, `href="/organisation"`} {
-		if !strings.Contains(docs, want) {
-			t.Errorf("/docs does not lead to %s", want)
-		}
 	}
 
 	// Both privacy pages, read as templates rather than as whatever this build

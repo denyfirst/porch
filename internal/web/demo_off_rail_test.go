@@ -22,7 +22,6 @@ func TestTheRailMarksThePageBeingRead(t *testing.T) {
 		"/domains":      `href="/domains" aria-current="page"`,
 		"/history":      `href="/history" aria-current="page"`,
 		"/installation": `href="/installation" aria-current="page"`,
-		"/docs":         `href="/docs" aria-current="page"`,
 	} {
 		body := get(t, path).Body.String()
 		if !strings.Contains(body, want) {
@@ -30,6 +29,14 @@ func TestTheRailMarksThePageBeingRead(t *testing.T) {
 		}
 		if n := strings.Count(body, `aria-current="page"`); n != 1 {
 			t.Errorf("%s marks %d rail items, want 1", path, n)
+		}
+	}
+
+	// A document is not a part of the workspace, so it marks nothing; Docs
+	// is a link to GitHub.
+	for _, path := range []string{"/privacy", "/terms", "/undertakings"} {
+		if n := strings.Count(get(t, path).Body.String(), `aria-current="page"`); n != 0 {
+			t.Errorf("%s marks %d rail items, want none", path, n)
 		}
 	}
 }

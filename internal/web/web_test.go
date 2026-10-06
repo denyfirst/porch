@@ -65,11 +65,10 @@ func TestEveryPageCarriesTheSameShell(t *testing.T) {
 		if !demo.Enabled {
 			shell = []string{`<aside class="rail">`, `<header class="topbar">`, `<body class="workspace">`}
 		}
+		// The footer's links are each site's own; the footer test checks them.
 		for _, required := range append(shell,
 			`class="wordmark"`,
 			`class="colophon"`,
-			`href="`+porchLink("/privacy")+`"`,
-			`href="`+porchLink("/terms")+`"`,
 		) {
 			if !strings.Contains(body, required) {
 				t.Errorf("%s is missing %s from the shared layout", path, required)

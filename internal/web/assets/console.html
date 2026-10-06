@@ -105,17 +105,11 @@
             aria-describedby="selectors-help">
         </div>
         <p class="field-help" id="selectors-help">
-          Separated by commas or spaces, and you can leave it empty: the check
-          already looks under the names mail providers document for their own
-          service, which covers most domains. Fill it in when yours is not one
-          of those.
-          <strong>Your selector is the <code>s=</code> tag in the
-          <code>DKIM-Signature</code> header of any message this domain sent</strong>
-          — open one and read it there. It is also the first label of the record
-          itself, in <code>&lt;selector&gt;._domainkey</code> under the domain.
-          Each is one lookup, to the same resolver as everything else. Up to
-          sixteen; a longer list is refused rather than cut short.
-          <a href="/mail/method">What is asked, and why nothing can list them.</a>
+          Optional, separated by commas or spaces. Common providers are
+          checked anyway. <strong>Your selector is the <code>s=</code> tag in the
+          <code>DKIM-Signature</code> header of any message this domain sent</strong>.
+          Up to sixteen.
+          <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#mail">How selectors are used.</a>
         </p>
       </div>
 

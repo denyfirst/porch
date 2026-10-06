@@ -271,7 +271,7 @@ func TestASelfHostedBuildServesNoMarketing(t *testing.T) {
 }
 
 // Every check the console offers is one the script can run and draw, and every
-// check has a page explaining it that the documents link to.
+// check is explained in docs/checks.md, which the script links.
 //
 // Three sabotages escaped the test above, which counts rows: dropping the
 // fourth check from the script's order, dropping its card from the documents,
@@ -279,7 +279,7 @@ func TestASelfHostedBuildServesNoMarketing(t *testing.T) {
 // missing row, because the page offers it.
 func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
 	src := script(t)
-	docs := asset(t, "assets/docs.html")
+	doc := checksDoc(t)
 
 	// Every row, run here or opened elsewhere, is something the script can
 	// draw and something the documents explain. A row on the list that no
@@ -289,20 +289,14 @@ func TestEveryCheckOfferedCanBeRunAndIsExplained(t *testing.T) {
 		for _, want := range []string{
 			`  ` + c.ID + `: {`,
 			`endpoint: "/api/v1/` + c.ID + `/scan"`,
-			`methodPage: "/` + c.ID + `/method"`,
+			`methodPage: CHECKS_DOC + "#` + c.ID + `"`,
 		} {
 			if !strings.Contains(src, want) {
 				t.Errorf("the script has no %q for the %s check", want, c.ID)
 			}
 		}
-		if _, served := pages["/"+c.ID+"/method"]; !served {
-			t.Errorf("the %s check has no method page", c.ID)
-		}
-		if !strings.Contains(docs, `href="/`+c.ID+`/method"`) {
-			t.Errorf("the documents do not link the %s check's method page", c.ID)
-		}
-		if !strings.Contains(docs, c.Policy) && !strings.Contains(docs, "{{.") {
-			t.Errorf("the documents do not name %s", c.Policy)
+		if !strings.Contains(strings.ToLower(doc), "## "+map[string]string{"tls": "tls", "web": "web", "mail": "mail", "dns": "dns", "names": "names"}[c.ID]) {
+			t.Errorf("docs/checks.md has no section for the %s check", c.ID)
 		}
 
 		if c.Page != "" {

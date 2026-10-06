@@ -319,19 +319,18 @@ func TestTheSelectorFieldGoesOnlyToTheMailCheck(t *testing.T) {
 	// And the field says where a selector is found, because somebody who does
 	// not know what one is cannot fill it in. The s= tag is the answer that
 	// does not depend on a provider's documentation being right, so it is the
-	// one in the field; the rest is on the method page the field links to,
-	// which is where this project explains what a check asks and why.
-	for _, want := range []string{"s=", "DKIM-Signature", `href="/mail/method"`} {
+	// one in the field; the rest is in the checks document the field links to.
+	for _, want := range []string{"s=", "DKIM-Signature", `href="` + ChecksURL + `#mail"`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the field asks for a selector and never says %q, so a reader is told to "+
 				"supply something they have no way to find", want)
 		}
 	}
 
-	method := asset(t, "assets/mail-method.html")
+	method := checksDoc(t)
 	for _, want := range []string{"_domainkey", "s=", "cannot list"} {
 		if !strings.Contains(method, want) {
-			t.Errorf("the mail method page never says %q, so the field's link leads nowhere "+
+			t.Errorf("docs/checks.md never says %q, so the field's link leads nowhere "+
 				"useful for somebody who followed it", want)
 		}
 	}

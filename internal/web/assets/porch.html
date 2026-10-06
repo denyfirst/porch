@@ -1,22 +1,13 @@
-<!--
-  Porch, on the demonstration.
-
-  What the tool is, a live run of it against the one domain this deployment may
-  reach, and the report that run produces — every check in one place, each in
-  its own tab with its own verdict, because a TLS result says nothing about how
-  mail is delivered. The pages at /tls and /web still answer, for the reports
-  and notices that already point at them.
--->
+<!-- Porch, on the demonstration: what it is, a live check of our domain, and how to run it. -->
 <section class="porch-hero">
   <div>
     <p class="eyebrow eyebrow-dot">Porch by denyfirst</p>
     <h1>Look closer.<br><span class="hero-soft">Know what answers.</span></h1>
-    <p class="lede">What your infrastructure presents to the outside world:
-    the TLS handshake and certificate, how the site is reached, and what the
-    domain's DNS says about its mail. Each finding cites the rule behind it,
-    and what could not be measured is said.</p>
+    <p class="lede">Porch checks what your servers show the outside world:
+    TLS, website, mail and DNS. Every finding links to the standard behind
+    it.</p>
     <p class="chips"><span>TLS &amp; certificates</span><span>Web reach</span><span>Mail policy</span><span>DNS</span><span>Name inventory</span></p>
-    <a class="text-link arrow-down" href="#how">How it works</a>
+    <a class="text-link arrow-down" href="#start">Run it yourself</a>
   </div>
 
   <section class="check-panel" aria-labelledby="check-heading">
@@ -68,78 +59,33 @@
     </form>
 
     <p class="field-help" id="porch-help">
-      This deployment checks only the domains this project runs. To check
-      yours, <a href="#start">run Porch yourself</a>.
+      This demo checks only our own domain. To check yours,
+      <a href="#start">run Porch yourself</a>.
     </p>
     <noscript>
-      <p class="noscript">Running a check needs JavaScript, because the result
-      is fetched and drawn in the page. The command line tool is a single file
-      in every release and needs nothing installed.</p>
+      <p class="noscript">Running a check needs JavaScript.</p>
     </noscript>
   </section>
 </section>
 
 <section class="porch-report" id="porch-results" aria-live="polite" hidden></section>
 
-<section class="band" id="how">
-  <div class="band-head">
-    <div>
-      <p class="eyebrow">How it works</p>
-      <h2 class="band-title">From connection<br>to clarity.</h2>
-    </div>
-    <p class="band-note">Here it checks our own domain. Run it yourself for the
-    infrastructure you are responsible for.</p>
-  </div>
-  <div class="columns">
-    <article>
-      <p class="index">01 / Connect</p>
-      <h3>Ask what a client asks.</h3>
-      <p>Handshakes at each TLS version, one request for the front page, and
-      the DNS records a mail server reads. Nothing is sent that a browser or a
-      mail server would not send.</p>
-    </article>
-    <article>
-      <p class="index">02 / Examine</p>
-      <h3>Grade against a named rule set.</h3>
-      <p>Each check has its own rule set, and every finding cites the standard
-      it rests on. Where no standard sets a line, the fact is reported rather
-      than graded.</p>
-    </article>
-    <article>
-      <p class="index">03 / Understand</p>
-      <h3>Start with what matters.</h3>
-      <p>Each check leads with its verdict and its findings, with the tables
-      and limits underneath. Your own copy lets you save every report.</p>
-    </article>
-  </div>
-</section>
-
-<!--
-  Getting started, in three steps, on the page that sells it. The commands are
-  the ones docs/self-host.md gives, and the guide stays the reference: it has
-  the reasons, the certificate for a public address, and what to check before
-  trusting a download.
--->
 <section class="band" id="start">
   <div class="band-head">
     <div>
-      <p class="eyebrow">Get started</p>
-      <h2 class="band-title">Your own copy,<br>in three steps.</h2>
+      <p class="eyebrow">Run it yourself</p>
+      <h2 class="band-title">Three steps.</h2>
     </div>
-    <p class="band-note">Docker on the server, and nothing else. The image is
-    named by its digest, and the compose file that names it is signed.</p>
+    <p class="band-note">You need a Linux server with Docker.</p>
   </div>
   <ol class="steps">
     <li>
       <h3>Get it</h3>
-      <p>One paste puts the compose file shown below on the server, with its
-      signed checksums, and checks both. It carries the release key rather
-      than fetching it. The last line has to print
-      <code>Good "file" signature</code> with the key
+      <p>Downloads the compose file shown below and checks its signature. The
+      last line must print <code>Good "file" signature</code> with the key
       <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code>
-      and <code>docker-compose.yml: OK</code>. If a check fails, the compose
-      file is removed and the next step has nothing to start.
-      <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">What each check proves</a>.</p>
+      and <code>docker-compose.yml: OK</code>. If not, the file is removed.
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">More on verifying</a>.</p>
       <div class="command terminal">
         <div class="terminal-bar">
           <span class="terminal-dots" aria-hidden="true"></span>
@@ -154,8 +100,8 @@
     </li>
     <li>
       <h3>Start it</h3>
-      <p>Make the data directory and start it. Proof of control and a password
-      are always on.</p>
+      <p>Create the data folder and start Porch. The first start prints a
+      password in <code>docker compose logs</code>.</p>
       <div class="command terminal">
         <div class="terminal-bar">
           <span class="terminal-dots" aria-hidden="true"></span>
@@ -168,7 +114,7 @@
     </li>
     <li>
       <h3>Open it</h3>
-      <p>It listens only on the server itself. Reach it through SSH, then open
+      <p>Porch listens only on the server. Connect through SSH, then open
       <code>http://localhost:8080</code>.</p>
       <div class="command terminal">
         <div class="terminal-bar">
@@ -181,18 +127,10 @@
     </li>
   </ol>
 
-  <!--
-    The compose file, open on the page so it is read before it is run. It has
-    no Copy button: the copy that runs is the one step 1 downloaded and
-    checked, and a copy pasted from a web page would be the one file on the
-    server nobody checked — and this is the file that decides what the
-    container may do. Its lines without their comments, the digest this
-    release's image has, and a test holds them to the file that ships.
-  -->
+  <!-- Shown to read, not to copy: the copy that runs is the one step 1 checked. -->
   <section class="compose-view" aria-labelledby="compose-title">
     <h3 id="compose-title">What you are about to run: <code>docker-compose.yml</code></h3>
-    <p>What step 1 puts on your server, to read before it runs. Nothing to copy
-    here: the copy that runs is the one step 1 checked.</p>
+    <p>Read it before you run it. Step 1 downloads and checks the real file.</p>
     <div class="terminal">
       <div class="terminal-bar">
         <span class="terminal-dots" aria-hidden="true"></span>
@@ -240,16 +178,6 @@
   <p class="band-footnote">To upgrade, run step 1 again in the same directory,
   then <code>docker compose up -d</code>. To remove it,
   <code>docker compose down --rmi all</code>, then delete the directory and the
-  DNS record. Everything else is in the
-  <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting guide</a>.</p>
-</section>
-
-<section class="cta">
-  <div>
-    <p class="eyebrow">For your own infrastructure</p>
-    <h2 class="cta-title">Run Porch where you work.</h2>
-    <p>Self-hosted, with proof of control for every domain, and nothing sent
-    to us.</p>
-  </div>
-  <a class="button button-secondary arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">Self-hosting guide</a>
+  DNS record. Full guide:
+  <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting</a>.</p>
 </section>

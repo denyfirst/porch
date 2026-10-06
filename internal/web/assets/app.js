@@ -36,29 +36,32 @@ const VERDICT_ORDER = { insecure: 3, weak: 2, strong: 1 };
   the markup can set and the CSP cannot object to; there is no inline script
   anywhere on this site and this does not add one.
 */
+// How each check works, and its limits: docs/checks.md on GitHub.
+const CHECKS_DOC = "https://github.com/denyfirst/porch/blob/main/docs/checks.md";
+
 const CHECKS = {
   tls: {
     label: "Transport",
-    says: "the handshake and the certificate behind it",
+    says: "TLS versions, ciphers and the certificate",
     endpoint: "/api/v1/tls/scan",
-    methodPage: "/tls/method",
+    methodPage: CHECKS_DOC + "#tls",
     working: "Opening handshakes at every TLS version. This takes a few seconds.",
     build: (data) => buildTLS(data),
   },
   web: {
     label: "Reach",
-    says: "how the site is reached over HTTP and HTTPS",
+    says: "HTTPS redirects, HSTS, cookies and headers",
     endpoint: "/api/v1/web/scan",
-    methodPage: "/web/method",
+    methodPage: CHECKS_DOC + "#web",
     working: "Reading how the site answers, over HTTPS and over plaintext.",
     build: (data) => buildWeb(data),
   },
   dns: {
     label: "DNS",
-    says: "how the domain itself is served, and whether its DNSSEC chain holds",
+    says: "name servers, DNSSEC and zone transfers",
 
     endpoint: "/api/v1/dns/scan",
-    methodPage: "/dns/method",
+    methodPage: CHECKS_DOC + "#dns",
     working: "Reading the delegation, the records at the name and the DNSSEC chain.",
     build: (data) => buildDNS(data),
   },
@@ -76,19 +79,19 @@ const CHECKS = {
   // the endpoint, the working line and the builder are all read there.
   names: {
     label: "Names",
-    says: "which names under the domain its certificates, its own records and its zone publish",
+    says: "names under the domain, from certificates and DNS",
 
     endpoint: "/api/v1/names/scan",
-    methodPage: "/names/method",
+    methodPage: CHECKS_DOC + "#names",
     working: "Asking what has been published under this domain, and what each name is doing now.",
     build: (data) => buildNames(data),
   },
   mail: {
     label: "Mail",
-    says: "what the domain's DNS says about its mail",
+    says: "SPF, DKIM, DMARC, MTA-STS and the mail servers",
 
     endpoint: "/api/v1/mail/scan",
-    methodPage: "/mail/method",
+    methodPage: CHECKS_DOC + "#mail",
     working: "Reading the sender policy, the DMARC record, the mail exchangers and what protects them.",
     build: (data) => buildMail(data),
   },
@@ -687,7 +690,7 @@ function legacy(tls) {
     "Each family was offered on its own, every suite in it at once. " +
     "Refused means the server accepted none of them. ");
   const why = el("a", "notes-method-link", "Why these are asked separately");
-  why.href = CHECKS.tls.methodPage + "#obsolete-suites";
+  why.href = CHECKS_DOC + "#obsolete-suites";
   note.appendChild(why);
   frag.appendChild(note);
 

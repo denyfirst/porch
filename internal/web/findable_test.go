@@ -131,7 +131,7 @@ func TestTheDemonstrationTitlesNameTheToolAndTheMaker(t *testing.T) {
 			t.Errorf("%s: the description is %d characters: %q", path, len(p.Description), p.Description)
 		}
 	}
-	for _, path := range []string{"/tls", "/web", "/porch", "/docs"} {
+	for _, path := range []string{"/tls", "/web", "/porch", "/undertakings"} {
 		if !strings.Contains(pages[path].Title, "Porch") {
 			t.Errorf("%s: a page about the tool does not name it: %q", path, pages[path].Title)
 		}

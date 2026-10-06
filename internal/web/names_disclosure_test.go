@@ -26,7 +26,7 @@ import (
 // from its source, as other tests in this package read theirs.
 func TestTheInventorySaysWhatLeavesThePageAndWhereItStops(t *testing.T) {
 	page := asset(t, "assets/names.html")
-	method := asset(t, "assets/names-method.html")
+	method := checksDoc(t)
 
 	src, err := os.ReadFile("../ptrnames/ptrnames.go")
 	if err != nil {
@@ -56,8 +56,15 @@ func TestTheInventorySaysWhatLeavesThePageAndWhereItStops(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Errorf("the inventory's fields no longer say %q", want)
 		}
+	}
+	for _, want := range []string{
+		"/" + strconv.Itoa(bound("smallestIPv4")),
+		"/" + strconv.Itoa(bound("smallestIPv6")),
+		grouped(bound("maxAddresses")) + " addresses",
+		grouped(knownnames.MaxNames),
+	} {
 		if !strings.Contains(method, want) {
-			t.Errorf("the names method page, which the fields link to, does not say %q", want)
+			t.Errorf("docs/checks.md, which the fields link to, does not say %q", want)
 		}
 	}
 

@@ -1,32 +1,18 @@
 <article class="prose">
 
-    <!--
-      The privacy page of an installation somebody runs themselves.
-
-      The public demonstration has its own, written about a machine this
-      project runs. Read on a self-hosted copy it described somebody else's
-      server and promised things this build does differently — it asks
-      certificate authorities for revocation lists, it reads pages where
-      control was proven, it can keep results. The 2026-09-16 audit (A21) found
-      the two mixed. This one is filled in from how this installation was
-      started, so it says what this copy does.
-    -->
+    <!-- The privacy page of an installation somebody runs, filled in from how it was started. -->
 
     <h1>What this installation keeps</h1>
 
     <p class="lede">
-      This is a copy of {{.Tool}} somebody runs on their own machine. It keeps
-      almost nothing, and this page says exactly what, from how it was started.
-      If a scan from here reached your server, <a href="#scans">what a scan
-      does</a> is the section you want.
+      This is a copy of {{.Tool}} that somebody runs on their own machine. This
+      page says what it keeps, based on how it was started. If a scan from here
+      reached your server, see <a href="#scans">what a scan does</a>.
     </p>
 
     <p>
-      This page is about this installation. What {{.Tool}} undertakes, beneath
-      what the organisation that publishes it undertakes — chiefly that nothing
-      here reports to them — is <a href="/undertakings">a separate page</a>,
-      because what a tool does to your machine and what its makers receive are
-      two questions, and a page answering both buries the second.
+      What {{.Tool}} and its maker undertake is on
+      <a href="/undertakings">a separate page</a>.
     </p>
 
     <nav class="jump">
@@ -41,80 +27,62 @@
 
     <h2 id="kept">What is kept</h2>
 
-    <!--
-      Each mode says what it keeps, not the sentence the demonstration can
-      say. The 2026-09-18 review (D11) found this page promising that nothing
-      records which name was checked or when, above a history that keeps
-      both: a report is kept as it was drawn, and it carries the time it was
-      measured. The time is useful to whoever runs this, so it stays; the
-      sentence changed.
-    -->
     <p>
       {{if .Guarded}}<strong>No log of requests.</strong> Nothing writes down
-      who asked for a check. What was checked, and when, is kept in one place:
-      the encrypted history under Results, which is what it is
-      for.{{else if .Keeps}}<strong>No record of requests.</strong> Nothing
-      writes down who asked, or at what time. Which name was checked, and on
-      which date, is kept in the results directory under
-      Results.{{else}}<strong>No record of requests.</strong> Nothing writes
+      who asked for a check. What was checked, and when, is kept only in the
+      encrypted history under Results.{{else if .Keeps}}<strong>No record of
+      requests.</strong> Nothing writes down who asked, or at what time.
+      Which name was checked, and on which date, is kept in the results
+      directory.{{else}}<strong>No record of requests.</strong> Nothing writes
       down which name was checked, by whom, or when.{{end}}
-      The service prints a line when it starts and when it stops, and one when
-      a result could not be kept — naming the operation and the system's
-      reason, never the name.
+      The service logs only that it started, that it stopped, and a failure to
+      keep a result, never the name.
     </p>
 
     <p>
-      <strong>Your address</strong> is held in memory to enforce a rate limit,
-      and dropped about three minutes after your last request.{{if .Guarded}}
-      An address that tries to sign in is held the same way, to limit guesses
-      at the password, and dropped within six minutes of its last attempt.{{end}}
-      Never written to disk, never in a response.
+      <strong>Your address</strong> is held in memory for the rate limit and
+      dropped about three minutes after your last request.{{if .Guarded}}
+      An address that tries to sign in is held the same way, to limit password
+      guesses, and dropped within six minutes of its last attempt.{{end}}
     </p>
 
     <p>
-      <strong>The names checked</strong> are held only as a short keyed hash,
-      for about half a minute to five, so one server is not scanned in bulk.
-      Refusal starts after at least {{.Threshold}} scans of one host in a short
-      window.
+      <strong>Names checked</strong> are held as a short keyed hash for a few
+      minutes, so one server is not scanned in bulk. A host is refused after
+      at least {{.Threshold}} scans in a short window.
     </p>
 
     <p>
-      <strong>Counts</strong> of scans and of refusals, by check and by reason,
-      are kept in memory, written to a file only if the installation was started
-      with one, and served at <code>/api/v1/stats</code>. Nothing in them
-      points at a name or a person.
+      <strong>Counts</strong> of scans and refusals are kept in memory, saved
+      to a file only if one was given, and served at <code>/api/v1/stats</code>.
+      They point at no name and no person.
     </p>
 
     <p>
       <strong>Results</strong>:
-      {{if .Guarded}}every report, kept whole on this machine, encrypted under a
-      key the password seals, so they can be opened again or deleted under
-      History. Each is filed under a random name and read back only by
-      somebody signed in. A report is kept as it was drawn: the name checked,
-      what was measured, and the time it was measured. At most a thousand that
-      the password opens are kept, the oldest dropped first.{{else if .Keeps}}kept on this machine, because it was started with a results
-      directory: per name and per check, the date, the verdict, the rule set
-      and the rules raised. No time of day and nothing about who asked. They are
-      never served over HTTP.{{else}}not kept. Close the page and the report is
+      {{if .Guarded}}every report, encrypted under a key the password seals,
+      so it can be opened or deleted under History. A report is kept as it was
+      drawn: the name checked, what was measured, and the time it was
+      measured. The newest thousand are kept.{{else if .Keeps}}kept on this machine, because it was started with a results
+      directory: per name and check, the date, the verdict and the rules
+      raised. No time of day and nothing about who asked. They are never
+      served over HTTP.{{else}}not kept. Close the page and the report is
       gone, unless you saved its JSON.{{end}}
     </p>
 
     {{if or .Guarded .Keeps}}
     <p>
-      <strong>What this page cannot speak for</strong>: the times the files
-      themselves carry, backups of this machine, and any proxy or container
-      log in front of it. Those belong to whoever runs it.
+      <strong>What this page cannot speak for</strong>: file timestamps,
+      backups, and any proxy or container log in front of this machine.
     </p>
     {{end}}
 
     {{if .Verified}}
     <p>
-      <strong>A verification secret</strong> is kept in a file readable by its
-      owner alone. Every record a domain publishes to prove it is theirs is
-      derived from it. Which domains have proven anything is not kept: it is
-      asked again on every scan, so deleting the record ends it.{{if .Guarded}}
-      The domains you add under Domains are kept, with the date each was
-      added, in one file sealed like the history.{{end}}
+      <strong>A verification secret</strong> is kept in a file only its owner
+      can read. Every proof record is derived from it. Proof is checked again
+      on every scan, so deleting the record ends it.{{if .Guarded}} The
+      domains you add under Domains are kept, sealed like the history.{{end}}
     </p>
     {{end}}
 
@@ -122,114 +90,83 @@
 
     <p>
       {{if .Verified}}Only names whose domain publishes this installation's
-      record at <code>_porch-challenge.&lt;domain&gt;</code> are checked; the
-      check page shows the record to publish.{{else}}<strong>This installation
+      record at <code>_porch-challenge.&lt;domain&gt;</code> are checked.{{else}}<strong>This installation
       checks any public name it is given.</strong> Without proof, it listens
-      on this machine's own loopback address and nowhere else.{{end}}
-      Private, loopback and reserved addresses are refused whatever is asked.
+      only on this machine's loopback address.{{end}}
+      Private, loopback and reserved addresses are always refused.
     </p>
 
     <ul class="plain">
-      <li><strong>Transport</strong>: TLS handshakes at each protocol version,
-        closed as soon as each finishes, on ports that speak TLS from the first
-        byte. No application data is sent.</li>
-      <li><strong>Reach</strong>: one <code>GET /</code> over HTTPS and one over
-        HTTP, following redirects a bounded number of times, and one
-        <code>GET</code> of <code>/.well-known/security.txt</code> over HTTPS —
-        the file RFC 9116 defines for exactly this. {{if .Whole}}The contacts it
-        names and its expiry date are shown to you.{{else}}A count of the
-        contacts and one date are kept, never an address.{{end}} One TLS handshake is
-        also opened to an address the name publishes for IPv6, carrying no
-        request at all, to see whether the site answers where it says it can
-        be reached; where no such address is published, nothing is dialled.
-        One <code>GET /</code> is also made of the other form of the name —
-        <code>www.</code> added where there is none and removed where there is —
-        which is not followed further, and of which only the host it points at
-        is kept. No other name is looked up, and none is searched for.
-        {{if .Whole}}The final page is read, once, to one megabyte, and
-        only a short list of facts is kept from it.{{else}}No page body is
-        read.{{end}}
-        Query values in a redirect address are not kept in the report.</li>
-      <li><strong>Mail</strong>: DNS lookups for the sender policy, DMARC, TLS
-        reporting, MTA-STS, the mail exchangers, their DANE records, and signing
-        keys under documented selectors and any you name.
-        {{if .Whole}}It also fetches the MTA-STS policy file, and asks each mail
-        exchanger on port 25 whether it offers STARTTLS: greeting, EHLO,
-        STARTTLS, handshake, QUIT. An exchanger inside the domain, whose name is
-        not an alias for somebody else's, is also asked whether it would
-        forward mail for a domain it does not serve: an empty sender, one
-        recipient under <code>.invalid</code>, which cannot exist, and a reset
-        before any message. No message is ever composed. The mailboxes DMARC
-        reports are sent to are shown to you, and so are the SPF, DMARC and
-        TLS-RPT records as the zone publishes them.{{else}}No mail server is
-        contacted, where DMARC reports go is named by domain only, and the
-        records themselves are not printed.{{end}}
-        A mail address may be typed; everything before the <code>@</code> is
-        dropped in the browser and again by the service.</li>
-      <li><strong>DNS</strong>: lookups through the resolver for the domain's
-        addresses, its name servers, the record at the top of its zone, and the
-        two ends of its DNSSEC chain.
-        {{if .Whole}}Each of the zone's own name servers is also asked directly,
-        over TCP, whether it answers for the zone and whether it would hand the
-        whole zone to anybody — the transfer is stopped before a record of it is
-        read — and one server of the zone above is asked who it says serves
-        this one. A name server inside the domain is asked whether it answers
-        questions about names that are not its own.{{else}}No name server is
+      <li><strong>Transport</strong>: TLS handshakes at each version, each
+        closed when it ends. No application data is sent.</li>
+      <li><strong>Reach</strong>: <code>GET /</code> over HTTPS and HTTP,
+        following a few redirects; <code>/.well-known/security.txt</code>
+        (RFC 9116); <code>GET /</code> of the <code>www.</code> form of the
+        name; and one TLS handshake to the site's IPv6 address, if it has one.
+        {{if .Whole}}The contacts it names and its expiry date are shown to
+        you. The final page is read once, up to one megabyte.{{else}}A
+        count of security.txt contacts and one date are kept, never an
+        address. No page body is read.{{end}}</li>
+      <li><strong>Mail</strong>: DNS lookups for SPF, DMARC, TLS-RPT, MTA-STS,
+        the mail servers, DANE and DKIM keys.
+        {{if .Whole}}It also fetches the MTA-STS policy and asks each mail
+        exchanger on port 25 whether it offers STARTTLS. A mail server inside
+        the domain is also asked whether it would relay for a domain it does
+        not serve, using an address that cannot exist, and reset before any
+        message. No message is ever composed. The mailboxes DMARC reports are
+        sent to are shown to you, and so are the SPF, DMARC and TLS-RPT records
+        as the zone publishes them.{{else}}No mail server is contacted, and
+        DMARC report addresses are shown by domain only.{{end}}
+        If a mail address is typed, the part before the <code>@</code> is
+        dropped.</li>
+      <li><strong>DNS</strong>: lookups for the domain's addresses, name
+        servers, SOA and DNSSEC chain.
+        {{if .Whole}}Each of the zone's own name servers is also asked directly
+        whether it answers for the zone and whether it allows a zone transfer,
+        which is stopped before any record is read.{{else}}No name server is
         asked directly.{{end}}</li>
     </ul>
 
     <p>
-      No authentication is attempted, no path is guessed, no exploit or
-      malformed packet is sent. Each host has its own scan budget, whoever asks.
+      No logins, no guessed paths, no exploits, no malformed packets. Each
+      host has its own scan budget, whoever asks.
     </p>
 
     <h2 id="asked">Who else is asked</h2>
 
     <ul class="plain">
-      <li><strong>The DNS resolver</strong> this machine uses, or the one it was
-        started with, sees every name checked. That is true of anything that
-        resolves a name.</li>
-      <li><strong>The certificate authority</strong> named in a certificate is
-        asked for its revocation list. It learns a list was fetched, not which
-        certificate was being looked at, because one list covers thousands.</li>
+      <li><strong>The DNS resolver</strong> this machine uses sees every name
+        checked.</li>
+      <li><strong>The certificate authority</strong> of a certificate is
+        asked for its revocation list. One list covers thousands of
+        certificates, so it does not learn which one.</li>
       {{if .Verified}}<li><strong>The domain's own name servers</strong> are
-        asked for its proof record, reached from the root rather than through
-        the resolver, so that a resolver cannot answer for a domain it does
-        not hold. On the way the root servers learn which top-level domain,
-        and that domain's servers which domain — neither learns the name under
-        it being proven. All of them see this machine's address, as the
-        resolver's own questions to them would have shown the resolver's.</li>
+        asked for its proof record, reached from the root. The root and
+        top-level servers learn only the domain, and all of them see this
+        machine's address.</li>
       <li><strong>The host itself</strong> may be asked for
         <code>/.well-known/porch-challenge</code> when its domain publishes no
-        record, as the other way of proving a site is yours.</li>
-      <li><strong>crt.sh</strong>, a certificate transparency monitor, is asked
-        which certificates exist for each name a TLS check reads, so that a
-        certificate somebody else obtained for it can be found. It learns that
-        somebody is looking at that name. Only for a domain this installation
-        has been shown control of.</li>{{end}}
+        record.</li>
+      <li><strong>crt.sh</strong> is asked which certificates exist for each
+        name the TLS check reads. It learns that somebody is looking at that
+        name. Only for proven domains.</li>{{end}}
       {{if .Monitor}}<li><strong>A certificate transparency monitor</strong>
         (<code>{{.Monitor}}</code>) is asked which names under a domain appear
-        in publicly logged certificates. It learns that somebody is looking at
-        that domain. Only for a domain this installation has been shown control
-        of.</li>{{end}}
+        in public certificates. Only for proven domains.</li>{{end}}
       {{if .Register}}<li><strong>A passive register</strong>
-        (<code>{{.Register}}</code>) is asked what it has observed under a
-        domain, on this installation's own account with it, and only for a
-        domain it has been shown control of.</li>{{end}}
+        (<code>{{.Register}}</code>) is asked what it has seen under a domain,
+        on this installation's own account. Only for proven domains.</li>{{end}}
       {{if .ReadsCertificates}}<li><strong>Each name that answers</strong> may
-        be asked for the certificate it presents: one handshake, closed as soon
-        as the certificate has been read, with nothing requested over it. Only
-        for a domain this installation has been shown control of.</li>{{end}}
+        be asked for the certificate it presents: one handshake, closed when
+        the certificate is read. Only for proven domains.</li>{{end}}
       {{if .AsksResponder}}<li><strong>The authority's responder</strong> is
         asked whether a certificate has been revoked, because this installation
-        was started with <code class="flag">-ask-responder</code>. That question names one
-        certificate to its own authority, so it runs only for a domain this
-        installation has been shown control of.</li>{{end}}
+        was started with <code class="flag">-ask-responder</code>. Only for
+        proven domains.</li>{{end}}
       {{if .WalksRanges}}<li><strong>Nothing, for an address range you name.</strong>
-        Its reverse records are read through the resolver above, and not one
-        packet is sent to the addresses themselves. A range is read only for
-        whoever runs this installation, because no record can prove a range
-        belongs to anybody the way one can prove a domain does.</li>{{end}}
+        Its reverse records are read through the resolver, and not one packet
+        is sent to the addresses themselves. Ranges are read only for whoever
+        runs this installation.</li>{{end}}
       {{if .AsksNobodyElse}}<li>No certificate transparency log, no passive
         register and no revocation responder is asked by this service.</li>{{end}}
     </ul>
@@ -237,39 +174,28 @@
     <h2 id="stopping">Stopping a scan</h2>
 
     <p>
-      This copy is run by whoever runs this machine, not by the people who
-      write {{.Tool}}. To stop scans from it, contact whoever answers for the
-      address they came from. The project can exclude a domain from every
-      future release, but it cannot reach into a copy somebody else is
-      running.
+      This copy is run by whoever runs this machine, not by the makers of
+      {{.Tool}}. To stop scans from it, contact whoever is responsible for the
+      address they came from.
     </p>
 
     <h2 id="promises">What is not promised</h2>
 
     <p>
-      A report describes what a server negotiated at one moment, graded
-      against a published rule set. It is not an audit, not a certification,
-      and not a statement that anything is safe. The software is provided
-      without warranty, under the AGPL-3.0.
+      A report describes one moment and is not an audit or a certification.
+      The software is provided without warranty, under the AGPL-3.0.
     </p>
 
     <h2 id="browser">Your browser</h2>
 
     <p>
-      {{if .Guarded}}One cookie, set when you sign in: a random session token,
-      readable by no script, sent to no other site, and ending when you sign
-      out, after twelve hours, or when the installation restarts. This machine
-      holds a hash of it and nothing about you. No analytics, no fonts or
-      scripts from elsewhere.{{else}}No cookies, no analytics, no fonts or
-      scripts from elsewhere.{{end}} Pages load
-      one stylesheet and a small script from this machine, and the ones that
-      check something one more. The only thing stored in your browser is the
-      colour scheme you chose, if you chose one. The clipboard is written in one
-      place: the Copy button beside a DNS record to publish, which copies that
-      record and nothing else. A report is never put there.
+      {{if .Guarded}}One cookie, set when you sign in: a random session token
+      that no script can read, sent to no other site. It ends when you sign
+      out, after twelve hours, or when the installation restarts.{{else}}No
+      cookies.{{end}} No analytics, and nothing loaded from elsewhere. Your
+      browser stores only your colour scheme, if you chose one. The clipboard
+      is written in one place: the Copy button next to a DNS record to
+      publish. A report is never put there.
     </p>
-
-    <p><a class="text-link arrow-e" href="/docs">The source, the guarantees and their tests, and how
-    to report a vulnerability</a></p>
 
 </article>

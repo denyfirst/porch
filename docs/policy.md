@@ -6,9 +6,8 @@ do to inherit the first.
 
 The text itself is not here. It is in
 [`internal/promises`](../internal/promises/promises.go). The organisation's is
-served at `/organisation`, and Porch's at `/undertakings`, beneath the
-organisation's carried unchanged. A document that restated it would be the
-exact fault the split was made to avoid.
+served at `/organisation`, and Porch's at `/undertakings`, which links to the
+organisation's.
 
 ---
 
@@ -65,7 +64,7 @@ Six tests, in `internal/promises` and `internal/web`:
 | `TestNoProductRedefinesWhatTheOrganisationUndertakes` | no product addition carries an organisation identifier, and every addition is named for the product it belongs to |
 | `TestTheUndertakingsAreNotCopiedIntoAnyPage` | nothing served to a visitor carries these sentences in its own words; the pages range over the one place they live |
 | `TestThePageAboutTheOrganisationCarriesEveryUndertaking` | the organisation's page carries every one of its undertakings and every way of checking one, each addressable by its identifier, links to each product's own page, and carries none of a product's additions |
-| `TestPorchsPageCarriesTheOrganisationsListAndItsOwnUnderneath` | Porch's page carries the organisation's list unchanged and Porch's additions underneath, and says where the organisation's is canonical |
+| `TestPorchsPageCarriesItsOwnUndertakings` | Porch's page carries Porch's additions, repeats none of the organisation's, and links to them |
 | `TestThePrivacyPageSendsAReaderToTheUndertakings` | a reader who arrived with the other question is pointed across, above the jump list rather than below it |
 
 The last one exists because a split nobody is pointed across is a page that was
@@ -103,7 +102,7 @@ product at once — which is the whole point of it being one list.
 | | |
 |---|---|
 | `/organisation` | what denyfirst undertakes, and where each product's own page is |
-| `/undertakings` | the organisation's undertakings unchanged, and what Porch adds underneath |
+| `/undertakings` | what Porch adds, linking to the organisation's |
 | `/privacy` | what this service keeps, what a scan does, how to stop one |
 | `/terms` | what you agree to, and what is not promised |
 | `internal/promises` | the one place the undertakings are written |

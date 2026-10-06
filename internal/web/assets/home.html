@@ -1,12 +1,4 @@
-<!--
-  The denyfirst front page, on the demonstration only.
-
-  "/" stood in for the TLS check until there was a front page to put there;
-  this is it. The team and what it makes, in short, with each product's own
-  page carrying the detail. Nothing here is a claim about a scan, so nothing
-  here needs the script that runs one. hero.js only opens the lens over the
-  opening, and the page is whole without it.
--->
+<!-- The denyfirst front page, on the demonstration only. -->
 <section class="hero">
   <div class="hero-lens" aria-hidden="true">
     <span class="lens-1">evidence</span>
@@ -17,9 +9,8 @@
   <p class="eyebrow eyebrow-dot">Independent security and privacy tools</p>
   <h1>Security.<br><span class="hero-soft">On your terms.</span></h1>
   <div class="hero-bottom">
-    <p>Tools that help you understand your infrastructure. Built with
-    evidence, restraint and respect for your data.</p>
-    <a class="button button-primary arrow-se" href="#products">Explore our work</a>
+    <p>Tools that check your infrastructure and keep your data with you.</p>
+    <a class="button button-primary arrow-se" href="#products">Our products</a>
   </div>
   <p class="hero-rule" aria-hidden="true"><span>Independent by design</span><span>001 — denyfirst</span></p>
 </section>
@@ -27,68 +18,57 @@
 <section class="band" id="products">
   <div class="band-head">
     <div>
-      <p class="eyebrow">01 / Products &amp; services</p>
-      <h2 class="band-title">Purpose-built.<br>Principle-led.</h2>
+      <p class="eyebrow">01 / Products</p>
+      <h2 class="band-title">What we make.</h2>
     </div>
-    <p class="band-note">Products and services with a clear purpose. Choose the
-    one that fits the work.</p>
   </div>
 
   <div class="cards">
     <a class="card card-live card-link" href="https://porch.denyfirst.dev/">
       <span class="card-top"><span class="card-symbol" aria-hidden="true">⌁</span><span class="badge badge-live">Available</span></span>
       <h3 class="card-name arrow-ne">Porch</h3>
-      <p>A clear view of your TLS, web and mail configuration, and the
-      evidence behind every finding. Run it yourself, or watch it work here on
-      our own domain.</p>
+      <p>Checks your TLS, website, mail and DNS. Runs on your own server.</p>
       <span class="card-foot">Infrastructure checks</span>
     </a>
     <article class="card">
       <span class="card-top"><span class="card-symbol" aria-hidden="true">≋</span><span class="badge">Being built</span></span>
       <h3 class="card-name">Rootwell</h3>
-      <p>A self-hosted workspace for certificates, keys and machine
-      identities — your own root of trust. The first part inspects, matches and
-      converts what you already hold, on your own machine. Private material is
-      never uploaded to us.</p>
+      <p>A self-hosted workspace for certificates and keys. Private keys never
+      leave your machine.</p>
       <span class="card-foot">Certificates and keys</span>
     </article>
     <article class="card">
       <span class="card-top"><span class="card-symbol" aria-hidden="true">⊞</span><span class="badge">Exploring</span></span>
       <h3 class="card-name">PAM services</h3>
-      <p>A possible future service for privileged access management. Its
-      scope is not defined yet.</p>
+      <p>Privileged access management. Not defined yet.</p>
       <span class="card-foot">Privileged access</span>
     </article>
   </div>
-  <p class="band-footnote">Anything not marked available is work in progress or
-  work being considered. They are not available, and no date is promised.</p>
+  <p class="band-footnote">Rootwell and PAM are not available yet, and no date is promised.</p>
 </section>
 
 <section class="band" id="principles">
   <div class="band-head">
     <div>
-      <p class="eyebrow">02 / The standard we build to</p>
-      <h2 class="band-title">Less blind trust.<br>More understanding.</h2>
+      <p class="eyebrow">02 / How we work</p>
+      <h2 class="band-title">Three rules.</h2>
     </div>
   </div>
   <div class="columns">
     <article>
       <p class="index">01</p>
       <h3>Evidence first.</h3>
-      <p>Show what was observed, cite the rule behind a conclusion, and say
-      plainly what was not measured.</p>
+      <p>Every result shows what was seen and the standard behind it.</p>
     </article>
     <article>
       <p class="index">02</p>
-      <h3>Control stays with you.</h3>
-      <p>Built to be run on your own machine. What is kept and what is
-      contacted are stated, and nothing is collected by us.</p>
+      <h3>Your data stays with you.</h3>
+      <p>Our tools run on your machine. We collect nothing.</p>
     </article>
     <article>
       <p class="index">03</p>
-      <h3>Keep the scope clear.</h3>
-      <p>Purposeful instruments with explicit boundaries: a check reads what a
-      server already serves, and does nothing more.</p>
+      <h3>A clear scope.</h3>
+      <p>A check reads what a server already shows, and nothing more.</p>
     </article>
   </div>
 </section>
@@ -96,24 +76,11 @@
 <section class="band band-split" id="about">
   <p class="eyebrow">03 / Independent security &amp; privacy team</p>
   <div>
-    <h2 class="band-title">Independent people.<br>A considered approach.</h2>
-    <p class="band-prose">We are an independent team building security and
-    privacy tools. denyfirst is the home for that work: the products, the
-    reasoning behind them, and the responsibility for both. Everything we
-    ship is open source, with no third-party dependencies, so it can be
-    checked rather than trusted.</p>
-    <a class="text-link arrow-ne" href="https://github.com/denyfirst/porch">See the source</a>
+    <h2 class="band-title">Small and independent.</h2>
+    <p class="band-prose">denyfirst is an independent team that puts privacy
+    first. Our code is open source and has no third-party dependencies.</p>
+    <a class="text-link arrow-ne" href="https://github.com/denyfirst/porch">Source on GitHub</a>
   </div>
-</section>
-
-<section class="cta">
-  <div>
-    <p class="eyebrow">Documentation</p>
-    <h2 class="cta-title">Everything written down, in one place.</h2>
-    <p>How to read a report, what a check sends, how to run your own copy,
-    and how to reach us.</p>
-  </div>
-  <a class="button button-secondary arrow-e" href="https://porch.denyfirst.dev/docs">Read the docs</a>
 </section>
 
 <script src="/hero.js" defer></script>

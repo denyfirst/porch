@@ -27,7 +27,6 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 	project := map[string]bool{
 		"/privacy": true,
 		"/terms":   true,
-		"/docs":    true,
 
 		// What the organisation undertakes, whatever you run. The most
 		// root-level page there is: it is not about a check, and a copy of it
@@ -83,11 +82,7 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 		}
 	}
 
-	// Every check's method page is where that check says it is.
-	//
-	// The limits of a TLS handshake are not the limits of a header check, and
-	// a page trying to be both would be true of neither.
-	for _, path := range []string{"/tls", "/tls/method", "/web/method", "/mail/method"} {
+	for _, path := range []string{"/tls", "/web"} {
 		if w := get(t, path); w.Code != http.StatusOK {
 			t.Errorf("GET %s returned %d", path, w.Code)
 		}
@@ -152,7 +147,7 @@ func pathOfPorchURL(t *testing.T, s string) string {
 	}
 
 	rest := s[i+len(marker):]
-	if end := strings.IndexAny(rest, " )\t\r\n"); end >= 0 {
+	if end := strings.IndexAny(rest, " )#;\t\r\n"); end >= 0 {
 		rest = rest[:end]
 	}
 	if rest == "" {
@@ -192,8 +187,8 @@ func TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt(t *testing.T) {
 	if m.Code != http.StatusMovedPermanently {
 		t.Errorf("GET /method returned %d, want 301", m.Code)
 	}
-	if got := m.Header().Get("Location"); got != "/tls/method" {
-		t.Errorf("GET /method redirects to %q, want /tls/method", got)
+	if got := m.Header().Get("Location"); got != ChecksURL+"#tls" {
+		t.Errorf("GET /method redirects to %q, want the TLS section of the checks document", got)
 	}
 
 	// The root itself differs by deployment since 2026-09-12, and this is where
@@ -314,26 +309,23 @@ func TestEachCheckCallsItsOwnPaths(t *testing.T) {
 		endpoint   string
 		methodPage string
 	}{
-		{"tls", "/api/v1/tls/scan", "/tls/method"},
-		{"web", "/api/v1/web/scan", "/web/method"},
-		{"mail", "/api/v1/mail/scan", "/mail/method"},
+		{"tls", "/api/v1/tls/scan", "#tls"},
+		{"web", "/api/v1/web/scan", "#web"},
+		{"mail", "/api/v1/mail/scan", "#mail"},
+		{"dns", "/api/v1/dns/scan", "#dns"},
+		{"names", "/api/v1/names/scan", "#names"},
 	} {
 		for _, want := range []string{
 			`endpoint: "` + tc.endpoint + `"`,
-			`methodPage: "` + tc.methodPage + `"`,
+			`methodPage: CHECKS_DOC + "` + tc.methodPage + `"`,
 		} {
 			if !strings.Contains(source, want) {
 				t.Errorf("the %s check does not declare %s", tc.check, want)
 			}
 		}
-
-		// And any address it points at is one this service answers.
-		if tc.methodPage == "" {
-			continue
-		}
-		if _, ok := pages[tc.methodPage]; !ok {
-			t.Errorf("the %s check points at %s, which this site does not serve", tc.check, tc.methodPage)
-		}
+	}
+	if !strings.Contains(source, `const CHECKS_DOC = "`+ChecksURL+`";`) {
+		t.Error("the script does not link the checks document")
 	}
 
 	// The old path is still answered — see the API's own test for why it is
@@ -387,14 +379,10 @@ func TestEachScanPageDeclaresItsCheck(t *testing.T) {
 	}
 }
 
-// The footer leads to the documents, and to no one check's limits.
-//
-// It carried "How a report is read", pointing at the limits of the check a
-// page was about and at the Transport limits everywhere else. Once there were
-// three checks and pages that run all of them, a single link there was right
-// on a minority of pages. The method pages are reached from the reports that
-// need them and from /docs, which lists all three.
-func TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits(t *testing.T) {
+// Each site's footer links its own documents: the organisation's pages its
+// undertakings and contacts, every other page Porch's documents. No footer
+// offers one check's limits.
+func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 	for path, body := range rendered {
 		_, foot, ok := strings.Cut(string(body), `<footer class="colophon">`)
 		if !ok {
@@ -406,13 +394,10 @@ func TestTheFooterLeadsToTheDocumentsAndNotOneChecksLimits(t *testing.T) {
 		for _, l := range links {
 			got = append(got, l[1])
 		}
-		// Three, and the page added on 2026-09-25 saying what the organisation
-		// undertakes is deliberately not a fourth. Two tests pin this count
-		// because the footer once carried six links and nobody read them; the
-		// new page is reached from /docs, which lists every document, and from
-		// the first paragraph of each privacy page, which is where somebody
-		// asking the question is already looking.
-		want := porchLink("/docs") + " " + porchLink("/privacy") + " " + porchLink("/terms")
+		want := DocsURL + " " + porchLink("/privacy") + " " + porchLink("/terms") + " " + porchLink("/undertakings")
+		if p, ok := pages[path]; ok && demo.Enabled && p.Organisation {
+			want = SiteURL + "/organisation " + SiteURL + SecurityTxtPath + " " + SiteURL + PGPKeyPath
+		}
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s: the footer links %v, want %s", path, got, want)
 		}

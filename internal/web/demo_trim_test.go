@@ -184,8 +184,8 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 	// nobody goes looking for a second way that skips the signature.
 	said := strings.Join(strings.Fields(shownText(string(raw))), " ")
 	for _, sentence := range []string{
-		"One paste puts the compose file shown below on the server, with its signed checksums, and checks both.",
-		"Nothing to copy here: the copy that runs is the one step 1 checked.",
+		"Downloads the compose file shown below and checks its signature.",
+		"Read it before you run it. Step 1 downloads and checks the real file.",
 	} {
 		if !strings.Contains(said, sentence) {
 			t.Errorf("the Porch page no longer says %q", sentence)

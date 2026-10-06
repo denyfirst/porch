@@ -224,7 +224,7 @@ type Prober struct {
 // one page and find out precisely what was sent and why, which is the
 // difference between a request they can dismiss and one they must
 // investigate.
-const DefaultUserAgent = "porch/1 (+https://porch.denyfirst.dev/web/method)"
+const DefaultUserAgent = "porch/1 (+https://porch.denyfirst.dev/privacy#stopping)"
 
 // ErrNotAHostname is returned for a target that is not a bare hostname.
 var ErrNotAHostname = errors.New("webprobe: target must be a bare hostname")
