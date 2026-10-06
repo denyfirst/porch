@@ -3,6 +3,7 @@
 package web
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -147,10 +148,12 @@ func TestTheFrontPageSaysWhatIsNotAvailable(t *testing.T) {
 func TestTheCatalogueAndTheMenuNameTheSameProducts(t *testing.T) {
 	front := get(t, "/").Body.String()
 
-	for _, name := range []string{"Porch", "Rootwell"} {
-		if !strings.Contains(front, ">"+name+"<") {
-			t.Errorf("the front page does not name %s", name)
-		}
+	// Porch's card carries Porch's mark, as Porch's own header draws it.
+	if !strings.Contains(front, `<h3 class="product-feature-name">porch<span class="wordmark-porch-stop">.</span></h3>`) {
+		t.Error("the front page's card does not name Porch by its mark")
+	}
+	if !strings.Contains(front, "<h3>Rootwell</h3>") {
+		t.Error("the front page does not name Rootwell")
 	}
 	if strings.Contains(front, "Porch Elite") {
 		t.Error("the front page still names a product that was replaced")
@@ -158,6 +161,9 @@ func TestTheCatalogueAndTheMenuNameTheSameProducts(t *testing.T) {
 
 	// The menu is on every page, so one page is enough to read it, and it says
 	// the same thing about what is being built.
+	if !strings.Contains(front, `<span class="nav-menu-name">Porch</span>`) {
+		t.Error("the products menu does not name Porch")
+	}
 	if !strings.Contains(front, `<span class="nav-menu-name">Rootwell</span><span class="nav-menu-note">Being built</span>`) {
 		t.Error("the products menu does not name Rootwell as being built")
 	}
@@ -194,5 +200,26 @@ func TestTheFrontPageSaysHowToReportAVulnerability(t *testing.T) {
 	}
 	if got := groupedFingerprint("75B7A18A89715E3775DBCA2EA8D994D1221AA045"); got != "75B7 A18A 8971 5E37 75DB  CA2E A8D9 94D1 221A A045" {
 		t.Errorf("the fingerprint is grouped as %q, not as gpg prints it", got)
+	}
+
+	// The three facts beside it are SECURITY.md's, which a reporter reads
+	// before writing: a promise made in one place and not the other is the
+	// one that gets broken.
+	raw, err := os.ReadFile("../../SECURITY.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := strings.Join(strings.Fields(string(raw)), " ")
+	for claim, backing := range map[string]string{
+		"<li>Private reports only</li>":       "Please do not open a public issue for security problems.",
+		"<li>Anonymous reports accepted</li>": "Anonymous and pseudonymous reports are accepted without question.",
+		"<li>Disclosed within 90 days</li>":   "Coordinated disclosure, 90 days by default. If a fix ships earlier, disclosure happens earlier.",
+	} {
+		if !strings.Contains(page, claim) {
+			t.Errorf("the front page's security section does not say %s", claim)
+		}
+		if !strings.Contains(policy, backing) {
+			t.Errorf("SECURITY.md no longer says %q, which the front page's %s rests on", backing, claim)
+		}
 	}
 }

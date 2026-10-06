@@ -64,6 +64,22 @@ func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 	}
 }
 
+// Both marks are drawn the same wherever they appear.
+//
+// The maker's name in Porch's footer is a link home, and a browser underlines
+// a link: under a wordmark the line reads as part of the mark. Porch's mark on
+// the front page sits on the organisation's page, where the accent is the
+// brand red, so its stop names Porch's violet rather than the page's accent.
+func TestEachMarkIsDrawnAsItsHeaderDrawsIt(t *testing.T) {
+	sheet := stylesheet(t)
+	if rule := cssRule(t, sheet, "a.colophon-brand"); !strings.Contains(rule, "text-decoration: none") {
+		t.Errorf("the maker's name in the footer is underlined:\n%s", rule)
+	}
+	if rule := cssRule(t, sheet, ".product-feature-name .wordmark-porch-stop"); !strings.Contains(rule, "var(--porch-") {
+		t.Errorf("Porch's mark on the front page takes the page's accent, not Porch's violet:\n%s", rule)
+	}
+}
+
 // Every page can switch its colour scheme, and the switch is only shown where
 // the script that makes it work has loaded.
 func TestEveryPageCanSwitchItsColourScheme(t *testing.T) {
