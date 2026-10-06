@@ -1683,7 +1683,8 @@ code.flag { white-space: nowrap; }
 .band:has(+ .band-tint) { border-bottom: 0; }
 
 .band-head .eyebrow::before,
-.band-split > .eyebrow::before {
+.band-split > .eyebrow::before,
+.team-text > .eyebrow::before {
   content: "";
   display: inline-block;
   width: 1.5rem;
@@ -1748,41 +1749,134 @@ code.flag { white-space: nowrap; }
   color: var(--ink-soft);
 }
 
-/* What the about band claims, each a link to the file that shows it. */
-.proofs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0 0 1.4rem;
-  padding: 0;
-  list-style: none;
+/*
+  The about band: who makes this, drawn as the card a member of the team
+  would wear, with the slot a lanyard goes through. It names nobody and shows
+  no face. What it shows instead is how the team is known: the key that signs
+  every release, and the files that back each other line. The fine diagonal
+  ground is the pattern printed on documents meant to be hard to copy.
+*/
+.team {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+  gap: 2.5rem 4rem;
+  align-items: center;
 }
 
-.proofs a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 24px;
-  padding: 0.3rem 0.8rem;
-  font-size: 0.85rem;
-  color: var(--ink);
-  text-decoration: none;
-  background: var(--paper-sunk);
+.team-card {
+  position: relative;
+  padding: 2.4rem 1.6rem 1.3rem;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in srgb, var(--tool) 7%, transparent) 0 1px, transparent 1px 9px),
+    var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-top: 4px solid var(--tool);
+  border-radius: 14px;
+  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
+  transform: rotate(-1deg);
+  transition: transform 220ms ease-out;
+}
+
+.team-card:hover { transform: rotate(0deg); }
+
+.team-card::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  width: 3.2rem;
+  height: 0.55rem;
+  transform: translateX(-50%);
+  background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: 999px;
 }
 
-.proofs a::before {
-  content: "";
-  width: 0.7rem;
-  height: 0.38rem;
-  margin-top: -0.2rem;
-  border-left: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
-  transform: rotate(-45deg);
+.team-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
 }
 
-.proofs a:hover { border-color: var(--accent); }
+.team-card-mark {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.team-card-tag {
+  padding: 0.2rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.team-card-rows { margin: 0; }
+
+.team-card-rows > div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.2rem 1rem;
+  padding: 0.65rem 0;
+  border-top: 1px dashed var(--rule);
+}
+
+.team-card-rows dt {
+  padding-top: 0.15rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.team-card-rows dd { margin: 0; font-size: 0.95rem; color: var(--ink); }
+
+.team-card-rows a { color: var(--ink); text-decoration-color: var(--rule); }
+
+.team-card-rows a:hover { text-decoration-color: var(--accent); }
+
+.team-card-rows code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.team-card-foot {
+  margin: 0.6rem 0 0;
+  padding-top: 0.9rem;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule);
+}
+
+@media (max-width: 52rem) {
+  .team { grid-template-columns: 1fr; }
+  .team-card { transform: none; }
+}
+
+/* On a phone the key, the one long line, takes the card's width under its
+   label; the short lines keep their label beside them. */
+@media (max-width: 40rem) {
+  .team-card { padding-inline: 1.2rem; }
+  .team-card-rows > div { grid-template-columns: 6.5rem minmax(0, 1fr); }
+  .team-card-rows > .team-card-key { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-card, .team-card:hover { transition: none; transform: none; }
+}
 
 .cards {
   display: grid;

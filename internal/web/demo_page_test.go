@@ -229,12 +229,15 @@ func TestEachRuleOnTheFrontPageSaysHowToCheckIt(t *testing.T) {
 	}
 }
 
-// The facts under the opening and the marks in the about band are true of
-// this site and this repository, and each mark links the file that shows it.
+// The facts under the opening and the lines on the team's card are true of
+// this site and this repository, and each line that can link the file that
+// shows it does.
 //
 // "001 — denyfirst" stood there until 2026-10-06: a serial number that meant
 // nothing and that a reader asked about. What replaced it is checkable, so it
-// is checked.
+// is checked. The card names nobody; it says how the team is known instead,
+// by the key that signs every release, and that key has to be the one the
+// verification guide tells a reader to expect.
 func TestTheFrontPagesFactsHold(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("the front page is the demonstration's")
@@ -258,24 +261,38 @@ func TestTheFrontPagesFactsHold(t *testing.T) {
 		}
 		return string(body)
 	}
-	for mark, file := range map[string]string{
-		"AGPL-3.0":            "LICENSE",
-		"Signed releases":     "docs/verify.md",
-		"Reproducible builds": "docs/verify.md",
-		"No third-party code": "go.mod",
+	const repo = "https://github.com/denyfirst/porch/blob/main/"
+	const key = "SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y"
+	for _, line := range []struct{ term, file, says string }{
+		{"Known by", "docs/verify.md", "<code>" + key + "</code>"},
+		{"Releases", "docs/verify.md", "Signed and reproducible"},
+		{"Licence", "LICENSE", "AGPL-3.0"},
+		{"Dependencies", "go.mod", "None"},
 	} {
-		if !strings.Contains(page, `<a href="https://github.com/denyfirst/porch/blob/main/`+file+`">`+mark+`</a>`) {
-			t.Errorf("the about band's %q does not link %s", mark, file)
+		want := "<dt>" + line.term + `</dt><dd><a href="` + repo + line.file + `">` + line.says + "</a></dd>"
+		if !strings.Contains(page, want) {
+			t.Errorf("the team's card does not say %s", want)
 		}
-		read(file)
+		read(line.file)
+	}
+	if !strings.Contains(page, "<dt>Investors</dt><dd>None</dd>") {
+		t.Error("the team's card does not say it has no investors")
+	}
+
+	verify := read("docs/verify.md")
+	if !strings.Contains(verify, "Good \"file\" signature for releases@denyfirst.dev with ED25519 key "+key) {
+		t.Error("the key on the team's card is not the one the verification guide expects")
+	}
+	if !strings.Contains(verify, "Builds are reproducible.") {
+		t.Error("docs/verify.md no longer says how a release is rebuilt")
 	}
 	if licence := read("LICENSE"); !strings.Contains(licence, "GNU AFFERO GENERAL PUBLIC LICENSE") || !strings.Contains(licence, "Version 3") {
-		t.Error("the licence is not the AGPL-3.0 the front page names")
+		t.Error("the licence is not the AGPL-3.0 the card names")
 	}
 	if strings.Contains(read("go.mod"), "require") {
-		t.Error("go.mod requires a module, and the front page says there is no third-party code")
+		t.Error("go.mod requires a module, and the card says there are no dependencies")
 	}
-	if verify := read("docs/verify.md"); !strings.Contains(verify, "SHA256SUMS.sig") || !strings.Contains(verify, "Builds are reproducible.") {
-		t.Error("docs/verify.md no longer shows how a release is signed and rebuilt")
+	if !strings.Contains(strings.Join(strings.Fields(read("SECURITY.md")), " "), "This is an unfunded project") {
+		t.Error("SECURITY.md no longer says the project is unfunded, and the card says it has no investors")
 	}
 }
