@@ -296,3 +296,50 @@ func TestTheFrontPagesFactsHold(t *testing.T) {
 		t.Error("SECURITY.md no longer says the project is unfunded, and the card says it has no investors")
 	}
 }
+
+// What happens after a report arrives is drawn as a track beside the way to
+// write, and every stop on it is SECURITY.md's.
+//
+// The column beside "04 / Security & disclosure" was empty, and three plain
+// lines there read as a list nobody asked for. The track says the same things
+// a reporter needs, in the order they happen; each has to stay what the policy
+// a reporter reads before writing says.
+func TestTheDisclosureTrackIsSecurityMd(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	page := get(t, "/").Body.String()
+	raw, err := os.ReadFile("../../SECURITY.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := strings.Join(strings.Fields(string(raw)), " ")
+	for _, stop := range []struct{ when, what, backing string }{
+		{"Day 0", "You report it privately", "Please do not open a public issue for security problems."},
+		{"72 hours", "We acknowledge it", "| Acknowledgement | 72 hours |"},
+		{"7 days", "First assessment", "| Initial assessment | 7 days |"},
+		{"30 days", "A fix or a plan, if high or critical", "| Fix or mitigation plan | 30 days for high and critical |"},
+		{"90 days", "Made public, with credit to you", "Coordinated disclosure, 90 days by default."},
+	} {
+		want := `<li><span class="timeline-when">` + stop.when + `</span><span class="timeline-what">` + stop.what + `</span></li>`
+		if !strings.Contains(page, want) {
+			t.Errorf("the track does not carry %s: %s", stop.when, stop.what)
+		}
+		if !strings.Contains(policy, stop.backing) {
+			t.Errorf("SECURITY.md no longer says %q, which the track's %s rests on", stop.backing, stop.when)
+		}
+	}
+	for _, backing := range []string{
+		"Reporters are credited in the advisory and the release notes unless they ask not to be.",
+		"Anonymous and pseudonymous reports are accepted without question.",
+		"## Safe harbour",
+		"Good-faith research under this policy is authorised and will not be met with legal action.",
+	} {
+		if !strings.Contains(policy, backing) {
+			t.Errorf("SECURITY.md no longer says %q, which the note under the track rests on", backing)
+		}
+	}
+	if !strings.Contains(page, `href="https://github.com/denyfirst/porch/blob/main/SECURITY.md#safe-harbour">safe harbour</a>`) {
+		t.Error("the note does not link the safe harbour it names")
+	}
+}

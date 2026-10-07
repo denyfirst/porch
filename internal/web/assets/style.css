@@ -2443,6 +2443,94 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
 
+/*
+  The security band: how to write on one side, and under the label the track a
+  report follows after it arrives. Every stop on the track is SECURITY.md's,
+  and demo_page_test.go holds each to it. On a phone the track comes after
+  the box, so the way to write is read first.
+*/
+.disclosure {
+  grid-template-areas: "label body" "track body";
+  grid-template-rows: auto 1fr;
+}
+
+.disclosure > .eyebrow { grid-area: label; }
+.disclosure-body { grid-area: body; }
+.disclosure-track { grid-area: track; align-self: start; max-width: 24rem; }
+
+.disclosure-track-title {
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.timeline {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The line the stops sit on, from the rule's grey into the accent: a report
+   travels from private towards public. */
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0.95rem;
+  bottom: 0.95rem;
+  width: 2px;
+  background: linear-gradient(var(--rule), var(--accent));
+}
+
+.timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  gap: 0.2rem 0.9rem;
+  align-items: baseline;
+  padding: 0.5rem 0 0.5rem 1.7rem;
+}
+
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.82rem;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--paper-sunk);
+}
+
+.timeline li:last-child::before { background: var(--accent); }
+
+.timeline-when {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+.timeline-what { font-size: 0.95rem; color: var(--ink); }
+
+.timeline-note {
+  margin: 0.9rem 0 0 1.7rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 52rem) {
+  .disclosure {
+    grid-template-areas: "label" "body" "track";
+    grid-template-rows: auto;
+  }
+  .disclosure-track { max-width: none; }
+}
+
 /* How to report a vulnerability, on the front page. */
 .security-box {
   max-width: 44rem;
