@@ -107,7 +107,7 @@ and pass it with `-helo`. A blocked outbound port 25 is reported as such.
 
 ### Limits
 
-- **No message was sent.** No message was sent: there is no DATA, so nothing can be delivered or queued. A mail exchanger inside the domain is also asked whether it forwards mail for a domain it does not serve: an empty sender, a recipient at a name RFC 2606 reserves so it cannot exist, and a reset before any message. An exchanger run by somebody else is never asked that. DANE is checked only against a certificate an exchanger presented, and DNSSEC is the resolver's word. A DKIM key is read only under a selector this scan was told to look under, and the report says which.
+- **No message was sent.** No message was sent: there is no DATA, so nothing is delivered or queued. An exchanger inside the domain is asked whether it would relay for a domain it does not serve, with an address that cannot exist (RFC 2606), and reset before any message; an exchanger run by somebody else is never asked. DANE is checked only against presented certificates, DNSSEC is the resolver's word, and DKIM is read only under the selectors given.
 
 ## DNS
 

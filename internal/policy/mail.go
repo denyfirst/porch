@@ -414,10 +414,8 @@ func GradeMail(f MailFacts) MailFinding {
 	if f.SPFRecords > 1 {
 		add("mail.spf-duplicate", Insecure,
 			"The domain publishes more than one SPF record",
-			"RFC 7208 permits exactly one. A domain with "+strconv.Itoa(f.SPFRecords)+
-				" produces a permanent error, and receivers that hit one act as though no policy "+
-				"were published at all. This is usually an attempt to authorise an additional "+
-				"sender, and it switches the entire policy off instead.",
+			"RFC 7208 permits one SPF record; this domain publishes "+strconv.Itoa(f.SPFRecords)+
+				". Receivers treat that as a permanent error and apply no policy at all.",
 			rfc7208)
 	}
 
@@ -427,19 +425,18 @@ func GradeMail(f MailFacts) MailFinding {
 	if f.SPFLookupLimit {
 		add("mail.spf-lookup-limit", Insecure,
 			"Evaluating this SPF policy takes more DNS lookups than are allowed",
-			"RFC 7208 allows at most ten DNS-resolving terms across everything a policy pulls in; "+
-				"this one takes "+atLeast(f.SPFLookupsAtLeast)+strconv.Itoa(f.SPFLookups)+". Over the limit the policy is a "+
-				"permanent error, and receivers treat that as no policy. Nothing in the record "+
-				"shows this: the cost is mostly inside the providers it includes.",
+			"RFC 7208 allows at most ten DNS lookups; this policy takes "+
+				atLeast(f.SPFLookupsAtLeast)+strconv.Itoa(f.SPFLookups)+", mostly inside the "+
+				"providers it includes. Over the limit, receivers treat it as no policy.",
 			rfc7208)
 	}
 
 	if f.SPFVoidLimit {
 		add("mail.spf-void-lookups", Weak,
 			"The SPF policy relies on names that no longer resolve",
-			strconv.Itoa(f.SPFVoidLookups)+" of the lookups this policy requires return nothing. "+
-				"RFC 7208 allows two; beyond that the evaluation is a permanent error. A policy "+
-				"resting on names that have gone is a policy nobody is maintaining."+
+			strconv.Itoa(f.SPFVoidLookups)+" of the lookups this policy requires return "+
+				"nothing, and RFC 7208 allows two before the policy fails. The names have gone "+
+				"and the record was never updated."+
 				namedPolicies(" The policies that answered nothing are ", f.SPFVoidNames),
 			rfc7208)
 	}
@@ -450,10 +447,8 @@ func GradeMail(f MailFacts) MailFinding {
 	if f.SPFAll == "+" {
 		add("mail.spf-allows-everybody", Insecure,
 			"The SPF policy authorises every sender",
-			"The policy ends in +all, which tells every receiver that any server on the internet "+
-				"may send mail claiming to be from this domain. It is weaker than publishing no "+
-				"policy, because a receiver that would otherwise be suspicious has been told not "+
-				"to be.",
+			"The policy ends in +all, which lets any server on the internet send mail as "+
+				"this domain. That is weaker than publishing no policy.",
 			rfc7208, nist800177)
 	}
 
@@ -462,8 +457,8 @@ func GradeMail(f MailFacts) MailFinding {
 	if f.DMARCRecords == 1 && f.DMARCPolicy == "" && f.DMARCReason == "" {
 		add("mail.dmarc-no-policy", Weak,
 			"The DMARC record names no policy",
-			"RFC 7489 requires a p= tag. A record without one is not a policy a receiver can "+
-				"apply, so the domain appears to have DMARC and has none.",
+			"RFC 7489 requires a p= tag. Without one there is no policy to apply, so the "+
+				"domain has no DMARC in effect.",
 			rfc7489)
 	}
 
@@ -497,11 +492,9 @@ func GradeMail(f MailFacts) MailFinding {
 	if refused := f.DMARCReportTo.Unauthorised(); len(refused) > 0 {
 		add("mail.dmarc-reports-unauthorised", Weak,
 			"The aggregate reports are addressed to a domain that has not agreed to receive them",
-			"RFC 7489 §7.1 requires "+namedHosts(refused)+" to publish a record authorising reports "+
-				"about this domain, and "+wasWere(len(refused))+" not. A receiver that follows the "+
-				"specification therefore sends nothing there. The record asks for reports and the "+
-				"reports do not arrive, which is the position of a domain that believes it is "+
-				"watching its own mail and is not.",
+			"RFC 7489 §7.1 requires "+namedHosts(refused)+" to publish a record accepting "+
+				"reports about this domain, and "+wasWere(len(refused))+" not. Receivers send "+
+				"nothing there, so the reports never arrive.",
 			rfc7489)
 	}
 
@@ -520,27 +513,25 @@ func GradeMail(f MailFacts) MailFinding {
 		case f.MTASTSPolicyInvalid != "":
 			add("mail.mta-sts-policy-invalid", Weak,
 				"The MTA-STS policy is not a valid policy",
-				"The policy served at mta-sts.<domain>/.well-known/mta-sts.txt is not one RFC 8461 "+
-					"allows: "+f.MTASTSPolicyInvalid+". A sending server that cannot read the policy "+
-					"applies no MTA-STS at all, so the domain announces protection it does not have.",
+				"The policy at mta-sts.<domain>/.well-known/mta-sts.txt is not valid under RFC "+
+					"8461: "+f.MTASTSPolicyInvalid+". Senders that cannot read it apply no MTA-STS "+
+					"at all.",
 				rfc8461)
 
 		case f.MTASTSMode == "":
 			add("mail.mta-sts-policy-invalid", Weak,
 				"The MTA-STS policy names no mode",
-				"RFC 8461 requires a mode field, and the policy served at mta-sts."+
-					"<domain>/.well-known/mta-sts.txt carries none that this scan recognised. A "+
-					"sending server that cannot read the policy applies no MTA-STS at all, so the "+
-					"domain announces protection it does not have.",
+				"The policy at mta-sts.<domain>/.well-known/mta-sts.txt has no mode this scan "+
+					"recognised, and RFC 8461 requires one. Senders that cannot read it apply no "+
+					"MTA-STS at all.",
 				rfc8461)
 
 		case (f.MTASTSMode == "enforce" || f.MTASTSMode == "testing") && len(f.MTASTSPolicyMX) == 0:
 			add("mail.mta-sts-policy-invalid", Weak,
 				"The MTA-STS policy names no mail exchangers",
-				"RFC 8461 requires at least one mx entry in a policy that is enforcing or testing. "+
-					"This one is in "+f.MTASTSMode+" mode and lists none, so there is no host a "+
-					"sending server could match — the policy permits nothing rather than "+
-					"protecting anything.",
+				"RFC 8461 requires at least one mx entry in a policy that is enforcing or "+
+					"testing. This one is in "+f.MTASTSMode+" mode and lists none, so no host can "+
+					"match it.",
 				rfc8461)
 		}
 	}
@@ -565,11 +556,8 @@ func GradeMail(f MailFacts) MailFinding {
 			"The enforcing MTA-STS policy does not cover this domain's own mail exchangers",
 			"The policy is in enforce mode and names no pattern matching "+
 				namedHosts(f.MTASTSUncovered)+", which the domain publishes as "+
-				plainCount(len(f.MTASTSUncovered), "mail exchanger")+". RFC 8461 says a sending "+
-				"server applying an enforcing policy must not deliver to a host the policy does "+
-				"not match, so mail routed to "+thatHost(len(f.MTASTSUncovered))+" is refused by "+
-				"every sender that honours MTA-STS rather than delivered. This is what an "+
-				"exchanger added to DNS and not to the policy looks like.",
+				plainCount(len(f.MTASTSUncovered), "mail exchanger")+". Under RFC 8461, senders "+
+				"that honour MTA-STS refuse mail routed to "+thatHost(len(f.MTASTSUncovered))+".",
 			rfc8461)
 	}
 
@@ -610,10 +598,8 @@ func GradeMail(f MailFacts) MailFinding {
 
 			add("mail.mta-sts-exchanger-fails-policy", Weak,
 				"An exchanger the enforcing MTA-STS policy covers cannot satisfy it",
-				x.Host+" "+fails+". The domain's MTA-STS policy is in enforce mode, and RFC 8461 says a "+
-					"sending server applying it must not deliver to an exchanger that does not offer "+
-					"STARTTLS with a certificate valid for its own name — so mail routed there is refused "+
-					"by every sender that honours MTA-STS rather than delivered.",
+				x.Host+" "+fails+". The MTA-STS policy is in enforce mode, so under RFC 8461 "+
+					"senders that honour it refuse mail routed there.",
 				rfc8461)
 		}
 	}
@@ -648,10 +634,9 @@ func GradeMail(f MailFacts) MailFinding {
 		}
 		add("mail.dane-exchanger-fails-binding", Weak,
 			"An exchanger fails the DANE binding it publishes",
-			b.Host+" "+fails+". Its TLSA records were reported validated by the resolver this scan asked, "+
-				"and RFC 7672 says a sending server that finds usable, validated TLSA records must not deliver "+
-				"to an exchanger that cannot match them — so mail routed there is held rather than delivered "+
-				"by every sender that applies DANE.",
+			b.Host+" "+fails+". Its TLSA records were reported validated by the resolver "+
+				"this scan asked, so under RFC 7672 senders that apply DANE hold mail routed "+
+				"there.",
 			rfc7672)
 	}
 
@@ -668,21 +653,17 @@ func GradeMail(f MailFacts) MailFinding {
 		}
 		add("mail.dkim-weak-key", Weak,
 			"A DKIM signing key is shorter than RFC 8301 allows",
-			"The key at selector "+k.Selector+" is "+strconv.Itoa(k.Bits)+" bits. RFC 8301 raised "+
-				"the floor to 1024 and says a verifier may treat anything shorter as insecure, so "+
-				"mail signed with this key can be discarded by a receiver that applies the rule — "+
-				"and a key this size is old enough that nobody has looked at it since it was made.",
+			"The key at selector "+k.Selector+" is "+strconv.Itoa(k.Bits)+" bits. RFC 8301 "+
+				"sets the floor at 1024, so receivers may treat its signatures as insecure.",
 			rfc8301)
 	}
 
 	if len(f.MXAliases) > 0 {
 		add("mail.exchanger-is-an-alias", Weak,
 			"An exchanger this domain names is an alias",
-			"RFC 2181 says the name an MX record points at carries an address and is not an alias: "+
-				strings.Join(f.MXAliases, ", ")+" is one. A sender looking it up asks for the address "+
-				"at the name it was given, and what it does with the alias it finds instead differs "+
-				"between implementations — so mail from some senders arrives and mail from others does "+
-				"not, which is the hardest kind of delivery problem to find.",
+			"RFC 2181 says the name an MX record points at must not be an alias: "+
+				strings.Join(f.MXAliases, ", ")+" is one. Senders handle that differently, so "+
+				"some mail arrives and some does not.",
 			rfc2181)
 	}
 
@@ -700,11 +681,9 @@ func GradeMail(f MailFacts) MailFinding {
 		if x.RelayAccepted {
 			add("mail.open-relay", Insecure,
 				"An exchanger forwards mail for a domain it does not serve",
-				x.Host+" accepted a recipient at a domain that is not one of its own, from a sender "+
-					"it knows nothing about. That is an open relay: whoever finds it can send in "+
-					"anybody's name through this server, and the address it sends from is this "+
-					"server's. Nothing was sent here — the conversation was abandoned before any "+
-					"message existed — so what is graded is what the server agreed to do.",
+				x.Host+" accepted a recipient at a domain it does not serve, from a sender it "+
+					"knows nothing about. That is an open relay: anyone can send mail through it in "+
+					"anybody's name. No message was sent.",
 				rfc2505, rfc5321)
 		}
 	}
@@ -746,9 +725,8 @@ func describeMail(f MailFacts) []Note {
 		// not know whether the domain sends mail. A domain that sends none and
 		// says so with a null MX is correctly configured without SPF, and
 		// grading it would be penalising a correct decision (R6).
-		out = append(out, Observed("The domain publishes no SPF record, so a receiver has "+
-			"nothing to check a sending server against. Whether that matters depends on "+
-			"whether this domain sends mail, which this scan did not establish."))
+		out = append(out, Observed("The domain publishes no SPF record, so receivers cannot check which servers may "+
+			"send for it. Whether that matters depends on whether it sends mail."))
 	}
 
 	// The qualifier, described rather than graded except for +all above. A
@@ -756,16 +734,14 @@ func describeMail(f MailFacts) []Note {
 	// forgotten relay is doing the right thing in the right order.
 	switch f.SPFAll {
 	case "-":
-		out = append(out, Observed("The SPF policy ends in -all, so a receiver is told it may "+
-			"reject mail from a server the policy does not list. That is the position these "+
-			"records exist to reach."))
+		out = append(out, Observed("The SPF policy ends in -all, so receivers may reject mail from servers it does "+
+			"not list. That is where SPF should end up."))
 	case "~":
-		out = append(out, Observed("The SPF policy ends in ~all, which asks a receiver to accept "+
-			"mail from unlisted servers and mark it. It is the staging position on the way to "+
-			"-all and is not graded here: moving before the list is complete rejects real mail."))
+		out = append(out, Observed("The SPF policy ends in ~all: receivers accept mail from unlisted servers and "+
+			"mark it. It is the step before -all and is not graded."))
 	case "?":
-		out = append(out, Observed("The SPF policy ends in ?all, which tells a receiver the "+
-			"domain declines to say. A receiver treats it as it would treat no policy."))
+		out = append(out, Observed("The SPF policy ends in ?all, which says nothing; receivers treat it as no "+
+			"policy."))
 	case "":
 		if f.SPFRecords == 1 {
 			out = append(out, Observed("The SPF record has no all mechanism, so a receiver falls "+
@@ -795,27 +771,25 @@ func describeMail(f MailFacts) []Note {
 	}
 
 	if f.SPFUsesPTR {
-		out = append(out, Observed("The policy uses the ptr mechanism, which RFC 7208 says SHOULD "+
-			"NOT be used: it is slow, it puts the work on the receiver, and several large "+
-			"receivers ignore it."))
+		out = append(out, Observed("The policy uses the ptr mechanism, which RFC 7208 says SHOULD NOT be used: it "+
+			"is slow, and several large receivers ignore it."))
 	}
 
 	switch {
 	case f.DMARCReason != "":
 		out = append(out, Unsettled("The DMARC policy was not read: "+f.DMARCReason+"."))
 	case f.DMARCRecords == 0:
-		out = append(out, Observed("The domain publishes no DMARC record. Without one a receiver "+
-			"has no instruction about what to do with mail that fails SPF, and the domain gets "+
-			"no reports about who is sending as it."))
+		out = append(out, Observed("The domain publishes no DMARC record, so receivers have no instruction for mail "+
+			"that fails SPF, and the domain gets no reports."))
 	case f.DMARCPolicy == "none":
-		out = append(out, Observed("The DMARC policy is p=none, which asks receivers to do nothing "+
-			"differently. It is the monitoring position and it protects nobody yet; it is not "+
-			"graded because moving off it before the reports are understood rejects real mail."))
+		out = append(out, Observed("The DMARC policy is p=none: receivers change nothing. It is the monitoring step "+
+			"and is not graded, because tightening it before the reports are read rejects "+
+			"real mail."))
 	case f.DMARCPolicy == "quarantine" || f.DMARCPolicy == "reject":
 		if f.DMARCPercent > 0 && f.DMARCPercent < 100 {
-			out = append(out, Observed("The DMARC policy is p="+f.DMARCPolicy+" and applies to "+
-				strconv.Itoa(f.DMARCPercent)+"% of mail, so most of what fails is still delivered. "+
-				"A rollout in progress looks exactly like this."))
+			out = append(out, Observed("The DMARC policy is p="+f.DMARCPolicy+" for "+strconv.Itoa(f.DMARCPercent)+"% "+
+				"of mail, so most failing mail is still delivered. A rollout in progress looks "+
+				"like this."))
 		} else {
 			out = append(out, Observed("The DMARC policy is p="+f.DMARCPolicy+
 				", so a receiver is told what to do with mail that fails."))
@@ -826,24 +800,21 @@ func describeMail(f MailFacts) []Note {
 	// name beneath it. Reported, not graded: whether any subdomain sends mail
 	// is not something this can see.
 	if f.DMARCRecords == 1 && f.DMARCSubdomainPolicy != "" && strength(f.DMARCSubdomainPolicy) < strength(f.DMARCPolicy) {
-		out = append(out, Observed("Subdomains are covered by sp="+f.DMARCSubdomainPolicy+
-			" rather than by p="+f.DMARCPolicy+", so mail that fails from a name under this domain is "+
-			"handled "+subdomainHandling(f.DMARCSubdomainPolicy)+". A name that sends no mail is still one "+
-			"somebody else can send as."))
+		out = append(out, Observed("Subdomains use sp="+f.DMARCSubdomainPolicy+" rather than p="+f.DMARCPolicy+", "+
+			"so failing mail from them is handled "+subdomainHandling(f.DMARCSubdomainPolicy)+
+			". A subdomain that sends no mail can still be impersonated."))
 	}
 
 	if f.DMARCRecords >= 1 && !f.DMARCReporting {
-		out = append(out, Observed("The DMARC record names nowhere to send aggregate reports. "+
-			"Those reports are how a domain finds out who is sending as it, and without them "+
-			"moving to a stricter policy is done blind."))
+		out = append(out, Observed("The DMARC record names nowhere to send aggregate reports, which are how a "+
+			"domain learns who sends mail as it."))
 	}
 
 	out = append(out, describeReporting(f)...)
 
 	if !f.TLSReporting {
-		out = append(out, Observed("The domain publishes no TLS-RPT record, so it receives no "+
-			"reports when another server fails to deliver to it over an encrypted connection. "+
-			"Nothing is wrong without one; it is the only way to find out that something is."))
+		out = append(out, Observed("The domain publishes no TLS-RPT record, so it hears nothing when other servers "+
+			"fail to deliver to it over TLS. Nothing is wrong without one."))
 	}
 
 	out = append(out, describeMailPath(f)...)
@@ -948,13 +919,12 @@ var LimitMailSendsNothing = StandingLimit{
 	// So what is true of every mail scan stays here, and what this particular
 	// scan read about the policy is said by the report that read it. describeSTS
 	// names the reason where there is one.
-	Text: "No message was sent: there is no DATA, so nothing can be delivered or queued. A mail " +
-		"exchanger inside the domain is also asked whether it forwards mail for a domain it does " +
-		"not serve: an empty sender, a recipient at a name RFC 2606 reserves so it cannot exist, " +
-		"and a reset before any message. An exchanger run by somebody else is never asked that. " +
-		"DANE is checked only against a certificate an exchanger presented, and DNSSEC is the " +
-		"resolver's word. A DKIM key is read only under a selector this scan was told to look " +
-		"under, and the report says which.",
+	Text: "No message was sent: there is no DATA, so nothing is delivered or queued. An " +
+		"exchanger inside the domain is asked whether it would relay for a domain it " +
+		"does not serve, with an address that cannot exist (RFC 2606), and reset before " +
+		"any message; an exchanger run by somebody else is never asked. DANE is checked " +
+		"only against presented certificates, DNSSEC is the resolver's word, and DKIM is " +
+		"read only under the selectors given.",
 }
 
 // MailStandingLimits are true of every mail check this program runs.
@@ -987,27 +957,22 @@ func describeMailPath(f MailFacts) []Note {
 		// A domain saying it receives no mail is correctly configured without
 		// any of the rest, and telling it otherwise would be the clearest case
 		// of penalising a right decision (R6).
-		out = append(out, Observed("The domain publishes a null MX, which is RFC 7505's way of "+
-			"stating that it accepts no mail at all. A receiver is told not to try, which is "+
-			"the strongest thing a domain that does not receive mail can say. Nothing below "+
-			"about delivery applies to it."))
+		out = append(out, Observed("The domain publishes a null MX (RFC 7505): it accepts no mail at all, and senders are told not to try. "+
+			"Nothing below about delivery applies."))
 		return out
 
 	case !f.MXRead:
 		return out
 
 	case len(f.MXHosts) == 0:
-		out = append(out, Observed("The domain publishes no MX record. A sender falls back to "+
-			"the domain's own address record, so mail may still be delivered somewhere — and a "+
-			"domain that does not receive mail says so with a null MX rather than by silence, "+
-			"which is a fact a receiver can act on."))
+		out = append(out, Observed("The domain publishes no MX record, so senders fall back to its address record. "+
+			"A domain that takes no mail should say so with a null MX."))
 		return out
 	}
 
-	out = append(out, Observed("Mail for this domain is accepted by "+
-		count(len(f.MXHosts), "host")+": "+namedHosts(f.MXHosts)+". Which hosts those are, and "+
-		"how many, is an operational decision no specification settles, so it is named rather "+
-		"than graded."))
+	out = append(out, Observed("Mail for this domain is accepted by "+count(len(f.MXHosts), "host")+": "+
+		namedHosts(f.MXHosts)+". Which hosts, and how many, is the operator's choice, so "+
+		"it is named rather than graded."))
 
 	out = append(out, describeSTS(f)...)
 
@@ -1019,22 +984,17 @@ func describeMailPath(f MailFacts) []Note {
 		// something about a question nobody put.
 
 	case len(f.DANEHosts) == len(f.MXHosts) && f.DANEUnread == 0 && !f.DANEPartial:
-		out = append(out, Observed("Every mail exchanger publishes a DANE record, so a sending "+
-			"server that checks them will refuse to deliver to a host presenting the wrong "+
-			"certificate. "+daneCheckedSentence(f)))
+		out = append(out, Observed("Every mail exchanger publishes a DANE record, so senders that check them refuse "+
+			"a host presenting the wrong certificate. "+daneCheckedSentence(f)))
 
 	case len(f.DANEHosts) > 0:
-		out = append(out, Observed("DANE records are published for "+
-			exchangerCount(len(f.DANEHosts), len(f.MXHosts))+" — "+namedHosts(f.DANEHosts)+
-			" — and not for the rest. A sender checking DANE gets the guarantee for some "+
-			"deliveries and not others, which is usually a migration in progress rather than a "+
-			"decision."))
+		out = append(out, Observed("DANE records are published for "+exchangerCount(len(f.DANEHosts), len(f.MXHosts))+
+			" — "+namedHosts(f.DANEHosts)+" — and not the rest, so only some deliveries get "+
+			"the guarantee. Usually a migration in progress."))
 
 	default:
-		out = append(out, Observed("No mail exchanger publishes a DANE record. DANE and MTA-STS "+
-			"are two answers to the same problem and a domain needs neither, so this is named "+
-			"rather than graded; it is here because an operator choosing between them is owed "+
-			"the fact that at present they have picked neither."))
+		out = append(out, Observed("No mail exchanger publishes a DANE record. DANE and MTA-STS solve the same "+
+			"problem and neither is required, so this is named rather than graded."))
 	}
 
 	if f.DANEUnread > 0 {
@@ -1043,9 +1003,8 @@ func describeMailPath(f MailFacts) []Note {
 			"the ones that answered."))
 	}
 	if f.DANEPartial {
-		out = append(out, Unsettled("The domain publishes more mail exchangers than this scan "+
-			"asks about, so DANE was checked for the first few only. A list long enough to hit "+
-			"that bound is itself unusual."))
+		out = append(out, Unsettled("The domain publishes more mail exchangers than this scan checks, so DANE was "+
+			"checked for the first few only."))
 	}
 
 	return out
@@ -1068,9 +1027,8 @@ func describeSTS(f MailFacts) []Note {
 	var out []Note
 
 	if f.MTASTSRecords == 0 {
-		return append(out, Observed("The domain announces no MTA-STS policy. Without one, a "+
-			"sending server that cannot negotiate TLS with these hosts may deliver in the clear "+
-			"rather than refuse, because nothing told it not to."))
+		return append(out, Observed("The domain announces no MTA-STS policy, so a sender that cannot negotiate TLS "+
+			"with these hosts may deliver in the clear."))
 	}
 
 	if !f.MTASTSPolicyRead {
@@ -1083,34 +1041,24 @@ func describeSTS(f MailFacts) []Note {
 		if reason == "" {
 			reason = "this scan did not fetch it"
 		}
-		return append(out, Unsettled("An MTA-STS policy is announced and what it says "+
-			"was not read: "+reason+". A policy in testing mode asks a sending server to deliver "+
-			"anyway when TLS fails and to send a report about it, and from DNS it looks exactly "+
-			"like one in enforce mode — so an announcement on its own establishes that a policy "+
-			"exists and nothing about whether it protects anything."))
+		return append(out, Unsettled("An MTA-STS policy is announced but was not read: "+reason+". From DNS, testing "+
+			"and enforce mode look the same, so whether it protects anything is not "+
+			"established."))
 	}
 
 	switch f.MTASTSMode {
 	case "enforce":
-		out = append(out, Observed("The MTA-STS policy is in enforce mode, so a sending server "+
-			"that honours it will refuse to deliver to these hosts rather than fall back to an "+
-			"unprotected connection. That is the position MTA-STS exists to reach."))
+		out = append(out, Observed("The MTA-STS policy is in enforce mode: senders that honour it refuse to deliver "+
+			"over an unprotected connection. That is where MTA-STS should end up."))
 
 	case "testing":
 		// Not graded, and this is the sentence that carries the whole check.
-		out = append(out, Observed("The MTA-STS policy is in testing mode. A sending server is "+
-			"asked to deliver as it would have anyway when TLS fails, and to send a report about "+
-			"it — so the policy is measuring the problem rather than preventing it. That is the "+
-			"right setting while the reports are being read and the wrong one to leave behind, "+
-			"and it is not graded here because moving to enforce before the policy is known to "+
-			"be complete stops real mail."))
+		out = append(out, Observed("The MTA-STS policy is in testing mode, so it is measuring the problem rather than preventing "+
+			"it: senders deliver anyway when TLS fails, and send a report. It is not graded."))
 
 	case "none":
-		out = append(out, Observed("The MTA-STS policy is in none mode, which RFC 8461 defines "+
-			"as withdrawing a policy: a sending server holding a cached one is told to stop "+
-			"applying it. The record is still published, so this is a deliberate teardown rather "+
-			"than an absence — which is what it should look like, and what a switch-off somebody "+
-			"forgot to finish also looks like."))
+		out = append(out, Observed("The MTA-STS policy is in none mode, which RFC 8461 defines as withdrawing it. A "+
+			"deliberate teardown looks like this, and so does a forgotten one."))
 
 	case "":
 		// Graded above as an invalid policy. Nothing to describe: the finding
@@ -1121,10 +1069,9 @@ func describeSTS(f MailFacts) []Note {
 		// The number, and nothing compared to it. RFC 8461 recommends a large
 		// value and sets no floor a scanner could hold a domain to, so a
 		// judgement here would be one this project invented (R21).
-		out = append(out, Observed("A sending server may cache this policy for "+
-			describeSeconds(f.MTASTSMaxAge)+" (max_age). A long cache is what makes MTA-STS "+
-			"resistant to an attacker who can interfere with DNS, and it is also how long a "+
-			"change to the policy takes to reach everybody."))
+		out = append(out, Observed("Senders may cache this policy for "+describeSeconds(f.MTASTSMaxAge)+" "+
+			"(max_age). A long cache resists DNS attacks, and is also how long a change "+
+			"takes to reach everyone."))
 	}
 
 	switch {
@@ -1139,24 +1086,21 @@ func describeSTS(f MailFacts) []Note {
 	case f.MTASTSPolicyMXTruncated:
 		// Before "every exchanger is matched": with patterns dropped, an empty
 		// list of uncovered hosts means nobody compared, not that all matched.
-		out = append(out, Unsettled("The policy names more host patterns than this scan keeps, "+
-			"so whether it covers the domain's own mail exchangers was not established: a "+
-			"pattern past the ones kept might be the one that matches."))
+		out = append(out, Unsettled("The policy names more host patterns than this scan keeps, so whether it covers "+
+			"the domain's own mail exchangers was not established."))
 
 	case len(f.MTASTSUncovered) == 0 && len(f.MXHosts) > 0:
-		out = append(out, Observed("Every mail exchanger the domain publishes is matched by the "+
-			"policy, so an enforcing sender has a host it is permitted to deliver to."))
+		out = append(out, Observed("Every mail exchanger the domain publishes is matched by the policy, so an "+
+			"enforcing sender has somewhere to deliver."))
 
 	case len(f.MTASTSUncovered) > 0 && f.MTASTSMode == "testing":
 		// The most useful sentence this check produces, and it is a note
 		// because in testing mode nothing is broken yet. It will be the day
 		// the operator does the thing the mode exists to lead them towards.
-		out = append(out, Observed("The policy does not match "+namedHosts(f.MTASTSUncovered)+
-			", which the domain publishes as "+plainCount(len(f.MTASTSUncovered), "mail exchanger")+
-			". In testing mode a sending server delivers anyway, so nothing is failing now — but "+
-			"an enforcing policy must not deliver to a host it does not match, so moving this "+
-			"policy to enforce as it stands would refuse mail routed to "+
-			thatHost(len(f.MTASTSUncovered))+"."))
+		out = append(out, Observed("The policy does not match "+namedHosts(f.MTASTSUncovered)+", which the domain "+
+			"publishes as "+plainCount(len(f.MTASTSUncovered), "mail exchanger")+". Nothing "+
+			"fails in testing mode, but moving this policy to enforce as it stands would "+
+			"refuse mail routed to "+thatHost(len(f.MTASTSUncovered))+"."))
 
 	case len(f.MTASTSUncovered) > 0:
 		// enforce is graded; none mode means no sender applies the policy at
@@ -1217,9 +1161,8 @@ func describeExchangers(f MailFacts) []Note {
 		if reason == "" {
 			reason = "this scan did not contact them"
 		}
-		return append(out, Unsettled("Whether the mail exchangers accept encrypted connections was not "+
-			"measured: "+reason+". That needs a conversation with each of them on port 25, and DNS cannot "+
-			"answer it."))
+		return append(out, Unsettled("Whether the mail exchangers accept encrypted connections was not measured: "+reason+
+			". That needs a conversation with each of them on port 25."))
 	}
 
 	var (
@@ -1254,17 +1197,16 @@ func describeExchangers(f MailFacts) []Note {
 		if len(plain) > 1 {
 			verb = "do"
 		}
-		out = append(out, Observed(namedHosts(plain)+" "+verb+" not offer STARTTLS, so mail delivered to "+
-			thatHost(len(plain))+" crosses the network unencrypted. RFC 3207 makes STARTTLS optional, so "+
-			"this is named rather than graded; an MTA-STS policy in enforce mode refuses delivery to an "+
-			"exchanger like this, and so does DANE."))
+		out = append(out, Observed(namedHosts(plain)+" "+verb+" not offer STARTTLS, so mail to "+thatHost(len(plain))+
+			" crosses the network unencrypted. RFC 3207 makes STARTTLS optional, so this is "+
+			"named rather than graded."))
 	}
 
 	if len(badCertificate) > 0 {
 		out = append(out, Observed("The certificate presented after STARTTLS does not verify for "+
-			strings.Join(badCertificate, "; ")+". A sender delivering opportunistically still encrypts and "+
-			"does not check the certificate, so this is not graded on its own; it is what makes MTA-STS and "+
-			"DANE fail for "+thatHost(len(badCertificate))+"."))
+			strings.Join(badCertificate, "; ")+". Opportunistic senders still encrypt, so "+
+			"this is not graded alone, but it makes MTA-STS and DANE fail for "+
+			thatHost(len(badCertificate))+"."))
 	}
 
 	switch {
@@ -1273,10 +1215,9 @@ func describeExchangers(f MailFacts) []Note {
 		// shape a network blocking outbound port 25 produces, and it is said as
 		// a likely fact about where the scan ran rather than about the servers
 		// (R3d).
-		out = append(out, Unsettled("No mail exchanger could be reached on port 25 before the time ran out. "+
-			"Many networks, residential connections and hosting providers among them, block outbound port "+
-			"25, so this most likely describes where this scan ran rather than the exchangers. Run it from a "+
-			"network that allows port 25 to have them measured."))
+		out = append(out, Unsettled("No mail exchanger could be reached on port 25 in time. Many networks block "+
+			"outbound port 25, so this most likely describes where this scan ran, not the "+
+			"exchangers."))
 	case len(unmeasured) > 0:
 		out = append(out, Unsettled("For "+plainCount(len(unmeasured), "exchanger")+", whether encrypted "+
 			"connections are accepted was not established — "+strings.Join(unmeasured, "; ")+". None of that "+
@@ -1336,22 +1277,19 @@ func describeDANE(f MailFacts) []Note {
 			"DANE records published for "+thatHost(len(matched))+", so a sender applying DANE delivers there."))
 	}
 	if len(matchedUnvalidated) > 0 {
-		out = append(out, Unsettled("The resolver this scan asked did not report the DANE records of "+
-			namedHosts(matchedUnvalidated)+" validated. A sender applies DANE only to records that validate, "+
-			"and from here an unsigned zone and a resolver that does not validate look the same, so whether "+
-			"those bindings protect anything is not established."))
+		out = append(out, Unsettled("The resolver did not report the DANE records of "+namedHosts(matchedUnvalidated)+
+			" validated. Senders apply DANE only to validated records, so whether these "+
+			"protect anything is not established."))
 	}
 	if len(ignored) > 0 {
-		out = append(out, Observed("The DANE records do not hold for "+strings.Join(ignored, "; ")+". The "+
-			"resolver this scan asked did not report those records validated, and RFC 7672 has a sender apply "+
-			"only records that validate, so this is named rather than graded: if the zone is signed and this "+
-			"resolver simply does not validate, mail there is being held."))
+		out = append(out, Observed("The DANE records do not hold for "+strings.Join(ignored, "; ")+". The resolver "+
+			"did not report them validated, so this is named rather than graded; if the zone "+
+			"is signed, mail there is being held."))
 	}
 	if len(unused) > 0 {
-		out = append(out, Observed("The DANE records published for "+namedHosts(unused)+" are none of them "+
-			"records a sender uses for SMTP — the PKIX usages RFC 7672 sets aside, or a selector, matching "+
-			"type or digest length nothing can match — so DANE authenticates nothing there, and a sender "+
-			"encrypts without checking the certificate."))
+		out = append(out, Observed("None of the DANE records for "+namedHosts(unused)+" is usable for SMTP under "+
+			"RFC 7672, so DANE authenticates nothing there and senders encrypt without "+
+			"checking the certificate."))
 	}
 	if len(open) > 0 {
 		out = append(out, Unsettled("Whether the DANE records hold was not established for "+
@@ -1423,33 +1361,29 @@ func describeReporting(f MailFacts) []Note {
 	inside, outside := reportDestinations(dest)
 	switch {
 	case len(outside) == 0:
-		out = append(out, Observed("Aggregate reports go to "+namedHosts(inside)+
-			", inside this domain. RFC 7489 §7.1 asks nothing of a destination the domain "+
-			"owns, so nothing else had to agree for these to arrive."))
+		out = append(out, Observed("Aggregate reports go to "+namedHosts(inside)+", inside this domain, so no "+
+			"outside destination had to agree to receive them."))
 	default:
 		line := "Aggregate reports go to " + namedHosts(outside) + ", outside this domain"
 		if len(inside) > 0 {
 			line += ", and to " + namedHosts(inside) + " inside it"
 		}
-		out = append(out, Observed(line+". RFC 7489 §7.1 requires each destination outside "+
-			"the domain to publish a record accepting them, and this check asked for one at "+
-			"each. A destination under this domain is treated as inside it, which is the "+
-			"reading receivers differ on and the one that reports fewer faults rather than "+
-			"more."))
+		out = append(out, Observed(line+". RFC 7489 §7.1 requires each destination outside the domain to publish a "+
+			"record accepting them, and this check asked each one. A destination under this "+
+			"domain counts as inside it."))
 	}
 
 	// A destination nothing could be established about is not a destination
 	// that refused, and the two send an operator to opposite places (R4).
 	if unread := dest.Unread(); len(unread) > 0 {
-		out = append(out, Unsettled("Whether "+namedHosts(unread)+" accepts reports about this "+
-			"domain could not be read, so nothing above says whether those reports arrive. "+
-			"That is a fact about the lookup rather than about the destination."))
+		out = append(out, Unsettled("Whether "+namedHosts(unread)+" accepts reports about this domain could not be "+
+			"read, so nothing here says whether those reports arrive."))
 	}
 
 	if dest.Dropped > 0 {
-		out = append(out, Observed("The record names "+count(dest.Dropped, "further report address")+
-			" that this check did not read: either more than it follows, or written in a form "+
-			"that is not a URI. Nothing above covers "+themIt(dest.Dropped)+"."))
+		out = append(out, Observed("The record names "+count(dest.Dropped, "further report address")+" this check "+
+			"did not read, either past its limit or not a URI. Nothing above covers "+
+			themIt(dest.Dropped)+"."))
 	}
 	return out
 }
@@ -1506,10 +1440,8 @@ func themIt(n int) string {
 // zone is named second because somebody who published the record may still
 // have it, and the provider third because it is the one that is wrong when a
 // domain has moved.
-const whereSelectorsAre = " A selector is the s= tag in the DKIM-Signature header of any message " +
-	"this domain sent — open one and read it there. It is also the first label of the record " +
-	"itself, in <selector>._domainkey under the domain, and your mail provider's setup page " +
-	"names the ones it uses."
+const whereSelectorsAre = " A selector is the s= tag in the DKIM-Signature header of mail this domain " +
+	"sent, and the first label of <selector>._domainkey under the domain."
 
 // describeDKIM says what looking under a set of selectors found, and — the part
 // that matters most — what it did not look under.
@@ -1522,10 +1454,9 @@ func describeDKIM(f MailFacts) []Note {
 	var out []Note
 
 	if !f.DKIMLooked {
-		out = append(out, Unsettled("DKIM was not checked. A signing key lives under a selector "+
-			"and DNS cannot list what is beneath a name, so a scan has to be told where to look. "+
-			"Name your selectors to have them read; there is no way to discover them, and this "+
-			"report says nothing about whether the domain signs its mail."+whereSelectorsAre))
+		out = append(out, Unsettled("DKIM was not checked: DNS cannot list selectors, so a scan has to be told them. "+
+			"Name your selectors to have them read; until then this report says nothing "+
+			"about DKIM."+whereSelectorsAre))
 		return out
 	}
 
@@ -1553,18 +1484,16 @@ func describeDKIM(f MailFacts) []Note {
 	// A selector the operator named and which holds nothing is worth saying:
 	// they said it should be there.
 	if len(named) > 0 {
-		out = append(out, Observed("No key is published at "+namedHosts(named)+", which you named. "+
-			"A signature made with a selector that publishes no key cannot be verified by anybody, "+
-			"so mail signed under it is treated as unsigned."))
+		out = append(out, Observed("No key is published at "+namedHosts(named)+", which you named. Mail signed "+
+			"under a selector with no key cannot be verified, so it counts as unsigned."))
 	}
 
 	// A provider default that holds nothing is not a finding about the domain.
 	if len(missing) > 0 && len(found) == 0 {
-		out = append(out, Unsettled("None of the selectors tried holds a key: "+
-			namedHosts(missing)+". These are names mail providers document for their own service, "+
-			"not names this domain has to use, so this establishes that these particular names "+
-			"hold nothing and not that the domain publishes no key. Name your own selectors to "+
-			"settle it."+whereSelectorsAre))
+		out = append(out, Unsettled("None of the selectors tried holds a key: "+namedHosts(missing)+". These are "+
+			"names mail providers document, not names this domain has to use, so this does "+
+			"not mean the domain publishes no key. Name your own selectors to settle it."+
+			whereSelectorsAre))
 	}
 
 	if unread > 0 {
@@ -1578,16 +1507,13 @@ func describeDKIM(f MailFacts) []Note {
 	// protected is not.
 	for _, k := range f.DKIMKeys {
 		if k.Found && k.Testing {
-			out = append(out, Observed("The key at "+k.Selector+" is marked as testing (t=y). "+
-				"RFC 6376 tells a verifier not to treat a failure under a testing key as a reason "+
-				"to reject, so signatures made with it protect nothing yet. That is the right "+
-				"setting during a rollout and the wrong one to leave behind."))
+			out = append(out, Observed("The key at "+k.Selector+" is marked testing (t=y). RFC 6376 tells verifiers not "+
+				"to reject on a failure under a testing key, so it protects nothing yet."))
 		}
 		if k.Found && k.Revoked {
-			out = append(out, Observed("The key at "+k.Selector+" is revoked: the record is "+
-				"published with an empty key, which RFC 6376 defines as withdrawing it. Mail "+
-				"signed with it cannot verify, which is what revoking is for — this is named "+
-				"because a selector left revoked by accident looks exactly the same."))
+			out = append(out, Observed("The key at "+k.Selector+" is revoked: its record has an empty key, which RFC "+
+				"6376 defines as withdrawn. Listed because a selector revoked by accident looks "+
+				"the same."))
 		}
 	}
 
