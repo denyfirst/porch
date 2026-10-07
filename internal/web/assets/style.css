@@ -2981,8 +2981,12 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 /*
-  The compose file, open under the steps. Read rather than copied, so it has
-  no button: the copy that runs is the signed one in the release.
+  The compose file, under the steps. Read rather than copied, so it has no
+  button: the copy that runs is the signed one in the release. Its head is
+  open, the image it pins and the command it runs, and the rest is one click
+  away rather than a long block every visitor scrolls past. All of it is in
+  the page, for a screen reader and a search alike; a browser without :has()
+  shows it whole, and so does paper.
 */
 .compose-view {
   margin: 1.2rem 0 0;
@@ -3005,6 +3009,47 @@ main > .band:last-child { border-bottom: 0; }
   margin: 0.8rem 0 1rem;
   font-size: 0.93rem;
   color: var(--ink-soft);
+}
+
+.compose-view:has(.compose-more:not([open])) .compose-terminal pre {
+  max-height: 17.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+
+.compose-more { margin: 0.6rem 0 0; }
+
+.compose-more > summary {
+  display: inline-block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--link);
+  cursor: pointer;
+  list-style: none;
+}
+
+.compose-more > summary::-webkit-details-marker { display: none; }
+
+.compose-more > summary::after {
+  content: "";
+  display: inline-block;
+  width: 0.42em;
+  height: 0.42em;
+  margin-left: 0.5em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-0.2em) rotate(45deg);
+}
+
+.compose-more[open] > summary::after { transform: translateY(0.05em) rotate(-135deg); }
+.compose-more[open] .compose-more-closed,
+.compose-more:not([open]) .compose-more-open { display: none; }
+
+@media print {
+  .compose-view .compose-terminal pre { max-height: none; overflow: visible; -webkit-mask-image: none; mask-image: none; }
+  .compose-more { display: none; }
 }
 
 /* A domain the page shows rather than offers: the field's box, no control. */
