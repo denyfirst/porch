@@ -39,8 +39,7 @@ func TestTheWordmarkEndsInTheBrandColour(t *testing.T) {
 // The label said "Dark" while the page was light and "Light" while it was dark,
 // which is correct and reads backwards to anybody who does not stop to think
 // about it. A circle with one half filled says what pressing it gives without
-// being read at all, and it is the figure this site's own icon is built from: a
-// shape cut by a straight line.
+// being read at all: a shape cut by a straight line.
 //
 // The word stays in aria-label, because an icon with no name is a button nobody
 // using a screen reader can describe.

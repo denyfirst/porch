@@ -39,14 +39,23 @@ func TestEveryPageLeadsToTheDocs(t *testing.T) {
 	}
 }
 
-// Arrows are drawn by the stylesheet with empty alternative text, so a screen
-// reader reads the link and not the arrow.
+// Arrows are drawn by the stylesheet with nothing in their content, so a
+// screen reader reads the link and not the arrow.
+//
+// They were characters until 2026-10-06, with empty alternative text. The
+// typeface has no arrows, so each came from the reader's own fonts and was a
+// different arrow on every system; they are drawn now, one shape turned to
+// face each way, and no arrow character is left for a font to supply.
 func TestArrowsAreDecoration(t *testing.T) {
 	sheet := stylesheet(t)
-	for _, arrow := range []string{`"↗" / ""`, `"↘" / ""`, `"→" / ""`, `"↓" / ""`} {
-		if !strings.Contains(sheet, arrow) {
-			t.Errorf("the stylesheet does not draw %s as decoration", arrow)
+	shape := cssRule(t, sheet, ".arrow-ne::after,\n.arrow-se::after,\n.arrow-e::after,\n.arrow-down::after")
+	for _, want := range []string{`content: "";`, "border-top:", "border-right:", "linear-gradient(to bottom right"} {
+		if !strings.Contains(shape, want) {
+			t.Errorf("the arrow is not drawn: its rule lacks %q", want)
 		}
+	}
+	if strings.ContainsAny(sheet, "↗↘→↓▾") {
+		t.Error("the stylesheet still sets an arrow as a character, which the reader's fonts draw differently")
 	}
 	for _, name := range []string{"assets/home.html", "assets/porch.html", "assets/docs.html", "assets/app.js"} {
 		body, err := assets.ReadFile(name)
@@ -113,6 +122,11 @@ func TestProductsAreAMenuNotABar(t *testing.T) {
 	}
 	if !strings.Contains(cssRule(t, sheet, ".nav-menu-list"), "display: none") {
 		t.Error("the menu is open before anybody asks for it")
+	}
+	// It opens towards the page. Anchored by its left edge it ran 67 pixels
+	// past the right of a 1280-pixel window and scrolled the page sideways.
+	if list := cssRule(t, sheet, ".nav-menu-list"); !strings.Contains(list, "right: -1rem;") || strings.Contains(list, "left:") {
+		t.Errorf("the menu is not anchored by its right edge:\n%s", list)
 	}
 }
 

@@ -2212,7 +2212,6 @@ a.card:hover { border-color: var(--link); }
 
 @media (max-width: 52rem) {
   .cards,
-  .columns,
   .porch-hero,
   .band-split { grid-template-columns: 1fr; }
 }
@@ -2230,30 +2229,42 @@ a.card:hover { border-color: var(--link); }
    The small things the design carries: an arrow on a link that goes
    somewhere, a red dot before a heading's label, a short red rule under the
    hero, a symbol on a card. Every arrow is drawn by CSS rather than written in
-   the markup, with empty alternative text, so a screen reader announces the
-   link and not "north east arrow", and a script that rewrites a button's label
-   cannot lose it. */
+   the markup, so a screen reader announces the link and not "north east
+   arrow", and a script that rewrites a button's label cannot lose it.
+
+   Drawn rather than set as a character: the typeface has no arrows, and the
+   ones a reader's own fonts supplied were a different arrow on every system.
+   One shape — a corner and a diagonal through it — turned to face each way,
+   with nothing in its content for a screen reader to read. */
 
 .arrow-ne::after,
 .arrow-se::after,
 .arrow-e::after,
 .arrow-down::after {
+  content: "";
   display: inline-block;
-  margin-left: 0.55em;
+  width: 0.58em;
+  height: 0.58em;
+  margin-left: 0.6em;
+  vertical-align: 0.04em;
+  border-top: 0.12em solid currentColor;
+  border-right: 0.12em solid currentColor;
+  background: linear-gradient(to bottom right,
+    transparent calc(50% - 0.06em), currentColor calc(50% - 0.06em),
+    currentColor calc(50% + 0.06em), transparent calc(50% + 0.06em));
   transition: transform 160ms ease-out;
 }
 
-.arrow-ne::after   { content: "↗"; content: "↗" / ""; }
-.arrow-se::after   { content: "↘"; content: "↘" / ""; }
-.arrow-e::after    { content: "→"; content: "→" / ""; }
-.arrow-down::after { content: "↓"; content: "↓" / ""; }
+.arrow-se::after   { transform: rotate(90deg); }
+.arrow-e::after    { transform: rotate(45deg); }
+.arrow-down::after { transform: rotate(135deg); }
 
 a:hover.arrow-ne::after,
 .card-link:hover .arrow-ne::after,
 button:hover.arrow-ne::after { transform: translate(2px, -2px); }
-a:hover.arrow-se::after      { transform: translate(2px, 2px); }
-a:hover.arrow-e::after       { transform: translateX(3px); }
-a:hover.arrow-down::after    { transform: translateY(2px); }
+a:hover.arrow-se::after      { transform: translate(2px, 2px) rotate(90deg); }
+a:hover.arrow-e::after       { transform: translateX(3px) rotate(45deg); }
+a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 
 .card-name.arrow-ne {
   display: flex;
@@ -2553,18 +2564,26 @@ main > .band:last-child { border-bottom: 0; }
    can travel to it. */
 .nav-menu { position: relative; }
 
+/* The menu's caret, drawn like the arrows: a corner turned to point down. */
 .nav-menu-button::after {
-  content: "▾";
-  content: "▾" / "";
-  margin-left: 0.35em;
-  font-size: 0.8em;
+  content: "";
+  display: inline-block;
+  width: 0.36em;
+  height: 0.36em;
+  margin-left: 0.45em;
+  border-right: 0.12em solid currentColor;
+  border-bottom: 0.12em solid currentColor;
+  transform: translateY(-0.2em) rotate(45deg);
 }
 
+/* Opens towards the page rather than past its edge: the menu is the last
+   entry in the bar but one, and anchored by its left it ran off the right of
+   the window and gave the whole page a sideways scroll while it was open. */
 .nav-menu-list {
   display: none;
   position: absolute;
   top: 100%;
-  left: -1rem;
+  right: -1rem;
   z-index: 10;
   min-width: 16rem;
   margin: 0;
@@ -3066,9 +3085,19 @@ main > .band:last-child { border-bottom: 0; }
   border-color: color-mix(in srgb, var(--tool) 35%, var(--rule));
 }
 
+/* The rail's marks are drawn here, one stroke weight and one cap for all
+   six, rather than borrowed from whatever symbols the reader's fonts hold:
+   the typeface has none, and the borrowed ones differed by system — one of
+   them turned into a coloured emoji on some. */
 .rail-glyph {
-  width: 1.1rem;
-  text-align: center;
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   color: var(--ink-faint);
 }
 
