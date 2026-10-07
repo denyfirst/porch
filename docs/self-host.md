@@ -166,7 +166,7 @@ Building from source is the other answer, and needs nothing but Go:
 ```sh
 git clone https://github.com/denyfirst/porch
 cd porch
-go build ./cmd/porch-scan ./cmd/porchd
+go build -o . ./cmd/porch-scan ./cmd/porchd
 ```
 
 `go.mod` has no `require` block. Nothing is fetched beyond the standard

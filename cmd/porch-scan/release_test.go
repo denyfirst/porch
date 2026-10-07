@@ -291,6 +291,33 @@ func TestEveryCloneIsFollowedByTheDirectoryItMade(t *testing.T) {
 	}
 }
 
+// A build of more than one command says where the binaries go.
+//
+// go build given two main packages compiles both and keeps neither. Until
+// 2026-10-06 docs/self-host.md built porch-scan and porchd that way: the
+// command succeeded, printed nothing and left nothing to run.
+func TestABuildOfTwoCommandsKeepsThem(t *testing.T) {
+	for _, path := range []string{
+		"../../README.md",
+		"../../docs/self-host.md",
+		"../../docs/verify.md",
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		for n, line := range strings.Split(string(body), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "go build ") {
+				continue
+			}
+			if strings.Count(line, "./cmd/") > 1 && !strings.Contains(line, " -o ") {
+				t.Errorf("%s:%d builds several commands and keeps none of them:\n  %s", path, n+1, line)
+			}
+		}
+	}
+}
+
 // The signature uploaded is the one release.ps1 made for that tag, and no
 // other.
 //
