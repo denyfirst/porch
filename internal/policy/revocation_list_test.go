@@ -202,7 +202,7 @@ func TestACertificateNotPresentedIsSaidPlainly(t *testing.T) {
 
 		var explained bool
 		for _, n := range DescribeLogged(f) {
-			if strings.Contains(n.Text, "was not the one this server presented") {
+			if strings.Contains(n.Text, "besides the one this server presented") {
 				explained = true
 				if n.Kind != KindObserved {
 					t.Errorf("the note is %q; a certificate in a log is a fact, and which ones "+

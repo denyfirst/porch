@@ -259,7 +259,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if !f.ChainComplete && !f.SelfSigned {
 		add("cert.chain-incomplete", Weak,
 			"Incomplete certificate chain",
-			"The server did not send the certificate that issued this one. Browsers often recover by fetching the missing issuer; command-line clients, mobile apps, and API consumers usually do not.",
+			"The server did not send the certificate that issued this one. Browsers often "+
+				"fetch it themselves; command-line tools, mobile apps and API clients usually "+
+				"fail.",
 			rfc5280, cabBR)
 	}
 
@@ -288,7 +290,8 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 		// algorithm did not, which is the same omission left half-closed.
 		add("cert.signature-algorithm-unrecognised", Weak,
 			"Signature algorithm not recognised",
-			"The algorithm that signed this certificate is not one this rule set knows, so whether the hash behind it is sound was not established. Nothing here says it is weak; nothing here can say it is sound either.",
+			"The algorithm that signed this certificate is unknown to this rule set, so "+
+				"whether its hash is sound was not established.",
 			rfc5280, rfc9155)
 
 	case strings.Contains(sig, "MD2"), strings.Contains(sig, "MD5"):
@@ -321,13 +324,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 		if f.KeyFromBrokenGenerator {
 			add("cert.roca", Insecure,
 				"Key made by a generator known to produce factorable keys",
-				"The modulus carries the fingerprint of Infineon's RSALib, which built primes from a "+
-					"small family instead of at random. A key of that shape can be factored from the "+
-					"public key alone by Coppersmith's method — weeks to months of computation, and "+
-					"nothing an attacker needs the server for. Millions of smart cards, TPMs and "+
-					"identity cards were affected in 2017 and the certificates among them were "+
-					"revoked. This is a fingerprint of how the key was generated; nothing here "+
-					"factored anything. Replace the key rather than reissuing the same one.",
+				"The modulus carries the fingerprint of Infineon's RSALib (2017), whose keys can "+
+					"be factored from the public key alone by Coppersmith's method. Nothing was "+
+					"factored here. Replace the key rather than reissuing the same one.",
 				roca2017, cve201715361, cabBR)
 		}
 		if f.KeyBits < 2048 {
@@ -359,7 +358,8 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 		}
 		add("cert.key-algorithm-unrecognised", Weak,
 			"Key algorithm not recognised",
-			fmt.Sprintf("The public key is %s, which this rule set does not know how to size, so its strength was not graded. Nothing here says it is weak; nothing here can say it is sound either.", named),
+			fmt.Sprintf("The public key is %s, which this rule set cannot size, so its strength was not "+
+				"graded.", named),
 			nist80057, cabBR)
 	}
 
@@ -378,9 +378,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if f.BasicConstraintsValid && f.IsCA {
 		add("cert.leaf-is-ca", Insecure,
 			"This certificate may issue other certificates",
-			"Basic constraints say cA:TRUE on the certificate served for this host, so whoever "+
-				"holds its private key can sign certificates for any name, not only for the names "+
-				"here. The Baseline Requirements require cA:FALSE on a subscriber certificate.",
+			"Basic constraints say cA:TRUE on this host's certificate, so its private key "+
+				"can sign certificates for any name. The Baseline Requirements require cA:FALSE "+
+				"here.",
 			rfc5280, cabBR)
 	}
 
@@ -394,10 +394,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if f.HasKeyUsage && f.KeyCertSign && !f.IsCA {
 		add("cert.key-usage-cert-sign", Insecure,
 			"The key usage permits signing certificates",
-			"The key usage extension includes keyCertSign while basic constraints do not say "+
-				"cA:TRUE. RFC 5280 permits keyCertSign only on a certificate authority, so this "+
-				"certificate claims a power its own constraints deny it and clients disagree about "+
-				"which of the two to believe.",
+			"Key usage includes keyCertSign but basic constraints do not say cA:TRUE. RFC "+
+				"5280 allows keyCertSign only on a certificate authority, so clients disagree "+
+				"about which to believe.",
 			rfc5280)
 	}
 
@@ -410,10 +409,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if f.HasKeyUsage && !f.DigitalSignature {
 		add("cert.no-digital-signature", Weak,
 			"The key usage does not permit signing",
-			"The key usage extension lists what this key may do and does not list "+
-				"digitalSignature. Every TLS 1.3 handshake and every ECDHE handshake at TLS 1.2 "+
-				"requires the server to sign with this key, so a client enforcing the extension "+
-				"cannot use either with this certificate.",
+			"Key usage does not list digitalSignature, which every TLS 1.3 and ECDHE "+
+				"handshake needs from this key, so a client enforcing it cannot use this "+
+				"certificate.",
 			rfc5280)
 	}
 
@@ -427,10 +425,10 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if len(f.UnhandledCriticalExtensions) > 0 {
 		add("cert.critical-extension-unrecognised", Weak,
 			"A critical extension this checker does not recognise",
-			"The certificate marks "+listed(f.UnhandledCriticalExtensions)+" critical, and RFC 5280 "+
-				"requires a client that does not recognise a critical extension to reject the "+
-				"certificate. What this scan cannot tell you is whether the clients you care about "+
-				"recognise it; what it can tell you is that this one does not.",
+			"The certificate marks "+listed(f.UnhandledCriticalExtensions)+" critical, and "+
+				"RFC 5280 requires a client that does not recognise a critical extension to "+
+				"reject the certificate. Whether your clients recognise it was not established; "+
+				"this one does not.",
 			rfc5280)
 	}
 
@@ -443,9 +441,8 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if f.HasExtKeyUsage && !f.ServerAuth {
 		add("cert.no-server-auth", Insecure,
 			"Not a certificate for TLS servers",
-			"The extended key usage extension lists what this certificate may be used for and does "+
-				"not list server authentication. RFC 5280 makes that list exhaustive, so a client "+
-				"following it refuses the connection whatever else is correct here.",
+			"Extended key usage does not list server authentication. RFC 5280 makes that "+
+				"list exhaustive, so a client following it refuses the connection.",
 			rfc5280, cabBR)
 	}
 
@@ -458,9 +455,8 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if bad := malformedWildcards(f.DNSNames); len(bad) > 0 {
 		add("cert.wildcard-shape", Weak,
 			"A wildcard name that no client will match",
-			fmt.Sprintf("%s. A wildcard has to be the entire leftmost label — `*.example.com` and "+
-				"nothing else — so a client following RFC 9525 matches no host against these. The "+
-				"certificate covers less than it appears to.", listed(bad)),
+			fmt.Sprintf("%s. A wildcard must be the entire leftmost label, as in `*.example.com`, so a "+
+				"client following RFC 9525 matches no host against these.", listed(bad)),
 			rfc9525, cabBR)
 	}
 
@@ -471,10 +467,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if f.CommonName != "" && looksLikeHostname(f.CommonName) && !covers(f.DNSNames, f.CommonName) {
 		add("cert.cn-not-in-san", Weak,
 			"The common name is not among the names",
-			fmt.Sprintf("The subject common name is %s and it is not in the subject alternative name "+
-				"extension. Clients have matched names only from that extension since RFC 2818 was "+
-				"replaced, so this name is matched by nothing, and the CA/Browser Forum requires a "+
-				"common name to repeat a value from the extension rather than add one.",
+			fmt.Sprintf("The subject common name is %s and it is not in the subject alternative names. "+
+				"Clients match only those, so this name matches nothing, and the CA/Browser "+
+				"Forum requires the common name to repeat one of them.",
 				listed([]string{f.CommonName})),
 			rfc9525, cabBR)
 	}
@@ -507,9 +502,8 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 		add("cert.serial-entropy", Weak,
 			"Serial number too small to be random",
 			fmt.Sprintf("The serial number is %d bits. The CA/Browser Forum has required at least 64 "+
-				"bits from a random source since 2016, because a predictable serial lets an attacker "+
-				"who can influence the certificate's contents mount a hash collision against its "+
-				"signature. A serial this small is a counter, not that output.", f.SerialBits),
+				"random bits since 2016, because a predictable serial enables a hash collision "+
+				"attack on the signature.", f.SerialBits),
 			cabBR, rfc5280)
 	}
 
@@ -517,7 +511,9 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	if out.ValidityDays > out.MaxValidityDays {
 		add("cert.validity-too-long", Weak,
 			fmt.Sprintf("Lifetime of %d days exceeds the %d-day limit", out.ValidityDays, out.MaxValidityDays),
-			fmt.Sprintf("A certificate issued on %s may run for at most %d days under Ballot SC-081v3. A longer lifetime keeps a compromised key usable for longer and, for a publicly trusted certificate, is grounds for revocation.",
+			fmt.Sprintf("A certificate issued on %s may run for at most %d days under Ballot SC-081v3. A "+
+				"longer lifetime keeps a compromised key usable longer, and is grounds for "+
+				"revocation.",
 				f.NotBefore.UTC().Format(time.DateOnly), out.MaxValidityDays),
 			cabSC081, cabBR)
 	}
