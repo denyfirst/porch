@@ -120,21 +120,33 @@
   </div>
 </section>
 
-<section class="band band-split band-tint" id="security">
+<section class="band band-split band-tint disclosure" id="security">
   <p class="eyebrow">04 / Security &amp; disclosure</p>
-  <div>
-  <h2 class="band-title">Found a vulnerability?</h2>
-  <div class="security-box">
-    <p>Write to <a href="mailto:security@denyfirst.dev">security@denyfirst.dev</a>,
-    encrypted to our key if you can. We reply within 72 hours.</p>
-    <p class="field-label">Key fingerprint</p>
-    <p class="fingerprint"><code>{{.Fingerprint}}</code></p>
-    <p class="security-links">
-      <a href="/pgp-key.txt">Download the key</a>
-      <a href="/.well-known/security.txt">security.txt</a>
-      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Check the fingerprint on GitHub</a>
-    </p>
+  <div class="disclosure-body">
+    <h2 class="band-title">Found a vulnerability?</h2>
+    <div class="security-box">
+      <p>Write to <a href="mailto:security@denyfirst.dev">security@denyfirst.dev</a>,
+      encrypted to our key if you can. We reply within 72 hours.</p>
+      <p class="field-label">Key fingerprint</p>
+      <p class="fingerprint"><code>{{.Fingerprint}}</code></p>
+      <p class="security-links">
+        <a href="/pgp-key.txt">Download the key</a>
+        <a href="/.well-known/security.txt">security.txt</a>
+        <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Check the fingerprint on GitHub</a>
+      </p>
+    </div>
   </div>
+  <div class="disclosure-track">
+    <p class="disclosure-track-title" id="after-you-write">After you write</p>
+    <ol class="timeline" aria-labelledby="after-you-write">
+      <li><span class="timeline-when">Day 0</span><span class="timeline-what">You report it privately</span></li>
+      <li><span class="timeline-when">72 hours</span><span class="timeline-what">We acknowledge it</span></li>
+      <li><span class="timeline-when">7 days</span><span class="timeline-what">First assessment</span></li>
+      <li><span class="timeline-when">30 days</span><span class="timeline-what">A fix or a plan, if high or critical</span></li>
+      <li><span class="timeline-when">90 days</span><span class="timeline-what">Made public, with credit to you</span></li>
+    </ol>
+    <p class="timeline-note">Anonymous reports are accepted, and credit is yours to decline.
+    Good-faith research has <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md#safe-harbour">safe harbour</a>.</p>
   </div>
 </section>
 

@@ -2212,7 +2212,6 @@ a.card:hover { border-color: var(--link); }
 
 @media (max-width: 52rem) {
   .cards,
-  .columns,
   .porch-hero,
   .band-split { grid-template-columns: 1fr; }
 }
@@ -2230,30 +2229,42 @@ a.card:hover { border-color: var(--link); }
    The small things the design carries: an arrow on a link that goes
    somewhere, a red dot before a heading's label, a short red rule under the
    hero, a symbol on a card. Every arrow is drawn by CSS rather than written in
-   the markup, with empty alternative text, so a screen reader announces the
-   link and not "north east arrow", and a script that rewrites a button's label
-   cannot lose it. */
+   the markup, so a screen reader announces the link and not "north east
+   arrow", and a script that rewrites a button's label cannot lose it.
+
+   Drawn rather than set as a character: the typeface has no arrows, and the
+   ones a reader's own fonts supplied were a different arrow on every system.
+   One shape — a corner and a diagonal through it — turned to face each way,
+   with nothing in its content for a screen reader to read. */
 
 .arrow-ne::after,
 .arrow-se::after,
 .arrow-e::after,
 .arrow-down::after {
+  content: "";
   display: inline-block;
-  margin-left: 0.55em;
+  width: 0.58em;
+  height: 0.58em;
+  margin-left: 0.6em;
+  vertical-align: 0.04em;
+  border-top: 0.12em solid currentColor;
+  border-right: 0.12em solid currentColor;
+  background: linear-gradient(to bottom right,
+    transparent calc(50% - 0.06em), currentColor calc(50% - 0.06em),
+    currentColor calc(50% + 0.06em), transparent calc(50% + 0.06em));
   transition: transform 160ms ease-out;
 }
 
-.arrow-ne::after   { content: "↗"; content: "↗" / ""; }
-.arrow-se::after   { content: "↘"; content: "↘" / ""; }
-.arrow-e::after    { content: "→"; content: "→" / ""; }
-.arrow-down::after { content: "↓"; content: "↓" / ""; }
+.arrow-se::after   { transform: rotate(90deg); }
+.arrow-e::after    { transform: rotate(45deg); }
+.arrow-down::after { transform: rotate(135deg); }
 
 a:hover.arrow-ne::after,
 .card-link:hover .arrow-ne::after,
 button:hover.arrow-ne::after { transform: translate(2px, -2px); }
-a:hover.arrow-se::after      { transform: translate(2px, 2px); }
-a:hover.arrow-e::after       { transform: translateX(3px); }
-a:hover.arrow-down::after    { transform: translateY(2px); }
+a:hover.arrow-se::after      { transform: translate(2px, 2px) rotate(90deg); }
+a:hover.arrow-e::after       { transform: translateX(3px) rotate(45deg); }
+a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 
 .card-name.arrow-ne {
   display: flex;
@@ -2432,6 +2443,94 @@ a:hover.arrow-down::after    { transform: translateY(2px); }
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
 
+/*
+  The security band: how to write on one side, and under the label the track a
+  report follows after it arrives. Every stop on the track is SECURITY.md's,
+  and demo_page_test.go holds each to it. On a phone the track comes after
+  the box, so the way to write is read first.
+*/
+.disclosure {
+  grid-template-areas: "label body" "track body";
+  grid-template-rows: auto 1fr;
+}
+
+.disclosure > .eyebrow { grid-area: label; }
+.disclosure-body { grid-area: body; }
+.disclosure-track { grid-area: track; align-self: start; max-width: 24rem; }
+
+.disclosure-track-title {
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.timeline {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The line the stops sit on, from the rule's grey into the accent: a report
+   travels from private towards public. */
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0.95rem;
+  bottom: 0.95rem;
+  width: 2px;
+  background: linear-gradient(var(--rule), var(--accent));
+}
+
+.timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  gap: 0.2rem 0.9rem;
+  align-items: baseline;
+  padding: 0.5rem 0 0.5rem 1.7rem;
+}
+
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.82rem;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--paper-sunk);
+}
+
+.timeline li:last-child::before { background: var(--accent); }
+
+.timeline-when {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+.timeline-what { font-size: 0.95rem; color: var(--ink); }
+
+.timeline-note {
+  margin: 0.9rem 0 0 1.7rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 52rem) {
+  .disclosure {
+    grid-template-areas: "label" "body" "track";
+    grid-template-rows: auto;
+  }
+  .disclosure-track { max-width: none; }
+}
+
 /* How to report a vulnerability, on the front page. */
 .security-box {
   max-width: 44rem;
@@ -2553,18 +2652,26 @@ main > .band:last-child { border-bottom: 0; }
    can travel to it. */
 .nav-menu { position: relative; }
 
+/* The menu's caret, drawn like the arrows: a corner turned to point down. */
 .nav-menu-button::after {
-  content: "▾";
-  content: "▾" / "";
-  margin-left: 0.35em;
-  font-size: 0.8em;
+  content: "";
+  display: inline-block;
+  width: 0.36em;
+  height: 0.36em;
+  margin-left: 0.45em;
+  border-right: 0.12em solid currentColor;
+  border-bottom: 0.12em solid currentColor;
+  transform: translateY(-0.2em) rotate(45deg);
 }
 
+/* Opens towards the page rather than past its edge: the menu is the last
+   entry in the bar but one, and anchored by its left it ran off the right of
+   the window and gave the whole page a sideways scroll while it was open. */
 .nav-menu-list {
   display: none;
   position: absolute;
   top: 100%;
-  left: -1rem;
+  right: -1rem;
   z-index: 10;
   min-width: 16rem;
   margin: 0;
@@ -3066,9 +3173,19 @@ main > .band:last-child { border-bottom: 0; }
   border-color: color-mix(in srgb, var(--tool) 35%, var(--rule));
 }
 
+/* The rail's marks are drawn here, one stroke weight and one cap for all
+   six, rather than borrowed from whatever symbols the reader's fonts hold:
+   the typeface has none, and the borrowed ones differed by system — one of
+   them turned into a coloured emoji on some. */
 .rail-glyph {
-  width: 1.1rem;
-  text-align: center;
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   color: var(--ink-faint);
 }
 
@@ -3751,6 +3868,15 @@ main > .band:last-child { border-bottom: 0; }
   /* Paper gets neither the header nor the rail, and with them went the only
      mark on the page; a report handed on should say what made it. Porch's
      mark heads the sheet, and the footer still names its maker. */
+  .print-date {
+    float: right;
+    margin-top: 0.5em;
+    font-size: 9pt;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--ink-faint);
+  }
+
   .print-mark {
     display: block;
     margin: 0 0 6mm;

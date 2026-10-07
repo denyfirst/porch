@@ -409,6 +409,15 @@ function printButton() {
   return button;
 }
 
+// A sheet of paper says when it was printed. A report handed to an auditor is
+// read days later, and a fresh report on an installation carries no time of
+// its own. Written as the print dialogue opens, from this machine's clock, into
+// the mark only paper shows; nothing leaves the page.
+window.addEventListener("beforeprint", () => {
+  const stamp = document.getElementById("print-date");
+  if (stamp) stamp.textContent = "Printed " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+});
+
 // reportFilename builds a name from the target.
 //
 // The target reaching here is already canonical — the service accepts letters,

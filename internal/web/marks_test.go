@@ -39,8 +39,7 @@ func TestTheWordmarkEndsInTheBrandColour(t *testing.T) {
 // The label said "Dark" while the page was light and "Light" while it was dark,
 // which is correct and reads backwards to anybody who does not stop to think
 // about it. A circle with one half filled says what pressing it gives without
-// being read at all, and it is the figure this site's own icon is built from: a
-// shape cut by a straight line.
+// being read at all: a shape cut by a straight line.
 //
 // The word stays in aria-label, because an icon with no name is a button nobody
 // using a screen reader can describe.
@@ -165,8 +164,19 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(layout), `{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span></p>`) {
+	if !strings.Contains(string(layout), `{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>`) {
 		t.Error("Porch's pages do not carry the mark a printed report is headed with")
+	}
+
+	// And the sheet says when it was printed: a fresh report on an
+	// installation carries no time of its own, and a PDF is read days later.
+	app, err := assets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(app), `window.addEventListener("beforeprint", () => {`) ||
+		!strings.Contains(string(app), `stamp.textContent = "Printed " + new Date().toISOString()`) {
+		t.Error("a printed report does not say when it was printed")
 	}
 
 	// The way around the installation and the things that are pressed do not
