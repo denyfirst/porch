@@ -1,8 +1,14 @@
 package web
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/demo"
 )
 
 // The rail's marks are drawn, not borrowed from the reader's fonts.
@@ -53,6 +59,135 @@ func TestTheTabIconsAreTheMarksAndOnlyShapes(t *testing.T) {
 		}
 		if n := strings.Count(svg, "<path"); n != 2 {
 			t.Errorf("%s draws %d paths, not a letter and a stop", icon.file, n)
+		}
+	}
+}
+
+// Each mark is also an .ico and a square PNG, for what reads no SVG, and the
+// files carry the picture and nothing else.
+//
+// Safari and search engines ask for /favicon.ico or a PNG, and until
+// 2026-10-07 both answered 404 here. They are cut from the same SVGs, and a
+// PNG is checked down to its chunks: a text or time chunk in a file every
+// visitor's browser fetches would be something said about whoever made it.
+func TestTheFallbackIconsAreTheMarks(t *testing.T) {
+	for _, name := range []string{"assets/denyfirst.ico", "assets/porch.ico"} {
+		raw, err := assets.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(raw) < 6 || binary.LittleEndian.Uint16(raw[0:]) != 0 || binary.LittleEndian.Uint16(raw[2:]) != 1 {
+			t.Fatalf("%s is not an icon file", name)
+		}
+		count := int(binary.LittleEndian.Uint16(raw[4:]))
+		var sizes []int
+		for i := 0; i < count; i++ {
+			entry := raw[6+16*i:]
+			size := int(entry[0])
+			length := int(binary.LittleEndian.Uint32(entry[8:]))
+			offset := int(binary.LittleEndian.Uint32(entry[12:]))
+			if offset+length > len(raw) {
+				t.Fatalf("%s points past its end", name)
+			}
+			width, height, _ := pngShape(t, name, raw[offset:offset+length])
+			if width != size || height != size {
+				t.Errorf("%s says %dx%d and holds %dx%d", name, size, size, width, height)
+			}
+			sizes = append(sizes, size)
+		}
+		if fmt.Sprint(sizes) != "[16 32 48]" {
+			t.Errorf("%s holds %v, want 16, 32 and 48", name, sizes)
+		}
+	}
+
+	// A phone puts this on its home screen and rounds the corners itself, so
+	// it is square and has nothing to see through.
+	for _, name := range []string{"assets/denyfirst-touch.png", "assets/porch-touch.png"} {
+		raw, err := assets.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		width, height, colour := pngShape(t, name, raw)
+		if width != 180 || height != 180 || colour != 2 {
+			t.Errorf("%s is %dx%d with colour type %d, want an opaque 180x180", name, width, height, colour)
+		}
+	}
+}
+
+// pngShape reads a PNG's size and colour type, and fails on any chunk but the
+// four a picture needs.
+func pngShape(t *testing.T, name string, raw []byte) (width, height, colour int) {
+	t.Helper()
+	if !bytes.HasPrefix(raw, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatalf("%s holds something that is not a PNG", name)
+	}
+	for at := 8; at+8 <= len(raw); {
+		length := int(binary.BigEndian.Uint32(raw[at:]))
+		kind := string(raw[at+4 : at+8])
+		switch kind {
+		case "IHDR":
+			width = int(binary.BigEndian.Uint32(raw[at+8:]))
+			height = int(binary.BigEndian.Uint32(raw[at+12:]))
+			colour = int(raw[at+17])
+		case "PLTE", "tRNS", "IDAT", "IEND":
+		default:
+			t.Errorf("%s carries a %s chunk, which is not part of the picture", name, kind)
+		}
+		at += 12 + length
+	}
+	return width, height, colour
+}
+
+// Pages link the marks at their new addresses, one icon each, and each name
+// answers the addresses a browser asks for unprompted with its own mark.
+func TestEachNameLinksAndServesItsOwnMark(t *testing.T) {
+	layout, err := assets.ReadFile("assets/layout.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := string(layout)
+	for _, want := range []string{
+		`<link rel="icon" href="/icon-denyfirst.svg" type="image/svg+xml">`,
+		`<link rel="apple-touch-icon" href="/denyfirst-touch.png">`,
+		`<link rel="icon" href="/icon-porch.svg" type="image/svg+xml">`,
+		`<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
+	} {
+		if !strings.Contains(head, want) {
+			t.Errorf("the layout does not link %s", want)
+		}
+	}
+	// One icon per page. Chromium fetches every icon a page links, and the
+	// front page's receipt counts the files a visit loads; what reads no SVG
+	// asks for /favicon.ico unprompted, and is answered there.
+	for _, branch := range strings.Split(head, "{{else}}")[:2] {
+		if n := strings.Count(branch, `<link rel="icon"`); n != 1 {
+			t.Errorf("a page links %d icons, not one", n)
+		}
+	}
+	// The old addresses still answer, and nothing links them: a browser that
+	// kept the earlier mark under one would go on showing it.
+	for _, old := range []string{`href="/favicon.svg"`, `href="/porch-icon.svg"`} {
+		if strings.Contains(head, old) {
+			t.Errorf("the layout still links %s", old)
+		}
+	}
+
+	if !demo.Enabled {
+		return
+	}
+	for _, c := range []struct{ host, path, file string }{
+		{organisationHost, "/favicon.ico", "assets/denyfirst.ico"},
+		{organisationHost, "/apple-touch-icon.png", "assets/denyfirst-touch.png"},
+		{porchHost, "/favicon.ico", "assets/porch.ico"},
+		{porchHost, "/apple-touch-icon.png", "assets/porch-touch.png"},
+	} {
+		want, err := assets.ReadFile(c.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := getOn(t, http.MethodGet, c.host, c.path)
+		if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), want) {
+			t.Errorf("%s%s answers %d with something other than %s", c.host, c.path, w.Code, c.file)
 		}
 	}
 }

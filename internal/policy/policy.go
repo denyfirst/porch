@@ -411,12 +411,13 @@ var cipherRules = []cipherRule{
 		// _DHE_ does not match _ECDHE_: the character before DHE is C there,
 		// not an underscore. Asserted in the tests rather than left to be
 		// worked out from the substring.
-		id:        "cipher.ffdhe",
-		match:     func(n string) bool { return strings.Contains(n, "_DHE_") },
-		verdict:   Insecure,
-		title:     "Finite-field Diffie-Hellman key exchange",
-		rationale: "RFC 10015 prohibits offering or selecting finite-field DHE suites in TLS 1.2. The exchange is forward-secret, but the groups are frequently weak or reused, and the elliptic curve form replaces it with no loss.",
-		refs:      []Reference{rfc10015, rfc9325},
+		id:      "cipher.ffdhe",
+		match:   func(n string) bool { return strings.Contains(n, "_DHE_") },
+		verdict: Insecure,
+		title:   "Finite-field Diffie-Hellman key exchange",
+		rationale: "RFC 10015 prohibits finite-field DHE suites in TLS 1.2. Their groups are often " +
+			"weak or reused, and the elliptic-curve form replaces them with no loss.",
+		refs: []Reference{rfc10015, rfc9325},
 	},
 	{
 		// Narrowed on 2026-08-22, and the narrowing is the fix.
@@ -463,8 +464,11 @@ var cipherRules = []cipherRule{
 		// Said as what was measured and not as what it implies (R17): the
 		// sentence claims the arrangement, names what was not established, and
 		// stops.
-		rationale: "The session key is derived from a long-term key, so anyone who later obtains the server's private key can decrypt traffic captured months or years earlier. A static RSA key exchange is also the only arrangement in which a Bleichenbacher oracle can exist, which lets an attacker decrypt recorded sessions or forge a signature without ever holding the private key. Whether this server is such an oracle was not established here — confirming it means sending deliberately malformed handshakes, which this tool does not do — and it does not need to be, because the remedy is the same either way: stop offering key exchange without forward secrecy.",
-		refs:      []Reference{rfc9325, rfc10015, rfc9846, robot, bsiTR02102},
+		rationale: "Without forward secrecy, anyone who later obtains the server's private key can decrypt traffic " +
+			"captured months or years earlier. Static RSA key exchange is also what a Bleichenbacher oracle " +
+			"needs; whether this server is one was not established here, and the remedy is the same either " +
+			"way: stop offering it.",
+		refs: []Reference{rfc9325, rfc10015, rfc9846, robot, bsiTR02102},
 	},
 	{
 		id: "cipher.cbc",
@@ -489,12 +493,13 @@ var cipherRules = []cipherRule{
 		// suite would drop out of the aggregate and a server accepting one
 		// could still be graded strong overall. Weak carries into the
 		// aggregate without asserting a defect.
-		id:        "cipher.unrecognised",
-		match:     func(n string) bool { return DescribeCipher(n).KeyExchange == "unknown" },
-		verdict:   Weak,
-		title:     "Unrecognised cipher suite",
-		rationale: "This suite is not covered by the rule set and was not graded. Its key exchange could not be read from its name, so nothing here can say whether it is sound.",
-		refs:      []Reference{rfc9325, mozillaTLS},
+		id:      "cipher.unrecognised",
+		match:   func(n string) bool { return DescribeCipher(n).KeyExchange == "unknown" },
+		verdict: Weak,
+		title:   "Unrecognised cipher suite",
+		rationale: "This suite is not covered by the rule set and was not graded: its key exchange " +
+			"could not be read from its name.",
+		refs: []Reference{rfc9325, mozillaTLS},
 	},
 }
 

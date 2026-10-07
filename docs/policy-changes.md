@@ -1,123 +1,39 @@
-# What changed between policy versions
+# Rule set changes
 
-Every verdict this project produces carries the name of the rule set that
-produced it, and reports from two different rule sets are not comparable. A
-server graded `strong` under `denyfirst-v1` and `weak` under `denyfirst-v2`
-may not have changed at all.
+Every verdict names the rule set that graded it. The ones in force are
+`porch-tls-v7`, `porch-web-v3`, `porch-mail-v3` and `porch-dns-v2`. Reports
+from two rule sets are not comparable: a server graded `strong` under one and
+`weak` under the next may not have changed at all. This page says what moved,
+so a pipeline can tell a configuration that got worse from a rule that got
+stricter.
 
-This page says what moved, so that anyone whose pipeline reads the output can
-tell a configuration that got worse from a rule that got stricter.
+Rule identifiers are stable across releases. Track or suppress a finding by
+its identifier, never by its wording.
 
-The rule identifiers are stable across releases. A finding can be tracked or
-suppressed by its identifier rather than by matching prose, and the prose is
-free to improve without breaking that.
+Rule sets were named `denyfirst-…` until v0.16.0, when the tool was renamed
+Porch. The numbers did not reset, and older sections keep the names they
+shipped under, because those are the names in the reports.
 
----
-
-## The tool is called porch
-
-Every rule set is named `porch-<check>-vN` from this release. They were
-`denyfirst-<check>-vN`.
-
-**No rule changed and no verdict moved.** This is the name of the instrument,
-not a change to what it measures. `denyfirst` is the brand these rules are
-published under and it is going to carry more than one product; a rule set named
-for the brand says which company graded a report and not which tool did.
-
-**The numbers did not reset.** `denyfirst-tls-v7` became `porch-tls-v7`, not
-`porch-tls-v1`. Resetting would have told a reader the rules were new when they
-are the same rules under a different name — which is the one thing a version on
-a rule set exists to prevent.
-
-**Nothing anybody holds is affected.** All three of the rule sets renamed here
-were unreleased: `denyfirst-tls-v7`, `denyfirst-web-v3` and `denyfirst-mail-v1`
-never appeared in a report. The sections below name the last released rule set on
-each side of the change, so a reader comparing an older report against a new one
-is reading the whole story rather than a rename spliced into it. Sections for
-releases that did ship keep the names they shipped under, because that is what
-those reports say.
-
-The programs are `porch-scan` and `porchd`, and the user agent is `porch/1`. The
-addresses under `denyfirst.dev` are unchanged: that is the brand's domain, the
-pages explaining what a scan sends are there, and a log reader who looked one up
-is entitled to find it still answering.
+Newest first.
 
 ---
-
 
 ## `porch-mail-v2` → `porch-mail-v3`
 
 Released in v0.24.0, 2026-09.
 
-One finding is added and one is no longer raised against an exchanger whose
-name is an alias. A domain whose report was strong under `porch-mail-v2` is
-strong under this one unless its aggregate reports are addressed to a domain
-that has not agreed to receive them.
-
-### Reports addressed to a domain that has not agreed to receive them
-
-`mail.dmarc-reports-unauthorised`, graded `weak`.
-
-RFC 7489 §7.1: where a DMARC record asks for reports at an address outside the
-domain being reported on, a receiver must not send anything there until that
-destination publishes a DMARC record at
-`<domain>._report._dmarc.<destination>`. Without it the receiver is required to
-discard the address. The reports are not delayed and not bounced — they never
-leave.
-
-This is invisible from the domain's own DNS. The record is well formed, the
-policy applies, the `rua` tag names a vendor, and every report goes nowhere;
-the missing record is in somebody else's zone. It is the position of a domain
-that believes it is watching its own mail and is not, which is the kind of
-fault this project exists to find.
-
-Two things bound what it claims. A destination *under* the domain being
-reported on is treated as inside it: the specification says "the same domain",
-receivers differ on whether a subdomain counts, and the two readings fail in
-opposite directions — so this takes the reading that reports fewer faults
-rather than more, and the report says so. And where the authorisation record
-could not be read at all, nothing is graded: an unanswered lookup is not a
-destination that declined, and the report says which of the two happened.
-
-Reading the `rua` tag is itself new. It was reduced to *reports are asked for,
-or they are not* until this rule set, which made the check above impossible and
-left an operator unable to see where their reports go — at a vendor they no
-longer pay, or at the mailbox of somebody who has left. The destinations are
-now named. The mailbox beside each is printed where the tool is run by the
-operator or the domain has been proven, and withheld otherwise: a domain is not
-a person and a mailbox is. Nothing about the finding depends on it, because the
-finding is about domains.
-
-### What a report now names, and grades no differently
-
-Nothing below moves a verdict. The void-lookup finding names the policies that
-answered nothing, where it counted them; void lookups under the limit, and
-policies that could not be read, are said with their names where they were
-counted or not said at all; and a DMARC record whose `sp=` asks less of
-subdomains than `p=` asks of the domain is said, not graded, because nothing
-here can see whether a subdomain sends mail. Where the report is read by the
-person the domain belongs to, the SPF, DMARC and TLS-RPT records are carried
-as the zone publishes them.
-
-### An exchanger whose name is an alias is not asked whether it relays
-
-`mail.open-relay` can no longer be raised against an exchanger whose name is a
-CNAME. Such an exchanger is measured as every other one is — STARTTLS, the
-certificate, DANE — and its relay line says the question was not put, and why.
-
-The relay question goes only to exchangers inside the domain being checked,
-because inside the domain is the operator's own server and outside it is a
-provider's. That was a reading of the name, and a name is not a server:
-`mail.example.com` pointed by an alias at a mail provider is inside the domain
-and is the provider's machine, which `docs/scope.md` names as the case a
-verified zone does not cover. A relay probe in that provider's log reads as a
-spam probe from the operator's address. An alias says so in DNS, so an alias is
-no longer asked; an address record pointing at a provider cannot be told apart
-from here, and the report claims nothing about it.
-
-A domain whose aliased exchanger accepted the relay question under the earlier
-reading was graded `insecure` for it and is not graded for it here. It is still
-graded `weak` for the alias itself, which RFC 2181 forbids.
+- **Added `mail.dmarc-reports-unauthorised`, weak.** The DMARC record sends
+  reports to another domain that has not published the authorisation record
+  RFC 7489 §7.1 requires, so every receiver discards them. A destination under
+  the domain itself counts as inside it. Where the authorisation record could
+  not be read, nothing is graded.
+- **Narrowed `mail.open-relay`.** An exchanger whose name is a CNAME is no
+  longer asked whether it relays, because an alias usually points at a
+  provider's machine. It is still graded weak under
+  `mail.exchanger-is-an-alias`.
+- **Reported, not graded:** where DMARC reports go; which policies a void
+  lookup came from; an `sp=` that asks less than `p=`; and, for a proven
+  domain, the SPF, DMARC and TLS-RPT records as published.
 
 ---
 
@@ -125,57 +41,15 @@ graded `weak` for the alias itself, which RFC 2181 forbids.
 
 Released in v0.19.0, 2026-09.
 
-Two findings are added, and nothing that was graded before is graded
-differently. A domain whose report was strong under `porch-mail-v1` is strong
-under this one unless one of its own exchangers is an open relay, or an
-exchanger it names is an alias.
-
-### An exchanger whose name is an alias
-
-`mail.exchanger-is-an-alias`, graded `weak`.
-
-RFC 2181 says the name an MX record points at carries an address and is not an
-alias. A sender looking it up asks for the address at the name it was given,
-and what it does with the alias it finds instead differs between
-implementations — so mail from some senders arrives and mail from others does
-not, which is the hardest kind of delivery problem to find. The question is
-asked of the name itself, because an exchanger whose name is an alias still
-resolves and nothing else read here would show it.
-
-### An exchanger that forwards mail for a domain it does not serve
-
-`mail.open-relay`, graded `insecure`.
-
-This is the oldest misconfiguration in mail and still the most expensive one
-to have. A server that accepts mail from anybody, for anybody, is found within
-hours of being reachable, used to send in other people's names, and listed
-everywhere that matters — after which the domain's own mail stops arriving.
-RFC 2505, a best current practice, says an MTA must not relay for domains it
-is not responsible for; RFC 5321 is the protocol it is said in.
-
-**Which exchangers are asked, and no others.** The question goes to an
-exchanger inside the domain being checked — `mail.example.com` when
-`example.com` is the domain — and never to one belonging to somebody else. An
-exchanger named by an MX record but run by a provider is that provider's
-server: a relay probe in their logs reads as a spam probe, and the address it
-came from is the one that gets listed for it. There is no flag to widen this.
-
-**What is said, and what cannot happen.** An empty reverse path, which is what
-every bounce carries and names nobody; a recipient under `.invalid`, which RFC
-2606 reserves so that the name cannot exist; then `RSET`, which abandons the
-transaction. `DATA` is never sent, so no message is ever composed, nothing is
-queued, and a server that agreed was never handed anything to forward. What is
-graded is what the server said it would do.
-
-**Not asked is not refused.** An exchanger that was never asked, one that
-refused the empty sender — which is a fact about bounces rather than about
-relaying — and one whose conversation ended early are each reported as
-themselves. Only a server that accepted the recipient is graded (R4).
-
-This also changes what `internal/smtptls` may say, and `docs/invariants.md` N3
-changes with it: the rule was that no sender or recipient is ever named, and it
-is now that no message is ever composed, with the one question that names a
-recipient bounded as above.
+- **Added `mail.exchanger-is-an-alias`, weak.** An MX target that is a CNAME,
+  which RFC 2181 forbids. Senders disagree about it, so some mail arrives and
+  some does not.
+- **Added `mail.open-relay`, insecure.** An exchanger inside the domain accepts
+  mail for a domain it does not serve (RFC 2505). It is asked with an empty
+  sender, a recipient under `.invalid` and `RSET`. `DATA` is never sent.
+  Exchangers run by a provider are never asked. An exchanger not asked, one
+  that refused the empty sender, and one that ended early are reported as
+  such and not graded.
 
 ---
 
@@ -183,60 +57,12 @@ recipient bounded as above.
 
 Released in v0.20.0, 2026-09.
 
-Two findings are added and nothing that was graded before is graded
-differently. A domain whose report was strong under `porch-dns-v1` is strong
-under this one unless the signatures over its zone have already run out, or the
-zone above hands out an address for one of its servers that the zone itself does
-not publish.
-
-### A signature that has run out
-
-`dns.signature-expired`, graded `insecure`.
-
-RFC 4035 §5.3.1 requires a validating resolver to refuse a signature whose
-validity period does not contain the current time. A zone whose signatures have
-expired is therefore already gone for everybody behind one — the same outcome as
-a chain that does not check out, and graded the same way. It is caused by
-signing that stopped running rather than by anything anybody changed, which is
-why nothing else in a report shows it.
-
-**When the signatures run out is reported on every signed zone, and not
-graded.** No document says how much room to leave, and a zone re-signed hourly
-with a two-day window is as correct as one re-signed weekly with a month (R21).
-The date and the key that made the signature are in the report; what to do about
-them is the operator's own judgement about their own schedule.
-
-The date costs no question. Every query this project sends already asks for
-DNSSEC data, so a signed zone's answers carry the signature; until now nothing
-read the one field in it a report can act on.
-
-### An address the zone above hands out that the zone does not publish
-
-`dns.glue-does-not-match`, graded `weak`.
-
-A server inside the zone it serves cannot be looked up without being told where
-it is, so the address its parent hands out beside the delegation — the glue — is
-what a resolver starting at the root dials. The zone publishes the same address
-itself, and the two can disagree: then whoever reaches the parent's copy reaches
-whatever is at that address now, which may be a machine that no longer serves
-the zone, and whoever reaches the zone's copy gets the zone. Which one a visitor
-gets depends on their resolver, and nothing in the zone's own records can show
-it.
-
-RFC 1912 §2.3 describes both halves: an address left behind at the parent, where
-"random people still see the old IP address", and a multi-homed server whose
-addresses are not all listed in the glue, which it states as a requirement. The
-finding names the address and the server, because it is changed at the registrar
-rather than in the zone file.
-
-A server outside the zone it serves has no glue, so nothing is compared and
-nothing is said.
-
-**Two things are now reported that were not, and neither is graded.** Whether
-the servers hold the same copy of the zone, read from the serial each one
-answers with; and whether the zone can be read whole by anybody, asked of every
-server and never taken. Both are notes rather than findings, so no verdict moves
-for either.
+- **Added `dns.signature-expired`, insecure.** The zone's DNSSEC signatures
+  have run out (RFC 4035 §5.3.1), so every validating resolver fails it.
+- **Added `dns.glue-does-not-match`, weak.** The parent hands out an address
+  for an in-zone name server that the zone does not publish (RFC 1912 §2.3).
+- **Reported, not graded:** when the signatures expire; whether the servers
+  hold the same serial; whether anybody can transfer the zone.
 
 ---
 
@@ -244,93 +70,32 @@ for either.
 
 Released in v0.19.0, 2026-09.
 
-A fourth rule set, for a fourth check: how a domain itself is served. **No TLS,
-web or mail verdict changed.** Those three grade a handshake, an HTTP response
-and a domain's mail policy; this one grades the delegation the domain is
-answered through and the DNSSEC chain its parent anchors. A report carries the
-rule set that graded it, and these four are never the same one.
+The fourth check: how a domain itself is served. No TLS, web or mail verdict
+moved. Most facts come from the machine's own resolver. Name servers are asked
+directly over TCP port 53, through the guard that refuses private addresses. A
+zone transfer is asked for and never taken.
 
-Almost nothing is connected to. Every fact but a few comes from the resolver the
-scanning machine already uses. The rest are put to servers directly, over TCP on
-port 53 and through the guard that refuses private, loopback and reserved
-destinations: whether each server answers for the zone, whether it hands the
-whole zone to anybody who asks, — for a server inside the domain only — whether
-it answers for other domains as well, and which servers the zone above hands
-out. An installation asks them where control of the domain has been proven; the
-command line asks them always.
+| rule | verdict | when |
+|---|---|---|
+| `dns.one-name-server` | weak | fewer than two name servers (RFC 1034, RFC 2182) |
+| `dns.name-servers-one-network` | weak | every server in one network, judged by address prefix |
+| `dns.name-server-without-address` | weak | a server the zone names resolves to nothing (RFC 1912) |
+| `dns.name-server-not-authoritative` | weak | a delegated server does not answer for the zone (RFC 1912) |
+| `dns.name-server-offers-recursion` | weak | a server inside the domain answers for other domains (RFC 5358) |
+| `dns.parent-and-zone-disagree` | weak | the parent's server list differs from the zone's (RFC 1912) |
+| `dns.name-server-is-an-alias` | weak | a delegated name is a CNAME (RFC 2181) |
+| `dns.alias-at-zone-apex` | insecure | a CNAME at the top of the zone (RFC 1034, RFC 2181) |
+| `dns.dnssec-no-keys` | insecure | the parent anchors DNSSEC and the zone publishes no matching key |
+| `dns.dnssec-chain-broken` | insecure | no published key matches the parent's digest |
+| `dns.dnssec-sha1-digest` | weak | the chain works over a SHA-1 digest (RFC 8624) |
+| `dns.dnssec-retired-algorithm` | insecure | signed with an algorithm RFC 8624 says must not be used |
+| `dns.dnssec-weak-algorithm` | weak | signed with an algorithm RFC 8624 no longer recommends |
+| `dns.nsec3-iterations` | weak | NSEC3 hashes more than once (RFC 9276) |
 
-A transfer is asked for and never taken: the first reply's header says whether
-the server began one, the connection is closed there, and nothing the zone
-contains is read or reported. Whether it can be read whole is reported and not
-graded — RFC 5936 §5 says an implementation ought to let an operator open
-transfers to everybody, while saying it must not be the default, so no document
-calls it a fault (R21).
-
-What it grades is deliberately short, and the reason is that DNS carries more
-advice than any other part of the internet and fewer requirements. A serial
-number in a particular shape and a refresh timer inside a particular range are
-what other reports open with; RFC 1912 calls its ranges recommendations, and a
-zone whose records are written through an interface has no reason to carry a
-serial a person can read. Those are reported here, never graded (R21).
-
-Five findings, each of which stops a resolver or contradicts a standard:
-
-- `dns.one-name-server` — fewer than two name servers, which RFC 1034 requires
-  and RFC 2182 (BCP 16) explains.
-- `dns.name-servers-one-network` — every server answering from one network,
-  judged by address prefix rather than by owner, because which organisation an
-  address belongs to cannot be read from the address.
-- `dns.name-server-without-address` — a server the zone names that resolves to
-  nothing, which RFC 1912 calls a lame delegation.
-- `dns.dnssec-no-keys` and `dns.dnssec-chain-broken` — the parent anchors
-  DNSSEC and no key published here matches what it holds. This is the finding
-  the check was built around: a key rotated without the registrar being told
-  leaves every validating resolver answering with a failure while the
-  operator's own browser is fine, so nobody finds out from their own machine.
-- `dns.dnssec-sha1-digest` — a chain that works over a digest RFC 8624 says is
-  not to be used for new delegations.
-- `dns.alias-at-zone-apex` — a CNAME at the top of a zone, which RFC 1034 and
-  RFC 2181 both forbid: resolvers that follow it lose the zone's mail and its
-  name servers.
-- `dns.name-server-not-authoritative` — a server the delegation names that,
-  asked directly, answers without claiming the zone as its own. RFC 1912 calls
-  it a lame delegation, and a resolver cannot show it: one that reached a
-  working server reports a working zone.
-- `dns.name-server-offers-recursion` — a server inside the domain that also
-  answers questions about domains it has nothing to do with, which RFC 5358
-  (BCP 140) says an authoritative server should not: it is what makes a server
-  usable for pointing traffic at somebody else.
-- `dns.parent-and-zone-disagree` — the zone above hands out a different set of
-  servers from the one the zone itself names, which RFC 1912 asks it not to.
-  A resolver starting at the root follows the parent's list, so a name only the
-  parent hands out is where some lookups go and whatever is at that address
-  answers them. A resolver cannot show this either: it answers an NS question
-  from the zone itself, so only the parent's own server can be asked.
-- `dns.name-server-is-an-alias` — a name in the delegation that is an alias,
-  which RFC 2181 forbids for the same reason and which resolvers disagree
-  about, so some reach the zone and others do not.
-- `dns.dnssec-retired-algorithm` and `dns.dnssec-weak-algorithm` — signing with
-  an algorithm RFC 8624 says must not be used, and with one it no longer
-  recommends. The first is graded insecure because validators are dropping it;
-  the second weak, because it still works.
-- `dns.nsec3-iterations` — hashing absent names more than once, which RFC 9276
-  (BCP 236) closed: the iteration count is zero, the extra work lands on every
-  resolver and on this zone's own servers, and the secrecy it was meant to buy
-  was measured and is not there.
-
-The digest is computed here, from the keys the zone publishes, rather than
-taken from the resolver's AD bit — that bit is the resolver's claim about work
-it did, and where the report repeats it, it says whose word it is. A digest of
-a type this does not compute is reported as neither matched nor ruled out.
-
-Whether absent names are proved with hashed names or plain ones is reported
-and not graded. Plain names let anybody list a zone; nothing requires the
-hashed kind, and a zone whose names are not secret loses nothing by it.
-
-An alias whose target does not exist is reported and not graded: no document
-sets a rule about one. What the note says is what it leads to — the name
-resolves to nothing, and where the target is a name at a provider that hands
-out unclaimed ones, whoever claims it next answers for this name.
+The DS digest is computed here from the zone's keys, not taken from the
+resolver's AD bit. **Reported, not graded:** serial format and timers, which
+RFC 1912 only recommends; NSEC versus NSEC3; an alias whose target does not
+exist.
 
 ---
 
@@ -338,424 +103,71 @@ out unclaimed ones, whoever claims it next answers for this name.
 
 Released in v0.16.0, 2026-09.
 
-A third rule set, for a third check: what a domain's DNS says about its mail.
-**No TLS verdict changed and no web verdict changed.** `denyfirst-tls-v7`
-grades a handshake, `denyfirst-web-v3` grades an HTTP response, and this one
-grades records that are served by neither. A report carries the rule set that
-graded it, and these three are never the same one.
-
-Most facts in a mail report come out of a DNS lookup the resolver this machine
-already uses would answer. Two do not, and both run only where the command line
-runs them or a service has proof of control: the MTA-STS policy file a zone
-announces, and a short conversation with each exchanger the zone names. No
-message is composed or sent, no sender or recipient is named, and nothing that
-would change state at the other end is attempted.
-
-The finding it was built around is invisible in the record. RFC 7208 allows a
-sender policy at most ten DNS-resolving terms across everything it pulls in;
-past that the evaluation is a permanent error and a receiver behaves as though
-the domain had published no policy. A domain can hold three `include` terms and
-be over the limit because one of its providers has eight of its own, and
-nothing an operator can read in their own zone shows it. The tooling that
-usually reports this is a web form somebody types their domain into.
-
-### What it grades
+The third check: what a domain's DNS says about its mail. No TLS or web
+verdict moved. The MTA-STS policy file and a short conversation with each
+exchanger happen only where the command line runs them or the domain is
+proven. No message is ever composed. An address may be given; the part before
+the `@` is discarded before anything can see it.
 
 | rule | verdict | when |
 |---|---|---|
-| `mail.spf-duplicate` | insecure | more than one SPF record, which RFC 7208 makes a permanent error |
-| `mail.spf-lookup-limit` | insecure | evaluating the policy takes more than the ten lookups RFC 7208 allows |
-| `mail.spf-allows-everybody` | insecure | the policy ends in `+all`, authorising every sender on the internet |
-| `mail.spf-void-lookups` | weak | more than the two lookups RFC 7208 allows return nothing |
-| `mail.dmarc-duplicate` | weak | more than one DMARC record, so RFC 7489 says a receiver applies none |
-| `mail.dmarc-no-policy` | weak | a DMARC record with no `p=`, which RFC 7489 requires |
-| `mail.dkim-weak-key` | weak | an RSA signing key below the floor RFC 8301 sets, which a verifier may treat as insecure |
-| `mail.mta-sts-policy-invalid` | weak | an MTA-STS policy with no `mode`, or none in `enforce`/`testing` naming no `mx`, both of which RFC 8461 requires |
-| `mail.mta-sts-uncovered-exchanger` | weak | an enforcing MTA-STS policy matching none of the exchangers the domain publishes |
-| `mail.mta-sts-exchanger-fails-policy` | weak | an exchanger an enforcing MTA-STS policy covers offers no STARTTLS, or a certificate that does not verify for its name |
+| `mail.spf-duplicate` | insecure | more than one SPF record (RFC 7208) |
+| `mail.spf-lookup-limit` | insecure | the policy needs more than ten DNS lookups (RFC 7208) |
+| `mail.spf-allows-everybody` | insecure | the policy ends in `+all` |
+| `mail.spf-void-lookups` | weak | more than two lookups return nothing (RFC 7208) |
+| `mail.dmarc-duplicate` | weak | more than one DMARC record (RFC 7489) |
+| `mail.dmarc-no-policy` | weak | a DMARC record with no `p=` (RFC 7489) |
+| `mail.dkim-weak-key` | weak | an RSA signing key below 1024 bits (RFC 8301) |
+| `mail.mta-sts-policy-invalid` | weak | the policy file breaks RFC 8461 |
+| `mail.mta-sts-uncovered-exchanger` | weak | an enforcing policy matches none of the exchangers |
+| `mail.mta-sts-exchanger-fails-policy` | weak | an exchanger an enforcing policy covers has no STARTTLS or a certificate that fails |
+| `mail.dane-exchanger-fails-binding` | weak | a validated DANE record does not hold for the exchanger's certificate (RFC 7672) |
 
-Every one of those is a specification calling something an error, or a
-configuration authorising everybody. There is no third kind.
+The MTA-STS and DANE failures are weak rather than insecure because they fail
+closed: mail stops rather than travelling unprotected.
 
-The last two are the ones worth arguing about, and the argument is written
-into each rule. An enforcing policy that does not match the domain's own `MX`, or
-that covers an exchanger unable to offer STARTTLS with a certificate valid for
-its name, is a break with a consequence RFC 8461 states outright — a sending
-server **must not** deliver — so mail from every sender that honours MTA-STS is
-queued and then returned. It is graded `weak` rather than `insecure` because it fails
-*closed*: mail stops rather than crossing the network unprotected, and
-`insecure` in every other rule here means a sender or a receiver was induced to
-accept something it should not have. One word cannot mean both without making a
-report harder to read than the configuration it describes, so the severity of
-these is carried by their sentences.
-
-**The SPF walk stops where a receiver stops.** Past ten lookups nothing more is
-resolved and the count is reported as a lower bound; `mail.spf-lookup-limit` is
-raised exactly as before. An included policy the resolver could not answer is
-counted as unread rather than as a void lookup, so a resolver's failure no
-longer counts towards `mail.spf-void-lookups`, and while any include is unread
-the report is ungraded rather than strong.
-
-**A domain whose records could not be read is ungraded, not strong.** Where the
-sender policy, the DMARC record or the exchanger list could not be read, every
-rule about it is silent, and silence is not a pass. Such a scan comes back
-`ungraded` unless something that was read raised a finding.
-
-### What it deliberately does not grade
-
-**A domain with no SPF record.** Whether that matters depends on whether the
-domain sends mail, and this check does not establish that. A domain that sends
-none is correctly configured without one.
-
-**`~all`, `?all`, or a record with no `all` at all.** A domain sitting at `~all`
-while it finds the last department still sending through a forgotten relay is
-doing the right thing in the right order. Moving to `-all` before the list is
-complete rejects real mail, so a scanner marking it down would be reporting a
-correct decision as a fault (R6, R21). The qualifier is described instead, with
-what a receiver does about it.
-
-**The lookup count, until it is over.** Nine of ten is reported on every report
-that has a policy to count — a domain one provider away from switching its own
-policy off has no other way to find that out — but nine is not a fault, because
-RFC 7208 says ten.
-
-**`p=none`, and `pct=` below 100.** The monitoring position and the rollout.
-Both protect less than a stricter setting and both are the documented way to
-reach one. Described, with what they mean for mail that fails.
-
-**No `rua=`, and no TLS-RPT record.** Reports are how an operator finds out
-what their policy is doing; a domain without them is flying blind rather than
-misconfigured. Nothing is wrong without either. They are named because they are
-the only way to find out that something is.
-
-**`ptr`.** RFC 7208 says SHOULD NOT, and several large receivers ignore it.
-That is a description with a document behind it, not an error the document
-declares.
-
-### The mail path
-
-Three more things the DNS says, all reported and none graded.
-
-**Which hosts accept the mail.** The `MX` records, named. How many a domain has
-and whose they are is an operational decision no specification settles.
-
-**A null MX.** RFC 7505's single `.` is a domain stating that it accepts no mail
-at all, and it is the clearest case of a correct configuration a scanner could
-mark down. It is read as the statement it is, and every sentence below it about
-delivery is dropped rather than reported as unsatisfied (R6).
-
-**MTA-STS and DANE.** Whether the domain announces an MTA-STS policy, and which
-exchangers publish a DANE record. Neither is required by anything and they are
-two competing answers to the same problem — an operator may reasonably deploy
-either, both or neither — so a verdict on the choice would be a threshold this
-project invented (R21). What the report does is name what is there, because an
-operator choosing between them is owed the fact that at present they have
-picked neither.
-
-**What the MTA-STS policy says, where the deployment reads it.** The record at
-`_mta-sts.<domain>` says a policy exists; the policy itself is a file at
-`https://mta-sts.<domain>/.well-known/mta-sts.txt`, and only the file says
-whether it is in `enforce`, `testing` or `none` mode. From DNS a policy that
-protects the domain and one that has been rehearsing for two years look
-identical, so the file is fetched — under four conditions. Only where the domain
-announces a policy: no record, no request. Only where the deployment reads it:
-the command line does, and a service does exactly where it requires proof of
-control. One address, fixed by RFC 8461, no redirect followed, and the
-certificate must verify for the policy host. And it is a web host, sent one GET.
-
-`testing` and `none` are described and never graded: `testing` is the staging
-position on the way to `enforce`, as `p=none` is for DMARC, and `none` is a
-deliberate withdrawal. `max_age` is reported as a duration and compared to
-nothing, because RFC 8461 sets no floor a scanner could hold a domain to. An
-exchanger the policy does not match is graded under `enforce` and, under
-`testing`, named with the consequence of moving to `enforce` as it stands —
-nothing is failing yet, and that sentence is the reason to read the file at all.
-
-A file that was fetched and is not a valid policy — no `version: STSv1`, no
-mode or one RFC 8461 does not define, no `max_age`, no `mx` for a mode that
-needs one, a repeated field, or more than the size bound — is graded
-`mail.mta-sts-policy-invalid`, weak, with the reason, and nothing in it is used:
-a sending server applies no MTA-STS from it. A policy naming more host patterns
-than are kept is not compared with the exchangers, and the report says so.
-
-A policy that could not be fetched is reported with its reason and graded for
-nothing. A failure here looks the same whether the policy host is broken or this
-machine's egress is blocked, and no measurement available from here tells them
-apart.
-
-Whether each DANE binding *holds* is checked where the exchangers are contacted,
-against the certificate each presented, and said to be unchecked where they are
-not — see below.
-
-**What each exchanger answers when asked for encryption, where the deployment
-asks.** An enforcing MTA-STS policy and a DANE record both promise that mail is
-delivered encrypted, and only the exchanger can say whether it keeps that
-promise. So each exchanger the domain's MX records name — at most eight — is
-asked on port 25: the greeting, EHLO, STARTTLS, the handshake, QUIT. No sender,
-recipient or message is ever named. The report says, per exchanger, whether it
-offers STARTTLS, what was negotiated, and whether the certificate verifies for
-its own name against the deployment's trust store.
-
-Almost none of it is graded. RFC 3207 makes STARTTLS optional, and a sender
-delivering opportunistically encrypts without checking the certificate, so an
-exchanger without STARTTLS or with a certificate that fails is described (R21).
-Where an enforcing MTA-STS policy covers the exchanger, RFC 8461 says a sender
-must not deliver to it — so there it is graded,
-`mail.mta-sts-exchanger-fails-policy`, weak for the reason the uncovered rule
-is: it fails closed. An exchanger that offered STARTTLS and could not negotiate
-with this client is not graded, because that is a limit of this client before it
-is a fault of the server (R4).
-
-**Whether each exchanger's DANE records hold for the certificate it presented.**
-Checked as RFC 7672 has a sender check: DANE-EE(3) against the leaf, with no
-name or date check; DANE-TA(2) against a presented certificate, which the leaf
-must chain to and whose chain must name the exchanger. PKIX-TA and PKIX-EE, which
-RFC 7672 sets aside for SMTP, undefined selectors and matching types, and digests
-of the wrong length are reported as records no sender uses. Where a binding does
-not hold — no record matches, or the exchanger offers no STARTTLS — and the
-resolver reported the records validated, it is graded,
-`mail.dane-exchanger-fails-binding`, weak: RFC 7672 has a sender hold the mail,
-so it fails closed, as the enforcing MTA-STS rule does. Without the AD bit it is
-named and not graded, because a sender applies only records that validate, and
-the report says the bit is the resolver's word rather than a check this program
-made. A bare DANE-TA key that no presented certificate carries, and an anchor past
-its own dates, are reported as not established rather than as failures, and so is
-every exchanger that presented no certificate to this client.
-
-Outbound port 25 is blocked by many networks, residential connections and
-hosting providers among them. Where no exchanger can be reached, the report says
-that most likely describes where the scan ran rather than the exchangers (R3d),
-and grades nothing.
-
-The EHLO name is the client's own, as RFC 5321 says: `-helo` if given, else this
-machine's fully qualified host name, else its address as a literal.
-
-DANE is asked about beneath each exchanger, which is the one place this check
-follows a name out of the target's own zone. The reasoning is the one that
-already lets a sender policy's `include` be resolved: the domain published an
-`MX` saying "this host takes my mail", so asking what that host publishes is
-reading the domain's own answer rather than wandering off it. Bounded, because
-the list is written by whoever is being measured.
-
-### Signing keys, under selectors somebody names
-
-A DKIM key lives at `<selector>._domainkey.<domain>` and DNS has no query for
-what is beneath a name. There is no set of selectors to discover, so keys are
-read under names this scan is told to look under: the operator's own, given with
-`-dkim-selector`, and the ones mail providers document for their own service.
-
-The second are on by default and that is a decision worth stating. Trying names
-nobody mentioned looks like the guessing this project refuses everywhere — but
-that rule is about constructing paths on somebody's *server*, where the request
-lands in their access log and looks like an attack. A DNS lookup reaches the
-zone rather than the host: a name that does not exist costs a resolver one
-answer and the domain nothing at all, and a key that does exist is published for
-every receiving mail server on the internet to read.
-
-What keeps it honest is not withholding the lookup. It is that the report names
-every selector it tried, and never turns *these names hold nothing* into *this
-domain publishes no key*. A selector the operator named and one a provider
-documents are reported differently for the same reason: they said theirs should
-be there, so an absence is a fact; a provider default holding nothing is not.
-
-The list is not one this project invented. Each entry is the name a provider
-tells its own customers to create, and each carries the provider it belongs to
-so a reader can check rather than take the file's word for it.
-
-**One rule is graded: `mail.dkim-weak-key`.** RFC 8301 raised the floor to 1024
-bits and says a verifier may treat anything shorter as insecure, so mail signed
-with a smaller key can be discarded by a receiver applying the rule. That is a
-measurement. Everything else about DKIM is reported: a key in testing mode
-(`t=y`), which RFC 6376 tells a verifier not to act on; a revoked key, which is
-an empty `p=` and a decision rather than a mistake; and which selectors held
-nothing.
-
-### An address may be given, and the part before the @ is discarded
-
-Somebody checking a domain's mail policy has an address in front of them, and
-pasting it is the natural thing to do. Refusing it teaches nothing.
-
-So it is accepted and split at the last `@` — a quoted local part may contain
-one and a domain may not — and the left half is gone before anything can log,
-count or report it. A local part is a person's identity, every question this
-check asks is about the zone, and the way to keep a promise about not holding
-something is to have nowhere for it to go.
-
-### What it cannot see
-
-
-One standing limit, on every mail report: no message was sent. Where an
-exchanger was contacted, the conversation ended once encryption had been
-negotiated or declined, and no sender, recipient or message was named. A DANE
-binding's correctness was not checked. And a DKIM key is read
-only under a selector the scan was told to look under, because selectors cannot
-be listed from DNS; the report names every selector it tried, and a report
-saying DKIM was missing would be claiming something the scan did not establish
-(R4).
-
-This limit said "everything here was read from DNS" until the MTA-STS policy
-could be fetched, and that sentence had to go rather than be reworded. A
-standing limit is the same sentence on every report, and whether the policy is
-read now differs by deployment; what this particular scan read about the policy
-is said by the report that read it.
+**Reported, not graded:** no SPF record; `~all`, `?all` or no `all`; a lookup
+count under ten; `p=none` and `pct=` below 100; no `rua=` and no TLS-RPT;
+`ptr`; a null MX; MTA-STS and DANE presence; `testing` and `none` modes and
+`max_age`; STARTTLS and certificates where no policy requires them. A domain
+whose records could not be read is ungraded, not strong. DKIM keys are read
+only under the selectors the operator names and the ones providers document,
+and the report lists every selector it tried.
 
 ---
-
 
 ## `denyfirst-tls-v6` → `porch-tls-v7`
 
 Released in v0.16.0, 2026-09.
 
-**Three sentences corrected by the 2026-09-16 audit (A19, A20).** The coverage
-line says every suite *this client can offer* was tried, not every suite the
-server accepts. A verified transparency receipt is described as a log's signed
-promise, with the inclusion proof named as not asked for, rather than as proof
-the log recorded the certificate. And a version served the same leaf over a
-different intermediate is now a different chain, graded like any other; it was
-invisible before. The `alpn` field, which no handshake here ever filled, is
-gone.
+Verdicts that can now appear where they could not before. In each case nothing
+about the server changed; what it accepts became visible.
 
-**A revocation list answers only for what it covers.** A delta list, a list
-with a critical extension this does not read, and a list whose issuing
-distribution point leaves this certificate out are now "not checked" instead of
-"not revoked". No rule changed; `cert.revoked` is raised exactly as before.
+- **SSL 3.0, export and NULL suites are asked about**, with hand-written
+  hellos. `version.ssl3`, `cipher.export` and `cipher.null` could not fire
+  through Go's client. A server accepting any is now insecure.
+- **Finite-field DHE and anonymous suites are asked about.** `cipher.ffdhe`
+  and `cipher.anonymous` can now fire.
+- **TLS 1.3 suites are asked one at a time**, so an integrity-only suite
+  (RFC 9150) raises `cipher.no-encryption`. The answers are used only when the
+  suite Go negotiated is confirmed among them.
+- **Revocation lists are read.** One can raise `cert.revoked` after it is
+  fetched from an address the certificate names, size-capped, verified against
+  the issuer and found in date. A list that does not cover the certificate is
+  "not checked". The demonstration never fetches one.
+- **`porch-scan -ask-responder`**, off by default, asks the certificate's OCSP
+  responder; a verified answer can raise `cert.revoked` or
+  `cert.revocation-unknown`.
+- **A scan whose suite list did not finish stays ungraded**, even beside a
+  sound certificate.
+- **On Windows and macOS, trust is decided by the carried copy of the
+  platform's root store**, not by the platform verifier, which fetched
+  missing intermediates outside the private-address guard.
 
-**A scan whose suite list did not finish is ungraded, even beside a sound
-certificate.** The transport was already ungraded when enumeration stopped
-early; joining it with a strong certificate made the whole report strong. It
-now stays ungraded unless something seen was worse.
-
-**On Windows and macOS, "trusted" is decided by the carried copy of the
-platform's store.** A system pool on those two platforms made crypto/x509 ask
-the platform verifier, and Windows's fetches the intermediates a scanned
-certificate names — outside the dialler that refuses private addresses. The
-verdict there now rests on the copy of Microsoft's or Apple's store this build
-carries, verified by crypto/x509 alone. A chain the platform used to complete by
-fetching an intermediate the server never sent is now reported as incomplete or
-untrusted, which is what the server sent. No rule changed; on Linux nothing
-moved.
-
-**Four clients' root stores are named beside the verdict.** The verdict on a
-chain still rests on the store of the machine that ran the scan (R7). Beside it,
-a report now says what Mozilla, Chrome, Microsoft and Apple make of the chain,
-from copies of their stores carried in `internal/rootstores` and dated in the
-report: trusted, conditionally trusted, distrusted for certificates issued after
-a date, or not trusted. Only membership and Mozilla's TLS distrust dates are
-evaluated; Chrome's version-dependent constraints and Microsoft's "NotBefore"
-roots are reported as conditional rather than guessed at. **No verdict moved:**
-which clients matter is the operator's to decide (R21). The sources are not
-signed by their publishers; a refresh refuses any certificate that does not hash
-to the fingerprint its publisher lists, and a weekly workflow opens an issue when
-a store changes.
-
-**Transparency receipts are now checked, not only counted.** Each receipt a
-certificate or handshake carries is checked against the key Chrome's log list
-gives its log, offline. The list is Google's published file, carried byte for
-byte in `internal/ctlogs` and believed only when Google's signature over it
-verifies against a key written into the source. A report names the list's
-date and version, says how many signatures verified, and keeps apart a
-signature that fails, a log the list does not name, and a receipt that could
-not be checked. **No verdict moved:** transparency is described, never graded,
-because how many receipts a certificate needs is each browser's policy (R21).
-A weekly workflow opens an issue when the published logs change; a person
-refreshes the list with `go run ./internal/ctlogs/refresh` and signs the commit.
-
-**SSL 3.0, the export-grade suites and the NULL suites are now asked about.**
-The rules `version.ssl3`, `cipher.export` and `cipher.null` existed in every
-version and could not fire: this scanner measured through Go's TLS client, which
-implements none of them, so a server still accepting SSL 3.0 was reported as
-refusing every version and graded nothing. That was the flattering direction on
-exactly the servers that most need the finding. A server accepting any of them
-now comes back `insecure`. Nothing about such a server moved; its acceptance
-became visible. No rule identifier and no verdict changed.
-
-Each is one hand-written ClientHello: SSL 3.0 offering the suites a server of
-that era would choose among, and a TLS 1.2 hello offering every export suite
-and, separately, every NULL suite. No handshake is completed, no certificate is
-read, and at most seventy-eight bytes of the reply are parsed. What is
-established is whether *any* of each is accepted, not every one that is, and
-the standing limit says so.
-
-Only an alert is a refusal. A server that closes the connection instead is
-reported as not measured, because a firewall does the same thing and neither is
-the server declining (R4). And the hellos are sent only where an ordinary
-handshake was answered: a name that did not resolve costs nobody four more
-connections.
-
-**Whether a downgraded hello is refused is reported, and not graded.** Where a
-server accepts more than one version, a hello claiming the older one and
-carrying `TLS_FALLBACK_SCSV` is sent. RFC 7507 asks a server that speaks
-something newer to refuse it. Whether it did is described; no verdict moves,
-because what a downgrade costs depends on the version it lands on, and that
-version is graded on its own.
-
-**The certificate's own responder can be asked, from the command line.**
-`porch-scan -ask-responder`, off by default, posts the OCSP question to the
-responder the certificate names and verifies the answer against the issuer. A
-verified revoked raises `cert.revoked` and a verified unknown raises
-`cert.revocation-unknown`, once each whatever else said the same; no rule
-identifier and no verdict of any other kind changed. Without the flag nothing
-is asked and every report reads as before. The service and the demonstration
-never ask (R3a).
-
-**Finite-field DHE and anonymous suites are now asked about.** Go's client
-implements no suite of either family, so the ordinary enumeration could never
-list one, and `cipher.ffdhe` and `cipher.anonymous` could not fire. A server
-accepting `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256` beside modern suites was
-reported strong — and RFC 10015 now says a TLS 1.2 server MUST NOT select it.
-Each family is one more hand-written hello offering only its own suites, from
-the IANA registry, alongside the export and NULL ones; a server accepting any
-comes back `insecure`. Nothing about such a server moved; its acceptance became
-visible. No rule identifier changed, and as for the others, what is established
-is whether any of each is accepted, not every one that is.
-
-**The TLS 1.3 suites are now asked one at a time.** Go's client offers the TLS
-1.3 suites it chooses and no others, so a TLS 1.3 server was listed with the
-one suite it negotiated. A server also accepting AES-CCM, the ShangMi suites or
-the integrity-only suites of RFC 9150 — which send every record in the clear —
-was never asked about them, and one accepting `TLS_SHA256_SHA256` was reported
-as strong. Each suite in the registry is now asked alone with a hand-written
-hello, and a server accepting an integrity-only suite comes back `insecure`
-under `cipher.no-encryption`, a rule that existed and could not fire. Nothing
-about such a server moved; its acceptance became visible. No rule identifier
-changed.
-
-The answers are believed only when calibrated: the suite Go's own handshake
-negotiated is asked too, and unless it comes back accepted at TLS 1.3 none of
-the answers is used, only the negotiated suite is listed as before, and the
-report says why. A suite nobody answered about leaves the list incomplete, which
-leaves the verdict ungraded rather than strong, exactly as an incomplete TLS 1.2
-list does (R4).
-
-**A revocation list can now raise the `cert.revoked` finding.** Until this version a
-certificate was reported as revoked only when the server stapled a status
-response that verified against the issuing authority and said so. That path has
-been drying up: the CA/Browser Forum made OCSP optional and revocation lists
-mandatory, and authorities issuing for much of the web stopped publishing OCSP
-altogether. A certificate from one of them names no responder, so nothing can be
-stapled, so revocation went unestablished for most of the internet — and *not
-established* is what a report honestly said.
-
-The rule identifier is unchanged and its verdict is unchanged. What changed is
-that a second source can reach it, so a server whose certificate was withdrawn,
-and which was previously graded on everything else, can now come back
-`insecure`. Nothing about such a server moved; what moved is that the withdrawal
-became visible.
-
-One withdrawal is still one finding. A server that staples a revoked response
-*and* names a list that agrees raises `cert.revoked` once.
-
-A list is believed only after it is fetched from an address the certificate
-names, parsed under a size cap, verified against the issuing certificate, and
-found to be inside its own validity window. Anything short of all four leaves
-revocation unestablished, and the report says which of them failed — a list that
-could not be checked is not a certificate that is not revoked.
-
-**The demonstration deployment does not do this.** It promises on its privacy
-page that it asks no certificate authority anything, and the promise is kept by
-the call being compiled out of that build rather than by a default somebody
-could change. A report from denyfirst.dev is graded by the same rule set and
-says revocation was not checked, which is true there.
+**Reported, not graded:** what Mozilla, Chrome, Microsoft and Apple make of the
+chain; transparency receipts, now verified offline against Google's signed log
+list; whether a downgraded hello with `TLS_FALLBACK_SCSV` is refused; the same
+leaf over a different intermediate.
 
 ---
 
@@ -763,262 +175,42 @@ says revocation was not checked, which is true there.
 
 Released in v0.16.0, 2026-09.
 
-**Four readings corrected by the 2026-09-16 audit (A13–A16).** A
-Strict-Transport-Security header that repeats a directive is unparseable, as a
-browser treats it, rather than read by its first `max-age`. Only a policy the
-graded host sent itself is graded as its policy; another host's, reached by a
-redirect, is not. A redirect this scan did not follow — a host the deployment
-may not reach, or the redirect limit — is said as not followed rather than
-graded `reach.never-reaches-tls`, and a site whose reach was not established is
-ungraded rather than strong. And missing framing protection is said unless an
-enforcing header carries `frame-ancestors`. No rule identifier changed.
-
-**The page is read as a browser resolves its addresses (A17).** Character
-references in attributes are decoded, `<base href>`, `srcset` and `formaction`
-are read, `rel` is a list of words, and tabs, newlines and backslashes in an
-address are read as the URL standard reads them. So `http&#58;//host/app.js`
-is now the plaintext script it is, and can raise `content.mixed-blocked`. The
-page's own host over plaintext or on another port is another origin. A read that
-stopped part way now says so, as a truncated one did. The sentence naming
-origins that carry an integrity attribute now says the hashes themselves were
-not checked.
-
-**The check reads the cookies it was already collecting.** Every Set-Cookie a
-site sends has been in the report since the check shipped and no rule looked at
-any of them. Four rules are added and three observations, and the line between
-those two lists is the whole of the change worth arguing about.
-
-### What is graded, and why only this
-
-A browser settles each of these. They are not opinions about configuration;
-they are what happens next, and a site that has one is usually the last to
-know, because every symptom appears somewhere other than the header.
-
-| rule | what a browser does |
-|---|---|
-| `cookie.no-secure-over-tls` | sends the cookie on plaintext requests too, in the clear |
-| `cookie.host-prefix-broken` | rejects a `__Host-` cookie that breaks the prefix, entirely |
-| `cookie.secure-prefix-broken` | rejects a `__Secure-` cookie sent without `Secure` |
-| `cookie.samesite-none-without-secure` | rejects the cookie |
-
-Three of the four mean a cookie the site believes it set does not exist.
-
-### What is reported and deliberately not graded
-
-There is a large body of advice about cookies and almost none of it is a line
-anybody published. R21 is the rule being applied.
-
-**`HttpOnly` missing** is good advice and not a rule. A CSRF token, a locale, a
-consent flag and a feature switch are all cookies a page is meant to read, and
-this check cannot tell which it is looking at — deliberately, since a cookie
-value is never recorded. Failing those servers would be this project inventing
-a threshold nobody can argue with.
-
-**`SameSite` missing** is treated as `Lax` by current browsers. That is a
-property of the browser rather than of the server, so it is stated rather than
-graded.
-
-**A `Domain` attribute** widens a cookie beyond the host that set it. That is
-often deliberate, and it is reported because it decides how far a cookie
-travels.
-
-### The response headers are read too
-
-The probe has collected thirteen headers since the check shipped and two of
-them were read. The rest are read now, and almost all of them are reported
-rather than graded.
-
-One rule is added. `headers.cors-wildcard-with-credentials` fires where
-`Access-Control-Allow-Origin` is `*` and `Access-Control-Allow-Credentials` is
-`true`: a browser refuses that combination rather than choosing between them,
-so the sharing the site configured does not work and nothing about the
-response says so.
-
-Everything else is a sentence. The headers a response did not send are listed
-once, with what each one does, because that is the list somebody closing gaps
-works from — and none of them is required by any specification. A missing
-`X-Content-Type-Options: nosniff` is on that list, and it is the one worth
-explaining: it was written as a graded finding first, and an existing test
-caught it by refusing to call a correctly reached site `strong`. There is no
-arrangement that wants nosniff absent, which is a good argument for grading it
-and not the same as a consequence this scan establishes — whether the absence
-matters depends on content types nothing here read. `hsts.absent` is graded
-because its consequence follows from the scan alone.
-
-A site sending a `Content-Security-Policy` header with `frame-ancestors` is not
-told it lacks `X-Frame-Options`, which that directive replaced. A policy without
-the directive, or one declared only in the page, was taken as the same until
-the 2026-09-16 audit (A16); CSP Level 3 has a browser ignore `frame-ancestors`
-in a meta element, so the missing header is said there.
-
-### The page itself is read, where the deployment reads pages
-
-**This is a change to a published promise and it is the most consequential
-thing in this version.** Until now the check read response headers and closed
-the body unread, and said so on `/web/method` and in `docs/invariants.md`. It
-now reads the final HTML response — once, to a bound of one megabyte, streamed
-— and keeps nothing of it.
-
-The reason for reading it: a `Content-Security-Policy` declared with `<meta
-http-equiv>` is one a browser applies and a header check cannot see, so a site
-that had done the work was told it had no policy, and then told a second time
-that it was missing framing protection the policy supersedes. One omission, two
-wrong sentences, both about something already done. That is fixed here.
-
-The reason nothing is kept: a body holds a key in a comment, a token in a
-script, a name in a template, and a report is a thing people paste into issue
-trackers. So what survives a read is a handful of booleans and a bounded list
-of **host names** — a reference is reduced to its host before it is kept, with
-no path, no query, and userinfo dropped first, because `http://user:token@host/`
-in somebody's markup is a credential.
-
-Which deployment read your page is now part of the promise. The user agent
-names one address from every installation, so `/web/method` describes both: the
-demonstration reads no body at all, and an installation somebody runs
-themselves may have read the page. A flat sentence there would have been true
-of one and false of the one in a log reader's records.
-
-Two standing limits are reworded, and both were wrong in the direction that
-matters.
-
-`web-root-only` said **"Only the root was asked, and only its headers were
-read"** and now says **"Only the root was asked"**. The second half stopped
-being true of every deployment, and a standing limit is one sentence on every
-report — so the half that is always true stays, and what a particular scan read
-is said by the report that read it.
-
-`web-no-browser` said what a page actually loads **"is visible only to a
-browser executing the page"**. What a page *declares* it loads is read now, so
-that sentence disowned a finding the same report had just made. It says what is
-still true instead: nothing was executed, so anything a script fetches once it
-runs was not seen.
-
-### Two rules that rest on the page
-
 | rule | verdict | when |
 |---|---|---|
-| `content.form-posts-in-the-clear` | insecure | a form on a secure page has an `http://` action |
-| `content.mixed-blocked` | weak | a secure page loads a script, stylesheet, frame or plugin resource over `http://` |
+| `cookie.no-secure-over-tls` | insecure | a cookie set over TLS without `Secure` is also sent in the clear |
+| `cookie.host-prefix-broken` | weak | a `__Host-` cookie breaks the prefix, so browsers reject it |
+| `cookie.secure-prefix-broken` | weak | a `__Secure-` cookie without `Secure`, so browsers reject it |
+| `cookie.samesite-none-without-secure` | weak | `SameSite=None` without `Secure`, so browsers reject it |
+| `headers.cors-wildcard-with-credentials` | weak | `Access-Control-Allow-Origin: *` with credentials, which browsers refuse |
+| `content.form-posts-in-the-clear` | insecure | a form on a secure page posts to `http://` |
+| `content.mixed-blocked` | weak | a secure page loads a script, stylesheet, frame or plugin over `http://` |
 
-Both rest on the W3C Mixed Content specification, which does not advise: it
-divides plaintext subresources on a secure page into *blockable* and
-*optionally-blockable* and says what a user agent does with each. Blockable
-content is refused by every current browser, so the resource does not arrive
-and the page runs without it — a page broken in a way its author may not have
-seen, because a blocked subresource fails quietly. A form is neither: a browser
-submits it, so whatever a visitor types travels in the clear, which is the one
-rule here about the visitor rather than the page.
+**The page itself is now read**, where the deployment reads pages: one GET of
+the final response, up to one megabyte, streamed, and nothing kept but a few
+booleans and host names. A `Content-Security-Policy` declared in markup is
+now seen.
 
-**Optionally-blockable content — images and media — is reported and not
-graded.** Browsers upgrade some, block others, and do not all agree. A verdict
-would be this project deciding something a standards body deliberately left
-open (R21), and it would land on a site whose behaviour depends on which
-browser the visitor uses.
+**Corrected readings:** an HSTS header that repeats a directive is
+unparseable; only the graded host's own HSTS policy counts; a redirect not
+followed is said rather than graded `reach.never-reaches-tls`; character
+references, `<base>`, `srcset` and `formaction` are read as a browser reads
+them.
 
-**Two more things the page shows, both reported and never graded.**
-
-`content` has no rule for either, because neither is an error any document
-declares. What they have instead is a sentence naming the origins, which is the
-part an operator cannot get any other way.
-
-**Code from another origin with no `integrity` attribute.** A browser executes
-whatever that origin sends, with the page's own authority, and checks nothing
-about it. Subresource integrity makes the browser refuse anything that is not
-the exact file expected. No specification requires one, and pinning has a real
-cost — a provider shipping a fix breaks every page pinned to the version before
-it — so this is named rather than graded (R21). Where a site has pinned some
-already, the report says so beside the gaps: a list of gaps with no denominator
-reads as a site that has never heard of the attribute.
-
-Scheme-relative addresses are read here, not skipped. `//cdn.example/jquery.js`
-inherits the page's scheme, so it is never mixed content — and it is how a
-great many older pages load their scripts, which are exactly the pages least
-likely to carry a hash.
-
-**A form posting to another origin over TLS.** Ordinary and often correct: a
-payment processor or a search provider looks exactly like this. It is named
-because a visitor sees this page's address while typing into somebody else's
-form, and because whoever runs the site is the only person who can say which are
-meant. Kept apart from `content.form-posts-in-the-clear`, which is graded and is
-a different fact.
-
-**Origin means host, not registrable domain.** `static.example.com` is a
-different origin from `www.example.com`, and subresource integrity and CORS both
-work on origins. Folding siblings together would report a site as loading
-nothing from elsewhere while a browser treats it as exactly that.
-
-### What can move a verdict
-
-A site can now be graded `weak` by `content.mixed-blocked` or `insecure` by
-`content.form-posts-in-the-clear` where it was not graded before. **Nothing
-about such a site changed**: what changed is that the page is read, so what was
-already in it became visible. Both are only reachable on a deployment that
-reads bodies, so a report from the public demonstration cannot carry either.
-
-A verdict can also move the other way, and this one is a correction: a site
-declaring its policy in markup is no longer listed as sending no
-`Content-Security-Policy` and no longer told it lacks `X-Frame-Options`. Those
-were notes rather than findings, so no verdict changes from that alone.
-
-### Nothing else moved
-
-No reach, HSTS or cookie rule was added, removed, or made stricter. A site with
-no cookies, every header in place and nothing loaded over plaintext is graded
-exactly as it was under v2.
+**Reported, not graded:** missing `HttpOnly`, missing `SameSite`, a `Domain`
+attribute; security headers not sent; images and media over `http://`; scripts
+from elsewhere without `integrity`; forms posting to another origin over TLS.
 
 ---
 
 ## `denyfirst-web-v1` → `denyfirst-web-v2`
 
 Released in v0.16.0, 2026-09, already superseded there by `porch-web-v3`. It
-was tagged as v0.15.1, which was built and never signed or published, so no
-published release graded under v2; the section stays because v3 is described
-as a change from it.
+was tagged v0.15.1, which was never published.
 
-**Two verdicts change, in the same direction and for the same reason: v1 said
-nothing where it had measured something.** No rule was added, removed, or made
-stricter, and no site that was reported as having a problem stops having one.
-
-### A correctly reached site is now `strong`, not `ungraded`
-
-`ungraded` means *nothing was established*. It is what a host that never
-answered comes back as, and it exists so that silence about something untested
-cannot read as approval.
-
-A site whose plaintext address redirects straight to TLS, or answers nothing at
-all, and whose policy is sound, has had a great deal established about it. v1
-reported that as an absence, which made a correct site indistinguishable from
-an unreachable one — and on the command line, where the exit status is the
-whole product, they were the same number: `4`.
-
-| | v1 | v2 |
-|---|---|---|
-| sound arrangement, sound policy | `ungraded`, exit 4 | `strong`, exit 0 |
-| nothing answered over TLS | `ungraded`, exit 4 | `ungraded`, exit 4 |
-
-If you gated a pipeline on `denyfirst-scan -check web` under v0.15.0, it failed
-on every host that passed. That is the defect, and this is the fix.
-
-### A host that answered nothing is no longer graded for its policy
-
-v1 read the `Strict-Transport-Security` headers of the secure chain, found an
-empty list, and raised `hsts.absent`: **weak, no policy tells a browser to come
-back over TLS.** A host that answered without the header and a host that
-answered nothing at all both produce an empty list, and v1 could not tell them
-apart, so it made a claim about a server it had never spoken to.
-
-`GradeHSTS` is now told whether any response arrived over TLS. Where none did,
-the report says so as something not established, and raises nothing.
-
-That is R17 — *a finding claims what was measured, not what it implies* — and
-R4 — *nothing measured is not the same as passing, or as failing*. Both were
-already written down. Neither was applied to the rule set added the day before.
-
-### Nothing else moved
-
-The ten rule identifiers are unchanged, and so is every verdict they produce.
-Anything tracking or suppressing a finding by its identifier is unaffected.
-`denyfirst-tls-v6` is untouched.
+- **A correctly reached site is `strong`, not `ungraded`.** v1 reported a sound
+  redirect and a sound policy as an absence.
+- **A host that answered nothing over TLS no longer raises `hsts.absent`.** It
+  is said as not established.
 
 ---
 
@@ -1026,522 +218,108 @@ Anything tracking or suppressing a finding by its identifier is unaffected.
 
 Released in v0.15.0, 2026-09.
 
-A second rule set, for a second check: how a name answers on each scheme, and
-what it says about coming back over TLS. **No TLS verdict changed and no TLS
-rule moved.** `denyfirst-tls-v6` grades a handshake and a certificate;
-`denyfirst-web-v1` grades an HTTP response, which most of the ports this
-project scans do not have. A report carries the rule set that graded it, and
-these two are never the same one.
-
-The check exists because a TLS report can be entirely correct and still leave
-its reader with the wrong impression. A host can negotiate TLS 1.3 with an
-immaculate certificate while serving the same site in the clear on port 80 and
-declaring no policy at all — and every visitor who types the name without a
-scheme hands their first request to whoever is on the path. Nothing in a TLS
-report says so, because nothing in a handshake shows it.
-
-### What it grades
+The second check: how a name answers on each scheme. No TLS verdict moved.
 
 | rule | verdict | when |
 |---|---|---|
 | `reach.plaintext-served` | insecure | port 80 returns a page instead of redirecting |
-| `reach.never-reaches-tls` | insecure | the redirects from port 80 end while still on plaintext |
+| `reach.never-reaches-tls` | insecure | the redirects from port 80 end on plaintext |
 | `reach.downgrades-to-plaintext` | insecure | the https address ends on an http one |
-| `reach.plaintext-not-redirected` | weak | port 80 answers, and does not send the visitor to TLS |
-| `reach.redirect-via-plaintext` | weak | TLS is reached, but only after a second cleartext request |
+| `reach.plaintext-not-redirected` | weak | port 80 answers and does not send the visitor to TLS |
+| `reach.redirect-via-plaintext` | weak | TLS is reached only after a second cleartext request |
 | `hsts.absent` | weak | no `Strict-Transport-Security` on the secure response |
-| `hsts.plaintext-only` | weak | the header is sent only where RFC 6797 requires a browser to ignore it |
-| `hsts.unparseable` | weak | the header has no `max-age` a browser can read, so the whole header is discarded |
-| `hsts.disabled` | weak | `max-age=0`, which tells a browser to forget the policy |
-| `hsts.preload-ineffective` | weak | `preload` is requested without the year and `includeSubDomains` the list requires |
+| `hsts.plaintext-only` | weak | the header is sent only where RFC 6797 has a browser ignore it |
+| `hsts.unparseable` | weak | no `max-age` a browser can read |
+| `hsts.disabled` | weak | `max-age=0` |
+| `hsts.preload-ineffective` | weak | `preload` without the year and `includeSubDomains` the list requires |
 
-### What it deliberately does not grade
-
-**The length of `max-age`.** No standards body publishes a minimum, and
-OWASP's cheat sheet explicitly recommends a short one during a rollout. A rule
-failing anything under a year would be this project inventing a threshold and
-then reporting a deliberate, correct choice as a fault. The value is described
-instead — in years or days, with what a browser does when it lapses — and the
-one-year figure appears only as what it is: the bar for one browser
-programme's list.
-
-**The absence of `includeSubDomains`.** A host with nothing beneath it needs
-no subdomain clause, and a scan of one host cannot see what is beneath it.
-
-**A temporary redirect from plaintext.** A 302 to the secure address works. It
-is described, because a browser may repeat the cleartext request where a
-permanent one would not, but it is not a fault on its own.
-
-Three of the four checks this project has now declined to invent a threshold
-for. That is the intended direction: a verdict rests on a document somebody
-can read, and where no document exists the measurement is reported rather than
-graded.
-
-### `policy.Version` is now `policy.TLSVersion`
-
-An identifier, not a value. `policy.Version` beside `policy.WebVersion` reads
-as *the* version and the web one, which is the confusion renaming the value to
-`denyfirst-tls-v6` was meant to end. Nothing a report says changed.
+**Not graded:** the length of `max-age`, a missing `includeSubDomains`, a
+temporary redirect.
 
 ---
 
 ## `denyfirst-v6` → `denyfirst-tls-v6`
 
-Released in v0.13.0, 2026-09. **No rule changed.** A report graded
-`denyfirst-v6` and a report graded `denyfirst-tls-v6` are comparable in every
-respect: the same twenty-four certificate rules, the same chain grading, the
-same cipher and protocol verdicts, from the same source. Only the name of the
-rule set is different, and this section exists so that a reader who notices
-the change does not go looking for the rules behind it.
-
-The name now carries the check as well as the number. This project has one
-check and expects more — the first of them looks at how a domain publishes its
-mail policy — and a number on its own stops meaning one thing the moment there
-is a second rule set. `denyfirst-v7` over a mail report and `denyfirst-v7`
-over a TLS report would be the same name over two different rule sets, which
-is precisely the confusion the name is printed to prevent.
-
-Renamed while there is one rule set to rename, for the same reason the check
-moved to its own address in the same release: it costs nothing today and
-cannot be undone cheaply once reports carrying the ambiguous name are in
-somebody's pipeline.
-
-Nothing else about a report changed. The rule identifiers are unchanged, so
-anything tracking or suppressing a finding by its identifier is unaffected.
+Released in v0.13.0, 2026-09. **No rule changed.** The name now carries the
+check as well as the number, because a second check was coming.
 
 ---
 
 ## `denyfirst-v5` → `denyfirst-v6`
 
-Released in v0.11.0, 2026-09. **The rest of the chain is graded.** Until now
-all twenty-four certificate rules looked at the certificate served for the
-host and at nothing else: the chain was checked for trust — does it reach a
-root — and never for strength. A report said
+Released in v0.11.0, 2026-09. **The rest of the chain is graded**, not only
+the leaf. A forged intermediate can issue for any name.
 
-```
-Chain   4 certificates, trusted
-```
-
-beside a `strong` verdict, and three of those four had been graded by nothing.
-An intermediate signed with SHA-1, or holding a 1024-bit key, passed in
-silence.
-
-It matters more on an issuer than on a leaf. **A forged leaf impersonates the
-names inside it; a forged intermediate issues certificates for any name at
-all**, and every client that trusts the chain accepts them. That is the
-argument `cert.leaf-is-ca` rests on, arriving from the other direction.
-
-Nothing new is asked of the server. These are bytes the handshake already
-delivered.
-
-### Rules added
-
-| Rule | Verdict | When |
+| rule | verdict | when |
 |---|---|---|
-| `chain.signature-sha1` | Insecure | An issuer carries a SHA-1 signature |
-| `chain.signature-md5` | Insecure | An issuer carries an MD5 or MD2 signature |
-| `chain.signature-algorithm-unrecognised` | Weak | An issuer's signature algorithm is not one this rule set knows |
-| `chain.roca` | Insecure | An issuer's RSA modulus carries the RSALib fingerprint |
-| `chain.rsa-key-too-small` | Insecure | An issuer holds an RSA key below 2048 bits |
-| `chain.ec-key-too-small` | Insecure | An issuer holds a curve below P-256 |
-| `chain.key-algorithm-unrecognised` | Weak | An issuer's key type cannot be sized by this rule set |
-| `chain.expired` | Insecure | An issuer's validity has ended |
-| `chain.not-yet-valid` | Insecure | An issuer's validity has not begun |
-| `chain.expiring-soon` | Weak | An issuer expires within 30 days |
-| `chain.critical-extension-unrecognised` | Weak | An issuer marks an extension critical that this checker does not recognise |
+| `chain.signature-sha1` | insecure | an issuer carries a SHA-1 signature |
+| `chain.signature-md5` | insecure | an issuer carries an MD5 or MD2 signature |
+| `chain.signature-algorithm-unrecognised` | weak | an issuer's signature algorithm is unknown |
+| `chain.roca` | insecure | an issuer's RSA modulus carries the RSALib fingerprint |
+| `chain.rsa-key-too-small` | insecure | an issuer's RSA key is below 2048 bits |
+| `chain.ec-key-too-small` | insecure | an issuer's curve is below P-256 |
+| `chain.key-algorithm-unrecognised` | weak | an issuer's key type cannot be sized |
+| `chain.expired` | insecure | an issuer's validity has ended |
+| `chain.not-yet-valid` | insecure | an issuer's validity has not begun |
+| `chain.expiring-soon` | weak | an issuer expires within 30 days |
+| `chain.critical-extension-unrecognised` | weak | an issuer marks an unknown extension critical |
 
-The identifiers are `chain.` and not `cert.` deliberately. A pipeline
-filtering on `cert.signature-sha1` today would otherwise start receiving
-findings about a different certificate under an identifier whose meaning it
-had already fixed. A new identifier is additive; a widened one is a silent
-change.
-
-### What is deliberately not graded
-
-**Names.** A wildcard shape, a missing subject alternative name, a common name
-outside the SAN list are questions about a certificate presented *for a name*.
-An issuer is not presented for one.
-
-**Self-signature.** A root is self-signed; that is what a root is, and
-`cert.self-signed` would fire on every complete chain.
-
-**Validity length.** An authority is issued for ten or twenty years by design.
-The leaf's limit would fire on every chain ever served.
-
-**Being an authority, and holding `keyCertSign`.** On an issuer both are
-required rather than suspect — the exact inverse of `cert.leaf-is-ca` and
-`cert.key-usage-cert-sign`.
-
-### And the root is not graded at all
-
-A root is trusted because the client already holds a copy, **not** because of
-the signature it carries. No client verifies that signature — one that did
-would be asking a certificate to vouch for itself — so grading it would raise
-an alarm about a risk nobody is exposed to, and roots predating SHA-256 are
-still in every store doing no harm.
-
-Any self-signed certificate in the chain is skipped, which is how a client
-treats it too. Where the server sent one, the report says so and says why.
-
-### What this means for a verdict
-
-An insecure issuer makes the report insecure, by the same worst-case rule as
-everything else: a chain is only as sound as the weakest certificate a client
-has to accept to reach a root.
+New identifiers rather than widened `cert.` ones, so a filter on a leaf rule
+does not start receiving findings about another certificate. Roots are not
+graded: no client checks a root's own signature.
 
 ---
 
 ## `denyfirst-v4` → `denyfirst-v5`
 
-Released in v0.8.0, 2026-09. Four rules, all of them read off a certificate
-this scan already had, so nothing new is asked of the server: the same
-handshakes, the same bytes, the same load at the other end.
+Released in v0.8.0, 2026-09. Four rules on what a certificate says about
+itself, all read from bytes the scan already had.
 
-All four grade something the report was **already displaying and grading with
-nothing**. A reader saw `CA: true` beside a leaf certificate and found no
-finding next to it.
-
-### What a certificate says it may be
-
-| Rule | Verdict | When |
+| rule | verdict | when |
 |---|---|---|
-| `cert.leaf-is-ca` | Insecure | Basic constraints say `cA:TRUE` on the certificate served for this host |
-| `cert.key-usage-cert-sign` | Insecure | The key usage includes `keyCertSign` and basic constraints do not say `cA:TRUE` |
-
-**`cert.leaf-is-ca`.** RFC 5280 does not forbid it and Go's verifier accepts
-such a certificate for a hostname, so nothing else on a report catches it. The
-Baseline Requirements do forbid it — a subscriber certificate must carry
-`cA:FALSE` — and the reason is the size of what the key can do. A stolen leaf
-key normally impersonates the names in that leaf. A stolen leaf key that may
-sign issues certificates **for any name at all**, and every client that trusts
-the chain accepts them.
-
-Absent is not false. With no basic constraints extension the question was not
-answered, and reading *not a CA* out of silence would be drawing a measurement
-that did not happen.
-
-**`cert.key-usage-cert-sign`.** The same power arriving by the other
-extension. RFC 5280 permits `keyCertSign` only where basic constraints say
-`cA:TRUE`, so a certificate carrying one without the other claims a power its
-own constraints deny it, and clients disagree about which half to believe. Not
-raised where `cA:TRUE` is also present: that is the rule above, and charging
-one mistake twice reports it as two.
-
-### What a certificate says its key may do
-
-| Rule | Verdict | When |
-|---|---|---|
-| `cert.no-digital-signature` | Weak | The key usage lists purposes and `digitalSignature` is not among them |
-| `cert.critical-extension-unrecognised` | Weak | The certificate marks an extension critical that this checker does not recognise |
-
-**`cert.no-digital-signature`.** Every TLS 1.3 handshake and every ECDHE
-handshake at TLS 1.2 has the server sign with its key, so a client enforcing
-the extension can use neither. An absent extension means *any purpose* and is
-not this case, exactly as with the extended key usage in v4.
-
-**`cert.critical-extension-unrecognised`.** RFC 5280 requires a client that
-meets a critical extension it does not recognise to reject the certificate.
-Go's verifier does, so such a certificate already produced
-`cert.chain-untrusted` — **with no reason attached**. The finding names the
-extension by object identifier and says only what was established: that this
-checker does not recognise it. Whether the clients an operator cares about
-recognise it is not something a scan from here can see.
-
-### What did not change
-
-No existing rule changed meaning. Every verdict that moves under `v5` moves
-because of something the certificate says about itself that `v4` displayed and
-did not grade.
+| `cert.leaf-is-ca` | insecure | the served certificate says `cA:TRUE` |
+| `cert.key-usage-cert-sign` | insecure | `keyCertSign` without `cA:TRUE` |
+| `cert.no-digital-signature` | weak | key usage is listed and `digitalSignature` is not in it |
+| `cert.critical-extension-unrecognised` | weak | a critical extension this checker does not recognise |
 
 ---
 
 ## `denyfirst-v3` → `denyfirst-v4`
 
-Released in v0.4.0, 2026-08. Five rules added and three notes. Every one of
-them is read off a certificate this scan already had, so nothing new is asked
-of the server: the same handshakes, the same bytes, the same load at the other
-end.
+Released in v0.4.0, 2026-08.
 
-### A key made by a generator known to be broken
-
-| Rule | Verdict | When |
+| rule | verdict | when |
 |---|---|---|
-| `cert.roca` | Insecure | The RSA modulus carries the fingerprint of Infineon's RSALib, CVE-2017-15361 |
+| `cert.roca` | insecure | the RSA modulus carries the RSALib fingerprint (CVE-2017-15361) |
+| `cert.no-server-auth` | insecure | extended key usage is listed and server authentication is not in it |
+| `cert.wildcard-shape` | weak | a `*` anywhere but as the whole leftmost label (RFC 9525) |
+| `cert.cn-not-in-san` | weak | the common name holds a hostname the SAN does not |
+| `cert.serial-entropy` | weak | on a publicly trusted chain, a serial too small to hold 64 random bits |
 
-RSALib built primes of the form `k·M + (65537^a mod M)`, with `M` the product
-of the first *n* primes, instead of choosing them at random. Both primes of a
-key were made that way, so the modulus satisfies `N ≡ 65537^(a+b) (mod M)` —
-and a key of that shape can be factored from the public key alone by
-Coppersmith's method, in weeks to months of computation, with no access to the
-server. Millions of smart cards, TPMs and national identity cards were
-affected in 2017; Estonia withdrew over 750,000 identity cards.
+**Reported, not graded:** an RSA exponent below 65537; how many names a
+certificate covers; whether the server accepts X25519MLKEM768, which costs one
+extra handshake where TLS 1.3 is spoken.
 
-**Nothing here factors anything.** Detection is a residue test: by the Chinese
-remainder theorem, `N mod p` must lie in the subgroup 65537 generates for every
-prime `p` dividing `M`, and checking thirty-eight of those takes microseconds.
-So the finding says what was established — that the key carries the fingerprint
-of a generator known to produce factorable keys — and not what it implies. The
-two are different claims, and only the first one was measured.
-
-The test is a necessary condition rather than a sufficient one: a modulus with
-no relation to RSALib would have to land inside the reachable set modulo all
-thirty-eight primes at once. The published corpora report no false positives,
-and the wording is chosen so that the report is still true if one exists.
-
-Nothing about a report changes for a key from any other generator. Practically
-every publicly trusted certificate carrying this shape was revoked in 2017, and
-authorities have been required to refuse such keys since; where it still bites
-is keys generated on a smart card or a TPM for a server somebody runs
-themselves, which is exactly what this project expects to be pointed at.
-
-### What the certificate says it is for, and about whom
-
-| Rule | Verdict | When |
-|---|---|---|
-| `cert.no-server-auth` | Insecure | The extended key usage extension lists purposes and server authentication is not among them |
-| `cert.wildcard-shape` | Weak | A name contains `*` somewhere other than as the whole of the leftmost label |
-| `cert.cn-not-in-san` | Weak | The common name holds a hostname that the subject alternative name does not |
-| `cert.serial-entropy` | Weak | On a publicly trusted chain, a serial number too small to hold the required randomness |
-
-**`cert.no-server-auth`.** RFC 5280 makes the extended key usage list
-exhaustive, so a certificate listing purposes and omitting server
-authentication is a certificate for something else, and a client following the
-document refuses the connection however correct the rest is. An absent
-extension means *any purpose* and is not this case — absent is not the same as
-excluding, and older certificates commonly carry none.
-
-**`cert.wildcard-shape`.** RFC 9525 permits one form: a leftmost label that is
-exactly `*`. `w*.example.com`, `a.*.example.com`, `*.*.example.com` and a bare
-`*` were each matched by some client at some point and are matched by none now.
-A name in one of those shapes is worse than a missing one, because whoever
-issued it believes the host is covered.
-
-**`cert.cn-not-in-san`.** Clients have matched names from the subject
-alternative name and nowhere else since RFC 2818 was replaced, and the Baseline
-Requirements say the common name, if present, must repeat one of those values
-rather than add one. So a hostname there that is not in the extension is
-matched by nothing while telling a reader the certificate covers it. Only
-raised when the common name is trying to be a hostname: an authority's own
-label, `R11`, and an organisation name are not accused of being one.
-
-**`cert.serial-entropy`, and why the threshold is not 64.** The Baseline
-Requirements have required at least 64 bits from a random source since 2016,
-because a predictable serial lets an attacker who can influence a certificate's
-contents mount a hash collision against its signature. But a serial carrying 64
-bits of that output is uniform over `[0, 2^64)`, so its *value* has fewer than
-64 bits half the time and fewer than 63 a quarter of the time: a rule demanding
-64 would accuse half of every compliant certificate ever issued. What one
-certificate can honestly show is that a serial is far too small to hold that
-output at all — a compliant one lands below `2^32` about once in four thousand
-million — so that is what this rule says, and it catches counters and sequences
-rather than pretending to measure entropy. It is raised only for a chain that
-reaches the trust store, because the requirement is the Forum's and a private
-authority answers to whoever runs it.
-
-### Two notes, which are not verdicts
-
-A **small RSA public exponent** is reported when it is below 65537. The
-Baseline Requirements say the exponent *should* be at least that, not that it
-must, and inventing a verdict the document does not carry is how a rule set
-stops being checkable against the document it claims to follow.
-
-**How many names a certificate covers** is reported whenever it is more than
-one, with a sentence about shared certificates once it passes twenty. One key
-standing behind a hundred hosts is a fact about the arrangement rather than a
-fault in it, and it is the fact that decides what a stolen key costs.
-
-### One more note, and the only measurement that costs a handshake
-
-Whether the server will negotiate **X25519MLKEM768**, a hybrid of X25519 and
-ML-KEM-768, is now reported on a `Key exchange` line beside the cipher suites.
-
-It is the reason to care about a key exchange at all in 2026: traffic recorded
-today can be kept and decrypted by whoever first builds a quantum computer
-large enough, which is why the attack is called *harvest now, decrypt later*.
-Forward secrecy does not prevent it — that protects against a private key
-stolen afterwards, not against the exchange itself being broken.
-
-Reported and not graded, because no document this rule set follows requires a
-hybrid yet, and a verdict invented here would be this project grading against
-its own opinion.
-
-Three answers, not two: accepted, declined, and not established. The hybrid is
-defined for TLS 1.3 alone, so a server without it is never asked and the
-report says so rather than reading the silence as a refusal.
-
-**It costs the scanned server one extra handshake, and only where the question
-exists.** Measured on a synthetic server: a full scan of a modern host went
-from twelve connections to thirteen, and a TLS 1.2 server stayed at twelve.
-
-### The report says which of three things a note is
-
-No rule changed here, and no verdict. What changed is how a report is read.
-
-Everything that is not a finding used to appear under one heading, *What this
-did not measure*. Three kinds of sentence lived there: what the scan
-established and does not grade, what it could not settle about the host in
-front of it, and what this program never claims about any host. A scan of a
-bank on 2026-09-01 put eleven sentences under that heading, of which three
-were limits of the scan. Among the rest was a post-quantum key exchange that
-had been measured and passed.
-
-Notes now carry a kind, and the report has three sections: **Observed**, **Not
-established for this host**, and **Limits of this method**.
-
-**This changes the API.** `notes` was an array of strings; it is now an array
-of `{"kind": "...", "text": "..."}`, and the same applies to the `notes` of
-each component. Anything reading the field will need the `.text`. It is a
-breaking change, made one day after the field first shipped in v0.4.0 and
-recorded here rather than left for a reader to discover.
-
-### A CAA record set reads the same twice
-
-RFC 8659 gives `issue` and `issuewild` properties no ordering and no
-precedence, and a resolver returns them in whatever order it likes. Two scans
-of paypal.com a quarter of an hour apart named the same authorities in
-different orders, and so did cloudflare.com and kapitalbank.az.
-
-They are sorted now, in the facts as well as in the sentence, so a report on
-an unchanged server does not move between scans. A diff full of changes that
-did not happen is one where the change that did happen is lost.
-
-### A report says how much of it was reached
-
-A report described only rules unbroken and absences observed. On a `strong`
-result the strongest sentence available was *Nothing here fell short of the
-rules*, and four of five observations beside it named something the server
-does not do.
-
-v0.6.x answered that with a block of nine affirmative sentences. Read on the
-live site, seven of the nine restated a table or a certificate row that was
-already on the page — one of them word for word. The block is gone. What
-replaces it is one line beside the verdict:
-
-```
-Coverage  Every cipher suite this client can offer was tried, the chain was
-          checked against the trust store, revocation was read from a stapled
-          response, transparency receipts were counted, and issuance policy
-          was answered.
-```
-
-It says what the scan reached and never what it missed — gaps belong to **Not
-established for this host**, once. It carries no marks and no colour: green
-ticks beside an insecure verdict read as approval, and a red mark against a
-name with no CAA record would be a grade this rule set deliberately does not
-give.
-
-A clause appears only when that thing was read, so a scan that reached nothing
-says nothing.
-
-### A verdict says what it means
-
-Beside a weak or insecure stamp:
-
-> Worst case: an attacker chooses which option to negotiate, so the weakest
-> one a server accepts is the one that decides.
-
-A server can be graded insecure with a trusted chain, a verified staple,
-transparency, CAA and an accepted post-quantum group, and until now nothing on
-the report said why one option outweighed the rest.
-
-### Cipher order and key exchange are labelled
-
-Both sat under the cipher table as prose with nothing in front of them, and
-the key exchange — the one measurement that costs the scanned server an extra
-handshake — was being read on a second visit rather than a first. They are
-rows now, in the same grammar as the certificate block, and they stay with the
-suites: a key exchange is a property of the transport, and filing it under the
-certificate teaches a reader that `RSA 4096` and `X25519MLKEM768` are the same
-kind of thing.
-
-### API
-
-`assurances` is removed, one release after it was added, and replaced by
-`coverage`: a single string, empty when a scan reached nothing.
-`certificate.hostnameMatches` and `certificate.inDate` stay.
-
-### The limits of the method are on one page### The limits of the method are on one page
-
-Four of the sentences a report carried were true of every scan and said
-nothing about the host: which cipher suites this client is able to offer, why
-TLS 1.3 suites cannot be enumerated, that no certificate authority is ever
-asked, and that transparency receipts are counted rather than verified.
-
-They are no longer printed on each report. Reports name how many there are and
-link **/method**, which explains how a report is read and lists all four; the
-command line prints them with `denyfirst-scan -limits`, which needs no
-network. They are declared once in `internal/policy/standing.go` and the page
-is generated from that declaration, so the two cannot disagree.
-
-### One sentence was wrong, on about a third of hosts
-
-`Revocation was not checked` was appended to every report. It was written when
-nothing here parsed a stapled response, and v0.3.0 — which taught this project
-to read one and verify it against the issuer — did not remove it. So a server
-that staples was told both that revocation had not been checked and that the
-stapled response had been read and verified, one line above the other.
-
-The sentence is gone. What replaces it says only what is true on every branch:
-no certificate authority is asked anything by this scan, and revocation is read
-only from a response the server stapled. What that response did or did not
-establish is said where it is known.
-
-### What did not change
-
-No existing rule changed meaning and no verdict moved. A report from
-`denyfirst-v3` and one from `denyfirst-v4` are comparable for every server
-that keeps to the documents these rules cite — which is nearly all of them.
+**API change:** `notes` became an array of `{"kind", "text"}`, and
+`assurances` was replaced by `coverage`. Notes are grouped as Observed, Not
+established for this host, and Limits of this method.
 
 ---
 
 ## `denyfirst-v2` → `denyfirst-v3`
 
-Released in v0.3.0, 2026-08. One change, and it is the largest single change
-this project has made to what a report means.
+Released in v0.3.0, 2026-08. **The stapled OCSP response is parsed and
+verified**: it must describe this certificate by issuer and serial, be in
+date, and be signed by the issuer or its delegated responder.
 
-### The stapled response is now read
-
-Until now this project observed that bytes arrived in the handshake and said
-*a certificate status response was stapled*. It never parsed one. A server can
-staple anything — an empty file, a year-old response, a response about a
-different certificate, one signed by nobody, or one that says revoked — and
-all of them produced the same sentence, which a reader takes to mean
-revocation was checked.
-
-The response is now parsed and has to pass every one of these before its
-status is reported: the responder answered successfully with a basic response;
-the entry describes **this** certificate by issuer name hash, issuer key hash
-and serial number, all three; it was produced in the past and has not expired;
-and it is signed by the issuer, or by a responder the issuer both signed and
-marked with the OCSP-signing extended key usage.
-
-| Rule | Verdict | When |
+| rule | verdict | when |
 |---|---|---|
-| `cert.revoked` | Insecure | A verified response says the certificate was withdrawn |
-| `cert.revocation-unknown` | Weak | A verified response says the authority has no record of this serial. Not the same as *not revoked* |
-| `cert.staple-unverifiable` | Weak | Bytes were stapled and establish nothing: malformed, expired, about another certificate, or unsigned |
+| `cert.revoked` | insecure | a verified response says the certificate was withdrawn |
+| `cert.revocation-unknown` | weak | a verified response says the authority does not know the serial |
+| `cert.staple-unverifiable` | weak | stapled bytes establish nothing |
 
-`cert.must-staple-not-stapled` changed meaning. It fired only when no response
-arrived, so a certificate demanding a staple and receiving sixteen bytes of
-rubbish passed it. It now fires unless a response arrives **and verifies**,
-which is what a client honouring RFC 7633 requires — for such a client an
-unverifiable response and an absent one are the same outcome: the handshake
-fails.
-
-Two things deliberately did **not** change. A missing staple is still not
-graded, for the reason at the top of `internal/policy/staple.go`: the
-authority decides whether a response exists, and several no longer publish
-OCSP at all. And a chain that omits the issuer produces no finding here —
-nothing can be verified without it, `cert.chain-incomplete` already grades the
-omission, and charging one mistake twice would report it as two.
-
-### What is still not checked
-
-The responder certificate's own revocation status. Checking it means fetching
-another response over the network from an address the scanned party chooses,
-and this scanner fetches nothing: it reads only bytes the server already sent.
-RFC 6960 §4.2.2.2.1 lets an issuer waive the check, and responder certificates
-are short-lived for the same reason.
+`cert.must-staple-not-stapled` now fires unless a response arrives and
+verifies. A missing staple is still not graded.
 
 ---
 
@@ -1549,69 +327,25 @@ are short-lived for the same reason.
 
 Released in v0.2.0, 2026-08.
 
-### Suites that now grade worse
-
-| Rule | Was | Is | Why |
+| rule | was | is | why |
 |---|---|---|---|
-| `cipher.ffdhe` | *(no rule)* | Insecure | RFC 10015, July 2026, updates BCP 195: ephemeral finite-field Diffie-Hellman moved from SHOULD NOT to **MUST NOT** for (D)TLS 1.2. Static RSA and non-ephemeral FFDH moved with it. |
-| `cipher.no-forward-secrecy` | *(no rule)* | Insecure | Static RSA, static DH and static ECDH key exchange. A recorded session is decrypted by anyone who later obtains the server's key. |
-| `cipher.no-encryption` | *(no rule)* | Insecure | RFC 9150's `TLS_SHA256_SHA256` and `TLS_SHA384_SHA384` authenticate and do not encrypt. Graded `strong` before, because nothing in the rules had considered a suite with no cipher in it. |
-| `cipher.unrecognised` | Strong | Weak | A suite whose key exchange this project cannot identify was graded as though it had passed. An unreadable answer is not a pass. |
-| `cert.signature-algorithm-unrecognised` | Strong | Weak | The same rule for a signature algorithm with no name. |
-| `cert.key-algorithm-unrecognised` | Strong | Weak | The same rule for a key algorithm with no name. The algorithm is named in the finding. |
+| `cipher.ffdhe` | no rule | insecure | RFC 10015 moved finite-field DHE in TLS 1.2 to MUST NOT |
+| `cipher.no-forward-secrecy` | no rule | insecure | static RSA, DH and ECDH key exchange |
+| `cipher.no-encryption` | no rule | insecure | RFC 9150 integrity-only suites |
+| `cipher.unrecognised` | strong | weak | an unreadable answer is not a pass |
+| `cert.signature-algorithm-unrecognised` | strong | weak | the same, for a signature algorithm |
+| `cert.key-algorithm-unrecognised` | strong | weak | the same, for a key algorithm |
 
-### Verdicts that are now withheld rather than given
-
-| Situation | Was | Is |
-|---|---|---|
-| Cipher enumeration stopped before the server ran out of suites | Strong | **Ungraded** |
-| A certificate chain that is both expired and untrusted | reported *trusted* | reported **not trusted** |
-| A CAA lookup that stopped before reaching the top of the tree | "no CAA found" | "the search stopped at *x*; not established either way" |
-
-The first is the one to know about if you gate on this. A truncated list can
-support *something weak is here* and cannot support *nothing weak is here*, and
-`strong` is the verdict that claims an absence. The host decides when to stop
-answering, so `ungraded` is a state the scanned party can choose — which is
-why the command line now exits `4` for it rather than `0`.
-
-The second was a real misreading: Go checks a certificate's dates before it
-looks for an issuer, so `Expired` is what it returns for an expired
-certificate whether or not anything would ever have vouched for it. Trust is
-now re-asked at a moment the certificate was valid.
-
-### Things now graded that were not looked at
-
-- **A certificate served only at an older protocol version.** A server picks
-  its certificate from what the client offered, so an old client can be handed
-  a different one. Every version that completes a handshake is compared by its
-  leaf's own bytes, and a chain that differs is graded in full. The worse of
-  the two sets the verdict.
-- **Extended key usages the Go standard library has no name for.** They were
-  dropped from the report, which read as though the certificate carried
-  nothing else.
-
-### Documents cited
-
-- RFC 8446 replaced by **RFC 9846**, which obsoletes it.
-- **RFC 10015** added, for the finite-field and static key exchange rules.
-- **RFC 9150** added, for the integrity-only suites.
-
-Each citation is checked against rfc-editor.org for an obsoleted or updated
-banner at every policy review. The next review date is in
-`internal/policy/policy.go`.
+A cipher enumeration that stopped early is **ungraded**, not strong. An
+expired and untrusted chain is reported not trusted. A CAA search that stopped
+early is not established either way. A certificate served only at an older
+version is graded too, and the worse one sets the verdict. RFC 8446 is cited
+as RFC 9846.
 
 ---
 
 ## What did not change
 
-Grading is still worst-case: one insecure option makes a configuration
-insecure, however many strong options sit beside it, because an attacker
-chooses which to negotiate.
-
-Refusing an obsolete protocol version is still not graded. A server that
-declines TLS 1.0 has done the right thing, and a finding attached to that
-refusal would report a correct configuration as insecure.
-
-Issuance policy is still reported and not graded. It comes from a resolver
-rather than from the connection, and it describes a system the person who
-configured the server often does not administer.
+Grading is worst case: one insecure option makes a configuration insecure,
+because an attacker chooses what to negotiate. Refusing an obsolete version is
+not graded. Issuance policy (CAA) is reported and not graded.

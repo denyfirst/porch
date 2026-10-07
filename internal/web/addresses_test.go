@@ -389,11 +389,12 @@ func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 		}
 		want := DocsURL + " " + porchLink("/privacy") + " " + porchLink("/terms")
 		if demo.Enabled {
-			// Porch's pages say who made them, with a link home.
-			want = SiteURL + "/ " + want
+			// Porch's pages say who made them, with a link home, and where to
+			// report a vulnerability in Porch: the band at the foot of its page.
+			want = SiteURL + "/ " + want + " " + PorchURL + "/#security"
 		}
 		if p, ok := pages[path]; ok && demo.Enabled && p.Organisation {
-			want = SiteURL + "/privacy " + SiteURL + "/#security"
+			want = SiteURL + "/privacy " + PorchURL + "/#security"
 		}
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s: the footer links %v, want %s", path, got, want)

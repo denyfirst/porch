@@ -191,9 +191,20 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 			t.Errorf("the Porch page no longer says %q", sentence)
 		}
 	}
-	// Open, so it is read before it is run rather than behind a click.
+	// Its head is open, so the image it pins and the command it runs are read
+	// before it is run; since 2026-10-07 the rest is one click away rather
+	// than a long block every visitor scrolls past. The whole file stays in
+	// the page, and the fold is the stylesheet's, so without :has() or on
+	// paper it is shown whole.
 	if !strings.Contains(string(raw), `<section class="compose-view"`) || strings.Contains(string(raw), `<details class="compose-view"`) {
 		t.Error("the compose file is folded away, or no longer on the page")
+	}
+	if !strings.Contains(string(raw), `<details class="compose-more">`) {
+		t.Error("the compose file has no way to show it whole")
+	}
+	fold := cssRule(t, stylesheet(t), ".compose-view:has(.compose-more:not([open])) .compose-terminal pre")
+	if !strings.Contains(fold, "max-height: 17.5rem;") {
+		t.Errorf("the compose file's open head is not the height the image and the command fit in:\n%s", fold)
 	}
 	// The page is for running the service. The command line is in the guide.
 	if strings.Contains(string(raw), "docker compose run --rm scan") {

@@ -80,9 +80,8 @@ func DescribeTransparency(f TransparencyFacts) []Note {
 
 	if total > 0 {
 		note := fmt.Sprintf(
-			"%s, from %s. The certificate is therefore recorded where anybody, including its "+
-				"domain's owner, can find it — which is how an authority that issued a certificate "+
-				"it should not have gets caught.",
+			"%s, from %s. The certificate is recorded where anybody, including the domain's "+
+				"owner, can find it, which is how a wrongly issued certificate gets caught.",
 			plural(total, "transparency timestamp"), plural(f.FromLogs, "log"))
 
 		if f.InHandshake > 0 && f.Embedded > 0 {
@@ -102,25 +101,22 @@ func DescribeTransparency(f TransparencyFacts) []Note {
 	if !f.Trusted {
 		// Not a fault. A private authority answers to whoever runs it.
 		return []Note{Observed(
-			"No transparency timestamps were found, and this chain does not reach a root in the " +
-				"trust store. A certificate outside the public authorities is under no obligation to " +
-				"appear in a transparency log.")}
+			"No transparency timestamps were found, and this chain does not reach a trusted " +
+				"root. A certificate outside the public authorities is under no obligation to be " +
+				"logged.")}
 	}
 
 	if f.Stapled {
 		// The one case where silence would be a false accusation.
 		return []Note{Unsettled(
-			"No transparency timestamps were found in the certificate or the handshake. They may " +
-				"still be present: a status response was stapled, timestamps can travel inside one, " +
-				"and this service does not read it. What can be said is that none arrived by the two " +
-				"routes that were examined.")}
+			"No transparency timestamps were found in the certificate or the handshake. A " +
+				"stapled status response can also carry them, and this service does not read it.")}
 	}
 
 	return []Note{Observed(
-		"No transparency timestamps were found in the certificate or the handshake, and no status " +
-			"response was stapled that might have carried them. A publicly trusted certificate is " +
-			"expected to be logged, and browsers refuse one that is not, so a client may well decline " +
-			"this connection where this report does not.")}
+		"No transparency timestamps were found in the certificate, the handshake or a " +
+			"stapled response. A publicly trusted certificate is expected to be logged and " +
+			"browsers refuse one that is not, so clients may decline this connection.")}
 }
 
 // describeReceipts says what checking the receipts found.
@@ -156,23 +152,22 @@ func describeReceipts(f TransparencyFacts, total int) []Note {
 		// A receipt is a log's signed promise, and a verified one proves the
 		// promise was made. That the log kept it is a separate proof. The
 		// sentence said "really did record" until the 2026-09-16 audit (A20).
-		out = append(out, Observed("Every receipt was checked against the key "+list+" gives its log, and "+
-			"every signature verifies: each log named signed a promise to include this certificate. "+
-			"Whether it did is shown by an inclusion proof, which this scan did not ask for."))
+		out = append(out, Observed("Every receipt was checked against the key "+list+" gives its log, and every "+
+			"signature verifies: each log named promised to include this certificate. "+
+			"Whether it did needs an inclusion proof, which this scan did not ask for."))
 	case f.Verified > 0:
 		out = append(out, Observed(fmt.Sprintf("%s of the %d verify against the key %s gives its log.",
 			plural(f.Verified, "receipt"), total, list)))
 	}
 
 	if f.BadSignature > 0 {
-		out = append(out, Observed(fmt.Sprintf("%s did not verify against the key %s gives its log, so it "+
-			"vouches for nothing about this certificate. A browser checking receipts discounts one like this.",
+		out = append(out, Observed(fmt.Sprintf("%s did not verify against the key %s gives its log, so it vouches for nothing; "+
+			"browsers discount it.",
 			plural(f.BadSignature, "receipt"), list)))
 	}
 	if f.UnknownLog > 0 {
-		out = append(out, Unsettled(fmt.Sprintf("%s came from a log %s does not name, so there was no key to "+
-			"check against. A log newer than the list, or one another browser trusts, looks exactly like "+
-			"this, so it is not established that the receipt is false.", plural(f.UnknownLog, "receipt"), list)))
+		out = append(out, Unsettled(fmt.Sprintf("%s came from a log %s does not name, so there was no key to check it against. A "+
+			"newer log looks the same, so it is not established that the receipt is false.", plural(f.UnknownLog, "receipt"), list)))
 	}
 	if f.Unreadable > 0 {
 		out = append(out, Unsettled(fmt.Sprintf("%s could not be checked: the receipt could not be read, or the "+

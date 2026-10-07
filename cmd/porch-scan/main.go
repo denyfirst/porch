@@ -680,13 +680,13 @@ func versionLine() string {
 // host but ours. Saying so is cheaper than the refusal they would otherwise
 // read as a fault in their own configuration.
 //
-// No verification scope on this line, because proving control is a service's
-// boundary. Whoever runs this already has the machine and the scan leaves from
-// their own address; docs/scope.md says why a default restricting that would
-// limit the one person it exists for.
+// The ordinary build said "scans whatever it is pointed at" until 2026-10-06,
+// a week after it began to ask every domain for proof of control. That is the
+// sentence an operator reads as "no boundary", and it had stopped being true;
+// it now says what porchd says, and where the scan leaves from.
 func reach() string {
 	if !demo.Enabled {
-		return "scans whatever it is pointed at, from this machine"
+		return "scans only domains this user has shown control of, from this machine"
 	}
 	hosts := demo.Targets()
 	if len(hosts) == 0 {

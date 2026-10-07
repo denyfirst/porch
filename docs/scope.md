@@ -1,544 +1,142 @@
-# Who may scan what, and where that is decided
+# Who may scan what
 
-`docs/invariants.md` says why each guard is written the way it is.
-`docs/roadmap.md` says what is coming. This says how the guards fit together
-into one boundary, because the answer has changed once already and changing it
-again by accident is the failure this document exists to prevent.
+A scanner opens connections to somebody else's server. Two facts decide
+everything about it: **whose address is in that server's logs**, and **whether
+anybody can say who asked**. This project keeps no record of who asked, so it
+must never be the visible party for a scan it cannot account for. Until
+2026-09-03 the public site was exactly that. Now it scans only hosts this
+project owns, and everything else runs on the machine of whoever wants it.
 
-Everything here is public. It carries no personal preference, no account, no
-session identifier, and nothing about who is working on it.
-
----
-
-## The question
-
-A scanner opens connections to somebody's server. Two facts decide everything
-else about it:
-
-- **Whose address is in the scanned party's logs.** Until 2026-09-03 it was
-  ours, for scans nobody asked us about.
-- **Whether we can say who asked.** We cannot, deliberately, and that is the
-  one promise this project is built on.
-
-Holding both at once is the worst position available — the visible party and
-the unattributable one simultaneously — and N6 is the decision that ended it.
-There were two ways out: start keeping records, which is not available because
-the promise is the point, or stop connecting to third parties. The second was
-taken.
-
-That decision is not being revisited. What follows is how it extends to
-deployments this project does not run.
+[`invariants.md`](invariants.md) has each guard and its tests. This page says
+how they fit together.
 
 ---
 
-## Three deployments, not two
-
-The code has two builds. It has **three** deployments, and conflating the last
-two is where a boundary would be lost.
+## Three deployments
 
 | | who runs it | who chooses the target | what stops it |
 |---|---|---|---|
-| **the demonstration** — denyfirst.dev | this project | a stranger | a list compiled into the binary (N6) |
-| **a self-hosted service** — `porchd` | an organisation | whoever holds its password | proof of control of each domain, and the password — both required beyond loopback |
-| **the command line** — `porch-scan` | one person | that person | proof of control of each domain, from a secret of their own |
+| **the demonstration** | this project | a stranger | a list of our own hosts, compiled in (N6) |
+| **`porchd`** | an organisation | whoever holds its password | proof of control of each domain, and the password beyond loopback |
+| **`porch-scan`** | one person | that person | proof of control of each domain, from a secret of their own |
 
-The command line needed nothing until 2026-09-29, on the argument that whoever
-runs it already has the machine, the scan leaves from their own address, and
-nobody else can reach it. That settles who can reach it and not what
-denyfirst distributes, which is a tool for checking your own estate. So it asks
-for the same record a service does, derived from a secret it keeps per user,
-and refuses an address, which no record can prove. A host on a private address
-is still checked with `-allow-private`, named by a domain proven in public DNS
-(N9).
-
-The demonstration is settled. The list is compiled in, the gate is the build
-tag rather than the length of the list, and a binary says which hosts it will
-connect to so that a deploy can read it rather than trust a filename.
-
-**The middle row was the open one**, and this document was written to close it.
-A `porchd` built without the tag had no restriction at all. It listened on
-loopback by default, which meant an accidental start was not immediately
-public — but a default is a mitigation, not a boundary. An organisation that
-bound it to an interface had rebuilt, inside its own network, the arrangement
-this project dismantled: anyone who could reach the box could point it at
-anything, and then it was *their* address in the scanned party's logs.
-
-That was not a hypothetical for somebody else. It is the arrangement a careless
-colleague reaches by accident, a compromised CI job reaches on purpose, and an
-SSRF into the scanner reaches for free. Since v0.18.0 `porchd` will not listen
-beyond loopback without `-verification-secret-file` and `-access-file`. Until
-2026-09-29 `-open` and `-without-password` turned those off, on the strength of
-a sentence about a network nobody else could reach; they are gone. What follows
-is the design that made that possible.
+Proof of control is on in every build and no flag turns it off. A default is
+a mitigation, not a boundary: a service bound to an interface without it is
+an open scanner for a careless colleague, a compromised CI job or an SSRF,
+and it is the operator's address in the logs.
 
 ---
 
-## The boundary for a self-hosted service
+## The boundary
 
-**A deployment scans only estates it has proven control of.**
+**A deployment scans only domains it has been shown control of.** The proof is
+a `TXT` record at `_porch-challenge.<domain>`, or a file at
+`/.well-known/porch-challenge`.
 
-Proof is a challenge the operator satisfies once per domain: a DNS `TXT`
-record at `_porch-challenge.<domain>`, or a file at
-`/.well-known/porch-challenge` for teams without DNS access.
-
-Architecturally this is a sibling of `internal/demo`: the same boundary, asked
-in the same place, from a different source of authority — one compiled in, one
-established at run time. Five properties decide whether it works.
-
-**Defaults differ because the threat models differ.**
-
-| | default | why |
-|---|---|---|
-| `porch-scan`, in a terminal | **on**; nothing turns it off | what the release does is the promise, wherever it runs |
-| `porchd`, a service | **on**, loopback included; nothing turns it off | anything anyone can reach must not scan arbitrary hosts, and more than its operator reaches loopback |
-
-A protection that must be switched on is one that is eventually forgotten,
-which is the same argument `AllowAnyPort` and `safedial` already make.
-
-**It is asked where the scan is decided, not where the request arrives.**
-`Scanner.Scan` and `webscan.Scanner.Scan`, beside `demo.Refusal`. A guard in
-one entry point disappears the moment a second one is added, and adding entry
-points is exactly what this project is now doing. Checking once at startup and
-holding a flag would make it a configuration boundary, and N6 says what
-happens to those: a flag can be omitted, a file can be edited, an environment
-variable can be missing, and nothing looks wrong.
-
-**It is re-read rather than remembered.** A DNS lookup is one round trip. A
-verification that never expires is a standing authorisation that outlives the
-relationship it came from: a domain changes hands, a supplier contract ends, a
-subsidiary is sold, and a record removed at the registrar is a record this
-scanner is still acting on. Re-reading also means revocation works by deleting
-the record, which is the only revocation mechanism an operator will actually
-find.
-
-**The two methods do not prove the same thing, so they do not grant the same
-thing.** A `TXT` record proves control of the zone. A file proves control of
-one host's HTTP surface — which is narrower, and is exactly the thing being
-scanned, so it is not weaker, only smaller. Therefore:
-
-- DNS `TXT` authorises the zone.
-- A `.well-known` file authorises **that hostname only** — never the zone,
-  never another name, and never a check that does not read HTTP.
-
-That last clause was written before anything needed it and the mail check is
-the first thing that does. Every question it asks is about the zone, or about a
-host the zone itself names, so it asks for the zone proof and refuses the file
-proof (N13). A
-deployment that accepted a page under a name as authority to read that zone's
-mail policy would be handing somebody who runs one host the configuration of a
-zone somebody else runs.
-
-**A verified zone is not a list of hosts you control.** This is the part most
-easily got wrong. Subdomains are delegated: `shop.example.com` is a `CNAME` to
-a shop platform, `mail.example.com` to a mail provider, `docs.example.com` to
-whoever hosts documentation. Scanning them reaches somebody else's servers
-under an authorisation the somebody else never gave, which is N6's problem
-rebuilt inside a verified deployment. The apex is not exempt: an `A` record
-often points at a CDN.
-
-There is no clean automatic answer to this, and inventing one would be a
-threshold nobody can argue with — the failure R21 is written about. What the
-tool can honestly do is **say what it is about to reach**: name the delegation
-it is scanning through, so the operator makes the call rather than the scanner
-making it for them.
+- **It is asked where the scan is decided**, in `Scanner.Scan` beside the
+  demonstration's own check, not where a request arrives. A guard at one entry
+  point disappears when a second is added.
+- **It is re-read every time.** A domain changes hands, a contract ends, and a
+  remembered proof would outlive it. Deleting the record is the revocation.
+- **The two proofs grant different things.** A `TXT` record proves the zone. A
+  file proves one host's HTTP surface: it authorises that hostname only, never
+  the zone, and never a check that does not read HTTP. The mail and DNS checks
+  need the zone.
+- **The record is read from the zone's own servers**, walked from the root,
+  with no walk up the tree. A record at `example.com` does not prove a name
+  delegated to somebody else.
+- **A verified zone is not a list of hosts you control.** `shop.example.com`
+  may be a shop platform and `mail.example.com` a mail provider. There is no
+  honest automatic answer, so the tool says what it is about to reach and the
+  operator decides. An exchanger behind an alias is never asked whether it
+  relays.
+- **It does not travel down a redirect.** A `Location` header names whatever
+  the server chose, so the scope is asked again before each hop (N10).
+- **It does not make an address scannable.** There is no zone to put a record
+  in for `10.0.0.5`. A name that resolves to a private address can be proven
+  and then checked with `-allow-private`.
+- **It is visible.** `_porch-challenge.example.com` is public and says the
+  domain is checked with Porch.
 
 ---
 
-## Reading a register is not scanning
-
-`porch-scan -check names` lists the names under a domain that appear in
-publicly logged certificates and in the domain's own published records, says
-which of them named each one, and says what each name is doing now. It belongs
-in this document because it is the one thing here that produces a list of
-somebody's hosts, and it is worth being exact about what it is.
-
-**It invents no name.** Not one. Every name it reports was published by whoever
-obtained a certificate for it, in a transparency log that exists to be read, or
-by the domain itself in its MX, its sender policy or its delegation, or was
-observed resolving by a passive register the operator named and holds the key
-for, or was handed over by the zone's own server to an operator reading their
-own zone. A wordlist
-tried against DNS — `mail`, `dev`, `staging`, `old` — would be enumerating an
-estate, and that is a different instrument with a different argument for
-existing. N7 draws that line and this stays on the reading side of it, for the
-same reason `security.txt` does.
-
-**What it does send, it says.** Reading a domain's own records is three
-lookups of that domain, which is what those records are published for.
-Establishing what a name is doing now is one resolution of a name that already
-existed and, at most, one connection to each address it gave — opened, found
-open or not, and closed, carrying nothing. The report prints both under *What
-this does not show*, because a paragraph claiming nothing was sent would be
-false the moment either happened, and the earlier version of it said exactly
-that for a week after the statuses were added.
-
-**What it costs is a disclosure, and it is larger than the check's.** The
-question names the domain to a monitor this project does not run, and asking
-for everything under a domain says more than asking about one host. N12
-governs it: never on a demonstration build, and on the command line a mode
-somebody types rather than anything that runs by default. The second source
-adds nothing to that cost — a domain's own records are read with the resolver
-this installation already uses for every other target — but it is read behind
-the same proof of control, because a lookup a stranger caused this installation
-to make is a lookup this installation made.
-
-**The reverse records of a range you name are read for whoever runs the
-installation, and for nobody else.** A domain can be proven with a record in
-its zone; an address range cannot be proven by anything this project can check.
-So a copy that anybody can reach refuses a range even from somebody who proved
-a domain, and a copy only its operator can reach — or one behind a password
-they set — reads it, which is the same answer this document gives for the
-inventory itself. A range wider than /20, or more than four thousand addresses
-in total, is refused rather than cut short. Nothing is sent to the addresses:
-the questions are reverse lookups, to the same resolver as everything else.
-
-**The hosts' own certificates are the one source that touches the estate, and
-they are off until an operator asks.** Each name that answers is asked for the
-certificate it presents — a handshake, closed as soon as it has been read, with
-nothing requested over it — and what that finds is the half no register holds:
-a certificate a private authority issued, which no public log will ever have.
-The certificate is read rather than judged; judging one is the TLS check's job,
-against a named trust store, one host at a time.
-
-**A passive register is a larger disclosure again, and it is off until an
-operator names one.** What it holds was not published by anybody: it is
-observation, collected by watching resolvers, which is why the report says a
-register named a host rather than folding it into a total, and why it is the
-operator's own account and key that asks. It is also the only source that finds
-a name a wildcard certificate hides, so a report with no register read says
-that nothing looked behind the wildcards it found.
-
-**A zone that hands itself over is read only for the estate that owns it.**
-A transfer is the one source that is not a sample: it is the zone, every name
-in it, from the server authoritative for them. It is also the one source whose
-answer belongs to somebody else's server, so the rule is narrow and it is the
-same rule twice. The DNS check asks whether a server will transfer to anybody
-and reads nothing of what comes back — the finding is that the zone is open,
-and a scanner that kept the records would be doing the thing it is warning
-about. The names mode reads the zone, and only where the asker's own estate is
-established: a service asks only about a domain it has been shown control of,
-and the command line asks only when an operator passes `-read-zone` for a zone
-they say is theirs. Nearly every zone refuses, which is correct, and a refusal
-is reported as a refusal rather than as an empty list.
-
-**It is offered where somebody looks, and it opens its own page.** The console
-lists it under the four checks, because a mode reachable only from a page you
-have to know about is a mode nobody runs — but as a link rather than a box. The
-console runs its checks against one name and has no field for an address range,
-so a box there ran two thirds of this and reported the rest as never asked. The
-column where the checks carry a rule set says `informational` instead, so
-nothing on that row suggests a verdict is coming.
-
-On the demonstration the same row opens the same page, and the report under it
-carries one more sentence: every source marked *not asked* is one that
-deployment does not use, and a copy you run yourself reads each of them. Four
-lines saying *not asked*, with nothing saying where they can be asked, describe
-a tool with four things it cannot do.
-
-**A signed zone lists itself through its own absence proofs, and that is read
-only for an estate the asker owns.** DNSSEC makes a zone prove that a name does
-not exist, and the plain way of doing it names the two names it lies between —
-so following those proofs from the apex reads the zone out of records it serves
-to any resolver. The DNS check has reported a zone in that state as walkable
-since it was written; this is what it exposes. The records being public does
-not make walking somebody else's estate with them anything but enumeration, so
-the rule is the transfer's: a service walks a domain it has been shown control
-of, and the command line walks one an operator names. It works only where a
-transfer usually does not — a signed zone that has not moved to NSEC3 — which
-is why both exist.
-
-**The list you already have is a source, and it is the one that answers what
-none of the others can.** DNS has no query that lists a domain's names: it
-answers questions about names you already know. Every source above is therefore
-somewhere a list is kept — a log, a register, a zone, a range — and a host in
-none of them is invisible to all of them, however long they are read. It is not
-secret; knowing the name is the whole problem. So `-names`, `-names-file`, and
-a box on the page take the names the operator already holds, and each is then
-resolved and reported like any name that was found, labelled as theirs. A file
-chosen on the page is read in the browser: nothing is uploaded, and what leaves
-the page is the names, in the same request as the domain.
-
-This is not the wordlist N7 refuses, and the bound is where the difference is
-kept. A dictionary tried against DNS invents names; this takes names somebody
-states they have, up to a thousand of them, and refuses a longer list rather
-than cutting it short. Past that it would be a dictionary under another name,
-which is a different instrument with a different argument for existing.
-
-**It grades nothing and says so.** No document says which names an estate ought
-to have, so a verdict would be a threshold this project invented (R21).
-
-**It is not an estate inventory, and the report says that every time it runs.**
-A host with no publicly trusted certificate never appears in a log. A wildcard
-covers hosts without naming them, which is what a wildcard is for. A name
-dropped from a monitor's history is gone. A domain's own records name only the
-hosts they have to, so a web server that takes no mail, sends none and answers
-for no zone is in none of them. Two incomplete sources make a longer list and
-not a complete one, which is why each name says which of them named it and each
-source says what it could not see. Somebody who hands the list to a security
-team as *the* inventory, and is then shown more hosts by a port scan, has lost an
-argument that was avoidable — so the limits are printed under every list,
-including the short clean ones where a reader is most inclined to believe them.
-
-## Two scopes, one methodology
-
-This is the shape of the whole product, and it is written here because getting
-the words wrong is how it would be lost.
+## Where it may look, never how
 
 ```
-                    DENYFIRST
-                       │
-              ┌────────┴────────┐
-              │                 │
-          UNVERIFIED         VERIFIED
-              │                 │
+          unverified          verified
+              │                  │
         public scope        owned scope
-              │                 │
-        read / observe     read / observe
-              │                 │
-         same safe           same safe
-        methodology         methodology
-              │                 │
-         no exploit          no exploit
-         no fuzzing          no fuzzing
-         no guessing         no guessing
-              │                 │
-              └────────┬────────┘
-                       │
-                MINIMAL RETENTION
+              │                  │
+              └───── same ───────┘
+                   methodology:
+             read and observe only,
+         no exploit, no fuzzing, no guessing,
+               minimal retention
 ```
 
-**Verification changes where this tool may look. It never changes how it
-looks.** The two branches separate on scope and rejoin on method, and the
-rejoining is the part that matters: a verified deployment is not a different
-tool with the safety catch off. It is the same instrument, pointed at more of
-what belongs to the person holding it.
-
-The temptation is to describe the right-hand branch as *full*, *deep* or
-*active*, and each of those words quietly authorises something this project has
-already refused. So the axis is named for what actually differs — **whose
-network it is** — and never for how hard the tool pushes.
+Verification changes **where** the tool may look. It never changes **how** it
+looks. So a verified deployment is never called *full*, *deep* or *active*:
+each of those words quietly authorises something this project refuses.
 
 | | unverified | verified |
 |---|---|---|
-| which hosts | what the deployment was built to reach | the estate proven control of |
-| private, loopback, reserved | refused | an operator's own decision, off by default |
-| ports | the implicit-TLS list | an operator's own decision, off by default |
-| how a host is examined | **identical** | **identical** |
-| what is retained | **identical** | **identical** |
+| which hosts | what the build may reach | the estate proven |
+| private, loopback, reserved | refused | the operator's choice, off by default |
+| ports | the implicit-TLS list | the operator's choice, off by default |
+| how a host is examined | identical | identical |
+| what is kept | identical | identical |
 
-Everything above the double line is about *whose network it is*. Everything
-below it is about *what kind of thing this is*, and no deployment model touches
-it. `docs/invariants.md` has the guards; the roadmap's "Not doing" section has
-the argument for the bottom three lines of the diagram, and it is worth reading
-in full, because the strongest reason there is not about the scanned party at
-all:
-
-> A tool that sends deliberately broken input is a weapon in whoever's hands it
-> ends up in. This one is meant to be installed by a company to check itself,
-> and the property that makes that safe is that the worst a careless colleague
-> can do with it is read a page.
-
-Proving control of `example.com` proves that `example.com` is yours. It does
-not make it safe to hand every junior on the team a tool that can take a
-production service down, and a deployment boundary is not an argument for
-building one.
-
-**Completeness comes from more passive checks, not from active ones.** An
-organisation that installs this to find its own gaps is owed all of them, and
-the way there is more that can be read. Mail policy was the first of those and
-is now built: DNS, the MTA-STS policy a zone announces, and STARTTLS on the
-exchangers it names, with no message ever sent; and the finding it was first built
-for — a sender policy over the ten lookups RFC 7208 allows, which switches the
-policy off while leaving it looking correct — is invisible from inside the
-operator's own zone. Still ahead: every address a name resolves to; the
-operator's own ports; several trust stores.
-What is given up by refusing the active class is roughly one finding, because
-almost everything reachable by malformed input is either reachable by a fuller
-ordinary handshake or has a precondition that is plainly visible. Where it is
-given up, the report says so rather than staying quiet.
+Verification changes who is responsible, not what the tool does. A verified
+deployment can still be reached by an SSRF or driven by a compromised job, so
+none of these is ever relaxed by it: the private-address refusal, the port
+list, the rate and concurrency limits, the per-target budget, and N7.
 
 ---
 
-## What verification does not do
+## Not doing, on any deployment
 
-**It changes who is responsible. It does not change what the tool does.**
+**Exploitation, credential guessing, fuzzing somebody else's service, state
+change, port sweeps, scanning at scale, or CVE guesses matched from a version
+string.** Nothing malformed is ever sent.
 
-A verified deployment can still be reached by an SSRF, driven by a compromised
-CI job, or misconfigured. So verification is not a reason to retire:
+- A tool that sends broken input is a weapon in whoever's hands it ends up
+  in. This one is installed by a company to check itself, and the worst a
+  careless colleague can do with it should be to read a page.
+- Several such probes can take down what they are aimed at.
+- The class is often wrong in both directions, and this project's answers are
+  meant to be checkable line by line.
 
-- `safedial`'s refusal of private, loopback, link-local and reserved
-  destinations by default;
-- the port allow list;
-- the per-client rate limit, the concurrency cap, the per-target budget;
-- the cross-site check and the read allowance;
-- anything in N7 — one `GET` of `/`, no path ever constructed, the body never
-  read, an allow list of headers, and nowhere to put a cookie's value.
-
-If verification ever becomes the argument for dropping one of these, the
-argument is wrong and this paragraph is why.
-
-**It does not make a bare address scannable.** Verification is name-based:
-there is no zone to put a record in for `10.0.0.5`. A name that resolves to a
-private address can be verified and then scanned — that composes. An IP typed
-as a target cannot, on the service or, since 2026-09-29, on the command line.
-
-**It does not travel down a redirect.** A verified zone authorises the hosts in
-it, and a `Location` header names whatever the server that answered chose to
-name. So the scope is asked again about that host, before the hop is dialled,
-and a chain that leaves the zone stops there with the reason recorded (N10).
-Anything else would mean one header on a site an organisation does own could
-walk its scanner out of its own estate — into a third party's logs, from the
-organisation's address, on the strength of a proof that was about somewhere
-else.
-
-The same holds in the other direction and is worth saying, because it is the
-part an operator notices: a record at `example.com` covers `www.example.com`,
-so the ordinary redirect is followed and the report is whole.
-
-**It settles whose certificate is being examined, which decides one
-disclosure.** Reading a revocation list tells the authority that somebody
-downloaded a list — not which certificate was being looked at, since one list
-covers thousands and authorities serve them from content delivery networks to
-the whole internet. That is a smaller disclosure than the one this project
-refused when it refused OCSP, where the serial is named in the question.
-
-It is still a request, and it runs on every build with no switch — the
-demonstration included since 2026-09-28, because its hosts are compiled in and
-the certificate it asks about is ours: on a deployment that requires proof of control the certificate belongs
-to whoever asked, and a person has nothing to hide from themselves. A switch
-they had to find first would be a gap in a report dressed as a choice — which
-is the shape of the question to ask about every future check that discloses
-something. *Whose is it, and what exactly does the other party learn?*
-
-**The same question, asked of the certificate logs, gets a different answer —
-and that is the point of asking it.** Searching for the certificates issued for
-a name sends the name to a monitor. That is the OCSP shape, not the revocation
-list shape, so it is offered differently: with no switch on a deployment that
-required proof of control, behind `-check-logs` on the command line, where the
-name may be somebody else's, and on the demonstration only because the name
-there can only ever be ours.
-
-What makes it acceptable at all is that certificate transparency is public by
-design — the certificates for a name are already published to anyone who looks,
-so only the looking is disclosed. That reason survives a change of provider. A
-reason about the provider being a security company would not, and is not the
-one relied on here (N12).
-
-**It is visible.** `_porch-challenge.example.com` sits in public DNS and
-says the organisation uses this tool. That is the ordinary cost of every
-challenge-based scheme and it is not worth hiding; it is worth naming, here
-and on the privacy page, rather than leaving it to be found.
+Completeness comes from more that can be read, not from pushing harder.
 
 ---
 
-## What the public deployment's strictness was, and what it was for
+## Disclosures, and whose they are
 
-Several rules are strict because a stranger was pointing our server at a third
-party. Where that is no longer the situation, the rule can be re-scoped — but
-each one is a separate decision with a separate reason, not a general
-loosening, and each belongs to the deployment rather than to the check.
+Some questions tell a third party something. The test is: *whose is it, and
+what exactly does the other party learn?*
 
-**Re-scopable for a verified self-hosted deployment**, in descending order of
-how clearly:
-
-| | today | re-scoped | condition |
-|---|---|---|---|
-| which hosts | a compiled-in list | the verified scope | the whole point |
-| private and reserved destinations | refused | reachable | verified names only, off by default |
-| the port allow list | eight implicit-TLS ports | any | verified names only, off by default |
-| per-target budget | one budget per host, whoever asks | the operator's setting | the oracle it closes (A9) does not exist inside one estate, and the load it caps is then the operator's own |
-| scan history and counters | one number per scan, nothing else | the operator's business | it is their data about their estate, and nothing here is a promise made on their behalf |
-
-**Not re-scopable, on any deployment**, because these are properties of being
-a measurement instrument rather than concessions to running in public:
-
-- Everything in N7. A tool that constructs a path is a different tool.
-- I3 and I6 — a message says what the rule is, never repeats the input, never
-  describes the machine.
-- The R-series — say what was measured and not what it implies; a verdict
-  cites a document; where no document sets a threshold, report rather than
-  grade; nothing measured is not the same as passing.
-- The "Not doing" list in the roadmap: exploitation, credential guessing,
-  fuzzing somebody else's service, state change, port sweeps, scanning at
-  scale, and CVE guesses matched from a version string.
-
-The first list is about *whose network it is*. The second is about *what kind
-of thing this is*, and no deployment model changes that.
+- **A revocation list** tells an authority that somebody downloaded a list
+  covering thousands of certificates. It is read on every build, because a
+  switch to find first would be a gap in a report dressed as a choice.
+- **An OCSP question** names the certificate. It is asked only with
+  `-ask-responder`, only for a proven domain, and never by the demonstration.
+- **A certificate transparency search** names the domain to a monitor. A
+  service runs it for a proven domain, the command line only with
+  `-check-logs`, and the demonstration only for our own domains.
+- **The names inventory** reads registers that exist to be read: logs, the
+  domain's own records, a zone that hands itself over, a passive register the
+  operator names and pays for, and names the operator lists. It invents no
+  name. It grades nothing, and says every time that it is not a complete
+  inventory.
 
 ---
 
-## Gaps this document listed, and how each closed
+## Reading a page
 
-Written as a list of gaps on 2026-09-10 and kept as a record of how they
-closed, because a list of known gaps that silently empties is a list nobody can
-check.
-
-**A self-hosted service had no boundary at all.** Closed. Proof of control is
-asked where every check connects (N9), a password stands in front of
-everything an installation serves (P6), and beyond loopback `porchd` refuses to
-start without both unless each is waived by name.
-
-**Loopback was the one place a service trusted its caller, and a browser could
-reach it for somebody else.** Closed on 2026-09-28. A page on another site can
-point its own name at 127.0.0.1 and call the service through its visitor's
-browser as same-origin, which made a loopback copy with no password — the
-operator's own, offered the inventory and the range walk without proof — an
-open scanner for whoever wrote the page. Over plain HTTP the service now
-answers only to an address or to `localhost` (N15).
-
-**A binary said which hosts it would connect to, and a verified deployment had
-no answer.** Closed. `porchd -version` says "scans only domains it has been
-shown control of" where a secret is configured, and `porch-scan -version`
-carries a reach line of its own.
-
-**Reading a response body is listed above as never re-scopable, and a check
-worth having needs it.** Mixed content, a missing subresource integrity
-attribute, and a form that posts to somebody else's origin are ordinary gaps an
-organisation has and cannot see from headers alone. All three are read-only, a
-browser reads the same bytes, and on a verified deployment the page belongs to
-whoever asked — so the reason for the rule is weaker here than the list above
-makes it sound.
-
-The reason that survives is not bandwidth. It is that a body holds things a
-report must never carry: a leaked key in a comment, a token in a script, a name
-in a template. A report is a thing people paste into issue trackers.
-
-The shape it had to take was written down here before it was built, because
-deciding it later under pressure is how it goes wrong. **It was built on
-2026-09-11 to that shape, and the list below is now a description rather than a
-plan.** N7 has the detail; what follows is why each line is the line.
-
-- **Only where the page belongs to whoever reads the report.** The command
-  line reads the page: it runs on the operator's own machine, from their own
-  address, and the report goes to whoever ran it, which is the same argument
-  `-allow-private` rests on. A service reads the page where it required proof
-  of control, or where only its operator can call it. The demonstration read
-  no body at all until 2026-09-28; it reaches a compiled-in list of this
-  project's own hosts, so it reads its own pages now.
-- **The page a log reader is sent to had to say both.** The user agent names
-  `https://porch.denyfirst.dev/web/method` from every installation, so one flat
-  sentence there would be true of the demonstration and false of the scan in
-  the reader's log. It describes both deployments now. This was foreseen in the
-  paragraph this one replaced, and it is the part that would have been quietly
-  skipped if the shape had not been written down first.
-- **Nothing kept but derived facts.** `markup.Facts` has nowhere to put a body,
-  in the way `webprobe.Cookie` has nowhere to put a value. A reference is
-  reduced to its host before it is kept — no path, no query, and userinfo
-  dropped before anything else, because `http://user:token@host/` in somebody's
-  markup is a credential.
-- **Capped and streamed.** One megabyte, truncated rather than refused, and the
-  report says nothing below the bound was seen.
-- **Still no path is constructed.** It reads the body of the address already
-  fetched. It does not follow a link, fetch a script, or ask for anything the
-  response mentioned, so the entry in the list above this section is untouched
-  in the part that matters.
-- **Nothing is executed**, so it sees less than a browser and the limits say
-  so rather than the report implying otherwise.
-
-What it buys, so far: a `Content-Security-Policy` declared with `<meta
-http-equiv>`. A browser applies one and a header check could not see it, so a
-site that had done the work was told twice that it had not — once for the
-policy, and again for the framing protection the policy supersedes. Mixed
-content and forms posting in the clear are read the same way and are graded
-separately.
-
+A page body can hold a key in a comment, a token in a script, a name in a
+template, and a report is something people paste into issue trackers. So the
+web check reads the page only where it belongs to whoever reads the report:
+the command line, a proven domain, or the demonstration's own pages. It reads
+it once, up to one megabyte, and keeps nothing of it but host names and
+yes-or-no facts. `markup.Facts` has no
+field that could hold markup. Nothing in the page is followed or executed.

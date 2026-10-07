@@ -263,13 +263,15 @@ func TestTheVersionSaysWhichHostsThisBinaryWillReach(t *testing.T) {
 	if strings.HasPrefix(line, "demonstration") {
 		t.Errorf("the ordinary build calls itself a demonstration: %q", line)
 	}
-	if !strings.Contains(line, "whatever it is pointed at") {
-		t.Errorf("the ordinary build does not say it is unrestricted: %q", line)
+	// Every domain is proven first, as on the service, so the line says so.
+	// It said "whatever it is pointed at" for a week after that stopped being
+	// true, which is the sentence an operator reads as no boundary at all.
+	if !strings.Contains(line, "shown control of") || strings.Contains(line, "whatever it is pointed at") {
+		t.Errorf("the ordinary build does not say it scans only proven domains: %q", line)
 	}
 
 	// And it says where the scan leaves from, which is the difference between
-	// this program and the service. docs/scope.md rests on it: whoever runs
-	// this already has the machine, and the scan is theirs rather than
+	// this program and the service: the scan is the operator's own rather than
 	// laundered through somebody else's.
 	if !strings.Contains(line, "from this machine") {
 		t.Errorf("the line does not say the scan leaves from the operator's own machine: %q", line)

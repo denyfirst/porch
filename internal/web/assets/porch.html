@@ -131,7 +131,7 @@
   <section class="compose-view" aria-labelledby="compose-title">
     <h3 id="compose-title">What you are about to run: <code>docker-compose.yml</code></h3>
     <p>Read it before you run it. Step 1 downloads and checks the real file.</p>
-    <div class="terminal">
+    <div class="terminal compose-terminal">
       <div class="terminal-bar">
         <span class="terminal-dots" aria-hidden="true"></span>
         <span class="terminal-where">docker-compose.yml</span>
@@ -174,10 +174,34 @@
     <span class="t-key">cap_drop</span>:
       <span class="t-o">-</span> <span class="t-v">ALL</span></code></pre>
     </div>
+    <details class="compose-more">
+      <summary><span class="compose-more-closed">Show the whole file</span><span class="compose-more-open">Show less</span></summary>
+    </details>
   </section>
   <p class="band-footnote">To upgrade, run step 1 again in the same directory,
   then <code>docker compose up -d</code>. To remove it,
   <code>docker compose down --rmi all</code>, then delete the directory and the
   DNS record. Full guide:
   <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting</a>.</p>
+</section>
+
+<section class="band band-tint security-band" id="security">
+  <div class="band-head">
+    <div>
+      <p class="eyebrow">Security</p>
+      <h2 class="band-title">Found a vulnerability?</h2>
+    </div>
+  </div>
+  <div class="security-box">
+    <p>Report it privately through GitHub, or write to
+    <a href="mailto:security@denyfirst.dev">security@denyfirst.dev</a>,
+    encrypted to our key if you can. We reply within 72 hours.</p>
+    <p class="field-label">Key fingerprint</p>
+    <p class="fingerprint"><code>{{.Fingerprint}}</code></p>
+    <p class="security-links">
+      <a href="https://github.com/denyfirst/porch/security/advisories/new">Report on GitHub</a>
+      <a href="https://denyfirst.dev/pgp-key.txt">Download the key</a>
+      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Full policy</a>
+    </p>
+  </div>
 </section>

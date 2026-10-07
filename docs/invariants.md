@@ -1,24 +1,19 @@
 # Security invariants
 
-Every rule below states something that must be true of this project, where it
-is enforced, and which test would fail if it stopped being true.
+Each rule below is something that must be true of Porch, where the code
+enforces it, and the tests that fail if it stops being true. CI checks that
+every test named here exists.
 
-The list exists because of a pattern that repeated four times while this code
-was being written. A guard was placed where the request arrived rather than
-where the dangerous action happened, and each time the gap was found by
-someone asking rather than by anything failing. A protection that depends on
-whoever is reviewing remembering to look for it is not a protection.
+Two rules apply to every change:
 
-Two rules follow from that, and they apply to every change:
+- **Guard the action, not the entrance.** A check in an HTTP handler protects
+  that handler. A check where the connection is opened protects every caller,
+  including the ones not written yet.
+- **Every guard gets a test that tries to defeat it.** Not a test that the
+  happy path works: a test that the guard refuses.
 
-**Guard the action, not the entrance.** A check in an HTTP handler protects
-that handler. A check in the package that opens the connection protects every
-caller, including the ones not written yet. When both are reasonable, put it in
-the inner one and let the outer one improve the message.
-
-**Every guard gets a test that tries to defeat it.** Not a test that the happy
-path works: a test that the guard refuses. A guard without such a test is an
-intention.
+The reasoning behind each rule, and how it came about, is in the comments of
+the tests that guard it and in this file's history.
 
 ---
 
@@ -26,54 +21,11 @@ intention.
 
 ### N1 — Outbound connections refuse non-public addresses
 
-Private, loopback, link-local, multicast, and reserved ranges are refused
-before any connection is made. IPv4-mapped IPv6 forms are unmapped first, so
-`::ffff:169.254.169.254` is treated as the link-local address it is.
-
-An IPv6 address can also carry an IPv4 address without being mapped, and no
-predicate in the standard library looks inside one. `::127.0.0.1` is the
-deprecated IPv4-compatible form from RFC 4291: `IsLoopback` returns false for
-it, `Unmap` leaves it alone, and before this was written it reached the
-dialler as an ordinary global address. Teredo does the same at a different
-offset, 6to4 and NAT64 at two more, and RFC 2765's IPv4-translated form
-`::ffff:0:a.b.c.d` at a fifth — sixteen bits longer than the mapped form and
-therefore a different prefix, which is how it stayed out of the list while its
-neighbour was in it. Each family needs a prefix of its own, and `2001::/23`
-covers several at once because IANA reserved that block for exactly this kind
-of assignment.
-
-`fec0::/10`, site-local unicast, joined the list on 2026-09-28. RFC 3879
-deprecated it and nothing public was ever assigned there, but networks set up
-before 2004 still route it inside, and `IsPrivate` knows only `fc00::/7`, its
-replacement.
-
-That RFC 2765 family is not routed by a stock Linux stack, so nothing broke while
-it was missing. It is listed because a deny list is worth exactly its
-completeness, and "not reachable on the kernel we happen to run" is a property
-of the kernel rather than of this code.
-
-The hostname is resolved once **per connection**, and the resolved literal is
-dialled, so a name that answers differently on a second lookup cannot redirect
-the connection after it was checked.
-
-Per connection, not per scan. That distinction was left implicit here and on
-the privacy page — both said "resolved once", which reads as a claim about the
-whole scan and is not one. A scan opens up to about fifty connections and
-resolves the name for each, which is why a rotating answer set can hand them to
-different machines; R3 is where that is reported. The rebinding property is
-unaffected and is what this paragraph is about: within one connection, the
-address that was checked is the address that is dialled.
-
-This is a deny list, which is the shape this document argues against. The
-reason is stated rather than hidden: the standard library has no predicate for
-"inside a range IANA has delegated to somebody", so an allow list would mean
-carrying the delegation registry and keeping it current. A range added to the
-special-purpose registry after the list was written is not covered until
-somebody adds it.
-
 *Enforced in:* `internal/safedial`, by default in `safedial.Dialer`
-*Reached through:* `tlsprobe.Prober.dial`, which selects safedial when
-`Dial` is nil
+
+*Reached through:* `tlsprobe.Prober.dial`, which selects safedial when `Dial`
+is nil
+
 *Guarded by:* `TestCheckAddrBlocks`, `TestEmbeddedIPv4FormsAreBlocked`,
 `TestSpecialPurposeBlockDoesNotReachDelegatedSpace`,
 `TestDefaultDialerRefusesPrivateTargets`,
@@ -81,84 +33,17 @@ somebody adds it.
 
 ### N2 — The HTTP service cannot be configured to reach private addresses
 
-The command line has `-allow-private`, because a local operator scanning their
-own network is not the abuse N1 guards against. The service has no equivalent,
-and adding one would make it an open proxy into whatever network it runs in.
-
 *Enforced by:* the absence of any option in `internal/httpapi`
+
 *Guarded by:* `TestPrivateTargetsAreRefused`
 
 ### N3 — Only implicit-TLS ports are dialled
 
-Dialling arbitrary ports on arbitrary hosts makes this a port scanner
-operating from our address, and the scanned network's logs will name us.
-
-Eight ports, all implicit-TLS: 443, 8443, 465, 636, 990, 993, 995 and 5061.
-STARTTLS ports are deliberately absent — the probe speaks TLS from the first
-byte, so 25 or 587 would fail in a way that reads as a fault of the server.
-
-**One exception, and it is not a target a person names.** The mail check asks
-each of a domain's exchangers for STARTTLS on port 25 (`internal/smtptls`). It
-is not the TLS check reaching a port somebody typed: the hosts are the ones the
-domain's own MX records name, the port is the one mail is delivered on, the
-dialler is `safedial` with port 25 as its whole allow list, and it runs only
-where the command line runs it or a service has proof of control of the
-domain. The conversation is a greeting, EHLO, STARTTLS and QUIT. Nothing about
-the TLS check's list changes: `scan.Scan` still refuses 25 for every target a
-caller gives it.
-
-**No message is ever composed, and one question names a recipient.** This rule
-read "no sender, recipient or message" until `porch-mail-v2`, and the sentence
-that survives is the one that mattered: `DATA` is never sent, so nothing is
-delivered, nothing is queued and nothing at the other end changes.
-
-The question that changed it is whether an exchanger forwards mail for a
-domain it does not serve — an open relay, which is the oldest misconfiguration
-in mail and the one that ends with the domain's own mail being refused
-everywhere. It cannot be answered from DNS: a configuration can look right and
-a server can still accept. So it is asked, in three lines that cannot deliver
-anything. The sender is the empty reverse path every bounce carries, which
-names nobody. The recipient is under `.invalid`, which RFC 2606 reserves so
-that the name cannot exist. Then `RSET`, before `DATA`, so a server that
-agreed was never handed anything to forward.
-
-**It is asked of the domain's own exchangers and of no others.** An exchanger
-inside the domain being checked — `mail.example.com` under `example.com` — is
-the operator's own server, and `internal/mailscan` asks it. One named by the
-same MX record but run by a provider is somebody else's: there the conversation
-reads as a spam probe, and the address it came from is what gets listed for it.
-There is no flag that widens this, because the question a flag would answer —
-*may I probe somebody else's mail server?* — is not one this project asks.
-
-**Inside the domain is a reading of the name, and a name is not a server.** An
-exchanger whose name is an alias — `mail.example.com` pointed by a CNAME at a
-provider — is inside the domain and is the provider's machine, which is the
-case `docs/scope.md` says a verified zone does not cover. It is asked what any
-sender asks and not the relay question, and its relay line says why
-(`porch-mail-v3`). An address record pointing at a provider cannot be told
-apart from here, and nothing claims otherwise.
-
-A server that refused, one that refused the empty sender, and one that was
-never asked are each reported as themselves. Only a server that accepted the
-recipient is graded (R4), and the report never repeats what the server wrote:
-its reply code is a fact, its wording is its own.
-
-**Two locks, on different doors.** `Scanner.Scan` refuses the port for every
-caller, which is why the check is there and not in the HTTP handler; and the
-list is handed down to the dialer, so a prober reached without passing `Scan`
-still cannot open the connection. The second was added on 2026-09-02 during an
-audit: the check was correct and singular, and a guard in one place is a guard
-somebody walks around by adding an entry point.
-
-This is the invariant a description of the service has to be measured against.
-The letter written to the hosting provider on 2026-09-01 said *port 443 and no
-other*, which was never what the code did, as the accuracy audit of 2026-09-02
-found. A statement about this project is worth what the code says, and the code
-is here.
-
 *Enforced in:* `internal/scan`, in `Scanner.Scan`, unless `AllowAnyPort`;
 `internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`
+
 *Lifted by:* the command line only
+
 *Guarded by:* `TestScannerEnforcesPortsByDefault`, `TestCheckPort`,
 `TestAllowedPortsAreImplicitTLS`, `TestThePortAllowListReachesTheDialer`,
 `TestTheAllowListReachesTheDialer`,
@@ -176,65 +61,24 @@ is here.
 
 ### N4 — Every network operation is bounded
 
-A per-attempt timeout multiplies by the number of addresses tried, so there is
-also a total budget, and a cap on how many resolved addresses are attempted. A
-caller's deadline is never extended.
-
-**And the lookups that follow a measurement stop short of the deadline rather
-than at it.** After the handshakes, the TLS check asks four others: the
-revocation list, the responder, the logs and the zone's CAA records. All four
-were asked up to the request's deadline. A log search that used all of it
-returned after the deadline had passed, and the service, which rightly counts
-a scan that overran as a timeout, threw away the transport that had been
-measured in full. On the demonstration this was the first Transport check
-after a restart, shown as "not run" (audit 2026-10-05, F10). Those lookups now
-end two seconds before the deadline. What they did not establish is said in
-the report, which is the outcome the scan's own comments had always described.
-
-The mail check had the same fault in its slowest step. The exchangers were
-asked up to the deadline, and the dial to port 25 waited the conversation's
-twenty seconds for each address. On the demonstration's network, which drops
-port 25, an exchanger with two addresses held the check for thirty seconds,
-and the whole mail report could be lost the same way. Opening a connection now
-has eight seconds per address and the conversation's twenty in all. The
-exchangers also stop two seconds short of the deadline, and an exchanger that
-never answered is reported as not reached from here. They are asked last, so
-that nothing is asked in the time they keep back (F11).
-
-The web check had the same shape after its two chains. Its security contact,
-IPv6 address and other form already said when they ran out of time, and the
-service never showed it: run to the deadline itself, the probe came back after
-it. They too now stop short of it. The rule lives in one place,
-`internal/budget`, rather than in three copies.
-
 *Enforced in:* `internal/safedial` (`Timeout`, `TotalTimeout`, `MaxAddrs`),
-`internal/tlsprobe` (`HandshakeTimeout`, `TotalTimeout`),
-`internal/httpapi` (`RequestTimeout`), `internal/rawhello.Ask` (the context's
-deadline on the connection), `internal/rawhello.ReadReply` (at most the bytes
-an answer needs), `internal/budget.ShortOf`, applied by `internal/scan` (the
-lookups after the handshakes), `internal/mailscan.readExchangerTLS` and
+`internal/tlsprobe` (`HandshakeTimeout`, `TotalTimeout`), `internal/httpapi`
+(`RequestTimeout`), `internal/rawhello.Ask` (the context's deadline on the
+connection), `internal/rawhello.ReadReply` (at most the bytes an answer needs),
+`internal/budget.ShortOf`, applied by `internal/scan` (the lookups after the
+handshakes), `internal/mailscan.readExchangerTLS` and
 `internal/webprobe.Prober.Probe`; `internal/smtptls.Prober.dialer`
-**A third party asked before a measurement gets half of what is left, since
-2026-10-05 (audit F12).** The names inventory asked its transparency monitor
-first, with the request's whole deadline, and the domain's own records after
-it. crt.sh did not answer the demonstration that afternoon: the records were
-asked with no time left, the probe and the certificate reader had no names to
-start from, and the page said the domain had none. The records are read first
-now — three lookups to this installation's own resolver — and the monitor and
-the register are each asked under `budget.Half`, so the estate's own hosts keep
-the other half however slow somebody else's service is.
 
 *Guarded by:* `TestCallerDeadlineWins`, `TestTotalTimeoutBoundsTheOperation`,
 `TestAskStopsWhenTheContextDoes`, `TestNoMoreIsReadThanTheAnswerNeeds`,
 `TestAskStopsWhenTheContextIsCancelledWithoutADeadline`,
-`TestASilentExchangerIsBounded`,
-`TestAnEnormousLineIsNotReadToItsEnd`,
+`TestASilentExchangerIsBounded`, `TestAnEnormousLineIsNotReadToItsEnd`,
 `TestAReplyThatNeverEndsIsBounded`,
 `TestARecordFromAnotherProtocolVersionIsNotBelieved`,
 `TestAnOversizedRecordIsNotBelievedWhateverFollows`,
 `TestOnlyAServerHelloIsAnAcceptance`,
-`TestAServerHelloSplitAcrossRecordsIsNotGuessed`,
-`FuzzReadReply`, `TestASlowLogSearchDoesNotCostTheReport`,
+`TestAServerHelloSplitAcrossRecordsIsNotGuessed`, `FuzzReadReply`,
+`TestASlowLogSearchDoesNotCostTheReport`,
 `TestExchangersThatNeverAnswerDoNotCostTheReport`,
 `TestOpeningAConnectionIsBoundedApartFromTheConversation`,
 `TestNothingIsAskedAfterTheExchangers`,
@@ -243,177 +87,25 @@ the other half however slow somebody else's service is.
 `TestAMonitorThatNeverAnswersDoesNotCostTheRecords`,
 `TestAThirdPartyAskedFirstLeavesHalfTheTime`
 
----
-
 ### N6 — The public deployment connects only to hosts this project owns
-
-Until 2026-09-03 anybody could point denyfirst.dev at any host on the internet
-and this server opened the connections. That arrangement put the project in the
-worst position available to it: **ours was the address in the scanned party's
-logs, and we had deliberately made ourselves unable to say who had asked**,
-because recording that is the one thing this project undertakes not to do.
-
-Each half is a correct decision on its own. Together they are the worst of both
-worlds — the visible party and the unattributable one at the same time, which
-is not a position to argue from. The Hetzner abuse ticket of 2026-08 is that
-shape, not an accident.
-
-There are two ways out. Start keeping records, which is not available: the
-promise is the point. Or stop connecting to third parties at all.
-
-So the tool is run by the person who wants the answer, on their own machine,
-from their own address, under their own responsibility. The public deployment
-scans only hosts this project owns, as a demonstration that the instrument
-works and that its verdicts can be reproduced by anyone who runs it.
-
-**Compiled in, not configured.** A configuration difference is a security
-boundary, and those are the boundaries that rot: a flag can be omitted, a file
-can be edited, an environment variable can be missing and nothing looks wrong.
-Under the `demo` build tag the list is in the binary and there is no way to
-widen it without building a different binary. Without the tag there is no
-restriction at all, which is what the tool is for — a default that restricted
-anything would quietly limit somebody scanning their own network.
-
-**The gate is the tag, not the length of the list.** Written the other way —
-refuse only when a list is non-empty — a list emptied by a bad merge would open
-the deployment to the whole internet and every test would still pass. This way
-an emptied list refuses everything, which fails in the safe direction and is
-caught by a test that says the demonstration has nothing to demonstrate on.
-
-**The list matches at label boundaries.** The exclusion list (N8) matches
-that way too, and there a mistake keeps a host out that should be in. Here a
-mistake lets a host in that should be out, which is how somebody would arrange
-to have us scan them: register `denyfirst.dev.example.com` and a plain suffix
-match hands them our address.
-
-**Checked in `Scanner.Scan`**, not in the HTTP handler, so it holds for the
-command line built with the same tag and for anything written later — a guard
-in one entry point disappears the moment a second one is added.
-
-**The tag gates the list and nothing else.** Two builds of one program is a
-boundary drawn by a build tag, and it is only as narrow as the files carrying
-that tag. A test walks the tree and fails if a third file ever appears under
-it: the demonstration build has to stay the tool with a list rather than
-becoming a different program nobody tests. CI builds and tests it on every
-change for the same reason.
-
-**The page offers what there is, and says what it is.** A field that accepts
-any hostname on a deployment that answers for a few is a control arguing with
-its own server, and the visitor loses the argument. So the demonstration build
-renders a menu rather than a field — keeping the id the script reads, because
-a `<select>` answers `.value` exactly as an `<input>` does, and one script
-serving both deployments has no branch in it to go stale. Beside it, at the
-control rather than in the footer, the page says that this deployment scans
-only hosts this project owns and where the tool is.
-
-**The menu and the boundary are separate, and checked against each other.**
-The boundary is a list of domains and decides what may be connected to; the
-menu is a list of particular hosts with a sentence each and decides what a
-visitor is offered. An entry on the menu that the scanner would refuse is the
-page arguing with itself, so a test scans every offered host and fails if any
-is refused.
-
-**A refusal is answered in words and counted.** `Scanner.Scan` refuses the
-host and that is where the property lives; the handler refuses it first so a
-caller gets a sentence and somewhere to go rather than a scan that failed, and
-so it is counted as `not_demonstrated` rather than as a host that could not be
-reached. A figure rising there would say visitors are asking for something
-this deployment does not do — which is how we would learn that the page is not
-explaining itself.
-
-**The list is not part of any check.** What this deployment may reach is a
-property of the deployment, and every check asks the same question of it. It
-lived inside the TLS scanner until 2026-09-05, which meant the web check would
-have imported the TLS scanner to find out what it may connect to, and a mail
-check after it — the shape that gets worse with every check added. It is
-`internal/demo` now, and each check's own scanner asks it.
-
-**Each check asks it where its own scan is decided.** `Scanner.Scan` for the
-transport, `webscan.Scanner.Scan` for the web check — not in the HTTP handler
-that happens to call one of them today. The web check was given the guard on
-2026-09-06, *before* it had an address on the service at all, and that order
-is the point: an entry point written later inherits the refusal instead of
-having to remember it. A guard in one place is a guard somebody walks around
-by adding an entry point, and adding entry points is exactly what this project
-is now doing.
-
-**A target is checked for validity before it is checked for permission.**
-Asked the other way round, a demonstration build answers *this deployment does
-not demonstrate that* to somebody who typed a port or a scheme, which tells
-them the wrong thing about their own mistake. The probe defines what a target
-is, so the probe is what is asked: `webprobe.CheckHostname` is exported for
-exactly this.
-
-**Two rules hold the build tag.** Every file gated on it is named `demo_*.go`,
-so the whole boundary can be listed without reading the tree; and outside
-tests the tag gates exactly the two files that declare the list. Most of the
-HTTP tests scan hosts the list does not cover, and bending forty of them to a
-deployment restriction would be the restriction dictating to the tool — so CI
-names and drives the demonstration's own test instead, and greps the log for
-it, because a `-run` pattern that matches nothing passes silently.
-
-**The binary carrying the property is the binary that is released and
-deployed.** A restriction compiled into a build is worth nothing until that
-build is the one running, and a build that runs here is one that was released:
-signed, listed in `SHA256SUMS`, and rebuilt by the reproduction workflow like
-every other artifact. `scripts/build.sh` produces
-`porchd-demonstration_<tag>_linux_amd64` — Linux and amd64 only, because
-this is not a thing to download and use but a thing one server runs, and
-offering it for five platforms would invite somebody to install a crippled
-scanner by mistake.
-
-**A binary says which hosts it will connect to, and the deploy reads what it
-says.** The two builds are indistinguishable from outside until one of them
-refuses something: install the wrong one and the file is in place, the service
-answers, the version matches, and the only symptom is a public scanner nobody
-meant to run. So `-version` carries a third line, composed from the same list
-the scanner enforces rather than from a constant of its own — a binary cannot
-say one thing and do another — and the deploy procedure greps for it rather
-than trusting a filename.
-
-**One chain of guards, not one per entry point.** The web check has an address
-now, and it walks the same chain the TLS check does: the client key, the read
-allowance, the cross-site test, the content type, the scan allowance, the body
-cap, the JSON decode, the exclusion list, the deployment list, the deadline,
-the concurrency cap and the per-target budget. Twelve of eighteen steps are
-identical, so a second handler would have been twelve copies of a guard, and
-this invariant is about what happens to the copy nobody is looking at. What
-differs is described as data — how a target is parsed, what budget it spends,
-what runs, what is written — and the chain is written once.
-
-The differences are small and each is a decision. The web check takes a bare
-hostname, so a port is refused rather than dropped: ignoring it would discard
-part of what somebody typed without saying so, which is the failure target
-parsing already refuses for a path. Its budget is the host's HTTPS one rather
-than a name of its own, because the per-target limit is the only one here that
-protects the server being measured and a second budget would let one host be
-made to absorb twice the peak. The scan allowance is shared, because two
-endpoints each with a full one would silently double what a client can spend.
-
-**And the list is asked about every host a redirect names.** The chain above
-authorises the host somebody typed. A demonstration build that followed a
-`Location` header off the hosts this project owns would be connecting to a
-stranger from this project's address — this arrangement rebuilt through a door
-nobody was watching, and needing no compromise to arrange, since a marketing
-redirect to somebody else's platform is enough. N10 is that guard.
 
 *Enforced in:* `internal/demo` (`demo.go`, `demo_on.go`, `demo_off.go`),
 `internal/scan.Scanner.Scan`, `internal/webscan.Scanner.Scan`,
 `internal/httpapi.Server.handleScan`, `internal/httpapi` (`check`, `target`),
 `internal/web/assets/index.html`, `scripts/build.sh`, `docs/releasing.md`
+
 *Guarded by:* `TestTheOrdinaryBuildIsNotADemonstration`,
 `TestTheWebScannerRefusesAHostThisProjectDoesNotOwn`,
 `TestARefusedHostIsNeverConnectedTo`,
-`TestTheOrdinaryWebScannerIsNotADemonstration`,
-`TestTheWebRefusalNamesNoHost`, `TestAMistypedTargetIsToldItIsMistyped`,
+`TestTheOrdinaryWebScannerIsNotADemonstration`, `TestTheWebRefusalNamesNoHost`,
+`TestAMistypedTargetIsToldItIsMistyped`,
 `TestEveryHostOfferedIsOneThisScannerWillReach`,
 `TestTheTagSwitchesTheWebScannerToo`,
 `TestTheDemonstrationListMatchesAtLabelBoundaries`,
 `TestABlankEntryAdmitsNothing`, `TestTheBuildTagTouchesNothingElse`,
 `TestTheDemonstrationBuildRefusesAHostItDoesNotOwn`,
-`TestTheDemonstrationRefusalNamesNoHost`,
-`TestTheDemonstrationListIsNotEmpty`, `TestTheTagIsWhatSwitchesIt`,
-`TestEveryHostOfferedIsOneTheScannerWillReach`,
+`TestTheDemonstrationRefusalNamesNoHost`, `TestTheDemonstrationListIsNotEmpty`,
+`TestTheTagIsWhatSwitchesIt`, `TestEveryHostOfferedIsOneTheScannerWillReach`,
 `TestTheDemonstrationPageOffersWhatItCanScan`,
 `TestTheDemonstrationPageSaysWhatItIsAndWhereTheToolIs`,
 `TestTheDemonstrationRefusalIsAnsweredAndCounted`,
@@ -430,488 +122,78 @@ redirect to somebody else's platform is enough. N10 is that guard.
 `TestTheVersionOutputCarriesTheReachLine`,
 `TestTheDemonstrationBuildIsReleasedAndDeployed`
 
----
-
 ### N7 — An HTTP request is one GET of the root, and no path is ever invented
 
-A TLS handshake stops at the transport. An HTTP request enters the
-application: it lands in an access log with a path, it reaches whatever sits
-in front of the origin, and on a badly built application a GET can change
-state. That difference is why the web check is a separate package with its own
-rules rather than a few more fields on the TLS probe, and why the discipline
-is compiled in rather than left to whoever calls it.
-
-**One `GET` of `/`, over HTTPS and over plaintext.** After the first request
-the only addresses fetched are the ones a `Location` header named, resolved
-against the address that sent them exactly as a browser resolves them. **No
-path is guessed at.** There is no probing of `/admin`, no `/backup.zip`, no
-`/.git/config`, and no second guess of any kind: this reads what a server
-volunteers to every visitor.
-
-**A guess and a registered address are different things, and this rule is
-about the first.** It read *no guessing under `/.well-known`* until
-2026-09-24, and by then the project fetched two paths under it and had done
-for months — `/.well-known/mta-sts.txt` since the mail check could read a
-policy, and its own `/.well-known/porch-challenge` since proof of control
-existed. A rule its own code contradicts twice is a rule stated wrongly, not a
-rule being broken.
-
-What makes `/admin` a guess is that this program invented it. Nobody said it
-was there; it might not be; and a `GET` of it can do harm, because plenty of
-real applications change state on one — `/logout`, `/admin/cache/clear`,
-`/delete?id=5`. A stream of such requests is also the signature of an attack:
-it trips the defences in front of the origin, fills the scanned party's logs
-with evidence of an intrusion that never happened, and where it succeeds it
-hands this program something it must then refuse to keep. And a binary that
-tries a thousand addresses is a scanner, which ends the property that makes
-this one safe to install — that the worst a careless colleague can do with it
-is read a page.
-
-A well-known URI is none of that. RFC 8615 created the space precisely as the
-register of addresses a server offers to anyone who asks, IANA keeps the list,
-and each entry is defined by its own document. Fetching one is not a guess
-about what might be there: it is using the door the standard built, for the
-purpose the standard built it. `/.well-known/security.txt` exists **in order
-to** be read by strangers — that is what it is for.
-
-So the rule is exact: **no address this program invents, and no request that
-could change state.** Under `/.well-known` this project fetches a short list
-named in one place, each entry carrying the document that defines it, and
-nothing else. A fourth path is a decision somebody makes deliberately and
-writes down, not a line somebody adds.
-
-The third arrived the day after the list did, which is the argument for having
-built the list: the web check now fetches `/.well-known/security.txt` as well
-as the page, because RFC 9116 defines that file as the thing a site publishes
-so a stranger who finds a fault knows who to tell. It is the clearest case this
-rule allows — an address defined by a standard, served to everybody, and read
-for the only purpose it has. Nothing about it is graded (R21).
-
-**What is kept from it was a count, and a count answered the wrong question.**
-*Is there a way to reach us* is what a number says; *does it still reach
-somebody* is what an operator reading their own file is checking, and two
-contacts and two contacts are the same number whether they are the security
-team or somebody who left two years ago. Since 2026-09-28 the addresses
-themselves are kept — where the asker is the operator
-(`TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
-`TestTheCommandLinePrintsTheSecurityContacts`,
-`TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof`).
-
-The condition is the one the DMARC report addresses take, and for the identical
-reason: a contact is published for strangers to read and is still a person's
-address. The command line prints it, because it runs on the operator's own
-machine and the report goes to whoever ran it; a service prints it where
-control of the domain has been proven, and otherwise prints the count it always
-printed. The count stays in front of the list either way, so that a list
-bounded at eight under a file naming forty cannot read as the whole file (R4,
-`TestTheContactsKeptAreBoundedAndTheCountIsNot`), and the value is stripped of
-what no address may carry before it reaches a terminal
-(`TestAContactIsCleanedBeforeItIsKept`).
-
-
-
-**And the address a certificate names for checking its own revocation.** It was
-a count, on the argument that the URLs are chosen by whoever issued the
-certificate — which on a hostile target means they are chosen by the target,
-and a report a stranger asked for does not repeat a string that party wrote
-back at its reader. That argument is right and it is kept.
-
-What it was never about is the operator's own certificate. There the authority
-is the one that issued it, and the question a count cannot answer is the one
-that comes up exactly when something went wrong: a revocation list that could
-not be fetched is reported already, and until 2026-09-28 the report would not
-say *from where*. The command line names it, because it runs on the operator's
-own machine. A service names it where the report is read by the person it is
-about — alongside proof of control, on the demonstration's own estate, and on a
-copy only its operator can call — and prints the count otherwise. It decides
-that in the one place every other such part of a report is decided, httpapi's
-`operatorView`; it arrived following the scope alone, set in porchd, and for
-its first day the demonstration and the operator's own copy printed a count of
-their own certificate's addresses
-(`TestTheRevocationAddressesAreKeptOnlyWhereAskedFor`,
-`TestTheCommandLineNamesTheRevocationAddresses`,
-`TestTheRevocationAddressesFollowTheOperatorsView`,
-`TestTheOperatorsOwnCopyShowsTheWholeReport`).
-
-The counts stay beside the lists rather than being replaced by them, because an
-empty list means withheld or none and only the count says which (R4). One
-address is named and the rest counted: a certificate naming four distribution
-points has one that mattered — whichever a client reached for — and four in a
-line is a sentence nobody reads (`TestWhereRevocationIsCheckedIsNamedWhenItIsKnown`).
-The value is bounded and stripped before it reaches a terminal, like every
-other string a measured party writes (`TestARevocationAddressIsCleanedBeforeItIsKept`).
-
-**And one `GET` of the root on the other form of the name.** `www.` added where
-there is none, removed where there is one, asked once over HTTPS, and not
-followed: a redirect names where it is sending a visitor in its own header, so
-following it would cost another connection to somebody's server and buy no
-fact. The host in that header is the only part kept — a path or a query from it
-would be text chosen by whoever is being measured, reaching a report people
-paste into issue trackers.
-
-This is the boundary between reporting on a name somebody gave and enumerating
-an estate, and it is four characters wide. Nothing looks for `mail`, `dev`,
-`staging` or `old`. One name is derived from the one asked about, by an
-operation with no judgement in it, and the report says which name it compared so
-that the reader can decide whether that was the interesting pair. Nothing claims
-to have found an apex: telling `example.co.uk` from `blog.example.com` needs the
-public suffix list, which is a third-party list this project does not carry and
-will not write a copy of — so the honest thing is to compare the two forms every
-visitor's fingers produce and name them.
-
-The row is reported, never graded. No document requires a `www` form to exist or
-to redirect anywhere (R21). What it is for is the question an operator cannot
-ask of their own site, because their habit answers it for them: whoever types
-the short form daily never learns what a visitor typing `www` gets, and whoever
-bookmarked `www` never learns what happens at the short form. Both are in every
-visitor's muscle memory and usually only one has ever been tried. The commonest
-thing it finds is two names serving two sites with nothing joining them, one of
-which stopped being updated years ago.
-
-It is asked even where the name itself answered nothing, and that is deliberate:
-a bare name that is dead while its `www` form serves the site is exactly the
-arrangement worth reporting, and it cannot be found by giving up.
-`TestTheOtherFormIsAskedEvenWhereTheNameItselfIsDead` holds that,
-`TestTheOtherFormIsAskedOnceAndNotFollowed` holds the single request and the
-host-only rule, `TestTheOtherFormOfANameIsDerivedAndNotSearchedFor` holds the
-four characters, and
-`TestTheOtherFormGoesThroughWhateverDecidesWhatMayBeReached` holds the part that
-is easiest to forget — the other form of a name is not automatically inside a
-demonstration build's fixed list, nor inside an estate a service has been shown
-control of, so whatever decides that for every other address decides it for this
-one (N6, N9). `TestTheOtherFormOfTheNameRowSaysHowTheTwoAgree` holds the
-sentences, and `TestWhereThisNameLandsReachesTheRowAboutTheOtherForm` the half
-of the answer that comes from the chain this check already followed.
-
-**And one handshake that carries no request.** The check opens a TLS
-connection to an address the name publishes for IPv6, reads the certificate,
-and closes it. Nothing is asked of the server, so nothing enters an
-application, and this rule — which is about requests — is not stretched by it;
-it is written here because a reader counting what a scan costs a server should
-find every connection in one place.
-
-It exists because a scan could not answer the question at all. Reaching a site
-means trying its addresses until one answers, which is correct for reaching and
-useless for measuring: a host with a working IPv4 address and an `AAAA` record
-pointing at nothing answers every scan, reads perfectly, and cannot be opened
-from a network that has only the newer protocol. The operator is the last to
-know, because their own machine has both.
-
-The row that results is reported, never graded — no document requires a site to
-be reachable over IPv6 — and it distinguishes four things that a single
-sentence would flatten: no address published, which is a decision somebody
-made; an address published in a range nothing may dial, which is usually an
-example copied into a zone; an address that answers with a certificate for
-another name, which is reachable and unusable; and an address that does not
-answer. `TestWhichPublishedAddressesCanBeTried` holds the first two apart and
-`TestWhatAnIPv6HandshakeSaysAboutTheCertificate` the last two.
-
-The fifth case is the one that matters most and is not about the scanned party
-at all. A machine with no IPv6 address of its own cannot reach any IPv6 host,
-and reporting "did not answer" from one would be printing the scanner's network
-as somebody else's fault — the distinction `safedial.SingleFamilyError` was
-written for, arriving here at the point where it decides what a report says.
-`TestTheIPv6RowSaysWhichKindOfNoItFound` asserts it about the words rather than
-the struct, because the words are what somebody acts on, and
-`TestWhoAFailedIPv6ConnectionIsAboutDependsOnThisMachine` states the judgement
-itself as a table. Both exist because a sabotage replaced the line deciding it,
-in each direction, and nothing failed either time: a scan from a machine with no
-IPv6 would have printed "did not answer" about every site there is, and a scan
-from one with IPv6 would have excused every site that really was broken.
-`TestWhatCountsAsThisMachineHavingIPv6` holds the part of that which is easiest
-to get wrong — every IPv6-capable interface has a link-local address whether or
-not a packet can leave the machine, so counting one would make every machine
-look connected and the distinction would stop existing quietly.
-
-`TestTheIPv6MeasurementRunsOnAScanAndReachesTheReport` is the plainest of them
-and was missing longest: nothing asserted the measurement happens at all, so the
-call could be deleted and every report would read *not measured* — the sentence
-that means this project did not look. It also settles where the addresses come
-from. The resolver is a hook on the prober, like the dialler, and
-`internal/webprobe/main_test.go` replaces the default for the whole package, so
-no test in it sends a query to anybody. Every name these tests probe is a
-reserved one that resolves to nothing, so nothing would have come back and
-nothing would have failed — the traffic would simply have been there, from a
-project whose argument is that it can be checked.
-
-**And all three say when the scan ran out of time, rather than what they saw.**
-
-They run after both chains and share one deadline with them, so a slow site
-spends the budget and these are what go without. Each then failed in its own
-way and reported what it found: the security contact could not be fetched, the
-IPv6 address did not answer, the other form could not be reached. Three
-sentences about this program's clock, printed as findings about somebody else's
-server, in the part of a report an operator is most likely to act on. It is
-worse on the service than on the command line, where the whole request has
-thirty seconds for every check and these are last in the queue.
-
-The IPv6 row was the worst of them, twice over. A measurement that never got as
-far as a lookup left `Published` at zero, and the row's own order then answered
-*no address published (no AAAA record)* — the most confident sentence in the
-row was the one with nothing behind it. And a failure after the deadline
-consulted this machine's network, so a scan that ran out of time on a machine
-without IPv6 claimed both that the site does not answer and that nothing here
-could have checked.
-
-So the deadline is answered first, in each of the three:
-`TestAScanThatRanOutOfTimeSaysSoRatherThanBlamingTheHost` for the shape of it,
-`TestADeadlineDuringTheIPv6HandshakeIsNotTheLocalNetworksFault` and
-`TestTheOtherFormSaysTheScanRanOutWhenTheDeadlinePassesMidRequest` and
-`TestTheSecurityContactSaysTheScanRanOutRatherThanThatTheFileIsMissing` for a
-budget that goes mid-request, which is the case a site produces rather than a
-test.
-
-**Nothing is looked up or dialled once the time is gone.** Saying so in the
-report is half of it; the other half is not spending somebody else's resources
-to learn what the clock already says.
-`TestNothingIsLookedUpOrDialledWithNoTimeLeft` holds the resolver query and the
-connections, and `TestTheReachDecisionIsNotAskedWithNoTimeLeft` holds the one
-piece of work that is easy to forget — whatever decides which names a
-deployment may reach is not free, and asking it for a measurement that cannot
-finish is work done for nothing.
-
-There is no guard in front of the security contact fetch, and that is
-deliberate rather than an omission. One would look more careful and buy
-nothing: the transport refuses a request on an expired context before it dials,
-so no connection is made either way and the report comes out the same. A
-sabotage proved it — removing the guard changed nothing any test could see,
-because there was nothing to see — and the branch went rather than gaining a
-test that asserted its own existence.
-
-`TestWhatIsReadIsCountedAndNotKept` checks that last part where it can be
-checked — every string the facts carry is searched for the address that was in
-the file, so a field added later with somewhere to put one fails in a test
-rather than in somebody's report. `TestASignatureIsNotReadAsFields` covers the
-case that looks harmless and is not: a PGP signature block is base64, base64
-holds colons, and a file read line by line past the signature reports contacts
-nobody published. `TestTheThreeKindsOfNothing` keeps apart the three answers
-that mean entirely different things — the file is there, the server says it has
-none, nothing answered at all — and `TestTheSecurityContactRowSaysWhichNothingItFound`
-holds the sentences the report prints for each, including the one the row
-exists for: published, and expired.
-
-That place is `internal/wellknown`, and it is a package rather than a comment
-because a comment cannot fail.
-`TestEveryWellKnownAddressInTheSourceIsNamedHere` walks every non-test `.go`
-file in the repository for an address under that space and refuses one the list
-does not name, which is what keeps this paragraph true a year from now. It
-also refuses an entry the source no longer uses: a list carrying an address
-nobody asks for is a list somebody will trust for the wrong one. The same file
-names what this project *serves* as well as what it asks for, because the two
-directions are easy to confuse in a search of the source and impossible to
-confuse in what they mean.
-
-They were two separate lists for exactly one day. `security.txt` is published
-by this project *and* asked of the sites it scans, and a shape that could not
-say both would have made somebody pick the half that fit — which is how a list
-stops being true. Each entry now carries a reason for each direction it is used
-in, and the one thing an entry may not be is neither.
-
-`TestTheListAndTheWrittenPromiseAgree` holds the other end: every address the
-list says is fetched must be named in this file, and nothing written anywhere
-in this repository may promise *no guessing under `/.well-known`* — words that
-stood until 2026-09-24 — except as a quotation carrying that date. It reads
-every `.go`, `.html`, `.md`, `.js` and `.txt` file rather than the two that
-carried the sentence when it was written, because the next one it caught was
-`internal/webprobe`'s own package comment: a promise in a doc comment nobody
-reads is still a promise, and it survived the change that added the second
-request. It reads N7 as a
-section rather than searching the whole file, because the first attempt at this
-was satisfied by a paragraph five hundred lines away that quotes a mail policy
-URL, and passed while the rule itself had stopped naming what the code fetches.
-`TestCoversRefusesAnAddressNobodyDecidedOn` asks the other question the walk
-cannot: whether an address in neither list is refused, and whether the served
-address has drifted onto the asked-for side. The page carried that promise
-unqualified while the mail check was already fetching a policy under it. A
-sentence the binary contradicts is worse than one never written, because
-somebody read it and decided to trust the tool.
-
-**The body is read only where a caller asks, and nothing of it is kept.**
-
-This said *the body is never read* until 2026-09-11, and the sentence that
-replaced it is narrower on purpose. What was given up and what was gained are
-both worth writing down, because the argument for never reading it was good.
-
-The argument was never bandwidth. It was that a body holds things a report must
-not carry — a key in a comment, a token in a script, a name in a template — and
-a report is a thing people paste into issue trackers. What changed is that the
-same argument, taken seriously, is a rule about *what may be kept* rather than
-about what may be read. So:
-
-- **Nothing is stored.** `markup.Facts` has nowhere to put markup, in the way
-  `webprobe.Cookie` has nowhere to put a value. What survives is a handful of
-  booleans and a bounded list of host names. A URL is reduced to its host
-  before it is kept, and userinfo is dropped before anything else, because
-  `http://user:token@host/` in somebody's markup is a credential and a report
-  carrying it would publish it to everyone the report is shown to.
-- **Only what a rule reads is kept at all.** A reference is recorded when it is
-  over plaintext, or when its host is not the page's own. A page loading its
-  own scripts from its own host produces nothing, because nothing asks about
-  that — and a field kept without a rule that reads it is a field to remove
-  rather than keep for later, which is the same rule the header allow list
-  above rests on. Origin means host: `static.example.com` is not
-  `www.example.com`, because subresource integrity and CORS are not either.
-- **Only the final HTML response.** Not a redirect's body, which no visitor
-  sees. Not a response that did not say it was HTML: browsers sniff and this
-  does not, so a site serving markup without declaring it gets no markup
-  findings and the report says the page was not read — which is true, and is
-  the safe direction for it to be wrong in (R4).
-- **Bounded and streamed.** One megabyte. Truncated rather than refused, which
-  is the opposite of what the revocation and transparency checks do with an
-  oversized answer, and the difference is what an empty result would mean.
-  There, refusing is safe because a truncated list reads as a clean
-  certificate. Here the page is the evidence, so refusing a large page would
-  produce a clean report for exactly the sites most likely to have something.
-  Past the bound `Truncated` is set and the report says nothing below it was
-  seen.
-- **Still no path is constructed.** This reads the body of the address already
-  fetched. It does not follow a link, retrieve a script, or ask for anything
-  the response mentioned — so the paragraph above this one is untouched.
-- **Nothing is executed.** A scanner, not a browser and not a parser: there is
-  no HTML parser in the standard library and this project has no third-party
-  dependencies, so what exists is a tag scanner. It follows that it sees less
-  than a browser, and the limits say so rather than the report implying
-  otherwise. Markup a script assembles at run time is invisible here.
-- **An address is read as a browser resolves it.** Character references in an
-  attribute are decoded, tabs and newlines inside an address are dropped, a
-  backslash is a slash for http and https, `http:host` is `http://host`, the
-  first `<base href>` moves every relative address after it, each address in a
-  `srcset` is read, a control's `formaction` is a form action, and `rel` is a
-  list of words. The page's own host over plaintext or on another port is
-  another origin. Before the 2026-09-16 audit (A17) `http&#58;//host/` was a
-  relative address, and a read that failed part way was reported as a page that
-  ended there; `Incomplete` now says only its start was seen.
-- **Off unless asked.** `webprobe.Prober.ReadMarkup` is false in the zero
-  value, so every caller that has not been changed keeps the old behaviour.
-  The demonstration build refused it outright until 2026-09-28; it reads its
-  own pages now, because its own are the only ones it reaches (N6).
-
-**Which deployment reached a log reader is now part of the promise.** The user
-agent names `https://porch.denyfirst.dev/web/method` from every installation, so that
-page describes both: the demonstration reads only its own pages, and an
-installation somebody runs themselves may have read the page. A flat sentence there would
-have been true of one and false of the one in the reader's log, which is worse
-than no page — it is a scanning notice that misdescribes the scan.
-
-**Only headers this check reads are kept.** An allow list, not a deny list.
-A response carries whatever the server chose to send — internal host names,
-software versions, request identifiers — and a report built from a deny list
-holds all of it until somebody thinks of the next entry. Adding a rule that
-reads a new header means adding the header to that list, which is a line a
-reviewer sees.
-
-The list drifted ahead of the rules once and it is worth naming, because a
-list of things nobody reads is the state this rule exists to prevent: thirteen
-headers were collected and two were graded, so eleven were held on the
-strength of an intention. They are read now — one graded, the rest reported —
-and a header kept without a rule that reads it is a header to remove rather
-than to keep for later.
-
-**A cookie's value is never recorded, and there is nowhere to put one.**
-`webprobe.Cookie` carries the name and the attributes that decide whether a
-cookie is safe — including `Path` and `Domain`, which a `__Host-` prefix
-constrains and which cannot be checked in part: a browser that finds any one
-of the three conditions wrong rejects the cookie outright, so reading two of
-them would report a guarantee no browser is making. It has no value field at all: a value is a session identifier
-as often as not, a report is a thing people paste into issue trackers, and a
-struct with nowhere to hold a secret cannot leak one through a later change
-that looked harmless. The value is discarded where the header is parsed, not
-where the report is rendered.
-
-**The chain is bounded and the boundary is recorded.** Five redirects, an
-overlong `Location` refused, a `Location` in another scheme refused, and
-credentials stripped from one before it is followed. Each refusal is written
-into the chain, because a reader who cannot tell *it stopped here* from *it
-was not followed* cannot interpret the chain at all.
-
-**The guard is under the transport, not in front of the first request.** The
-first address is one the operator chose; every address after it was chosen by
-the server that answered. So the dialler is `safedial`, and it is given the
-two ports a website is reached on — a redirect naming port 22 is this program
-being aimed by the host it is measuring. No proxy is read from the
-environment: one would put a third party in the path and the measurement would
-then describe the proxy.
-
-**The client says who it is.** The user agent names the tool and an address
-that explains exactly what is sent. There is a field for saying who you are
-and none for saying nothing: a probe that hides is one an administrator can
-only be alarmed by, where one that identifies itself is one they can make a
-decision about.
-
-**A redirect is followed as sent and recorded without its values.** A password
-reset or a sign-on redirect carries a token in its query string, and a report is
-a thing people paste anywhere. The chain requests the address exactly as the
-server gave it, so what is measured is what a visitor gets; the report records
-each hop's address, and the Location header, with every query value replaced,
-no userinfo and no fragment. Until the 2026-09-16 audit (A27) the whole address
-went into the JSON.
-
-**And the address leads somewhere.** That promise is worth exactly as much as
-the page behind it, and `/web/method` answered 404 from the day the user agent
-first named it until the check had a service surface — at which point the
-address started reaching strangers' access logs for real. A 404 makes a probe
-look like it is hiding, to the one reader who went looking, which is the
-opposite of what identifying yourself is for.
-
-Nothing caught it. Internal links are followed against the routing tables, but
-that reads the pages; this is an address the program puts into a request it
-makes to somebody else, and it was covered by neither direction. It is
-checked now, and the page answers the log reader before it answers the report
-reader: somebody who arrives from a log line did not choose to be here and
-wants one thing, which is what reached their server and the fact that there is
-nothing else to look for.
-
-**The demonstration reads its own page.** It read no body at all until
-2026-09-28, under a promise written when a visitor chose the host and the page
-read would have been somebody else's. Its hosts are compiled in now (N6), so a
-page it reads is ours, and the promise protected nobody while it kept the
-demonstration from showing the one thing a header check cannot see. The method
-page says so, and says the other half too: a request from the demonstration in
-somebody's log would mean their server is one of ours. The bound on what is
-carried is measured as what the client read, not what a handler handed to the
-kernel — on loopback the kernel buffers megabytes nobody reads, and the old
-measure failed one run in three under load on 2026-09-28, about bytes that never
-reached the prober.
+One `GET` of `/` over HTTPS and over plaintext; after that, only the addresses
+a `Location` header names. The only other paths ever asked for are files that
+exist to be read by strangers: `/.well-known/security.txt`,
+`/.well-known/mta-sts.txt` where a zone announces a policy, and
+`/.well-known/porch-challenge` for proof of control.
 
 *Enforced in:* `internal/webprobe`, `internal/markup`,
 `internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
 `internal/httpapi.Server.operatorView`
-*Guarded by:* `TestOnlyTheRootIsRequestedUnlessTheServerSaysOtherwise`,
+
+*Guarded by:* `TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestTheCommandLinePrintsTheSecurityContacts`,
+`TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof`,
+`TestTheContactsKeptAreBoundedAndTheCountIsNot`,
+`TestAContactIsCleanedBeforeItIsKept`,
+`TestTheRevocationAddressesAreKeptOnlyWhereAskedFor`,
+`TestTheCommandLineNamesTheRevocationAddresses`,
+`TestTheRevocationAddressesFollowTheOperatorsView`,
+`TestTheOperatorsOwnCopyShowsTheWholeReport`,
+`TestWhereRevocationIsCheckedIsNamedWhenItIsKnown`,
+`TestARevocationAddressIsCleanedBeforeItIsKept`,
+`TestTheOtherFormIsAskedEvenWhereTheNameItselfIsDead`,
+`TestTheOtherFormIsAskedOnceAndNotFollowed`,
+`TestTheOtherFormOfANameIsDerivedAndNotSearchedFor`,
+`TestTheOtherFormGoesThroughWhateverDecidesWhatMayBeReached`,
+`TestTheOtherFormOfTheNameRowSaysHowTheTwoAgree`,
+`TestWhereThisNameLandsReachesTheRowAboutTheOtherForm`,
+`TestWhichPublishedAddressesCanBeTried`,
+`TestWhatAnIPv6HandshakeSaysAboutTheCertificate`,
+`TestTheIPv6RowSaysWhichKindOfNoItFound`,
+`TestWhoAFailedIPv6ConnectionIsAboutDependsOnThisMachine`,
+`TestWhatCountsAsThisMachineHavingIPv6`,
+`TestTheIPv6MeasurementRunsOnAScanAndReachesTheReport`,
+`TestAScanThatRanOutOfTimeSaysSoRatherThanBlamingTheHost`,
+`TestADeadlineDuringTheIPv6HandshakeIsNotTheLocalNetworksFault`,
+`TestTheOtherFormSaysTheScanRanOutWhenTheDeadlinePassesMidRequest`,
+`TestTheSecurityContactSaysTheScanRanOutRatherThanThatTheFileIsMissing`,
+`TestNothingIsLookedUpOrDialledWithNoTimeLeft`,
+`TestTheReachDecisionIsNotAskedWithNoTimeLeft`,
+`TestWhatIsReadIsCountedAndNotKept`, `TestASignatureIsNotReadAsFields`,
+`TestTheThreeKindsOfNothing`,
+`TestTheSecurityContactRowSaysWhichNothingItFound`,
+`TestEveryWellKnownAddressInTheSourceIsNamedHere`,
+`TestTheListAndTheWrittenPromiseAgree`,
+`TestCoversRefusesAnAddressNobodyDecidedOn`,
+`TestOnlyTheRootIsRequestedUnlessTheServerSaysOtherwise`,
 `TestARedirectChainIsRecordedInOrder`,
 `TestTheRedirectLimitStopsTheChainAndSaysSo`,
 `TestARelativeLocationIsResolvedAgainstTheAddressThatSentIt`,
 `TestALocationWithAnotherSchemeIsNotFollowed`,
 `TestALocationCarryingCredentialsIsStrippedBeforeItIsFollowed`,
 `TestARedirectsTokenIsFollowedAndNotKept`, `TestRedactAddress`,
-`TestAnOverlongLocationIsNotFollowed`,
-`TestOnlyTheGradedHeadersAreRecorded`, `TestACookieValueIsNeverRecorded`,
-`TestCookieAttributesAreRead`, `TestTheScopeAttributesAreRead`,
+`TestAnOverlongLocationIsNotFollowed`, `TestOnlyTheGradedHeadersAreRecorded`,
+`TestACookieValueIsNeverRecorded`, `TestCookieAttributesAreRead`,
+`TestTheScopeAttributesAreRead`,
 `TestTheScopeAttributesDidNotAddSomewhereForAValue`,
 `TestTheRecommendedHeadersAreReportedAndNotGraded`,
-`TestTheBodyIsNotReadByDefault`,
-`TestTheBodyIsNotReadUnlessItIsAskedFor`,
-`TestThePageIsReadWhenItIsAskedFor`,
-`TestSomethingThatIsNotAPageIsNotRead`,
-`TestTheMediaTypeIsReadWithoutItsParameters`,
-`TestARedirectsBodyIsNotRead`,
-`TestAThreeHundredWithNowhereToGoIsAPage`,
-`TestALongPageIsBoundedAndSaysSo`,
+`TestTheBodyIsNotReadByDefault`, `TestTheBodyIsNotReadUnlessItIsAskedFor`,
+`TestThePageIsReadWhenItIsAskedFor`, `TestSomethingThatIsNotAPageIsNotRead`,
+`TestTheMediaTypeIsReadWithoutItsParameters`, `TestARedirectsBodyIsNotRead`,
+`TestAThreeHundredWithNowhereToGoIsAPage`, `TestALongPageIsBoundedAndSaysSo`,
 `TestTheDemonstrationShowsItsOwnEstateWhole`,
-`TestTheScannerDecidesWhetherThePageIsRead`,
-`TestNoMarkupReachesTheResult`,
-`TestNothingButTheHostSurvives`,
-`TestOnlyAnExplicitPlaintextAddressCounts`,
-`TestACommentedOutReferenceIsNotOne`,
-`TestWhatIsInsideAScriptIsNotMarkup`,
-`TestAClosingTagInCapitalsStillCloses`,
-`TestALongPageIsTruncatedAndSaysSo`,
+`TestTheScannerDecidesWhetherThePageIsRead`, `TestNoMarkupReachesTheResult`,
+`TestNothingButTheHostSurvives`, `TestOnlyAnExplicitPlaintextAddressCounts`,
+`TestACommentedOutReferenceIsNotOne`, `TestWhatIsInsideAScriptIsNotMarkup`,
+`TestAClosingTagInCapitalsStillCloses`, `TestALongPageIsTruncatedAndSaysSo`,
 `TestTheZeroValueIsNotACleanPage`,
-`TestAPageLoadingItsOwnThingsRecordsNothing`,
-`TestAnotherOriginIsRecorded`,
-`TestASiblingSubdomainIsAnotherOrigin`,
-`TestThePagesOwnHostIsFolded`,
-`TestWithNoHostNothingIsThirdParty`,
-`TestIntegrityIsReadWhereABrowserReadsIt`,
+`TestAPageLoadingItsOwnThingsRecordsNothing`, `TestAnotherOriginIsRecorded`,
+`TestASiblingSubdomainIsAnotherOrigin`, `TestThePagesOwnHostIsFolded`,
+`TestWithNoHostNothingIsThirdParty`, `TestIntegrityIsReadWhereABrowserReadsIt`,
 `TestAnEmptyIntegrityIsNotIntegrity`,
 `TestIntegrityIsNotRecordedWhereItDoesNothing`,
 `TestASchemeRelativeAddressIsReadAsThePagesOwnScheme`,
@@ -919,10 +201,8 @@ reached the prober.
 `TestAReferenceCanBeBothPlaintextAndAnotherOrigin`,
 `TestAnAddressIsReadAsABrowserResolvesIt`,
 `TestABaseElementMovesRelativeAddresses`,
-`TestAnEmptyAddressIsNotABaseReference`,
-`TestAnotherPortIsAnotherOrigin`,
-`TestEveryAddressInASrcsetIsRead`,
-`TestAFormActionOnAControlIsAFormAction`,
+`TestAnEmptyAddressIsNotABaseReference`, `TestAnotherPortIsAnotherOrigin`,
+`TestEveryAddressInASrcsetIsRead`, `TestAFormActionOnAControlIsAFormAction`,
 `TestAStylesheetAmongOtherRelationsIsAStylesheet`,
 `TestAReadThatFailsPartWayIsWhatWasSeen`,
 `TestAnIncompleteReadSaysWhatItCouldNotSee`,
@@ -935,75 +215,14 @@ reached the prober.
 `TestTheDefaultDiallerRefusesPrivateAddresses`,
 `TestTheDefaultDiallerRefusesPortsOtherThanEightyAndFourFourThree`,
 `TestTheClientFollowsNothingByItself`,
-`TestNoProxyStandsBetweenThisAndTheHost`,
-`TestTheTwoChainsAreIndependent`,
+`TestNoProxyStandsBetweenThisAndTheHost`, `TestTheTwoChainsAreIndependent`,
 `TestEveryAddressThisProjectSendsOutResolves`
-
----
 
 ### N8 — Some names are refused before anything connects to them
 
-A short list of defence and intelligence names, plus anyone who asked to be
-left out. A TLS handshake is harmless; a handshake against a defence network,
-described afterwards by somebody who was not asked, is a conversation this
-project has nothing to gain from.
-
-**The list is short on purpose.** A long one goes stale, and a long one that
-has gone stale says something worse than nothing: that this project decides
-which organisations deserve protection and got the answer wrong. `.gov` is
-deliberately absent — most of what sits under it is an ordinary public website
-a citizen's browser reaches daily, and refusing to look at one would suggest
-this tool does something such a site needs protection from.
-
-Anyone who would rather not be scanned is added on request, from an address at
-the domain or one listed in its WHOIS or `security.txt`. That route handles
-far more real cases than any list written in advance, and the additions are
-kept in a separate variable so a copy of this project starts with the same
-defaults and its operator's additions stay their own.
-
-**It matches at label boundaries.** `mil` must exclude `army.mil`, must not
-exclude `example.mil.com`, and must not exclude `domil.com`. A plain suffix
-test gets the last two wrong, and the third is the one that would go
-unnoticed. The comparison folds case and a trailing dot on its own rather than
-trusting a caller to have done it, which is the argument N3 makes about where
-a guard belongs: `EXAMPLE.COM`, `example.com` and `example.com.` are one
-server.
-
-**Every check asks it, and asks it where the connection is decided.** The list
-is a property of this project rather than of any one check. The TLS scanner
-asked it from the beginning; the web check did not, so until 2026-09-10 a name
-on it was refused by `-check tls` and scanned by `-check web` — one guard, one
-caller, and a second caller that walked around it, which is the failure N6 is
-about arriving through the door N6 predicted.
-
-**It is not part of any check.** It lived in `internal/scan`, which meant the
-web check would have imported the TLS scanner to find out what it may connect
-to, and a mail check after it — the shape that gets worse with every check
-added. It is `internal/exclusion` now, extracted exactly as `internal/demo`
-was on 2026-09-05 and for the same reason.
-
-**It is asked before any source of authority, and nothing overrides it.** A
-deployment list says which hosts an installation is *for*; this says which
-names this project will not touch, whoever is asking and whatever they have
-proven. Both refuse, so on the ordinary build the order decides only which
-sentence is returned and no test without the demonstration tag can see it — a
-sabotage that swapped them escaped every one. It is pinned under the tag
-instead, because the order stops being cosmetic the moment a second source of
-authority exists: a deployment that establishes its scope at run time
-(`docs/scope.md`) must not be able to buy a scan of a name on this list by
-proving control of it.
-
-**And it holds at a redirect.** A name on this list was refused when typed and
-reached when a `Location` header pointed at it, until the web probe began
-asking the caller's boundary about every host a redirect names. N10 has the
-reasoning; it applies to this list, to the demonstration list and to a verified
-zone alike, because all three answer the same question about the same kind of
-address.
-
-**The refusal states the rule and does not repeat the name** (I3).
-
 *Enforced in:* `internal/exclusion`, `internal/scan.Scanner.Scan`,
 `internal/webscan.Scanner.Scan`, `internal/httpapi.Server.handleScan`
+
 *Guarded by:* `TestExcludedNamesAreRefused`,
 `TestExclusionMatchesAtLabelBoundaries`,
 `TestOrdinaryGovernmentSitesAreNotExcluded`,
@@ -1014,352 +233,42 @@ address.
 `TestTheExclusionListIsNotOverriddenByTheDeploymentList`,
 `TestEveryRefusalCodeCanBeProduced`
 
----
-
 ### N9 — A deployment scans only estates it has been shown control of
 
-A service needed a boundary first, and until this existed it had nothing at
-all. A
-`porchd` bound to an interface is reachable by a careless colleague, by a
-compromised CI job, and by an SSRF into the scanner — and every scan any of
-them starts puts the operator's address in a stranger's logs. That is N6's
-arrangement rebuilt inside somebody's own network, which is the thing
-`docs/scope.md` was written to stop.
+*Enforced in:* `internal/verify`, `internal/challenge`,
+`internal/scan.Scanner.Scan`, `internal/webscan.Scanner.Scan`,
+`internal/httpapi.New`, `internal/httpapi.Server.UseWebScanner`,
+`internal/httpapi.Server.handleVerify`, `internal/httpapi.Server.operatorView`,
+`internal/web.Installation.Whole`, `cmd/porchd.verificationScope`
 
-**Proof is a TXT record at `_porch-challenge.<domain>`** carrying the token
-this deployment expects for that domain. Publishing it needs control of the
-zone, which is what is being proven.
-
-**And it is read from the zone's own servers, never through a resolver.** It
-was read through this machine's resolver, or the one `-resolver` named, and a
-resolver says whatever it is configured to say. On 2026-09-29 a resolver
-started on the same server as a proven installation answered for a domain
-nobody there controlled, carrying the token the installation expected, and the
-domain was scanned. Any resolver between a deployment and a zone — one handed
-out by DHCP, one with a poisoned cache, one on a path somebody sits on — was
-the proof's weakest point. The record is now read by walking from the root
-servers, whose addresses the binary carries, down each delegation to the
-servers holding the zone: one label at a time, so the root and the top-level
-domain never learn which name is being proven (RFC 9156); over TCP through the
-guard that refuses private and loopback destinations, since a zone names its
-own servers; with an address a referral carries used only for a server inside
-the zone that sent it; with a record believed only where its owner is the name
-asked about, and an alias followed by a walk of its own. The walk is bounded at
-forty-eight questions. What it cannot stop is somebody who answers in place of
-the zone's servers on this machine's own network, for a zone that is not
-signed; `-verification-requires-dnssec` then asks the resolver's signed bit as
-well, and a record counts only where both carry it
-(`TestTheChallengeIsReadFromTheZonesOwnServersAndNoResolver`,
+*Guarded by:* `TestTheChallengeIsReadFromTheZonesOwnServersAndNoResolver`,
 `TestGlueFromOutsideItsZoneIsNotBelieved`,
 `TestAnAliasIsWalkedFromTheRootAndNotBelieved`,
 `TestAWalkThatNeverEndsIsBounded`,
 `TestTheZonesOwnServersDecideAndNotAResolver`,
-`TestTheServiceReadsTheChallengeFromTheZone`).
-
-**Or a file at `/.well-known/porch-challenge`**, for teams without access
-to their own DNS — which is a common enough arrangement that refusing them
-would mean refusing the estates this tool is for.
-
-**The two do not prove the same thing, so they do not grant the same thing.** A
-record in a zone is a statement about the zone and covers every name under it.
-A file on a host is a statement about that host: it opens that hostname and no
-other, not its parent and not a name beneath it. Reading a file as a zone proof
-would let one file open every name under a domain, including the ones delegated
-to somebody else.
-
-**And a file does not open a check that leaves the ports a browser uses.** It
-proves control of what one hostname serves over HTTPS, which is exactly what a
-web check reads. It proves nothing about port 993 on the same name: a content
-network can serve the file while the mail service answers from an origin the
-person who placed it does not administer. So `Covers` is told which surface is
-asking, and only the zone proof answers for all of them.
-
-**The fetch is the dangerous half.** It is a connection this deployment opens
-to a host somebody named, before the boundary has decided anything — the shape
-of the SSRF this exists to survive. It dials through `safedial` as a scan does,
-over 443 and no other port, follows no redirect, reads a bounded body, and
-verifies the certificate: a challenge read over a connection this program would
-not trust proves nothing, because whoever can answer for the name can serve any
-file.
-
-**It is the one path this project constructs, and that is not a contradiction
-of N7.** N7 governs the web check, which reads what a server volunteers and
-guesses at nothing. This is not a check. It is one request for a file an
-operator deliberately placed, made only when the DNS proof was not found, to a
-host that will not be scanned unless the file is there. Nothing it returns
-reaches a report.
-
-**The token is derived per domain, not shared.** One secret published
-everywhere would be readable in public DNS: anybody who looked at one record
-could publish the same string on a name they control — including a name
-pointed at somebody else's address — and have this deployment scan it. The
-token is an HMAC over the deployment secret and the domain, so reading one
-tells nobody anything about another.
-
-**The secret is read from a file.** A flag value is in the process list, where
-every user on the machine can read it, and in whatever unit file or shell
-history put it there. It is the whole of the proof. A path naming no file gets
-a new secret, created exclusively and readable by its owner alone, so turning
-proof on is one flag; a mistyped path means a new secret and every record
-refused, which fails closed.
-
-**A service beyond loopback requires it, and nothing turns that off.**
-`porchd` will not listen anywhere but loopback without a secret, and the image
-and the compose file both turn proof on. docs/scope.md said the service default
-was on while the code shipped it off; the 2026-09-16 audit (A01, A02) found a
-container example publishing an open scanner.
-
-Until 2026-09-29 `-open` turned it off, and `-without-password` turned off the
-password beside it. Each rested on one sentence in its help text — "only for a
-network nobody else can reach" — which nothing could check, so an operator's
-belief about their network was the whole of the boundary. A second copy started
-on another port of a server that ran a proven installation, with both flags,
-served every name to everyone who could reach it, from the same address. Both
-flags are gone, and an installation started with either is told why rather than
-started (`TestTheFlagsThatOpenedAServiceAreRefused`). No release checks a
-name nobody has proven any more: the command line asks too, below.
-
-**And no flag brings one back without saying so.** Each of those two was one
-line in `main.go`, added the way every flag is. Every flag either program
-accepts is now named in a test beside what it does, read from the source
-rather than from a run, so one behind an untaken branch still counts
-(`TestNoServiceFlagTurnsProofOff`, `TestNoCommandLineFlagTurnsProofOff`). A
-new flag fails until it is added there, in the open, under the rule that
-nothing on the list weakens the proof; one whose name reads as a way round it
-— open, insecure, skip, without, bypass, no-verify — fails even when it is
-listed. Asking for a stronger proof is a flag this project can have
-(`-verification-requires-dnssec`); skipping it is not.
-
-**What denyfirst distributes checks only what has been proven.** Every release
-before v0.25.1 checked names nobody had proven, and was still downloadable
-after the code stopped doing so. On 2026-10-01 their binaries were withdrawn.
-v0.1.0 to v0.25.0 keep their tag, `SHA256SUMS`, its signature and `BUILD`, and
-are titled as withdrawn, so a copy somebody already has is checked as
-`docs/verify.md` says and each still rebuilds from its tag, but none is offered
-for download. The image of the unreleased v0.26.0-rc1 was deleted from the
-registry the same day. No guide may send a reader to a withdrawn binary
-(`TestNoGuideDownloadsAWithdrawnBinary`), and the security policy draws the same
-line: only the latest release is supported, and the releases before v0.25.1
-are named as withdrawn (`TestTheSecurityPolicySaysWhichVersionsAreSupported`).
-
-An installation already running an old release is its operator's, and nothing
-here reaches it. Nothing should be able to: a switch that could turn old
-copies off would be a connection home from every installation, and a single
-place from which all of them could be stopped, which is the arrangement this
-project exists not to make. They are told instead, in the release notes and
-on each withdrawn release.
-
-**The command line asks for the same proof, since 2026-09-29.** It needed none,
-on the argument that whoever runs it has the machine, the scan leaves from
-their own address, and nobody else can reach it. All true, and an answer to a
-different question — who can reach the program, rather than what denyfirst
-distributes. A release that checks whatever name is typed into it is a tool for
-looking at anybody's estate with this project's name on it, and the project
-undertakes to be a tool for looking at your own. So `porch-scan` keeps a secret
-per user — `porch/secret` under the user's configuration directory, made on
-the first run in a directory only they can enter, readable by them alone — and
-every target is proven before anything is checked, by the record the service
-asks for, read the same way from the zone's own servers and never through a
-resolver (`TestEveryTargetIsProvenBeforeAnythingIsChecked`,
+`TestTheServiceReadsTheChallengeFromTheZone`,
+`TestTheFlagsThatOpenedAServiceAreRefused`, `TestNoServiceFlagTurnsProofOff`,
+`TestNoCommandLineFlagTurnsProofOff`, `TestNoGuideDownloadsAWithdrawnBinary`,
+`TestTheSecurityPolicySaysWhichVersionsAreSupported`,
+`TestEveryTargetIsProvenBeforeAnythingIsChecked`,
 `TestTheCommandLineKeepsItsOwnSecretAndAsksNoResolver`,
-`TestTheCommandLineProvesBeforeItChoosesACheck`). A target that is not proven
-is refused with the records that would prove it; `-verification-token` prints
-them without asking anything. A lookup that failed is not a missing record,
-and is not reported as one (`TestAProofThatCouldNotBeReadIsNotAPass`). The web
-check takes the served file as the service does, and no other check does
-(`TestOnlyTheWebCheckAcceptsTheServedFile`).
-
-**On a server, one record covers the service and the command line, and the
-secret never moves.** The image carries `porch-scan` beside `porchd`, and the
-compose file's `scan` service runs it with `-verification-secret-file
-/data/secret`: the same image, the same sandbox, and the data directory
-mounted read-only, so the command line reads the secret as it is and can write
-nothing there — not the secret, not the sealed key, not a kept report
-(`TestOneRecordCoversTheServiceAndTheCommandLine`,
-`TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing`). It
-starts the release's image by the same digest as the service (S17). Copying
-the secret to another
-machine was documented for one day and taken out: the file is the authority
-to check every domain proven to the service, from wherever it is copied, and
-the only way to take it back is a new secret and every record published
-again. A command line elsewhere keeps a secret of its own.
-
-**The image build is never sent the data directory.** Since S17 a server
-builds nothing; this holds for whoever builds their own image from the
-`Dockerfile`. v0.25.1 shipped a
-Dockerfile without an ignore file, so `docker compose up --build` sent the
-whole directory — `porch-data` with it — to the builder, and run with `sudo` it
-left the secret in BuildKit's cache. Measured on 2026-10-01: a file in
-`porch-data` could be copied into the image. `Dockerfile.dockerignore`, named so
-that a release can carry it and read by BuildKit before `.dockerignore`, sends
-the builder the two binaries and nothing else, and the same probe then fails
-with "not found" (`TestAServerHoldsTheReleaseAndNothingElse`).
-
-Proving before the run is the part a person reads, so that the answer to "why
-did nothing happen" is a record to publish. It is not the guard. Each check is
-handed the same scope and asks again where it connects, so a mode added later,
-or a `run()` rearranged, is refused by the check itself
-(`TestEveryCheckAsksForProofWhereItConnects`); within one run the zone is asked
-once per name (`TestARunAsksTheZoneOncePerName`), and the next run asks again.
-
-An address is refused: it has no zone this can read, and a reverse zone is
-published by whoever holds the range rather than whoever types the address. So
-is a single label, before anything is asked, because asking the root about an
-internal name sends it to the root servers for nothing
-(`TestAnAddressIsNotCheckedFromTheCommandLine`). A host with a private address
-is still reached with `-allow-private`, named by a domain proven in public DNS.
-What this does not claim is written here so nobody else has to: the source is
-published, and anybody determined can delete these lines and build it again,
-or use a tool that asks nothing. The promise is about what the release does.
-
-**The page shows the record to publish, and that is safe because of the token,
-not despite it.** `POST /api/v1/verify` answers whether a name is proven and,
-where proof is required, the record for the name and each domain above it. A
-token is worth something only to whoever can publish it in that domain's
-zone. Copied to another domain it is the wrong value, because that domain's
-token differs; copied to another deployment it is the wrong value, because that
-deployment's secret differs. Knowing it proves nothing; publishing it is the
-proof. The endpoint walks every guard a scan does — rate limit, cross-site,
-exclusion list — opens no connection to the name, and is marked as asking
-rather than scanning where it is registered, so the boundary tests say which
-kind each POST is.
-
-**What a zone proof does not prove is who owns the addresses the name points
-at.** Whoever runs a zone can point a name anywhere, including at an address
-that is not theirs, and a TXT record cannot tell. That is a property of DNS and
-not of this token. What bounds it is everything else in this document: the
-private and reserved ranges `safedial` refuses, the per-host budget, the
-implicit-TLS ports, and a scan that sends only what a browser or a sending mail
-server would.
-
-**Nothing is remembered.** A verification checked once and stored is a standing
-authorisation outliving the relationship it came from: a domain changes hands,
-a supplier contract ends, a subsidiary is sold. Re-reading is one round trip,
-and it makes revocation work by deleting the record — the only revocation an
-operator will actually find.
-
-**Asked where the scan is decided**, beside `demo.Refusal` and the exclusion
-list, in `Scanner.Scan` and `webscan.Scanner.Scan` rather than in the handler
-that calls one of them today. Checking at startup and holding a flag would make
-it a configuration boundary, and N6 says what happens to those.
-
-**And asked after the exclusion list.** Proving control of a name does not put
-it back in reach: the list says what this project will not touch, whoever asks
-and whatever they have shown (N8). Asked the other way round, an operator is
-told to publish a record for a name that will be refused after they publish
-it — work this program prompted and that changes nothing.
-
-**A scope that cannot check refuses.** A deployment configured to require proof
-and given no resolver, or no secret, admits nothing. The message says the
-failure is local rather than blaming the host, and the process refuses to start
-if the secret file cannot be read: a service that was asked for a boundary,
-could not build one, and scanned anyway is the failure this exists to prevent
-arriving through a typo in a path.
-
-**A lookup that failed is not a domain that is unverified.** Reporting the
-second sends an operator to their DNS to publish a record they have already
-published, rather than to the resolver that would not answer.
-
-**Configured once, inherited by every check.** This is the half that was
-missing, and it was missing in production while every test passed. Both
-scanners asked the scope, both had tests proving they asked it, and
-`httpapi.New` built the web check from nothing — so a service that configured a
-boundary refused an unproven host on `/api/v1/tls/scan` and measured it on
-`/api/v1/web/scan`. The component was secure and the composition was not.
-
-N6 puts a guard where the connection is made, and it does. What N6 does not say
-is that **a guard every constructor has to remember to pass is a guard somebody
-forgets.** So the caller configures the boundary on the scanner it hands to
-`New`, and every check the service builds takes it from there — including
-through `UseWebScanner`, which is a door for tests and therefore exactly how a
-boundary comes to be off in production. A replacement that carries no scope
-inherits the one the server was built with rather than replacing it with
-nothing.
-
-The test for this drives the addresses rather than the packages. It reads the
-`POST` routes out of the source, posts an unproven name to each, and asserts
-that no dial was attempted and that the challenge was actually looked up — so a
-check added later is tested by existing, and a refusal that arrives without a
-lookup is not mistaken for this boundary holding.
-
-**The refusal is recognised, not repeated.** Unlike the exclusion list and the
-demonstration list, this boundary is a lookup, so asking it in the handler and
-again in the scanner would be two queries somebody else's resolver serves for
-one request. The scanner asks; the handler reads the answer and turns it into
-`not_verified` with a 403. Before that it arrived as `scan_failed` with a 502
-saying the target could not be reached — a sentence about somebody else's
-server for a decision made entirely here, and a deliberate refusal counted as a
-failure in the only figures an operator has to watch this service by.
-
-**It is opt-in today, and that is the open state.** Turning it on by default
-would stop every deployment that has not published a record yet, which is a
-change to make deliberately rather than as a side effect of an upgrade.
-`docs/scope.md` says the default belongs on for a service, and the roadmap
-carries the gap until it is.
-
-**Asking is not scanning, and is bounded apart.** The verify endpoint walks
-every guard a scan does, but spends an allowance of its own and holds a slot of
-its own. The review of 2026-09-18 found it spending the scan allowance (D04),
-so opening a Domains page of five, which asks once per domain, left nothing to
-scan with; and taking no slot at all (D10), so the lookups in flight had no
-bound. Both are now separate limits, and a request that gives up while queued
-is released unasked.
-
-**Signed is the resolver's word, and said as that.** The review of
-2026-09-16 (A06) asked what the proof rests on: a TXT answer from a resolver,
-which a forged answer or a stale cache can bend. The endpoint now says whether
-the resolver reported the proving record DNSSEC-validated, and Domains shows it
-in those words, because the AD bit is the resolver's claim and worth what the
-path to it is worth — the objection the CAA report makes about the same bit.
-`-verification-requires-dnssec` accepts only signed records and never the file,
-for an operator whose resolver is theirs; since 2026-09-29 the record must also
-be carried by the zone's own servers, reached from the root. Freshness, a failed lookup, and
-starting over with a new secret are in `docs/self-host.md`; nothing is cached,
-so a record taken out ends the proof as soon as the resolver lets it go.
-
-**The record asked for is the name's own.** The endpoint offers the name and
-the domains above it, most specific first, because it cannot tell a public
-suffix from a registrable domain and does not guess. The pages used to pick the
-last of them (D05) — `co.uk` for `www.shop.co.uk`, a zone its owner does not
-run, and a record that would speak for every name beneath it. They pick the
-first now, and say what choosing a parent gives away.
-
-**What a report carries follows who reads it, not only the scope.** Reading the
-page, the addresses a `security.txt` names, the MTA-STS policy, what each
-exchanger answers on port 25, the mailboxes DMARC reports go to, and what the
-zone's own servers say were all switched on by the scope alone — a rule from
-when a copy without one answered strangers. The command line has always shown
-all of them to the person who ran it. A copy of `porchd` only its operator can
-call, on this machine's loopback or behind their password, is that person with
-a browser in front of the command line, and it showed them a stranger's report
-of their own estate. `operatorView` now decides it: a scope, or a copy nobody
-but the operator can call. A copy that answers strangers shows only what a
-visitor sees — `porchd` no longer starts one, since `-open` and
-`-without-password` went on 2026-09-29, and the service does not assume it. The two questions
-that name the domain to somebody else — the transparency logs and the
-certificate's responder — stay with the scope, because without one the domain
-may be somebody else's, and the command line asks both only behind a flag for
-that reason. Every page that describes this says the same, rendered from the
-same two facts.
-
-*Enforced in:* `internal/verify`, `internal/challenge`,
-`internal/scan.Scanner.Scan`, `internal/webscan.Scanner.Scan`,
-`internal/httpapi.New`, `internal/httpapi.Server.UseWebScanner`, `internal/httpapi.Server.handleVerify`,
-`internal/httpapi.Server.operatorView`, `internal/web.Installation.Whole`,
-`cmd/porchd.verificationScope`
-*Guarded by:* `TestTheOperatorsOwnCopyShowsTheWholeReport`,
+`TestTheCommandLineProvesBeforeItChoosesACheck`,
+`TestAProofThatCouldNotBeReadIsNotAPass`,
+`TestOnlyTheWebCheckAcceptsTheServedFile`,
+`TestOneRecordCoversTheServiceAndTheCommandLine`,
+`TestTheCommandLineOnTheServerUsesTheServicesSecretAndChangesNothing`,
+`TestAServerHoldsTheReleaseAndNothingElse`,
+`TestEveryCheckAsksForProofWhereItConnects`, `TestARunAsksTheZoneOncePerName`,
+`TestAnAddressIsNotCheckedFromTheCommandLine`,
+`TestTheOperatorsOwnCopyShowsTheWholeReport`,
 `TestTheOperatorsOwnCopySaysItShowsTheWholeReport`,
-`TestAPublishedTokenCoversTheZone`,
-`TestADomainThatProvedNothingIsRefused`,
+`TestAPublishedTokenCoversTheZone`, `TestADomainThatProvedNothingIsRefused`,
 `TestATokenFromOneDomainDoesNotProveAnother`,
 `TestATokenFromAnotherDeploymentIsNotAccepted`,
-`TestTheTokenIsFoundAmongOtherRecords`,
-`TestAScopeThatCannotCheckRefuses`,
-`TestALookupFailureIsNotAnUnverifiedDomain`,
-`TestTheRefusalNamesNoHost`,
+`TestTheTokenIsFoundAmongOtherRecords`, `TestAScopeThatCannotCheckRefuses`,
+`TestALookupFailureIsNotAnUnverifiedDomain`, `TestTheRefusalNamesNoHost`,
 `TestTheWalkDoesNotReachForAPublicSuffix`,
-`TestTheMostSpecificNameIsAskedFirst`,
-`TestATokenIsStableAndSpellable`,
+`TestTheMostSpecificNameIsAskedFirst`, `TestATokenIsStableAndSpellable`,
 `TestTheTLSScannerRefusesAnUnverifiedNameBeforeDialling`,
 `TestTheTLSScannerScansAVerifiedName`,
 `TestTheTLSScannerNeedsNoProofByDefault`,
@@ -1368,27 +277,32 @@ same two facts.
 `TestAnExcludedNameIsRefusedAsExcludedRatherThanAsUnproven`,
 `TestEveryScanningEndpointRequiresProofOfControl`,
 `TestTheVerifyEndpointNamesTheRecordAndSaysWhetherItIsThere`,
-`TestTheVerifyEndpointReadsWhatTheChecksRead`, `TestAnOpenDeploymentHasNothingToVerify`,
-`TestAFailedChallengeLookupIsNotUnverified`, `TestTheVerifyEndpointHasTheScanGuards`,
-`TestTheVerifyRecordsAreBounded`, `TestProvingDomainsDoesNotSpendTheScanAllowance`,
-`TestSignedProofIsReportedAndCanBeRequired`, `TestTheVerifyEndpointSaysWhetherTheProofWasSigned`,
-`TestSignedProofOnlyNeedsProofAndReachesTheScope`, `TestDomainsSaysWhetherTheProofWasSigned`,
+`TestTheVerifyEndpointReadsWhatTheChecksRead`,
+`TestAnOpenDeploymentHasNothingToVerify`,
+`TestAFailedChallengeLookupIsNotUnverified`,
+`TestTheVerifyEndpointHasTheScanGuards`, `TestTheVerifyRecordsAreBounded`,
+`TestProvingDomainsDoesNotSpendTheScanAllowance`,
+`TestSignedProofIsReportedAndCanBeRequired`,
+`TestTheVerifyEndpointSaysWhetherTheProofWasSigned`,
+`TestSignedProofOnlyNeedsProofAndReachesTheScope`,
+`TestDomainsSaysWhetherTheProofWasSigned`,
 `TestProofLookupsInFlightAreBounded`, `TestTheProofDefaultsToTheNameItself`,
 `TestAMissingSecretIsCreatedAndThenKept`,
-`TestTheSecretIsCreatedByStartingAndNotByAsking`, `TestAServiceWithoutProofDoesNotStart`,
+`TestTheSecretIsCreatedByStartingAndNotByAsking`,
+`TestAServiceWithoutProofDoesNotStart`,
 `TestTheComposeFileTakesAwayWhatItSays`,
-`TestTheProofDialogIsOfferedOnlyWhereProofIsRequired`, `TestTheConsoleAsksForProofBeforeItRuns`,
-`TestOnlyTheEndpointsThatOpenNothingAskWithoutScanning`, `TestAServedFileIsNotReportedAsProofForEveryCheck`,
-`TestAnUnprovenNameOpensTheDialog`,
-`TestAProvenDomainReachesTheProbe`,
+`TestTheProofDialogIsOfferedOnlyWhereProofIsRequired`,
+`TestTheConsoleAsksForProofBeforeItRuns`,
+`TestOnlyTheEndpointsThatOpenNothingAskWithoutScanning`,
+`TestAServedFileIsNotReportedAsProofForEveryCheck`,
+`TestAnUnprovenNameOpensTheDialog`, `TestAProvenDomainReachesTheProbe`,
 `TestTheConstructorGivesEveryCheckTheSameBoundary`,
 `TestReplacingTheWebScannerCannotDropTheBoundary`,
 `TestTheVerificationRefusalStatesTheRuleWithoutRepeatingTheTarget`,
-`TestALookupFailureIsNotAnsweredAsUnproven`,
-`TestAServedFileProvesTheHost`, `TestAServedFileProvesNoOtherName`,
+`TestALookupFailureIsNotAnsweredAsUnproven`, `TestAServedFileProvesTheHost`,
+`TestAServedFileProvesNoOtherName`,
 `TestAServedFileDoesNotProveACheckThatLeavesTheBrowsersPorts`,
-`TestTheZoneProofCoversEverySurface`,
-`TestAFileWithTheWrongTokenIsRefused`,
+`TestTheZoneProofCoversEverySurface`, `TestAFileWithTheWrongTokenIsRefused`,
 `TestAFailedFetchIsNotAHostThatPublishedNothing`,
 `TestAHostServingNoFileIsRefusedRatherThanErrored`,
 `TestNoFetcherMeansOnlyTheZoneProofWorks`,
@@ -1399,94 +313,17 @@ same two facts.
 `TestAFetchFailureNamesNoInfrastructure`,
 `TestTheDefaultDiallerRefusesPrivateAddresses`,
 `TestAChallengeIsNotReadOverAnUntrustedConnection`,
-`TestAFileProofDoesNotOpenTheTLSCheck`,
-`TestAFileProofOpensTheWebCheck`,
-`TestAFileProofDoesNotOpenAnotherName`,
-`TestNoServiceFlagTurnsProofOff`,
-`TestNoCommandLineFlagTurnsProofOff`,
-`TestNoGuideDownloadsAWithdrawnBinary`,
-`TestTheSecurityPolicySaysWhichVersionsAreSupported`
-
----
+`TestAFileProofDoesNotOpenTheTLSCheck`, `TestAFileProofOpensTheWebCheck`,
+`TestAFileProofDoesNotOpenAnotherName`
 
 ### N10 — A redirect is a connection the scanned server chose
 
-Every boundary above authorises **the host the caller asked about**. A redirect
-names a different one, and until 2026-09-10 the probe followed it: the
-exclusion list, the demonstration list and the verified zone all held at the
-front door and none of them held at the hop.
-
-What that cost is not theoretical, and it is worst on the two deployments this
-project is most careful about. A name on the exclusion list was refused when
-typed and reached when a `Location` header pointed at it (N8). The
-demonstration build — whose entire safety is a compiled-in list of hosts this
-project owns — would have connected to a stranger the moment one of our own
-hosts answered with a redirect off it, which is N6's arrangement rebuilt
-through a door nobody was watching, and which needs no compromise to arrange:
-a marketing redirect to somebody else's platform is enough. And a deployment
-that scans only estates it has proven control of could be walked out of its own
-estate by one header on a site it does own (N9).
-
-`safedial` was never the answer to this. It stops a redirect reaching a
-private, loopback or reserved address, which is a different question — the
-hosts above are ordinary public ones.
-
-**So the boundary is asked again, at the hop, before the address is dialled.**
-The same three sources of authority, in the same order, written once in
-`webscan.Scanner.reachable` rather than twice, so that an authority added later
-cannot hold at the front door and not at the hop.
-
-**The host asked about is not asked about again**, and no name is asked about
-twice in one probe. Asking can be a DNS lookup somebody else's resolver serves;
-a redirect from `https` to `http` on the same name is the commonest redirect
-there is, and a chain of five hops on one host would otherwise be five
-questions. The names are folded before they are asked or remembered, for the
-reason N8 gives about its own comparison.
-
-**A boundary that cannot be asked stops the chain.** A lookup that fails is not
-permission — a guard that gives way whenever a resolver is slow is a guard
-somebody can arrange to be slow.
-
-**Asking is not free, and the cost is named rather than left to be found.** The
-web check asks for the `HTTPOnly` surface, the same one it asks about the host
-it was given, so a deployment that accepts the challenge *file* makes one
-request to a redirect target before refusing it: a `GET` of the challenge path
-over 443, identifying itself, following no redirect, with a capped body. "The
-refusal comes before the connection" is therefore true of the probe and not
-literally true of the machine, and a test that asserts nothing was dialled is
-asserting the first.
-
-The alternative — accepting only the zone proof at a hop, which costs a lookup
-and no connection — was not taken. The file proof exists for teams with no DNS
-access, and apex-to-www is the redirect almost every site has; those teams would
-get a chain truncated at the first hop with nothing they could do about it. What
-is spent instead is one fixed, published request, which is strictly less than
-the full probe that used to happen there unasked.
-
-**It is a parameter of `Probe`, not a field on `Prober`.** `Dial` is a field
-because leaving it unset selects the safe answer; this has no safe default,
-since the command line must follow a redirect anywhere and a service must not.
-So it is spelled at every call site, where a review can see a `nil` — because a
-guard a constructor has to remember to set is a guard somebody forgets, and
-this project has already been caught by exactly that (N9).
-
-**Declining is recorded, never silent.** The chain carries the reason in
-`Stopped`, which is not `Truncated`: one is a limit of the method and the other
-is a decision, and only one of them changes if the site is scanned from
-somewhere else. The reason states the rule and does not name the host (I3) —
-the `Location` header is one of the headers the probe keeps, so the reader has
-the address without the report repeating it. And the reason is a string rather
-than an error, because it is written into a report a stranger reads: an error
-from the caller's boundary could carry a resolver's address, and a signature
-with nowhere to put one is stronger than a rule saying not to (I6).
-
 *Enforced in:* `internal/webprobe.Prober.chain`, `internal/webprobe.walk`,
 `internal/webscan.Scanner.reachable`
+
 *Guarded by:* `TestARedirectIsNotFollowedToAHostTheCallerRefuses`,
-`TestARedirectIsFollowedToAHostTheCallerAllows`,
-`TestANilReachFollowsAnyHost`,
-`TestTheHostAskedAboutIsNotAskedAgain`,
-`TestOneQuestionPerDistinctHost`,
+`TestARedirectIsFollowedToAHostTheCallerAllows`, `TestANilReachFollowsAnyHost`,
+`TestTheHostAskedAboutIsNotAskedAgain`, `TestOneQuestionPerDistinctHost`,
 `TestTheHostIsFoldedBeforeTheBoundaryIsAsked`,
 `TestARefusedRedirectIsNotReportedAsTheRedirectLimit`,
 `TestARedirectToAnExcludedDomainIsNotFollowed`,
@@ -1497,106 +334,23 @@ with nowhere to put one is stronger than a rule saying not to (I6).
 `TestARedirectOffTheDemonstrationIsNotFollowed`,
 `TestARedirectInsideTheDemonstrationIsFollowed`
 
----
-
 ### N11 — An address a certificate names is an address the scanned party chose
-
-A certificate carries revocation list distribution points, and a scanner that
-reads one is fetching an address written by the party it is measuring. A
-certificate naming `http://10.0.0.1/` is that server aiming this scanner at the
-network it runs in, and a certificate naming forty addresses is one scan turned
-into forty requests somebody else pays for.
-
-So the same guards every other outbound connection has: `safedial`, which
-refuses private, loopback, link-local and reserved destinations; ports 80 and
-443 only, because a port taken from a certificate would make this a port
-scanner aimed by the target; `http` and `https` only, because a certificate may
-name `ldap://` and following one means speaking a protocol the measured party
-chose; no redirect followed, since that is an address chosen by whoever answered
-an address chosen by the server; credentials stripped; and two distribution
-points at most.
-
-**And what comes back is believed only after it is verified.** A list arrives
-over plaintext HTTP from an address a stranger named, so whoever can answer that
-request chooses the bytes. Without a signature check against the issuing
-certificate they could report a sound certificate as revoked — or, far worse, a
-revoked one as sound. Four things are required before a single field is read:
-the list parses, its signature verifies against the issuer, it is inside its own
-validity window, and it arrived under the size cap.
-
-**The size cap refuses rather than truncates**, and the direction of that
-failure is the whole reason it matters. Every serial is absent from a truncated
-list, and absence is exactly what "not revoked" is read from — so a list cut at
-the cap answers *good* about a revoked certificate.
-
-**A serial is compared as a number, never as bytes.** The same integer is
-encoded with or without a leading zero byte depending on whether its top bit is
-set, so a byte comparison reports a revoked certificate as sound for every
-serial above `0x7f` — which is most of them, and which would pass every test
-written with small numbers.
-
-**A list is an answer only about what it covers.** A list the issuer signed,
-inside its own dates, can still say it covers part of what the issuer signs: a
-delta list holds only what changed since its base, an issuing distribution
-point can limit it to authority certificates, to some revocation reasons, to an
-indirect issuer, or to another distribution point. Absence from such a list is
-silence about this certificate, not "not revoked". Until the 2026-09-16 audit
-(A09) every verified list was read as complete, and a signed delta list
-answered "good" alone. Now a delta list, an unknown critical extension, or a
-scope this certificate falls outside is "not checked"; the shape real
-authorities publish — Let's Encrypt's critical issuing distribution point
-naming the list's own address and user certificates — still answers, and a
-test holds its bytes.
-
-**Anything short of an answer is "not checked", never "not revoked"** (R4). The
-report says which of the four failed, in this project's own words rather than in
-a network error that would name a resolver or an address (I6).
-
-**This is the one check that asks a third party, and the asking is bounded by
-what it discloses.** Fetching a list tells an authority that somebody downloaded
-a list; it does not say which certificate, because one list covers thousands.
-That is a smaller disclosure than OCSP, which names the serial in the question,
-and it is why this is done where OCSP is not. It runs on every build with no
-switch: on a deployment that requires proof of control the certificate belongs
-to whoever asked, and a switch they had to find first would be a gap in a report
-dressed as a choice.
-
-The demonstration included, since 2026-09-28. It was compiled out of that build
-to keep a promise that it asked no authority anything, written when a visitor
-chose the host. Its hosts are compiled in now (N6), so the list it fetches is
-the one our certificate names, and leaving it out made the demonstration say
-"revocation not established" about a certificate every copy somebody runs would
-have checked. The privacy page says what it asks and about whom, and that each
-check runs at most once every fifteen minutes (an hour until 2026-10-05), the
-report kept and handed to everybody with its age.
-
-Both builds are driven. A test under the tag fails if the demonstration stops
-fetching, and a test without it fails if the ordinary build does — the second
-failure would be silent, since "revocation was not checked" is a sentence this
-project prints honestly in so many other places that nobody would look twice.
-
-**The standing sentence is true of the report it is on.** It said *no build
-asks* the question that names a serial, and `-ask-responder` asks exactly that;
-a report that asked it carried the sentence beside the finding quoting the
-answer. Where the responder was asked, the report now says so instead
-(`TestAReportThatAskedTheResponderDoesNotSayNobodyDid`).
 
 *Enforced in:* `internal/crl`, `internal/scan.Scanner.Scan`,
 `internal/scan.listStatus`, `internal/policy.GradeStapling`,
 `internal/policy.RevocationLine`
-*Guarded by:* `TestACertificateOnTheListIsRevoked`,
-`TestACertificateNotOnTheListIsGood`,
+
+*Guarded by:* `TestAReportThatAskedTheResponderDoesNotSayNobodyDid`,
+`TestACertificateOnTheListIsRevoked`, `TestACertificateNotOnTheListIsGood`,
 `TestAListTheIssuerDidNotSignIsRefused`,
 `TestAListThatDoesNotCoverTheCertificateIsNotAnAnswer`,
-`TestAListScopedToThisCertificateStillAnswers`, `TestARealIssuingDistributionPointIsRead`,
-`TestAStaleListIsNotAnAnswer`,
+`TestAListScopedToThisCertificateStillAnswers`,
+`TestARealIssuingDistributionPointIsRead`, `TestAStaleListIsNotAnAnswer`,
 `TestAListNotYetInEffectIsNotAnAnswer`,
 `TestAnOversizedListIsRefusedRatherThanTruncated`,
-`TestASerialIsComparedAsANumber`,
-`TestOnlyHTTPAddressesAreFetched`,
+`TestASerialIsComparedAsANumber`, `TestOnlyHTTPAddressesAreFetched`,
 `TestCredentialsInADistributionPointAreStripped`,
-`TestACertificateNamingNoListSaysSo`,
-`TestWithoutTheIssuerThereIsNoAnswer`,
+`TestACertificateNamingNoListSaysSo`, `TestWithoutTheIssuerThereIsNoAnswer`,
 `TestAListThatWasNotServedEstablishesNothing`,
 `TestSomethingThatIsNotAListIsNotParsedAsOne`,
 `TestNoReasonDescribesTheMachine`,
@@ -1604,1022 +358,176 @@ answer. Where the responder was asked, the report now says so instead
 `TestAnUnknownListStatusIsNotAnAnswer`,
 `TestTheOrdinaryBuildReadsTheRevocationList`,
 `TestTheDemonstrationReadsItsOwnRevocationList`,
-`TestAReportThatAskedTheResponderDoesNotSayNobodyDid`,
 `TestTheRevocationLimitDescribesThisBuild`,
 `TestAListThatNamesTheCertificateIsReported`,
 `TestAListThatDoesNotNameTheCertificateSaysAsOfWhen`,
-`TestAListThatCouldNotBeReadSaysWhy`,
-`TestOneWithdrawalIsOneFinding`,
+`TestAListThatCouldNotBeReadSaysWhy`, `TestOneWithdrawalIsOneFinding`,
 `TestADeploymentThatReadsNoListIsUnchanged`
-
----
 
 ### N12 — A question that names the domain is a disclosure, and is treated as one
 
-Asking which certificates exist for `example.com` contains `example.com`. That
-is the shape of the OCSP query this project refuses, and it is **not** the shape
-of reading a revocation list, where one list covers thousands and the question
-names nothing. Those two were conflated once while this was being designed, and
-the difference decides everything about how the check is offered.
+*Enforced in:* `cmd/porch-scan.httpsEndpoint`, `cmd/porchd.httpsEndpoint`,
+`internal/policy.UnaccountedLine`, `internal/scan.Scanner.searchLogs`,
+`internal/ctsearch`, `internal/ctsearch.SearchEstate`, `internal/liveness`,
+`internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
+`internal/dnsnames`, `internal/dnsnames.Reader.Under`, `internal/inventory`,
+`internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
+`cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`,
+`cmd/porch-scan.saysRecords`, `internal/httpapi.handleNames`,
+`internal/httpapi.Server.inventory`, `internal/httpapi.keptInventories`,
+`internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
+`internal/inventory.Inventory.WithLiveness`, `internal/inventory.Sources`,
+`internal/passivedns`, `internal/passivedns.SecurityTrails.Under`,
+`internal/passivedns.VirusTotal.Under`, `internal/certnames`,
+`internal/certnames.Reader.Under`, `internal/liveness.Answering`,
+`internal/ptrnames`, `internal/ptrnames.Reader.Under`,
+`internal/ptrnames.Addresses`, `internal/httpapi.Server.operatorOnly`,
+`internal/httpapi.parseRanges`, `internal/inventory.Name.MarshalJSON`,
+`internal/inventory.Inventory.MarshalJSON`, `internal/ptrnames.Reverse`,
+`internal/dnsclient.Client.LookupPTR`, `cmd/porch-scan.rangesNamed`,
+`internal/inventory.Inventory.Unasked`, `internal/httpapi.Server.presented`,
+`internal/passivedns.looksLikeAName`, `cmd/porch-scan.registerNamed`,
+`cmd/porchd.namesRegister`, `internal/ctsearch.under`,
+`internal/scan.Scanner.searchLogs`, `internal/scan.sameSerial`,
+`internal/policy.LoggedLine`, `internal/policy.DescribeLogged`,
+`cmd/porch-scan.tlsScanner`, `internal/zonenames`,
+`internal/zonenames.Reader.Under`, `internal/zonenames.Found.keep`,
+`internal/dnsclient.Client.Transfer`, `internal/dnsclient.transferNames`,
+`internal/dnsclient.readTransferMessage`,
+`internal/httpapi.Server.ReadZoneTransfers`, `internal/httpapi.zoneReader`,
+`cmd/porch-scan.saysZone`, `internal/nsecnames`,
+`internal/nsecnames.Reader.Under`, `internal/dnsclient.Client.LookupNSEC`,
+`internal/inventory.FromNSEC`, `internal/httpapi.Server.WalkAbsenceProofs`,
+`internal/httpapi.absenceWalker`, `cmd/porch-scan.saysNsec`,
+`internal/knownnames`, `internal/knownnames.From`,
+`internal/knownnames.ReadFile`, `internal/knownnames.MaxNames`,
+`internal/inventory.FromOperator`, `cmd/porch-scan.namesGiven`,
+`cmd/porch-scan.saysKnown`, `cmd/porch-scan.onlyGiven`,
+`internal/httpapi.DefaultMaxInventoryBytes`,
+`internal/inventory.Inventory.Readings`,
+`internal/inventory.Inventory.Failures`, `internal/web.consoleChecks`,
+`internal/web.consoleCheck`, `internal/policy.Informational`,
+`cmd/porch-scan.shortInventory`, `cmd/porch-scan.runNames`,
+`cmd/porch-scan.printNamesLimits`
 
-What makes it acceptable where OCSP was not is **not** the monitor's
-reputation — a certificate authority is not automatically a safe recipient of
-query data, and several of them sell monitoring. It is that certificate
-transparency is **public by design**. The certificates for a name are already
-published to anyone who looks, so nothing new about the domain is disclosed;
-what is disclosed is that somebody is looking. That reason survives a change of
-provider, and a reason about the provider would not.
-
-So the offer differs by deployment, and the question to ask of any future check
-that discloses something is the same one: *whose is it, and what exactly does
-the other party learn?*
-
-| | |
-|---|---|
-| the demonstration | the inventory, for the domain compiled into it and no other; the checks ask no log |
-| a service that required proof of control | runs, no switch: the name belongs to whoever asked |
-| the command line | `-check-logs`, because there the name may be somebody else's |
-
-**The first row said *never* until 2026-09-27, and the reason it said so had
-stopped applying.** The promise was written when the demonstration scanned
-whatever it was given: the domain named to a monitor would have been a
-visitor's, and not asking protected them. Since the boundary was compiled in
-(N6) a visitor cannot name a domain at all, so the only thing a monitor can
-learn from that deployment is that somebody is looking at *this project's* own
-estate — which is this project's own to disclose. The sentence had stopped
-protecting anybody and had started costing the demonstration: a visitor could
-not see the one mode that reads several sources and says which named what, so
-the strongest thing the tool does was a claim in a repository rather than
-something on a screen.
-
-Three things make that safe to offer, and none of them is the promise that was
-removed. The **boundary** decides the target, in `admit`, in the same words and
-the same counter as every other endpoint — not a second copy of the check
-inside the handler. The **field is fixed** on the page, because an open field
-that then refuses is what the old deletion was right about. And the answer is
-**kept for fifteen minutes and handed to everybody**, so a visit causes no request at
-all and a page anybody can refresh is not a way to make this installation
-hammer a third party (`keptInventories`). The copy carries the time it was made:
-a kept answer that read as current whatever its age would be the one claim this
-mode has to get right (R4).
-
-The privacy page says all of it, including what it used to say and why that
-changed, which is the rule N14 leaves: a capability that reaches a third party
-is finished when the page says it is there.
-
-`TestTheDemonstrationListsItsOwnEstate` holds the boundary and the fixed field;
-`TestTheDemonstrationKeepsTheInventoryItProduced` holds that two visits are one
-question; and `TestTheDemonstrationIsWiredToListItsOwnEstate` holds that the
-build wires both, because a sabotage removing either was caught only by two
-`cmd/porchd` tests that fail under the tag anyway — a red mark that is always
-red catches nothing.
-
-The keeping itself is held apart from the deployment that uses it:
-`TestAKeptInventoryIsProducedAgainWhenItAgesOut` for the interval and the date
-it carries, `TestAFailedSearchIsNotKept` because an unreachable monitor for one
-minute must not be an hour of telling everybody nothing was established,
-`TestTheHostsCertificatesAloneDoNotEstablishAnInventory` and
-`TestAnInventoryOnlyTheEmptyHostListAnsweredIsNotKept` because that is what
-happened anyway on 2026-10-05 (audit F12): with the monitor unreachable and the
-records unread, the certificate reader had no host to ask, said so truthfully,
-and that empty answer counted as a source that answered. The hosts it asks are
-the ones the other sources named, so it cannot establish an inventory on its
-own and no longer counts towards one,
-`TestVisitorsArrivingTogetherAskOneQuestion` for the per-domain lock that makes
-the promise true under load, and
-`TestKeepingNothingProducesAnInventoryForEveryCaller` for the ordinary
-installation, which keeps nothing and asks when it is asked.
-
-Both halves are compiled in rather than flagged — the monitor and the kept
-copy — because the page promises what the build does and a unit file is not the
-build. A flag left out of it would leave the demonstration showing half an
-inventory while the privacy page described a whole one, which is the defect
-this project had just finished fixing on the other privacy page.
-
-That table was written on 2026-09-08 and the middle row was not true until
-2026-09-24: `porchd` built its scanner without a monitor, so a service with a
-scope searched nothing. Nothing refused it and no test asked — the row simply
-had no code under it. A decision recorded and never wired is worth less than
-no decision, because everyone reading the page believes it is in force.
-
-**Nothing found is the reassuring answer, so every failure must be
-distinguishable from it.** A monitor that is down, rate limiting, or answering
-with a page rather than a document reports that nothing was established, never
-that nothing exists (R4). The size cap refuses rather than truncates, for the
-same reason.
-
-**One certificate is one certificate.** Every certificate is submitted to the
-logs twice, once as a precertificate and once as itself, so a name with one
-certificate comes back as two records sharing a serial. The first real answer
-this was built against — this project's own domain — showed exactly that, and
-counting records would have told an operator they had twice as many
-certificates as they do. On a check whose question is *is there one you did not
-order*, a phantom duplicate is the worst available false alarm.
-
-**A serial is compared as a number, never as text.** A monitor writes leading
-zeros; the same integer written without one is a different string. The
-consequence points the wrong way from the revocation check's version of this
-mistake: there a text comparison would clear a revoked certificate, here it
-reports the certificate the server just presented as one a stranger obtained.
-
-**The address was read from the service rather than remembered.** `?q=` with
-`output=json` answers 404 and `/json` answers 502; the form that works is
-`?Identity=`. A check written from memory would have shipped asking for a page
-that does not exist and reporting every name as having no certificates — which
-is the reassuring half, arrived at by a bug.
-
-**The answer is untrusted input.** Issuer and subject names come from
-certificates anybody may obtain and log, so they are chosen by whoever obtained
-them. Each is bounded and stripped of control characters before it reaches a
-report, and the name is escaped into the query: a name carrying `&` that arrived
-unescaped would add parameters to somebody else's query string.
-
-**It is reported and never graded.** A certificate in a log is a fact; whether
-it should exist is a question about somebody's purchasing that no scan can
-answer. An early renewal, a content delivery network issuing on the customer's
-behalf, and a certificate obtained by somebody who should not have one are
-identical from here, so a verdict would be a threshold this project invented
-(R21) and a claim about what a measurement implies rather than what it
-established (R17). What the report does is put the operator in front of the
-list, because they know what they ordered and nobody else does.
-
-**And it says what it did not search.** Only the exact name, so a certificate
-obtained for a subdomain — which is how this is usually done — does not appear.
-Silence there would let a clean answer read as a clean estate.
-
-**Searching under a domain is a separate mode, and it is not the same act.**
-
-The paragraph above is true of the check: the TLS scan asks about the exact
-name and says so. `porch-scan -check names` asks a different question — which
-names under a domain appear in logged certificates — and it is a mode somebody
-types rather than anything a check does.
-
-Reading it against N7 is where it earns its place. No address is invented: a
-wordlist against DNS would be enumerating an estate, and this sends not one
-packet to the domain asked about. What it reads is a register that exists to be
-read, in which every name was published by whoever obtained a certificate for
-it. That is the same argument `security.txt` rests on, and it is the whole of
-the difference between reading and guessing.
-
-What it costs is the disclosure this invariant is about, unchanged and now
-larger: the question names the domain to a monitor this project does not run,
-and asking for everything under it says more about the estate than asking about
-one host. So on the command line it is typed deliberately, and a service asks it
-only for a domain it has been shown control of. The demonstration asks it about
-its own domain and no other, since 2026-09-27 for the inventory and 2026-09-28
-for the TLS check: its hosts are compiled in, so the only thing a monitor
-learns from it is that somebody is looking at us.
-
-**The inventory says what it cannot show, every time, under every list.** Three
-kinds of name are missing from it and no amount of searching will produce them:
-a host with no publicly trusted certificate is never logged; a wildcard covers
-hosts without naming them, which is what a wildcard is for; and a name dropped
-from a monitor's history is gone from the answer. A list of forty names read
-without that paragraph says *this estate has forty hosts*, which is not what a
-certificate log establishes for anybody — and the person who hands such a list
-to a security team, and is then shown more hosts by a port scan, has lost an
-argument that was avoidable in advance. `Wildcards` is counted rather than
-merely listed for that reason: it is the measure of how much the search could
-not see.
-
-Nothing in it is graded. No document says which names an estate ought to have,
-so a verdict would be a threshold this project invented (R21) — and the report
-says that in its own words, because a reader who finds a list with no verdict
-and no explanation supplies the missing verdict themselves, and the one they
-supply is "fine".
-
-**A name belongs to the estate only on a label boundary.** `notexample.com`
-ends with `example.com` as text and is somebody else's. A shared certificate
-carries names from several estates at once, and reporting those under this
-domain would be this program drawing a boundary the certificate does not draw;
-they are counted and dropped. A wrong name in an inventory is worse than a
-missing one: the missing one is found by the next method, and the wrong one is
-investigated, escalated and reported.
-
-**The monitor is substitutable, and until 2026-09-25 that was true of the
-package and not of the product.** `internal/ctsearch` had said from the start
-that a monitor which goes away or changes is a substitution rather than a
-rewrite, and there was no way to substitute one from the command line. It is
-not hypothetical: crt.sh answered 502 to every request on the day this mode was
-written, which is an ordinary state for a free service indexing billions of
-certificates. `-monitor` names which one, `-monitor-url` says where, and a crt.sh address
-with no place for the name in it is refused rather than fetched once per domain.
-
-There are two implementations, and that is the point rather than a convenience.
-A dependency described as replaceable and never replaced is a claim nobody has
-checked, including whoever made it. crt.sh and SSLMate have different owners,
-different infrastructure and answers that agree on nothing but the idea, so the
-interface has now been shown to fit something it was not written around — and an
-operator whose monitor is down has somewhere to go.
-
-The second answers in pages of a hundred, which is the part worth getting right:
-a reader that took the first page and stopped would return a list that is
-sorted, dated, plausible and missing most of a large estate, with nothing about
-it looking wrong. `TestEveryPageOfAPagedAnswerIsRead` follows every page,
-`TestAnEstatePastTheBoundSaysItWasCut` holds the bound that must exist and the
-only dishonest way to have one, which is to stop quietly, and
-`TestOneCertificateUnderTwoIdentifiersIsOne`,
-`TestEachStateIsItsOwnAnswer`,
-`TestNothingPrivateIsEverDialled`,
-`TestAnEstatePastTheBoundIsCut`,
+*Guarded by:* `TestTheDemonstrationListsItsOwnEstate`,
+`TestTheDemonstrationKeepsTheInventoryItProduced`,
+`TestTheDemonstrationIsWiredToListItsOwnEstate`,
+`TestAKeptInventoryIsProducedAgainWhenItAgesOut`, `TestAFailedSearchIsNotKept`,
+`TestTheHostsCertificatesAloneDoNotEstablishAnInventory`,
+`TestAnInventoryOnlyTheEmptyHostListAnsweredIsNotKept`,
+`TestVisitorsArrivingTogetherAskOneQuestion`,
+`TestKeepingNothingProducesAnInventoryForEveryCaller`,
+`TestEveryPageOfAPagedAnswerIsRead`, `TestAnEstatePastTheBoundSaysItWasCut`,
+`TestOneCertificateUnderTwoIdentifiersIsOne`, `TestEachStateIsItsOwnAnswer`,
+`TestNothingPrivateIsEverDialled`, `TestAnEstatePastTheBoundIsCut`,
 `TestWhatEachNameIsDoingIsTheFirstThingOnTheLine`,
 `TestNamesSurviveAReportThatEstablishedNoStatus`,
 `TestAWildcardIsNeverAskedAboutAsAName`,
 `TestAResolverAddressWorksWithoutAPort`,
-`TestANameSaysWhatItIsDoingAndWhenItWasLastCovered` keys on the certificate hash rather
-than the monitor's own identifier — the identifier is not what a certificate is.
-`TestRateLimitingIsSaidPlainly` gives that answer its own sentence, because
-"did not answer the search" would send an operator looking for a fault in their
-network or in the domain when what they need is to wait. A key, where an
-operator has one, is read from the environment and sent as a credential:
-`TestTheKeyIsSentAsACredentialAndNotWrittenDown` holds both halves, and a
-credential on a command line is a credential in a shell history and in every
-process listing on the machine.
-
-**On a service it is behind proof of control, always, and that is stricter than
-the checks.**
-
-A check measures how a host answers, which is what any visitor learns and which
-the scanned party can see happening in their own logs. Anybody may point this
-tool at a host they do not own and find out how it is reached.
-
-The inventory is different in both halves. What it produces is the shape of an
-estate rather than the state of one host, and the scanned party cannot see it
-happen at all, because nothing is asked of them. A service answering that for
-anybody would be an anonymous reconnaissance endpoint with this project's name
-on it — and the data being public does not change what the service would be
-doing, which is assembling it, on request, for people who will not say who they
-are.
-
-So `POST /api/v1/names/scan` requires proof on every deployment that has a
-scope, and refuses without one **wherever anybody else can reach the service**.
-
-The measure is reachability rather than configuration, and the first version got
-that wrong. It asked whether verification was configured and refused wherever
-the answer was no, which put one operator in two places at once: the command
-line produced an inventory of their own estate immediately, while a copy of
-`porchd` on the same laptop, reachable by nobody, refused until they published a
-DNS record proving to themselves that they owned their own domain. That is
-friction bought with no safety, and friction bought with no safety is how a rule
-comes to be turned off altogether.
-
-A service nobody else can reach was the command line with a browser in front
-of it, and the command line did not ask for proof (A30). Since 2026-09-29 both
-do (N9): `porchd` does not start without a scope, and the command line proves
-every target, so the reachability rule here is reached only by a `Server` built
-with no `Verify` — which nothing this project ships builds, and which stays
-because a program embedding the package is an entry point too. A service anybody
-else can reach is the case the rule is for. Where verification *is* configured it is
-enforced wherever the service listens, because setting it up is an operator
-saying what they want, and a copy that quietly stopped enforcing it because of
-the address it bound to would be answering a question they had already answered.
-
-`cmd/porchd.beyondLoopback` decides it, once, and the same answer decides
-whether the service may start at all without proof —
-`TestWhatCountsAsReachableByAnybodyElse` holds both halves, including that an
-address which cannot be parsed counts as reachable.
-`TestAnInstallationNobodyElseCanReachNeedsNoProof` and
-`TestVerificationConfiguredIsEnforcedEvenOnLoopback` hold the two sides of the
-rule.
-
-The refusals are ordered for a second reason.
-`TestTheMonitorIsNotDescribedToSomebodyWhoProvedNothing` holds it: proof is
-checked before whether this installation has a monitor at all, because a
-stranger learning which monitors an installation is wired to has learned
-something about the installation in exchange for nothing.
-`TestAnInventoryIsOnlyProducedForAProvenDomain` and
-`TestAnInstallationWithNoVerificationProducesNoInventory` hold the two halves of
-the rule, and each checks that the monitor was never asked — a refusal that
-still made the request would have disclosed the domain to a third party on the
-way to saying no.
-
-**The demonstration serves the page for its own estate**, since 2026-09-27, and
-the field on it is fixed rather than open — the argument for that, and for what
-it replaced, is in the deployment table above.
-`TestTheDemonstrationListsItsOwnEstate` holds it on both sides: the page and
-the endpoint.
-
-**The command line's demonstration build still refuses the mode outright**, and
-that is stricter rather than inconsistent. That binary is not deployed
-anywhere, nothing compiles a boundary into the target it would be given, and
-the safe direction for an unshipped build to be wrong in is the one where it
-asks nobody anything. `TestTheDemonstrationInventoriesNoEstate` holds it.
-
-That last one held nothing for a day. The mode gained a `-resolver` flag on
-2026-09-25, the call in the demonstration test was not updated with it, and
-`go build -tags demo ./...` does not compile tests — so the only guard on the
-command line's half of the promise stopped being built and nothing said a word.
-A test that does not compile is indistinguishable, in a green log, from a test
-that passes. CI runs `go vet -tags demo ./...` now, which type-checks tests at
-the cost of seconds, and runs the demonstration's own command-line test under
-the same named-and-grepped pattern the service's half already used, because a
-`-run` pattern that matches nothing passes silently.
-
-**A source added after the gate was built goes behind it.**
-
-The service reads both sources now, and the proof requirement is what makes
-this endpoint something other than an anonymous reconnaissance service, so the
-second one is read only after proof — `TestNeitherSourceIsReadForAnUnprovenDomain`
-holds both halves. Three lookups of a stranger's domain, made by this
-installation because somebody asked it to, are three lookups this installation
-made; that the records are public changes what is disclosed and not who did the
-asking. The rule generalises: every future source belongs behind the same gate,
-and a test that names only the monitor is a test that will pass while the gate
-leaks.
-
-What the second source does **not** do is add a third party. It is read with
-the resolver this installation already asks about every other target, so
-nothing leaves the deployment that was not already leaving it, and N12's
-disclosure argument is untouched by it.
-
-**A zone that hands itself over is the source that is complete, and the one
-that usually refuses.**
-
-Every other source here is a sample: a log holds what was certified, a register
-what was observed, a record what had to be published, an address what its
-reverse record says. A transfer holds the zone — every name in it, from the
-server authoritative for them, with nothing guessed and nothing inferred. When
-it works it is the best answer this mode can give, and it works rarely, because
-a zone is handed to the secondaries its operator named and to nobody else.
-
-**Two callers ask the same question here for opposite reasons, and only one of
-them reads the answer.** `AskTransfer` asks whether a server will begin the
-transfer for anybody, reads the first reply's header and closes the connection:
-the records are the scanned party's own zone, and a scanner holding one would
-be the thing it is warning them about. `Transfer` reads the zone, and is asked
-only about an estate the asker owns — a domain a service has been shown control
-of (`TestTheZoneIsReadOnlyForAProvenDomain`), or one an operator named on their
-own machine with `-read-zone`. Reading your own zone is not holding somebody
-else's, and the flag is where somebody says which it is
-(`TestAnInstallationNotToldToReadAZoneDoesNot`).
-
-The reading is bounded at every turn, because a transfer is a stream somebody
-else controls: eight megabytes, two hundred thousand records, four thousand
-messages, and a deadline over all of it. A transfer that stops part way hands
-over what arrived and says it was cut, because reporting nothing would throw
-away names the server did send and reporting them whole would be the quiet
-shortening this mode cannot survive
-(`TestATransferThatStopsPartWayThroughSaysItWasCut`,
-`TestAZoneIsReadFromTheServerThatHandsItOver`). Every length in it is the
-server's and is checked rather than trusted
-(`TestATransferRecordCannotReachPastItsMessage`).
-
-**A refusal is an answer, not a failure**
-(`TestAServerThatRefusesATransferIsNotAFailure`,
-`TestEveryServerRefusingIsNotAFailure`). Three states produce no names and a
-reader must be able to tell them apart: nobody asked, every server refused, and
-the delegation could not be read
-(`TestADelegationThatCannotBeReadIsNotARefusal`,
-`TestTheReportSaysWhatTheZoneHandedOver`). One server is asked at a time and
-the first transfer wins: a zone in hand is the zone, and asking the other three
-is three transfers for one answer (`TestTheZoneHandsOverItsOwnList`,
+`TestANameSaysWhatItIsDoingAndWhenItWasLastCovered`,
+`TestRateLimitingIsSaidPlainly`,
+`TestTheKeyIsSentAsACredentialAndNotWrittenDown`,
+`TestWhatCountsAsReachableByAnybodyElse`,
+`TestAnInstallationNobodyElseCanReachNeedsNoProof`,
+`TestVerificationConfiguredIsEnforcedEvenOnLoopback`,
+`TestTheMonitorIsNotDescribedToSomebodyWhoProvedNothing`,
+`TestAnInventoryIsOnlyProducedForAProvenDomain`,
+`TestAnInstallationWithNoVerificationProducesNoInventory`,
+`TestTheDemonstrationInventoriesNoEstate`,
+`TestNeitherSourceIsReadForAnUnprovenDomain`,
+`TestTheZoneIsReadOnlyForAProvenDomain`,
+`TestAnInstallationNotToldToReadAZoneDoesNot`,
+`TestATransferThatStopsPartWayThroughSaysItWasCut`,
+`TestAZoneIsReadFromTheServerThatHandsItOver`,
+`TestATransferRecordCannotReachPastItsMessage`,
+`TestAServerThatRefusesATransferIsNotAFailure`,
+`TestEveryServerRefusingIsNotAFailure`,
+`TestADelegationThatCannotBeReadIsNotARefusal`,
+`TestTheReportSaysWhatTheZoneHandedOver`, `TestTheZoneHandsOverItsOwnList`,
 `TestWhatAServerSendsIsCleanedBeforeItIsKept`,
-`TestWhatAZoneHandedOverIsItsOwnSource`).
-
-And the DNS check's own note now says where to look: it reported that a zone
-hands itself to anybody and gave the operator no way to see what that exposes,
-which is a warning with nothing to do about it.
-
-**The reverse records of ranges the operator names are a fifth source, and the
-command line is the only place it exists.**
-
-Every other source starts from a name. This one starts from an address the
-operator says is theirs and asks what it answers to, which finds a machine from
-the other direction: one whose name is in no certificate, in no record the
-domain publishes and in no register, but whose reverse record its own network
-kept up to date. Nothing is sent to the addresses — the questions are reverse
-lookups to the resolver this installation already asks about everything else —
-and no name is invented, because a reverse record is a name somebody published
-for that address (N7).
-
-**It is read for the operator, and for nobody else.**
-
-A domain can be proven with a record in its zone. An address range cannot be
-proven by anything this project can check, so a service that walked one for
-whoever proved a domain would be a reverse-scanner for whoever proved a
-domain — the thing this endpoint exists not to be.
-
-That says who may not have it. It took a second pass to notice it does not say
-*nobody may*: this page said "no service offers it, and that is the invariant
-rather than an omission", which refused the person running the installation
-along with the stranger. They are not the same caller, and the project had
-already decided that once, for the inventory itself: **a service nobody else
-can reach is the command line with a browser in front of it** (A30, above).
-Refusing them is friction bought with no safety, and friction bought with no
-safety is how a rule comes to be turned off altogether.
-
-So the range is read where the caller is the operator — nobody else can reach
-the installation, or a password they set stands in front of it — and refused
-where it is not (`TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse`).
-`Server.operatorOnly` answers it, from the same two facts `cmd/porchd` already
-hands over, and `TestWhatCountsAsReachableByAnybodyElse` holds that they are
-worked out once rather than twice.
-
-The page draws the field only where the answer is yes, because an input that is
-always refused is worse than no input, and a check sent an address range
-refuses rather than dropping it: a field accepted and ignored is a caller
-believing something happened (`TestACheckRefusesAddressRanges`). The bounds are
-the command line's, in `internal/ptrnames`, so the two faces refuse the same
-range for the same reason rather than drifting into two answers
-(`TestARangeTooWideIsRefusedByTheService`), and the refusal names the rule and
-never the range (I6).
-
-**A range too wide to read is refused before anything is asked.** A /16 is
-sixty-five thousand questions to somebody's resolver, which is how an operator
-gets rate-limited off their own DNS; a /64 is not slow but impossible, and a
-tool that accepted the flag and then ran for a week would be lying about what
-it does. So: nothing wider than /20 for IPv4 or /116 for IPv6, four thousand
-and ninety-six addresses across all the ranges together, and **refused rather
-than cut short** — before anything is asked, so an operator finds out when they
-press return (`TestARangeTooWideToWalkIsRefused`,
-`TestTheRangesAreReadAndRefusedEarly`). The refusal says what the rule is
-rather than echoing back what was typed (I6).
-
-What comes back is untrusted, as everything from outside is: in a leased range
-the reverse record is written by the provider, and in any range by whoever
-holds the address. Folded, bounded, stripped of control characters, held to the
-label boundary, and a name under somebody else's domain is counted rather than
-listed (`TestWhatAReverseRecordSaysIsCleanedBeforeItIsKept`,
-`TestWhatTheAddressesAnswerTo`). A resolver that refused every question is not
-a range of nameless addresses (`TestAResolverThatAnsweredNothingIsNotAnEmptyRange`,
-`TestNamingNoRangeAsksNothing`, `TestTheReportSaysWhatTheAddressesAnsweredTo`),
-and the reverse name asked about is the one a resolver answers — the nibble
-form under `ip6.arpa` for IPv6, which is RFC 3596 §2.5
-(`TestTheReverseNameIsTheOneAResolverAnswers`,
-`TestTheNameAnAddressAnswersToIsRead`,
+`TestWhatAZoneHandedOverIsItsOwnSource`,
 `TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse`,
-`TestARangeTooWideIsRefusedByTheService`,
-`TestACheckRefusesAddressRanges`,
-`TestANameWithNoDateCarriesNoneInTheJSON`,
-`TestEveryInstallationHasAResolver`,
+`TestACheckRefusesAddressRanges`, `TestARangeTooWideIsRefusedByTheService`,
+`TestARangeTooWideToWalkIsRefused`, `TestTheRangesAreReadAndRefusedEarly`,
+`TestWhatAReverseRecordSaysIsCleanedBeforeItIsKept`,
+`TestWhatTheAddressesAnswerTo`,
+`TestAResolverThatAnsweredNothingIsNotAnEmptyRange`,
+`TestNamingNoRangeAsksNothing`, `TestTheReportSaysWhatTheAddressesAnsweredTo`,
+`TestTheReverseNameIsTheOneAResolverAnswers`,
+`TestTheNameAnAddressAnswersToIsRead`,
+`TestANameWithNoDateCarriesNoneInTheJSON`, `TestEveryInstallationHasAResolver`,
 `TestEveryInstallationIsWiredAResolver`,
 `TestNoServedPageLeaksATemplateAction`,
-`TestWhatAnAddressAnsweredToIsItsOwnSource`).
-
-**The hosts' own certificates are a fourth source, and the only one that is the
-estate rather than a record of it.**
-
-Every other source is somebody's register. This one asks each name that
-answers for the certificate it presents and keeps the names written in it —
-which is how a name a **private authority** issued reaches an inventory at all:
-no public log holds such a certificate, because nothing submitted it and
-nothing would accept it, and no register saw a query for a host nobody outside
-resolves.
-
-It is the one part of the mode that opens a connection to the estate on
-purpose, so it is **off unless asked for** (`porch-scan -read-certificates`,
-`porchd -names-read-certificates`) and, on a service, behind the same proof of
-control as everything else (`TestNoCertificateIsReadForAnUnprovenDomain`). A
-handshake is made and closed; nothing is requested over it
-(`TestNothingIsSentToAHostAfterTheHandshake`). Only the names that answer are
-knocked on — asking one that does not resolve spends a timeout to learn what
-the report already says (`TestAnsweringAreTheNamesSomethingIsListeningOn`).
-
-**The certificate is read, not judged.** Verification would fail on exactly the
-certificates this exists to find, and the names on an untrusted certificate are
-still the names its operator put there
-(`TestACertificateNobodyTrustsIsStillRead`). Nothing is graded on it (R21) and
-no verdict is derived from it (R17); the TLS check is where a certificate is
-judged, against a named trust store, one host at a time.
-
-**A name that arrives late is still asked what it is doing.** This source runs
-after the probe, because it needs somewhere to knock, so the names it finds
-arrive after the first round of questions. They are merged in and probed too
-(`TestUnaskedAreTheNamesNothingHasAskedAboutYet`,
-`TestTheServiceReadsTheCertificatesTheHostsPresent`) — a report where the
-newest names are the ones with nothing beside them would be answering the easy
-half (R4). A wildcard on a certificate stays a wildcard and is never resolved
-(`TestWhatAHostPresentedIsItsOwnSource`), and a report that asked no host says
-so rather than leaving the line out: a reader who sees three sources and no
-fourth line does not know a fourth exists
-(`TestAReportThatAskedNoHostSaysSo`, `TestTheReportSaysWhatTheHostsPresented`,
-`TestTheNamesAHostPresents`, `TestAHostThatDoesNotAnswerIsCountedAndNotInvented`,
+`TestWhatAnAddressAnsweredToIsItsOwnSource`,
+`TestNoCertificateIsReadForAnUnprovenDomain`,
+`TestNothingIsSentToAHostAfterTheHandshake`,
+`TestAnsweringAreTheNamesSomethingIsListeningOn`,
+`TestACertificateNobodyTrustsIsStillRead`,
+`TestUnaskedAreTheNamesNothingHasAskedAboutYet`,
+`TestTheServiceReadsTheCertificatesTheHostsPresent`,
+`TestWhatAHostPresentedIsItsOwnSource`, `TestAReportThatAskedNoHostSaysSo`,
+`TestTheReportSaysWhatTheHostsPresented`, `TestTheNamesAHostPresents`,
+`TestAHostThatDoesNotAnswerIsCountedAndNotInvented`,
 `TestAskingNoHostsIsNotAFailure`,
 `TestANameFromACertificateBelongsToTheEstateOnlyOnALabelBoundary`,
-`TestWhatAHostSaysIsCleanedBeforeItIsKept`).
-
-**A passive register is a third source, and the only one that is not
-publication.**
-
-A certificate log holds what somebody published on purpose. A domain's own
-records hold what its mail, its sender policy and its delegation have to say.
-Both are blind to a host behind a wildcard certificate that takes no mail and
-answers for no zone — which is most of an estate that uses one wildcard, and
-the reason `emanat.az` yields two names from certificates and its operators run
-many more.
-
-A passive register is not blind to it: resolvers write down the answers they
-saw, so a name anything ever resolved can be found without one packet being
-sent to the estate and without one name being guessed at. N7 is untouched —
-nothing is invented — and what this costs is the disclosure N12 is about.
-
-That disclosure is **larger than the monitor's, and of a different kind**.
-Certificate transparency is public by design, so asking a monitor discloses
-only that somebody is looking. A register's data is not published by anybody:
-it is observation, collected by watching resolvers. Three things follow, and
-the report carries all three:
-
-- **A name in a register may never have existed.** A typo somebody typed once,
-  a name that resolved for an hour in 2019, an internal name that leaked out of
-  a laptop on a hotel network — all of them look exactly like a host. This is
-  why what each name is doing now is asked separately, and why the report never
-  adds the three sources into one number.
-- **A name that exists may not be in it**, because nobody outside ever looked
-  it up.
-- **The register knows because it was watching.** This project takes no view on
-  that beyond saying, in the report, which source named a host.
-
-So it is **off unless an operator names one**, on both faces — `porch-scan
--passive`, `porchd -names-passive` — and never on the demonstration, which
-configures none. Every register worth reading wants an account: the key
-is the operator's own, the question names their domain to a company they chose,
-and the answer is billed to them. Nothing picks one for them and nothing falls
-back to one.
-
-**A register named with no key is refused before anything is sent.** At startup
-for the service, at the flag for the command line
-(`TestNoRegisterIsBuiltUntilOneIsNamedWithAKey`). Naming somebody's domain to a
-company that will refuse the question buys nothing and discloses exactly what a
-successful search would, which is the worst trade available. The key itself
-comes from the environment, never from a flag: a credential on a command line
-is a credential in a shell history and in every process listing on the machine.
-
-**What a register returns is untrusted, and less trustworthy than a
-certificate.** The names in it are whatever somebody's resolver was asked for,
-so they were chosen by whoever made the query — including, one day, by somebody
-hoping they would be printed into a terminal. Each is folded, bounded, checked
-against the label boundary, and checked against what a host name may contain:
-letters, digits, hyphen, dot, and the underscore real service names carry. Text
-that is not a name is **dropped rather than cleaned** — what would be left is
-not the thing the register saw
-(`TestWhatARegisterSaysIsCleanedBeforeItIsKept`,
-`TestANameFromARegisterBelongsToTheEstateOnlyOnALabelBoundary`).
-
-**The paging is followed, the bound is reported, and a cursor that does not
-move ends the walk.** A reader that took the first page and stopped would
-return a list that is sorted, plausible and missing most of a large estate,
-with nothing about it looking wrong; a walk that never advanced would make
-twenty-five identical requests to a service the operator is paying for
-(`TestEveryPageOfARegistersAnswerIsRead`,
+`TestWhatAHostSaysIsCleanedBeforeItIsKept`,
+`TestNoRegisterIsBuiltUntilOneIsNamedWithAKey`,
+`TestWhatARegisterSaysIsCleanedBeforeItIsKept`,
+`TestANameFromARegisterBelongsToTheEstateOnlyOnALabelBoundary`,
+`TestEveryPageOfARegistersAnswerIsRead`,
 `TestACursorThatDoesNotMoveEndsTheWalk`,
-`TestAnEstatePastTheRegistersPageBoundSaysItWasCut`). A redirect is not
-followed: it is an address the register chose, and the request carries the
-operator's domain and their key (`TestARegisterIsNotFollowedToAnotherAddress`).
-Each answer an operator can act on gets its own sentence — a refused key sends
-them to their account, a rate limit sends them to wait, and "did not answer"
-would send them to their network
-(`TestWhatARegisterRefusedIsSaidPlainly`,
-`TestNothingHeldIsNotTheSameAsNothingEstablished`).
-
-**And a wildcard with no register read says that nothing looked behind it.**
-Half a sentence is the danger: a reader told that a wildcard hides hosts, and
-not told that nothing went looking for them, is left believing the report tried
-(`TestAWildcardWithNoRegisterSaysNothingLookedBehindIt`,
-`TestTheReportSaysWhatARegisterObserved`). On the service the register is read
-behind the same proof of control as everything else
-(`TestTheServiceReadsTheRegisterOnlyForAProvenDomain`), and an installation
-with none configured says so rather than reporting an estate with nothing
-behind its wildcards (`TestAnInstallationWithNoRegisterSaysItAskedNone`,
+`TestAnEstatePastTheRegistersPageBoundSaysItWasCut`,
+`TestARegisterIsNotFollowedToAnotherAddress`,
+`TestWhatARegisterRefusedIsSaidPlainly`,
+`TestNothingHeldIsNotTheSameAsNothingEstablished`,
+`TestAWildcardWithNoRegisterSaysNothingLookedBehindIt`,
+`TestTheReportSaysWhatARegisterObserved`,
+`TestTheServiceReadsTheRegisterOnlyForAProvenDomain`,
+`TestAnInstallationWithNoRegisterSaysItAskedNone`,
 `TestARegisterThatWasNeverAskedIsNotAnEmptyRegister`,
 `TestWhatARegisterObservedIsItsOwnSource`,
 `TestARegisterThatWasCutSaysSoInTheInventory`,
-`TestWhatARegisterHasSeenUnderADomain`).
-
-**Three of the four sources need a resolver, so every installation has one.**
-The domain's own records, what each name is doing now, and the certificates its
-hosts present all hang off `scan.Scanner.Resolver`, and the certificates only
-run where something answered — so they go together. That field was set only
-where `-resolver` was given, out of care for a real trap: a nil
-`*dnsclient.Client` copied into an interface field is not nil, so a package
-reading "nil means build a default" never builds one. The trap needs a nil
-pointer; a client with an empty `Server` is not one, and it means this machine's
-own configuration, which is what the default would have been anyway.
-
-What the condition cost was three sources in four. A copy started without the
-flag read one and its page described four — the demonstration shipped that way
-and reached the live deployment, the fix that followed covered the
-demonstration alone, and the same defect was then found a second time by
-somebody naming an address range and being told this installation has no
-resolver. `TestEveryInstallationHasAResolver` holds the value and
-`TestEveryInstallationIsWiredAResolver` holds that no condition came back.
-
-**The service asks what the names are doing, and that is the part that touches
-the estate.** Everything else the inventory does is reading: a register somebody
-else keeps, and records the domain publishes for anyone. The probe resolves each
-name and opens at most one connection to each address it gave — opened, found
-open or not, closed, carrying nothing. So it sits behind the same proof of
-control as the rest (`TestNoNameIsProbedForAnUnprovenDomain`): a service that
-opened connections to a stranger's hosts on request would be a scanner anybody
-could point anywhere, which is the thing this endpoint exists not to be.
-
-**The probe has no dialler of its own, and that is the guard.**
-`internal/liveness` reads a nil dialler as safedial, which refuses private,
-loopback, link-local and reserved destinations. A proven domain whose name
-points at 127.0.0.1, or at a cloud metadata address, must not turn the service
-into a way of reaching it (N6), and the state for such a name is `internal`
-rather than a timeout — the resolver inside an organisation answers its own
-names with internal addresses, and a report that called that "gone" would be
-the office network printed as the state of the estate.
-`TestTheProbeTheServiceBuildsRefusesPrivateDestinations` holds the wiring rather
-than the behaviour, because the behaviour is held where the dialling is.
-
-Four seconds a name there, against the command line's ten. A request has one
-budget for everything in it and a name that will not answer takes all of
-whatever it is given; ten seconds each would spend the request on a handful of
-dead names. The parallelism stays at eight, because eight is a pace and raising
-it would make an estate's own firewall see a burst nobody asked for. When the
-budget runs out the names not reached come back unchecked and say so, and the
-answer is still sent: refusing the whole inventory at that point would throw
-away what was established in order to report what was not (R4).
-
-**A state goes beside its name, never in a list alongside.** The first version
-of the report printed one row per answer, and the answers are bounded — by how
-many names the probe will reach and by the time it has. A name past either
-bound had no row at all: not a row saying nothing was established, no row. An
-inventory that quietly lists fewer names than it found is the one failure this
-mode cannot survive, so the rows are drawn from the inventory and a name with no
-answer says that nothing asked (`TestANameNothingReachedIsStillInTheReport`,
-`TestWhatEachNameIsDoingGoesBesideTheName`). Being asked is what makes a report
-a probed one, not getting answers: an estate where every name is gone was still
-asked (`TestAnEstateWhereNothingAnswersWasStillAsked`).
-
-**The monitor is still the switch.** An installation started without one
-refuses the endpoint, as it always has, even though the records half needs no
-configuration and would answer. Offering somebody a capability they turned off,
-because a second source happens to be free, is answering a question they
-already answered — and what this endpoint produces is the shape of an estate.
-Where a resolver is absent instead, the records are reported as not read rather
-than as naming nothing, and the half that was established is still answered
-with (`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`,
-`TestTheServiceReadsBothSourcesForAProvenDomain`).
-
-**Both faces say the same thing about what the inventory misses.**
-`TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses` compares the sentences
-the page carries against the ones the command line actually printed. Two
-renderers composing one claim from the same facts is how the faces of a report
-drift apart (R16), and it matters more here than anywhere: the paragraph they
-share is the one that stops a list of names being read as an estate, so a page
-that quietly said something weaker would be the page somebody presents from.
-
-
-**A list of names is not an answer, so every name carries what it is doing
-now — and when the register last had it.**
-
-Each source of names is a record of the past. A certificate log holds names
-that were covered once, a passive register holds names somebody once looked up,
-and a zone holds whatever nobody has got round to deleting. Handed over as an
-inventory, all three say the same misleading thing: that this is the estate
-today. Usually it is not — a name from five years ago, for a service shut down
-four years ago, is noise in a report somebody has to act on, and worse than
-noise, because time is spent establishing that it is nothing.
-
-`internal/liveness` gives each name one of five states, and they are five rather
-than two because an operator acts differently on each: **live** answers,
-**silent** resolves and answers nothing, **internal** resolves only to addresses
-nothing may dial, **gone** does not resolve at all, and **dangling** is an alias
-whose target does not resolve. `TestEachStateIsItsOwnAnswer` holds them apart.
-Collapsing any two into "nothing answered" is what makes an inventory unusable.
-
-What it sends is one resolution per name and at most one connection per name,
-opened and closed, carrying nothing — no request, no protocol, nothing guessed.
-A wildcard is never asked about, because nothing resolves `*.example.com` and
-the failure would read as a dead name that never existed
-(`TestAWildcardIsNeverAskedAboutAsAName`).
-
-**An address nothing may dial is never dialled, and is its own state.**
-`TestNothingPrivateIsEverDialled` holds it. This is the case that matters in
-practice rather than in theory: a resolver inside an organisation answers that
-organisation's own names with internal addresses, so an inventory built from a
-desk inside it reports the inside while reading as though it had measured the
-outside. Reported as a timeout, that would be the office network printed as the
-state of the estate (R4). It is also why the resolver is the operator's to
-choose here: which resolver answered decides what the whole report means.
-
-Dangling is reported as what it is and no further. Whether somebody else can
-claim the target depends on what that target is and who runs it, which this has
-not established and will not guess at (R17).
-
-**Each line carries the date beside the state, because the finding needs both.**
-A name whose newest certificate expired four years ago and which is still
-answering on 443 is a service nobody has looked at since — and the two halves of
-that sentence come from two different places. A reader given only the state
-would chase it as current; one given only the date would not know it was still
-running. `TestANameSaysWhatItIsDoingAndWhenItWasLastCovered` holds both, and
-holds that a register carrying no dates produces no date rather than a guess.
-
-The expiry rather than the issue date: what an operator is looking for is a name
-nobody renewed, and the day a long-dead certificate was issued says that less
-directly. Nothing is graded on the age — no document says how old a name may be
-before it is a fault, and a threshold this project invented would be one nobody
-could argue with (R21). The date is shown; the reader judges.
-
-**Two sources, one list, and every name says which of them named it.**
-
-A certificate log and a domain's own records answer the same question from
-opposite ends, and neither answer is complete. A log holds the names somebody
-obtained a publicly trusted certificate for and nothing else: plain HTTP, a
-private authority and everything behind a wildcard are invisible to it. The
-records hold the hosts a domain's mail, its sender policy and its delegation
-have to name and nothing else: a web server that takes no mail is in none of
-them. `internal/dnsnames` reads the second, `internal/inventory` merges them,
-and the merge is worth more than either list alone only if the report says
-which source named what.
-
-Without that column a reader has forty lines and nothing to sort them by. With
-it, the three cases separate: a name only a log has is a host somebody obtained
-a certificate for, and if nothing answers it the certificate is the thing to
-look at; a name only the records have is a host the domain publishes itself; a
-name both have is the ordinary well-kept case, which is worth as much in a
-report as a finding is, because it is the line nobody has to spend time on.
-`TestEveryNameSaysWhatNamedIt` holds the column.
-
-The merge folds names before comparing them. A monitor writes a trailing dot or
-a capital where a resolver does not, and two spellings of one host would list as
-two hosts, each carrying half the evidence for itself
-(`TestTwoSpellingsOfOneHostAreOneHost`, `TestOneHostNamedTwiceIsOneName`). It
-never narrows what one source established either: the window a log gives a name
-survives a record naming the same host, and a name no certificate ever covered
-is given no date at all rather than borrowing the phrase a log would have used
-(`TestTheWindowSurvivesTheMerge`).
-
-**Each source answers for itself, and a source that failed is named.** Six names
-from two sources and six names from one that answered while the other timed out
-are the same six names, and only a line per source tells a reader which report
-they are holding. A monitor that is down and a domain that publishes nothing
-produce the same empty list, so the readings are kept apart and each says
-whether it was read, what it named, and why it established nothing where it
-established nothing (R4). `TestASourceThatFailedIsNotAnEmptyEstate` and
-`TestAnInventoryMissingASourceSaysWhichOne` hold it, and the exit status is 2
-wherever a source failed — including where the other answered and the report on
-the screen looks complete. This is the case the second source was added for:
-crt.sh was unreachable for a whole day while the mode was being written, and
-three lookups of the domain itself answered throughout.
-
-A source nobody read is not a source that found nothing, and is printed as
-unread. A short label this package does not know — a record type added to the
-reader and not here — carries the name through under the reader's own spelling
-rather than dropping it, because a name missing from a list somebody acts on,
-with nothing anywhere saying it was found, is the worst available way to learn
-that two spellings drifted apart (`TestARecordSourceWithNoShortLabelIsStillCarried`).
-
-**The paragraph saying what was sent had stopped being true.** Under every
-inventory stood *nothing here was guessed and nothing was asked of
-example.com*, and it survived the day each name started being resolved and
-connected to, and the day the domain's own records started being read. Both
-halves of that sentence were load-bearing and one of them had quietly become
-false. It is three claims now, each of which is checked against what the run
-actually did: no name was invented; each source describes its own blind spot and
-only where it answered; and where the statuses were established, the report says
-the resolution and the connection happened and that nothing was sent over it.
-
-**How many sources there are is asked of the inventory, because three places
-had each decided for themselves and all three were wrong.** `Established` named
-all six. The command line's exit status looked at the logs and the records, so
-a run whose zone transfer failed exited zero with the inventory short — the
-exact case that status exists to catch. The page's *not established* paragraph
-printed three reasons, so an installation whose only configured source was the
-zone drew the heading and then nothing at all, which is worse than the empty
-list it was written to avoid (R4, I6). `Inventory.Readings` is the one list now,
-`Inventory.Failures` reads it, and
-`TestEverySourceIsAReadingAndEveryReadingIsListed` takes the count from the
-struct itself: a seventh source is one failing test rather than three silent
-shortenings.
-
-**A source that is sent and never drawn is the same defect on the page.**
-Reverse DNS was read by the service, printed by the command line and absent
-from the web report for three weeks, while the page offered the field that asks
-for it — so an operator who typed an address range had its names folded into
-the list with nothing saying the walk had happened, how wide it was, or that it
-had failed, and the total above could not be accounted for from the lines under
-it. `TestThePageDrawsALineForEverySourceTheInventorySends` reads the Go struct
-and requires a line for each of them, and
-`TestThePageReadsTheNameFieldsTheAPISends` does the same for the fields of one
-name.
-
-**An eighth source, on the zones a transfer is refused by: the proofs the zone
-publishes that a name does not exist.** A zone signed with DNSSEC has to prove
-absence, and the plain way of doing it names two real hosts in order to do it —
-at every name the zone holds, a record naming the next one (RFC 4034 §4).
-Follow them from the apex and the zone lists itself, with nothing guessed and
-nothing tried: every name comes out of a record the zone publishes and serves
-to any resolver that asks.
-
-This is not a new observation. The DNS check has reported a signed zone with no
-`NSEC3PARAM` as walkable since it was written — and offered no way to see what
-that exposes, which is a warning with nothing to do about it. It is the gap the
-transfer note had before `internal/zonenames`, in the same shape and closed the
-same way.
-
-The two are halves rather than a repeat. A transfer is refused by nearly every
-zone; this works on the zones that refuse one *and* are signed without NSEC3.
-Both are complete where they answer, so both are labelled, and a reader can see
-which of the two their own zone actually allows
-(`TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
-`TestTheReportSaysWhatTheProofsListed`).
-
-**Whose zone may be walked is the transfer's rule again.** The records being
-public does not make reading somebody else's estate out of them anything but
-enumeration: a service walks a domain it has been shown control of, an
-installation walks one only where it was told to, and the command line walks
-one an operator names with `-walk-proofs`
-(`TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
-`TestAnInstallationNotToldToWalkProofsDoesNot`).
-
-**Three ways there is nothing, and they are not the same nothing.** A zone
-using NSEC3, an unsigned zone and a walk nobody asked for all produce no names
-and send an operator to three different places — one is a zone doing the right
-thing, one is a zone with no DNSSEC at all, and one is a flag that was not
-given (R4, `TestAZoneWithNoPlainProofsSaysSo`). A chain that loops, leaves the
-domain, or stops answering hands over what was read and says it was cut
-(`TestASignedZoneListsItself`, `TestAChainThatDoesNotComeRoundIsCut`,
-`TestAChainThatLeavesTheDomainStops`).
-
-**And one bound rather than two, which is the result of an investigation.** A
-second bound on the number of questions was written first, against a zone
-answering every query with a name already seen. A sabotage removing it changed
-nothing any test could see — because every turn of the walk either adds a name
-nobody has seen, which counts against the bound on names, or meets one that has
-and returns. There is no path that asks a question without doing one of the
-two. It is gone rather than kept for safety: a bound that cannot fire reads as
-protection, provides none, and is believed by whoever changes the loop next
-(`TestAZoneThatNeverComesRoundIsStopped`).
-
-**And a seventh source, which reads nothing: the list the operator already
-has.** It is here because of a property of the DNS that the six above are all
-working around. DNS answers questions and does not list — there is no query for
-*every name under this domain* — which is why every source here is a register,
-a log, a zone or an address rather than the DNS itself: each of them is
-somewhere a list is kept. A host with no publicly logged certificate, under a
-zone that refuses to transfer and is not signed, with no register account
-configured, is in none of them however long they are read. It is not secret;
-anybody who knows the name can look it up. Knowing it is the whole problem, and
-the one place it certainly exists is the estate's own operator.
-
-So they can hand it over: `-names`, `-names-file`, and on the page a box and a
-`.txt` (`TestTheListIsTakenAsGivenAndHeldToTheDomain`,
-`TestAFileIsOneNameToALineWithRoomForNotes`). The file is read in the browser
-and nothing is uploaded — what leaves the page is the names, in the same
-request as the domain, which is what typing them does. Everything this mode
-does to a name it found it does to a name it was given: resolves it, says what
-it is doing, and labels where it came from. The label is last in the column
-(`TestAListSomebodyGaveIsItsOwnSource`), because the column leads with evidence
-and this is a claim — an operator saying a host is theirs is not the same kind
-of statement as a log holding a certificate for it.
-
-The row it exists for is the one that reads *named by nothing else*. A host in
-the list that no log, register, zone or record carried is a host the outside
-cannot see; one that does not resolve is one their own records have let go of.
-
-**What keeps it from being a wordlist is the bound, and that is the reason the
-bound exists.** A dictionary tried against DNS — mail, dev, staging, old —
-invents names, and N7 refuses that: the report would then be about the wordlist
-as much as about the estate, and a host whose name was not in it would be
-missing with nothing saying so. A list of an estate is in the tens or the
-hundreds. `knownnames.MaxNames` is a thousand, and a longer one is refused
-whole rather than cut short, because a list silently shortened is an inventory
-that is quietly incomplete (R4, `TestAListLongerThanAnEstateIsRefused`,
-`TestAListLongerThanAnEstateIsRefusedByTheService`). The message says the rule
-and names nothing that was sent (I6).
-
-**The service takes one behind the ordinary proof, and no more than that**
-(`TestAListOfNamesIsReadForAProvenDomainAndNoOther`). An address range is
-refused to everybody but the operator because nothing can prove a range (A30);
-a name can be proven, because every name in the list is held to the domain the
-caller has already been shown to control. The worst a list can cause is this
-installation resolving hosts under an estate that is the caller's. A check
-refuses one rather than dropping it (`TestACheckRefusesAListOfNames`), for the
-same reason a check refuses a range: a field accepted and ignored is a caller
-believing something happened.
-
-**The endpoint's body bound is the arithmetic of the list bound, not a number
-beside it.** `DefaultMaxRequestBytes` is four kilobytes because a body was one
-JSON field, and a list of a thousand names is not. Two bounds on one list that
-can disagree produce the worst possible error — a list inside the documented
-bound refused by an undocumented one, telling an operator their estate is too
-large when it is not — so `DefaultMaxInventoryBytes` is computed from
-`knownnames.MaxNames` rather than chosen next to it.
-
-**A source is counted where it is read, not worked out from labels
-afterwards.** The records used to be credited with whatever was left over —
-every other source subtracted from the length of a name's provenance — which
-was correct only for as long as nobody added a source. It survived four of
-them because each remembered to join the subtraction; the seventh would have
-credited the domain's own records with names an operator typed. Each source
-now asks for itself, and the records, whose labels come from their reader
-rather than from this package, are remembered as they are read
-(`TestARecordSourceWithNoShortLabelIsStillCarried`).
-
-**The console offers the inventory as a door rather than as a box, and the
-column that carries a rule set carries a word instead.** It was reachable only
-from its own page until 2026-09-28, which meant somebody had to know it existed
-to find it — the worst way to offer the one mode that answers *what have I got*.
-So it is on the list, beside the checks, because that is where somebody looks.
-
-A checkbox was tried first and was worse than either thing it sat between. The
-console runs its checks against one name and has no field for an address range,
-so a run started from there reported the reverse walk as never asked, every
-time, with nothing on the page to do about it — a control that visibly
-half-runs what it offers, in the one place a user actually looks. The row opens
-the page that runs all of it instead, which costs a click and hides nothing.
-`TestTheConsoleOffersTheInventoryAsADoorNotABox` holds the three parts of that:
-the row exists, it is a link with no box for the form to submit, and the page
-it names is one this build serves.
-
-`policy.Informational` sits where the four checks carry their version, because
-a version there is a promise that two reports carrying it are comparable, and
-nothing here was graded (R21) — while a blank would read as a pass.
-
-**The demonstration draws the same door, and then says where the sources it
-does not use can be used** (`TestTheDemonstrationOffersTheInventoryAsADoor`).
-It reaches hosts compiled into it (N6) and configures two of the six sources,
-so a visitor reads four lines saying *not asked* with no way to change any of
-them, which reads as four things the tool cannot do rather than four it was not
-asked to do here. One sentence under the report points at those lines and says
-a copy you run yourself reads each of them. It points rather than lists: a list
-would be a second place to keep in step with what is actually configured, and
-the day it drifted it would be this page telling somebody something false about
-the tool (N14).
-
-**And the column a reader runs an eye down holds a state rather than a
-sentence.** *live — 192.0.2.1, 192.0.2.2, answering on 443 and 80* is two lines
-of prose in a table cell, and a column of them cannot be scanned at all. The
-state is the cell and the evidence is the note under it, which is what every
-other table here does with a qualification. Only *unchecked* is drawn faint,
-because faint on this site means nothing was measured: greying *gone* or
-*dangling* would put a reading of an estate into a colour, and those two are the
-last states an operator should have to hunt for.
-
-**And `-resolver` takes an address without a port.** It did not until
-2026-09-25: the resolvers read from this machine's own configuration have had
-the port added since `resolverList` was written, and one an operator typed did
-not — so `-resolver 8.8.8.8` failed every lookup and reported it as the names
-being unresolvable. A statement about somebody's estate, arrived at from a
-missing colon. `TestAResolverAddressWorksWithoutAPort` holds it, including the
-IPv6 literal, which is the case that would have been silently wrong rather than
-loudly wrong.
-
-**And a monitor or register the operator points elsewhere is asked over HTTPS
-or not at all.** `-monitor-url`, `-passive-url` and their `porchd` twins took
-any address, and the dialler behind them allows port 80, so `http://` sent the
-domain — and, for a register or CertSpotter, the operator's key — across every
-network on the way in the clear. Refused at start now, on both programs, with
-credentials in the address refused too: a key belongs in the environment, and
-an address is something an error message prints. The `%s` a monitor's address
-carries is read as the name it will become, so an address with the name in its
-path is not refused for the placeholder
-(`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`).
-
-**And the list the TLS check's Logged line asks for is shown.** The line ends
-on *N of which are valid today and were not the one presented here*, which
-asks the reader to check a list, and the entries sat in the JSON and on no
-face of the report: a count nobody can check against what they ordered. Each
-one is now a sentence composed in `internal/policy` — serial, issuer, validity,
-names — and printed under the line by both faces
-(`TestTheCertificatesTheLoggedLineCountsAreListed`,
-`TestTheCertificatesTheLoggedLineCountsArePrinted`).
-*Enforced in:* `cmd/porch-scan.httpsEndpoint`, `cmd/porchd.httpsEndpoint`,
-`internal/policy.UnaccountedLine`, `internal/scan.Scanner.searchLogs`,
-`internal/ctsearch`, `internal/ctsearch.SearchEstate`,
-`internal/liveness`, `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
-`internal/dnsnames`, `internal/dnsnames.Reader.Under`,
-`internal/inventory`, `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
-`cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`, `cmd/porch-scan.saysRecords`,
-`internal/httpapi.handleNames`, `internal/httpapi.Server.inventory`, `internal/httpapi.keptInventories`,
-`internal/httpapi.Server.records`, `internal/httpapi.Server.live`,
-`internal/inventory.Inventory.WithLiveness`, `internal/inventory.Sources`,
-`internal/passivedns`, `internal/passivedns.SecurityTrails.Under`, `internal/passivedns.VirusTotal.Under`,
-`internal/certnames`, `internal/certnames.Reader.Under`, `internal/liveness.Answering`,
-`internal/ptrnames`, `internal/ptrnames.Reader.Under`, `internal/ptrnames.Addresses`,
-`internal/httpapi.Server.operatorOnly`, `internal/httpapi.parseRanges`,
-`internal/inventory.Name.MarshalJSON`, `internal/inventory.Inventory.MarshalJSON`,
-`internal/ptrnames.Reverse`, `internal/dnsclient.Client.LookupPTR`, `cmd/porch-scan.rangesNamed`,
-`internal/inventory.Inventory.Unasked`, `internal/httpapi.Server.presented`,
-`internal/passivedns.looksLikeAName`, `cmd/porch-scan.registerNamed`, `cmd/porchd.namesRegister`,
-`internal/ctsearch.under`, `internal/scan.Scanner.searchLogs`,
-`internal/scan.sameSerial`, `internal/policy.LoggedLine`,
-`internal/policy.DescribeLogged`, `cmd/porch-scan.tlsScanner`,
-`internal/zonenames`, `internal/zonenames.Reader.Under`, `internal/zonenames.Found.keep`,
-`internal/dnsclient.Client.Transfer`, `internal/dnsclient.transferNames`,
-`internal/dnsclient.readTransferMessage`, `internal/httpapi.Server.ReadZoneTransfers`, `internal/httpapi.zoneReader`,
-`cmd/porch-scan.saysZone`,
-`internal/nsecnames`, `internal/nsecnames.Reader.Under`, `internal/dnsclient.Client.LookupNSEC`,
-`internal/inventory.FromNSEC`, `internal/httpapi.Server.WalkAbsenceProofs`,
-`internal/httpapi.absenceWalker`, `cmd/porch-scan.saysNsec`,
-`internal/knownnames`, `internal/knownnames.From`, `internal/knownnames.ReadFile`,
-`internal/knownnames.MaxNames`, `internal/inventory.FromOperator`,
-`cmd/porch-scan.namesGiven`, `cmd/porch-scan.saysKnown`, `cmd/porch-scan.onlyGiven`,
-`internal/httpapi.DefaultMaxInventoryBytes`,
-`internal/inventory.Inventory.Readings`, `internal/inventory.Inventory.Failures`,
-`internal/web.consoleChecks`, `internal/web.consoleCheck`, `internal/policy.Informational`,
-`cmd/porch-scan.shortInventory`,
-`cmd/porch-scan.runNames`, `cmd/porch-scan.printNamesLimits`
-*Guarded by:* `TestOneCertificateLoggedTwiceIsOneCertificate`,
-`TestTwoDifferentCertificatesAreTwo`,
-`TestTheNameIsEscapedIntoTheQuery`,
+`TestWhatARegisterHasSeenUnderADomain`,
+`TestNoNameIsProbedForAnUnprovenDomain`,
+`TestTheProbeTheServiceBuildsRefusesPrivateDestinations`,
+`TestANameNothingReachedIsStillInTheReport`,
+`TestWhatEachNameIsDoingGoesBesideTheName`,
+`TestAnEstateWhereNothingAnswersWasStillAsked`,
+`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`,
+`TestTheServiceReadsBothSourcesForAProvenDomain`,
+`TestBothFacesSayTheSameThingAboutWhatTheInventoryMisses`,
+`TestEveryNameSaysWhatNamedIt`, `TestTwoSpellingsOfOneHostAreOneHost`,
+`TestOneHostNamedTwiceIsOneName`, `TestTheWindowSurvivesTheMerge`,
+`TestASourceThatFailedIsNotAnEmptyEstate`,
+`TestAnInventoryMissingASourceSaysWhichOne`,
+`TestARecordSourceWithNoShortLabelIsStillCarried`,
+`TestEverySourceIsAReadingAndEveryReadingIsListed`,
+`TestThePageDrawsALineForEverySourceTheInventorySends`,
+`TestThePageReadsTheNameFieldsTheAPISends`,
+`TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
+`TestTheReportSaysWhatTheProofsListed`,
+`TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
+`TestAnInstallationNotToldToWalkProofsDoesNot`,
+`TestAZoneWithNoPlainProofsSaysSo`, `TestASignedZoneListsItself`,
+`TestAChainThatDoesNotComeRoundIsCut`, `TestAChainThatLeavesTheDomainStops`,
+`TestAZoneThatNeverComesRoundIsStopped`,
+`TestTheListIsTakenAsGivenAndHeldToTheDomain`,
+`TestAFileIsOneNameToALineWithRoomForNotes`,
+`TestAListSomebodyGaveIsItsOwnSource`, `TestAListLongerThanAnEstateIsRefused`,
+`TestAListLongerThanAnEstateIsRefusedByTheService`,
+`TestAListOfNamesIsReadForAProvenDomainAndNoOther`,
+`TestACheckRefusesAListOfNames`,
+`TestTheConsoleOffersTheInventoryAsADoorNotABox`,
+`TestTheDemonstrationOffersTheInventoryAsADoor`,
+`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`,
+`TestTheCertificatesTheLoggedLineCountsAreListed`,
+`TestTheCertificatesTheLoggedLineCountsArePrinted`,
+`TestOneCertificateLoggedTwiceIsOneCertificate`,
+`TestTwoDifferentCertificatesAreTwo`, `TestTheNameIsEscapedIntoTheQuery`,
 `TestAwkwardNamesDoNotEscapeTheQuery`,
 `TestNothingThatIsNotAnAnswerReadsAsNoneFound`,
-`TestAnEmptyAnswerIsNotAFailure`,
-`TestWhatTheMonitorSaysIsBoundedAndStripped`,
+`TestAnEmptyAnswerIsNotAFailure`, `TestWhatTheMonitorSaysIsBoundedAndStripped`,
 `TestALongHistoryIsBoundedAndSaysSo`,
 `TestAnOversizedAnswerIsRefusedRatherThanTruncated`,
 `TestAnEmptyNameIsNotSearchedFor`,
@@ -2628,12 +536,10 @@ names — and printed under the line by both faces
 `TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports`,
 `TestAKeptReportIsScannedOnceAnIntervalAndSaysItsAge`,
 `TestOnlyAnAnsweredReportIsKept`, `TestWithoutAnIntervalEveryCallerIsScanned`,
-`TestTheOrdinaryBuildSearchesTheLogsWhenAsked`,
-`TestNoSearcherMeansNoSearch`,
+`TestTheOrdinaryBuildSearchesTheLogsWhenAsked`, `TestNoSearcherMeansNoSearch`,
 `TestTheLogSearchIsOffUntilItIsAskedFor`,
 `TestADeploymentThatSearchedNoLogsSaysNothing`,
-`TestAFailedSearchIsNotAnEmptyEstate`,
-`TestOneCertificateInUseReadsAsSettled`,
+`TestAFailedSearchIsNotAnEmptyEstate`, `TestOneCertificateInUseReadsAsSettled`,
 `TestACertificateNotPresentedIsSaidPlainly`,
 `TestWhatTheLogsHoldIsNeverGraded`,
 `TestTheReportSaysSubdomainsWereNotSearched`,
@@ -2645,378 +551,42 @@ names — and printed under the line by both faces
 `TestTheSearchAsksForEverythingUnderTheDomainAndKeepsOnlyThat`,
 `TestAMonitorThatWillNotAnswerIsNotAnEmptyEstate`,
 `TestTheInventoryAlwaysSaysWhatItCannotShow`,
-`TestAFailedSearchPrintsNoInventory`,
-`TestTheInventoryCountsInWords`,
+`TestAFailedSearchPrintsNoInventory`, `TestTheInventoryCountsInWords`,
 `TestTheInventoryTakesADomainAndNotAnAddress`,
-`TestEveryPageOfAPagedAnswerIsRead`,
-`TestAnEstatePastTheBoundSaysItWasCut`,
-`TestRateLimitingIsSaidPlainly`,
-`TestTheKeyIsSentAsACredentialAndNotWrittenDown`,
 `TestTheSecondMonitorKeepsOnlyThisEstate`,
-`TestOneCertificateUnderTwoIdentifiersIsOne`,
-`TestOneHostNamedTwiceIsOneName`,
-`TestTwoSpellingsOfOneHostAreOneHost`,
-`TestTheWindowSurvivesTheMerge`,
-`TestASourceThatFailedIsNotAnEmptyEstate`,
-`TestAWildcardIsNeverAHostToResolve`,
-`TestARecordSourceWithNoShortLabelIsStillCarried`,
-`TestWhatEachSourceDroppedIsKeptApart`,
-`TestEveryNameSaysWhatNamedIt`,
-`TestAnInventoryMissingASourceSaysWhichOne`,
+`TestAWildcardIsNeverAHostToResolve`, `TestWhatEachSourceDroppedIsKeptApart`,
 `TestASourceThatFailedIsANonZeroExit`,
-`TestTheServiceReadsBothSourcesForAProvenDomain`,
-`TestNeitherSourceIsReadForAnUnprovenDomain`,
-`TestAnInstallationWithNoResolverSaysTheRecordsWereNotRead`,
 `TestAnInstallationWithAResolverReadsTheRecords`,
 `TestTheServiceSaysWhatEachNameIsDoing`,
-`TestNoNameIsProbedForAnUnprovenDomain`,
-`TestTheProbeTheServiceBuildsRefusesPrivateDestinations`,
-`TestANameNothingReachedIsStillInTheReport`,
-`TestWhatEachNameIsDoingGoesBesideTheName`,
 `TestAnAnswerIsMatchedToItsNameWhateverTheSpelling`,
-`TestAnEstateWhereNothingAnswersWasStillAsked`,
-`TestAZoneIsReadFromTheServerThatHandsItOver`,
-`TestAServerThatRefusesATransferIsNotAFailure`,
-`TestATransferThatStopsPartWayThroughSaysItWasCut`,
-`TestATransferRecordCannotReachPastItsMessage`,
-`TestTheZoneHandsOverItsOwnList`,
-`TestEveryServerRefusingIsNotAFailure`,
-`TestADelegationThatCannotBeReadIsNotARefusal`,
-`TestWhatAServerSendsIsCleanedBeforeItIsKept`,
-`TestWhatAZoneHandedOverIsItsOwnSource`,
-`TestTheReportSaysWhatTheZoneHandedOver`,
-`TestTheZoneIsReadOnlyForAProvenDomain`,
-`TestAnInstallationNotToldToReadAZoneDoesNot`,
-`TestEverySourceIsAReadingAndEveryReadingIsListed`,
-`TestThePageDrawsALineForEverySourceTheInventorySends`,
-`TestThePageReadsTheNameFieldsTheAPISends`,
-`TestTheConsoleOffersTheInventoryAsADoorNotABox`,
-`TestTheDemonstrationOffersTheInventoryAsADoor`,
-`TestTheListIsTakenAsGivenAndHeldToTheDomain`,
-`TestNoListIsNotAnEmptyList`,
-`TestAListLongerThanAnEstateIsRefused`,
-`TestAFileIsOneNameToALineWithRoomForNotes`,
-`TestAFileThatIsNotAListIsRefused`,
-`TestAListSomebodyGaveIsItsOwnSource`,
-`TestAListOfNamesIsReadForAProvenDomainAndNoOther`,
-`TestAListLongerThanAnEstateIsRefusedByTheService`,
+`TestNoListIsNotAnEmptyList`, `TestAFileThatIsNotAListIsRefused`,
 `TestAListIsNeverKeptForTheNextCaller`,
-`TestACheckRefusesAListOfNames`,
 `TestTheReportSaysWhatTheListContributed`,
 `TestTheNamesGivenComeFromTheFlagAndTheFile`,
-`TestEveryFieldThePageOffersIsSent`,
-`TestASignedZoneListsItself`,
-`TestAZoneWithNoPlainProofsSaysSo`,
-`TestAChainThatDoesNotComeRoundIsCut`,
-`TestAChainThatLeavesTheDomainStops`,
-`TestAZoneThatNeverComesRoundIsStopped`,
-`TestAWalkOfTheAbsenceProofsIsItsOwnSource`,
-`TestTheAbsenceProofsAreWalkedOnlyForAProvenDomain`,
-`TestAnInstallationNotToldToWalkProofsDoesNot`,
-`TestTheReportSaysWhatTheProofsListed`,
-`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`,
-`TestAnInventoryIsNotOfAnAddress`
+`TestEveryFieldThePageOffersIsSent`, `TestAnInventoryIsNotOfAnAddress`
 
 ### N13 — A question about a zone is authorised by the zone, and asks nobody else
-
-The mail check reads three names — the domain, `_dmarc.` under it, and
-`_smtp._tls.` under it — and whatever the domain's own sender policy points at.
-It opens two kinds of connection, under conditions set out below: one to the
-MTA-STS policy file a zone announces, and one short conversation with each
-exchanger the zone names. No message is composed or sent, and nothing that
-would change state at the other end is attempted. One question names a
-recipient — whether an exchanger inside the domain forwards mail for a domain
-it does not serve — and N3 sets out what bounds it: an empty sender, a name
-under `.invalid` that cannot exist, and a reset before `DATA`.
-
-The names the zone points at are read as names, too. An MX record that names
-an alias is one RFC 2181 forbids, and finding it means asking that name for
-its own record rather than for an address — an exchanger whose name is an
-alias still resolves, so nothing else read here would show it.
-
-**And the one input a check needs and cannot discover: the selectors a signing
-key lives under.** DNS does not list what is beneath a name, so a DKIM key is
-found only where somebody says to look. A service looked under the selectors
-mail providers document and nothing else until 2026-09-28, which meant a domain
-with a selector of its own was told those names hold nothing — a sentence about
-this project's list, read by an operator as a fact about their estate. The
-command line had taken `-dkim-selector` since it was written; the web face
-could not.
-
-The reason given was that "a list of selectors in a request body is a field
-somebody else fills in". Behind proof of control it is not: the person filling
-it in has shown the domain is theirs, which is the answer the name inventory's
-own list arrived at three days earlier. The request takes them, the mail check
-alone takes them, and every other check refuses one rather than dropping it —
-a field accepted and ignored is a caller believing something happened
-(`TestOnlyTheMailCheckTakesSelectors`).
-
-The scanner a request runs with is a copy where a caller named their own, and
-the shared one otherwise (`internal/httpapi.Server.mailFor`,
-`TestTheMailCheckLooksUnderTheSelectorsTheCallerNamed`). A value copy of
-configuration: every field is read during a scan and written by nobody, so two
-requests share the resolver, the store and the fetchers and disagree about
-nothing but the names to look under. Theirs come first, because the bound cuts
-from the end — a caller who named two and got the documented sixteen instead
-would have been answered about names they did not ask about — and a list past
-`dkim.MaxSelectors` is refused rather than cut, because a report that quietly
-skipped the rest answers about names nobody was told were left out (R4).
-
-The field sits beside the checks rather than in a section of its own, says
-which check it belongs to, and is sent only when that check is running
-(`TestTheSelectorFieldGoesOnlyToTheMailCheck`).
-
-**And it says where a selector is found, because "name your selectors" is
-advice nobody can follow.** A selector is not a thing most operators have heard
-of, and both notes that ask for one stopped at asking — describing a gap and
-leaving it there. The `s=` tag in the `DKIM-Signature` header of any message
-the domain sent is the reliable answer and the one nobody thinks of: it is in
-front of anybody with a sent message, whatever their provider's documentation
-says. The record's own first label comes second, and the provider's setup page
-third, because that is the one that is wrong when a domain has moved
-(`TestANoteThatAsksForASelectorSaysWhereToFindOne`).
-
-**A report destination outside the domain is asked whether it agreed, and the
-address it points at is a separate question from the domain it is at.** RFC
-7489 §7.1 forbids a receiver from sending aggregate reports to a destination
-outside the domain being reported on until that destination publishes a DMARC
-record at `<domain>._report._dmarc.<destination>`. So the lookup is one TXT
-question, to the resolver this check already uses, and it is the only way to
-learn something no amount of reading the domain's own zone can show: the record
-is well formed, the policy applies, `rua=` names a vendor, and every report
-goes nowhere, because the missing record is in somebody else's zone
-(`TestAnExternalDestinationIsAskedWhetherItAgreed`,
-`TestWhereTheReportsGoIsReadAndTheOutsideOnesAreAsked`).
-
-Three states are kept apart and none of them may be folded into another: a
-destination that agreed, one that has published nothing and therefore receives
-nothing, and one whose authorisation could not be read at all. The last is a
-fact about the lookup rather than about the destination, and reporting it as a
-refusal would send an operator to their vendor over a resolver that did not
-answer (R4, `TestAResolverThatWillNotAnswerIsNotARefusal`). A destination
-inside the domain is asked nothing: §7.1 exists because a domain cannot
-volunteer somebody else's mailbox, and it does not apply where the domain names
-itself. Two addresses at one vendor are one question
-(`TestOneVendorIsAskedOnce`).
-
-**Where the specification is ambiguous, the reading that reports fewer faults
-wins, and the report says which reading it took.** §7.1 says "the same domain",
-and receivers differ on whether a subdomain of it counts as external. The
-strict reading invents a finding at domains that have none; the loose one
-misses one. A scanner that invents is worse than one that reports less, so a
-destination under the domain is treated as inside it and the note beside the
-row says so (R17, R21).
-
-**The address is printed where the asker is the operator, and the domain
-always.** A domain is not a person and a mailbox is. The command line prints
-both, because it runs on the operator's own machine; a service prints the
-mailbox only where control of the domain has been proven, and otherwise names
-the destination without the address at it
-(`TestTheReportAddressesArePrintedOnlyWhenAskedFor`,
-`TestTheAddressesCanBeDroppedWithoutTheFinding`). Nothing about the finding
-rests on it, because the finding is about domains — which is the test that
-decides whether withholding a value is honest or is a hole: the sentence must
-mean the same thing without it (`TestADestinationWithNoAddressStillNamesItsDomain`).
-
-This replaced a boolean. The tag was read as *reports are asked for, or they
-are not* until 2026-09-28, and that discarded a measurement rather than a
-detail: the check above could not be made at all, and an operator could not see
-that their reports were addressed to an analytics vendor they stopped paying.
-The count answered neither question anybody has of the tag. Both faces say the
-same thing in the same words
-(`TestWhereTheReportsGoReachesBothFacesOfTheReport`), and the bounds are the
-usual ones for a value somebody else writes: eight destinations, the rest
-counted, and a URI this package cannot read dropped rather than guessed at
-(`TestTheTagIsReadAsThePlacesItNames`,
-`TestATagNamingMoreThanAnybodyReadsIsBounded`,
-`TestOnlyADMARCRecordIsAgreement`).
-
-That is not restraint applied to the check. It is what these records are: a
-domain publishes them so that strangers will read them, and reading one is the
-use they were put there for. The target learns nothing at all, because the
-queries go to the resolver this machine already asks about every other target.
-It is the strongest privacy position any check here holds, and it holds by
-construction rather than by promise.
-
-**The proof required is the zone proof, not the file proof.** A deployment that
-scans only estates it has been shown control of (N9) accepts two proofs: a TXT
-record in the zone, and a file under `/.well-known` for teams without access to
-their own DNS. Every record this check reads lives in the zone. A file served
-under a name proves control of one host's web surface and nothing about the zone
-behind it, so accepting it here would let somebody who can publish a page read
-the mail policy of a zone somebody else runs. `verify.AnyPort`, deliberately,
-and the difference is the whole of it.
-
-**The names asked about are derived from the target, never constructed from an
-answer.** Two names come from the domain's own records rather than from its
-spelling, and neither is an exception. An `include` is the domain instructing
-every receiver on earth to resolve that name, so resolving it is reading the
-policy. An `MX` is the domain saying *this host takes my mail*, so asking what
-that host publishes under `_25._tcp` is reading the domain's own answer rather
-than wandering off it. Both are bounded, because both lists are written by
-whoever is being measured. The walk is bounded — ten lookups, ten levels, and a set of
-names already seen, because a policy that includes itself is a policy that would
-otherwise be followed forever.
-
-**A record read out of somebody else's zone is untrusted input.** Its values are
-chosen by whoever is being measured, so each is bounded before it travels, the
-record itself is bounded before it is parsed, and a domain that publishes a
-forty-kilobyte `p=` tag gets a bounded one in the report rather than a report
-that carries it whole.
-
-**Nothing read is the reassuring answer, so a failure to read must not look like
-one.** A resolver that will not answer produces *not read, and here is why*,
-never *this domain publishes no policy*. The two send an operator to opposite
-places: one to their DNS provider, one to their mail configuration. The reason
-names no resolver and no address (I6).
-
-**What it grades is only what a document calls an error.** RFC 7208 makes more
-than one SPF record, more than ten resolving terms, and more than two void
-lookups permanent errors — a receiver hitting one behaves as though the domain
-published nothing, while the domain believes it has a policy. RFC 7489 says a
-receiver finding two DMARC records applies neither. `+all` authorises every
-sender on the internet. Everything else is described: `~all` is the staging
-position, `p=none` is the monitoring position, a `pct=` below 100 is a rollout,
-and a scanner marking any of them down would be reporting a correct decision as
-a fault (R6, R21).
-
-**The lookup count is reported before it is a fault.** Nine of ten is not an
-error and is the sentence this check was built for: the cost is mostly inside
-the providers a policy includes, so a domain one provider away from switching
-its own policy off has no way to see that from its own zone. The included
-domains are named with the count, because a number alone says there is a problem
-and not where it is.
-
-**And the count is bounded the way a receiver bounds it.** Past ten, a receiver
-has already stopped with a permanent error, so the walk stops resolving there
-too; the remaining terms of the record in hand are still counted, and the report
-says the figure is a lower bound. Before the 2026-09-16 audit (A12) nothing
-bounded the walk but the caller's deadline: thirty includes cost thirty-one
-queries, and a zone whose includes each named more had no ceiling. Now it is at
-most one query for the record and one for each lookup up to the limit. An
-include the resolver could not answer is counted as unread, not void — RFC 7208
-defines a void lookup as a name with no records, and counting a timeout as one
-turned this machine's failure into a finding about the domain. While any include
-is unread the report is not strong.
-
-**A record read is not a policy read, and the report says which it means.** The
-MTA-STS record at `_mta-sts.<domain>` announces that a policy exists; the policy
-itself is a file at `https://mta-sts.<domain>/.well-known/mta-sts.txt`, and only
-the file says whether it enforces or is only rehearsing. From DNS those look
-identical, and a reader left to complete "a policy is announced" completes it in
-the stronger direction.
-
-So the file is read, and it is the one connection this check makes. It is
-fenced four ways, and each is a test:
-
-- **Only where the zone announces one.** No record, no request. The record is
-  the domain naming the address, which is what makes the request the following
-  of a published instruction rather than an address this program chose — the
-  thing N7 refuses.
-- **Only where the deployment reads it.** Off unless a caller sets it. The
-  command line sets it, for the argument `-allow-private` and page reading rest
-  on; a service sets it exactly where it requires proof of control (N9), so the
-  host is in an estate the person asking has shown is theirs.
-- **One address, fixed by RFC 8461.** HTTPS on 443 through the dialler that
-  refuses private and reserved destinations (N1), no redirect followed, no
-  proxy, a bounded body, and a certificate that must verify for the policy host
-  against the deployment's own trust store (R7).
-- **Not a mail server.** The policy host is a web host, and one GET is all it
-  is sent.
-
-**A file that was fetched is not yet a policy.** RFC 8461 §3.2 requires
-`version: STSv1`, one of the three modes, a `max_age`, and an `mx` for a policy
-that enforces or tests; `version`, `mode` and `max_age` appear once. A file
-missing any of them, or larger than the bound, is one no sending server applies,
-so it is graded `mail.mta-sts-policy-invalid` with the reason and nothing in it
-is used. Until the 2026-09-16 audit (A18) a file with no version line was read
-as the enforcing policy its other lines described. A policy naming more
-patterns than are kept is not compared with the exchangers at all: a pattern
-past the bound might be the one that covers a host, so neither "uncovered" nor
-"every exchanger is matched" is established.
-
-**An exchanger is asked for encryption, and for nothing else.** Whether an MX
-offers STARTTLS, and what certificate it presents, is the fact an enforcing
-MTA-STS policy and a DANE record both depend on, and only the exchanger can
-answer it. So each exchanger the zone names — at most eight, the list being
-written by whoever is measured — is asked on port 25: greeting, EHLO, STARTTLS,
-the handshake, QUIT. There is no MAIL FROM, no RCPT TO and no DATA, so nothing
-is delivered and nothing is asked about a person. The EHLO name is the client's
-own, as RFC 5321 says, not a name invented to hide who asked. Replies are
-bounded before they are believed, bytes sent before encryption begins end the
-conversation (RFC 3207), and the certificate is judged against the deployment's
-own store (R7). A connection that never opens is reported as what a network
-blocking outbound port 25 produces, not as a fault of the exchanger (R3d). It
-runs where the command line runs it, or a service has proof of control.
-
-Where the policy is not read — the deployment does not read it, or the fetch
-failed — the report says so with the reason, and nothing about the policy is
-graded. A failed fetch looks the same whether the policy host is broken or this
-machine's egress is blocked, and no measurement available from here separates
-them (R4).
-
-**A DANE record is checked against the certificate its exchanger presented,
-and graded only where RFC 7672 says a sender acts.** The TLSA records are read
-beneath each exchanger either way; whether a binding *holds* needs the
-certificate the exchanger presents, so it is checked exactly where the
-exchangers are contacted, and said to be unchecked everywhere else. Only records
-a sender uses for SMTP count: DANE-EE matches the leaf with no name or date
-check, DANE-TA matches a presented certificate the leaf must chain to and name
-the exchanger through, and PKIX usages, undefined types and wrong-length digests
-authenticate nothing. A bare DANE-TA key no certificate carries, and an anchor
-outside its own dates, are left undetermined rather than guessed. A binding that
-does not hold is graded weak — it fails closed, as the enforcing MTA-STS rule
-does — only where the resolver reported the records validated, because a sender
-applying RFC 7672 ignores records that do not validate; that bit is the
-resolver's word and the rationale says so. Everything this client could not
-establish is described (R4).
-
-**A null MX ends the questions it makes inapplicable.** RFC 7505's single `.`
-is a domain stating that it accepts no mail at all, which is the clearest case
-of a correct configuration a scanner could mark down. Every sentence about
-delivery is dropped rather than reported as unsatisfied (R6).
-
-**A mail address is accepted and the local part never travels.** The split is
-at the last `@`, at the edge, before anything can log, count or report it. A
-local part is a person's identity and every question here is about the zone, so
-there is nowhere for it to go rather than a rule about not putting it there.
-The edge is three places: the scanner, the service's parser — which refused an
-address before the scanner saw it until the 2026-09-16 audit (A32) — and the
-page, which cuts it off before a request is built, so it never leaves the
-browser at all.
-
-**And every report says no message was sent.** No message was ever composed —
-the relay question names an empty sender and a recipient that cannot exist, and
-resets before any message (N3) — and a DANE binding's correctness was not
-checked. A DKIM key is
-read only under a selector the scan was told to look under — selectors cannot
-be listed from DNS — and the report names every one it tried, so "these names
-hold nothing" is never rendered as "this domain publishes no key" (R4). The
-standing limit said "everything here was read from DNS" until the policy file
-could be read, and "no mail server was contacted" until the exchangers could be
-asked; each sentence went rather than being reworded, because what a scan
-contacted differs by deployment and a standing limit is the same sentence on
-every report.
-
-**What a count stood for is named, and the records reach their owner.** The
-void-lookup finding said how many of a policy's lookups answered nothing and
-not which, void lookups under the limit and policies that could not be read
-were counted or not said at all, and the fix in every case starts with the
-name. They are named now. A DMARC `sp=` weaker than `p=` is said and not
-graded (R21). And where the report is read by the person the domain belongs
-to — the command line, or a service with proof or only its operator in front of
-it — the SPF, DMARC and TLS-RPT records are carried as the zone publishes them,
-under the rows written from them; a stranger's report still prints only what
-this program wrote, because the text is the zone's and two of them carry
-mailboxes. Every name and record is the zone's own bytes, so each goes through
-`internal/display` first (R10): an SPF include name reached the notes with
-nothing in between, and a TXT record is bytes.
 
 *Enforced in:* `internal/mailscan`, `internal/spf`, `internal/mtasts`,
 `internal/policy.GradeMail`, `internal/policy.MailStandingLimits`,
 `internal/httpapi.New`, `cmd/porch-scan.mailScanner`, `cmd/porch-scan.runMail`,
 `internal/display.Mark`, `cmd/porch-scan.printRecord`
-*Guarded by:* `TestTheRecordsReachTheirOwnerAndNobodyElse`,
+
+*Guarded by:* `TestOnlyTheMailCheckTakesSelectors`,
+`TestTheMailCheckLooksUnderTheSelectorsTheCallerNamed`,
+`TestTheSelectorFieldGoesOnlyToTheMailCheck`,
+`TestANoteThatAsksForASelectorSaysWhereToFindOne`,
+`TestAnExternalDestinationIsAskedWhetherItAgreed`,
+`TestWhereTheReportsGoIsReadAndTheOutsideOnesAreAsked`,
+`TestAResolverThatWillNotAnswerIsNotARefusal`, `TestOneVendorIsAskedOnce`,
+`TestTheReportAddressesArePrintedOnlyWhenAskedFor`,
+`TestTheAddressesCanBeDroppedWithoutTheFinding`,
+`TestADestinationWithNoAddressStillNamesItsDomain`,
+`TestWhereTheReportsGoReachesBothFacesOfTheReport`,
+`TestTheTagIsReadAsThePlacesItNames`,
+`TestATagNamingMoreThanAnybodyReadsIsBounded`,
+`TestOnlyADMARCRecordIsAgreement`,
+`TestTheRecordsReachTheirOwnerAndNobodyElse`,
 `TestARecordCannotActOnTheDisplay`, `TestTheSPFLookupsThatFailAreNamed`,
 `TestAWeakerSubdomainPolicyIsSaid`, `TestTheRecordsArePrintedUnderTheirRows`,
 `TestTheVoidLookupFindingNamesThePolicies`, `TestNothingCanActOnTheDisplay`,
@@ -3024,49 +594,38 @@ nothing in between, and a TXT record is bytes.
 `TestAnAliasedExchangerReachesBothFacesOfTheReport`,
 `TestTheAliasQuestionIsBoundedLikeTheExchangers`,
 `TestTheScanAsksOnlyAboutTheDomainItWasGiven`,
-`TestTheWalkStopsWhereAReceiverStops`, `TestAPolicyUnderTheLimitIsWalkedInFull`,
+`TestTheWalkStopsWhereAReceiverStops`,
+`TestAPolicyUnderTheLimitIsWalkedInFull`,
 `TestAnUnreadIncludeIsNotAVoidLookup`, `TestACancelledWalkAsksNothing`,
-`TestTheTenthLookupIsFollowed`,
-`TestAnSPFCountThatIsALowerBoundIsSaidAsOne`, `TestAnUnreadIncludeReachesTheReport`,
-`TestALowerBoundLookupCountIsSaidAsOne`,
+`TestTheTenthLookupIsFollowed`, `TestAnSPFCountThatIsALowerBoundIsSaidAsOne`,
+`TestAnUnreadIncludeReachesTheReport`, `TestALowerBoundLookupCountIsSaidAsOne`,
 `TestOnlyTheZoneProofAuthorisesAMailScan`,
-`TestScanRefusesBeforeItAsksAnything`,
-`TestExclusionSurvivesTheSpelling`,
-`TestScanTakesADomainAndNothingElse`,
-`TestScanReadsWhatTheZonePublishes`,
+`TestScanRefusesBeforeItAsksAnything`, `TestExclusionSurvivesTheSpelling`,
+`TestScanTakesADomainAndNothingElse`, `TestScanReadsWhatTheZonePublishes`,
 `TestAFailedLookupIsNotADomainWithNoPolicy`,
 `TestTLSReportingIsOnlyTrueWhenTheRecordSaysSo`,
 `TestOnlyARecordThatAnnouncesItselfIsDMARC`,
 `TestTheDefaultPercentIsTheOneRFC7489Specifies`,
-`TestAnEnormousTagDoesNotTravel`,
-`TestEveryReportCarriesTheMailLimit`,
+`TestAnEnormousTagDoesNotTravel`, `TestEveryReportCarriesTheMailLimit`,
 `TestTheDurationIsMeasuredRatherThanAssumed`,
-`TestAPolicyThatIncludesItselfStops`,
-`TestTheCountFollowsEveryInclude`,
-`TestMoreThanTenLookupsIsOverTheLimit`,
-`TestTenLookupsIsNotOverTheLimit`,
+`TestAPolicyThatIncludesItselfStops`, `TestTheCountFollowsEveryInclude`,
+`TestMoreThanTenLookupsIsOverTheLimit`, `TestTenLookupsIsNotOverTheLimit`,
 `TestOnlyResolvingTermsAreCounted`,
 `TestIncludesThatResolveToNothingAreCountedAsVoid`,
 `TestARedirectIsCountedOnlyWhereItWouldBeFollowed`,
-`TestTheIncludedDomainsAreListed`,
-`TestAnOverlongRecordIsBounded`,
+`TestTheIncludedDomainsAreListed`, `TestAnOverlongRecordIsBounded`,
 `TestAResolverThatWillNotAnswerIsNotAMissingPolicy`,
-`TestADomainThatDoesNotExistSaysSo`,
-`TestNoReasonDescribesTheMachine`,
+`TestADomainThatDoesNotExistSaysSo`, `TestNoReasonDescribesTheMachine`,
 `TestMailGradesWhatASpecificationCallsAnError`,
 `TestMailDoesNotGradeADeliberatePosition`,
 `TestTheLookupCountIsReportedBeforeItIsAFault`,
 `TestOverTheLimitTheCountIsNotAlsoReportedAsFine`,
 `TestNotReadIsDistinguishableFromNotPublished`,
 `TestEveryMailReportCarriesTheStandingLimit`,
-`TestTheMailLimitIsTheDeclaredOne`,
-`TestMailFindingsNameTheMailRuleSet`,
-`TestTheMailExchangersAreRead`,
-`TestANullMXIsReadAsOne`,
-`TestAHostileExchangerNameIsStripped`,
-`TestAnEnormousExchangerNameIsBounded`,
-`TestTheNameRendererBoundsWhatItIsGiven`,
-`TestTheRootNameIsReadableAsItself`,
+`TestTheMailLimitIsTheDeclaredOne`, `TestMailFindingsNameTheMailRuleSet`,
+`TestTheMailExchangersAreRead`, `TestANullMXIsReadAsOne`,
+`TestAHostileExchangerNameIsStripped`, `TestAnEnormousExchangerNameIsBounded`,
+`TestTheNameRendererBoundsWhatItIsGiven`, `TestTheRootNameIsReadableAsItself`,
 `TestADANERecordIsReadWithItsDataAndItsValidation`,
 `TestTheAssociationDataIsCopiedOutOfTheReply`,
 `TestAnEndEntityRecordMatchesTheLeafWhateverItsNameAndDates`,
@@ -3074,20 +633,24 @@ nothing in between, and a TXT record is bytes.
 `TestATrustAnchorRecordNeedsTheLeafToChainAndNameTheExchanger`,
 `TestATrustAnchorThatWasNotPresentedIsNotFound`,
 `TestATrustAnchorChainIsNotHeldToAKeyUsageTheRFCDoesNotAsk`,
-`TestABareAnchorKeyNobodyPresentedIsUndetermined`, `TestAnExpiredAnchorIsUndetermined`,
+`TestABareAnchorKeyNobodyPresentedIsUndetermined`,
+`TestAnExpiredAnchorIsUndetermined`,
 `TestAnExpiredLeafUnderAnAnchorDoesNotMatch`,
-`TestRecordsASenderDoesNotUseForSMTPAreNotUsable`, `TestEveryMatchingTypeMatches`,
-`TestOneMatchingRecordAmongSeveralIsEnough`, `TestWithoutACertificateNothingIsEstablished`,
+`TestRecordsASenderDoesNotUseForSMTPAreNotUsable`,
+`TestEveryMatchingTypeMatches`, `TestOneMatchingRecordAmongSeveralIsEnough`,
+`TestWithoutACertificateNothingIsEstablished`,
 `TestADANERecordIsCheckedAgainstWhatItsExchangerPresented`,
 `TestTheStatesBeforeACertificateAreSaidAsThemselves`,
-`TestNoBindingIsClaimedWhereNothingWasChecked`, `TestTheReportsDANEWordsAreTheCheckersWords`,
+`TestNoBindingIsClaimedWhereNothingWasChecked`,
+`TestTheReportsDANEWordsAreTheCheckersWords`,
 `TestAValidatedBindingThatDoesNotHoldIsGraded`,
 `TestABindingNotReportedValidatedIsNamedAndNotGraded`,
 `TestWhatNoSenderUsesAndWhatWasNotEstablishedAreNotGraded`,
-`TestAMatchIsSaidWithWhetherItValidated`, `TestTheMailPathSaysWhetherTheBindingsWereChecked`,
-`TestEachDANEBindingIsARowInThePagesWords`, `TestThePageReadsTheDANEFieldsTheAPISends`,
-`TestANameWithNoMXIsNotANameThatDoesNotExist`,
-`TestAShortMailRecordIsRefused`,
+`TestAMatchIsSaidWithWhetherItValidated`,
+`TestTheMailPathSaysWhetherTheBindingsWereChecked`,
+`TestEachDANEBindingIsARowInThePagesWords`,
+`TestThePageReadsTheDANEFieldsTheAPISends`,
+`TestANameWithNoMXIsNotANameThatDoesNotExist`, `TestAShortMailRecordIsRefused`,
 `TestDANEIsAskedOnlyBeneathTheExchangersTheDomainNamed`,
 `TestANullMXEndsTheQuestionsAboutDelivery`,
 `TestAnAddressIsAcceptedAndTheLocalPartIsDropped`,
@@ -3095,37 +658,26 @@ nothing in between, and a TXT record is bytes.
 `TestThePageSendsOnlyTheDomainOfAnAddress`,
 `TestAnUnusableEHLONameIsRefusedAtStart`,
 `TestTheEHLONameIsCheckedAndReachesTheService`,
-`TestAnUnusableEHLONameStopsTheCommand`,
-`TestTheEHLONameReachesTheMailCheck`,
+`TestAnUnusableEHLONameStopsTheCommand`, `TestTheEHLONameReachesTheMailCheck`,
 `TestTheAddressIsSplitWhereTheDomainBegins`,
 `TestTheMailPathIsDescribedAndNeverGraded`,
 `TestAnAnnouncedMTASTSPolicyIsNotAReadOne`,
 `TestTheThreeDANEStatesAreKeptApart`,
-`TestNothingIsLookedUnderWithoutASelector`,
-`TestAKeyIsReadWithItsSize`,
-`TestAKeyBelowTheFloorIsWeak`,
-`TestAnEmptyKeyIsRevokedRatherThanBroken`,
-`TestATestingKeyIsSeen`,
-`TestOnlyARecordThatAnnouncesItselfIsAKey`,
-`TestAFailedLookupIsNotAnAbsentKey`,
-`TestWhereASelectorCameFromIsKept`,
-`TestEveryDocumentedSelectorNamesItsProvider`, `TestMigadusSelectorsAreDocumented`,
-`TestASelectorIsAskedAboutOnce`,
-`TestTheSelectorListIsBounded`,
-`TestTheNameAskedAboutIsWhereAKeyLives`,
+`TestNothingIsLookedUnderWithoutASelector`, `TestAKeyIsReadWithItsSize`,
+`TestAKeyBelowTheFloorIsWeak`, `TestAnEmptyKeyIsRevokedRatherThanBroken`,
+`TestATestingKeyIsSeen`, `TestOnlyARecordThatAnnouncesItselfIsAKey`,
+`TestAFailedLookupIsNotAnAbsentKey`, `TestWhereASelectorCameFromIsKept`,
+`TestEveryDocumentedSelectorNamesItsProvider`,
+`TestMigadusSelectorsAreDocumented`, `TestASelectorIsAskedAboutOnce`,
+`TestTheSelectorListIsBounded`, `TestTheNameAskedAboutIsWhereAKeyLives`,
 `TestASelectorThatHeldNothingIsNotDescribed`,
 `TestAReportSaysWhichSelectorsWereTried`,
 `TestAnAbsenceMeansDifferentThingsByWhoNamedTheSelector`,
-`TestOnlyTheKeySizeIsGraded`,
-`TestARecordReachedThroughACNAMEIsRead`,
-`TestARecordForAnUnrelatedNameIsStillSkipped`,
-`TestACNAMELoopEnds`,
-`TestTheOnlyAddressAskedForIsTheOneRFC8461Names`,
-`TestThePolicyIsRead`,
-`TestOnlyTheThreeModesAreRead`,
-`TestAnUnknownKeyDoesNotDiscardThePolicy`,
-`TestOnlyASuccessfulResponseIsAPolicy`,
-`TestAnEnormousBodyIsBounded`,
+`TestOnlyTheKeySizeIsGraded`, `TestARecordReachedThroughACNAMEIsRead`,
+`TestARecordForAnUnrelatedNameIsStillSkipped`, `TestACNAMELoopEnds`,
+`TestTheOnlyAddressAskedForIsTheOneRFC8461Names`, `TestThePolicyIsRead`,
+`TestOnlyTheThreeModesAreRead`, `TestAnUnknownKeyDoesNotDiscardThePolicy`,
+`TestOnlyASuccessfulResponseIsAPolicy`, `TestAnEnormousBodyIsBounded`,
 `TestTooManyPatternsAreSaidToBeCut`,
 `TestAFileMissingWhatAPolicyNeedsIsNotAPolicy`,
 `TestAnInvalidPolicyIsGradedAndNotRead`,
@@ -3135,11 +687,9 @@ nothing in between, and a TXT record is bytes.
 `TestAFailedFetchIsNotAnAbsentPolicy`,
 `TestAPolicyIsNotReadOverAnUntrustedConnection`,
 `TestTheCertificateMustNameThePolicyHost`,
-`TestNoReasonNamesTheInfrastructure`,
-`TestTheWildcardCoversOneLabel`,
+`TestNoReasonNamesTheInfrastructure`, `TestTheWildcardCoversOneLabel`,
 `TestAPolicyWithNoPatternsCoversNothing`,
-`TestAHostileNameInThePolicyIsStripped`,
-`TestNoProxyIsConsulted`,
+`TestAHostileNameInThePolicyIsStripped`, `TestNoProxyIsConsulted`,
 `TestTheDefaultFetcherUsesTheScannersTrustStore`,
 `TestThePolicyModeReachesTheReport`,
 `TestATestingPolicyIsDescribedRatherThanGraded`,
@@ -3152,14 +702,11 @@ nothing in between, and a TXT record is bytes.
 `TestAnEnforcingPolicyThatCoversItsMailIsStrong`,
 `TestAnEnforcingPolicyThatExcludesItsOwnExchangerIsGraded`,
 `TestAnUncoveredExchangerUnderTestingIsSaidAndNotGraded`,
-`TestAPolicyThatNamesNoModeIsGraded`,
-`TestAPolicyNamingNoExchangerIsGraded`,
+`TestAPolicyThatNamesNoModeIsGraded`, `TestAPolicyNamingNoExchangerIsGraded`,
 `TestAPolicyNobodyReadIsNotGraded`,
 `TestTheCacheLifetimeIsReportedAndNotGraded`,
-`TestModeNoneIsReadAsAWithdrawal`,
-`TestTheSTSFindingsCiteTheirDocument`,
-`TestTheCommandLineReadsTheSTSPolicy`,
-`TestTheMTASTSRowSaysWhatWasRead`,
+`TestModeNoneIsReadAsAWithdrawal`, `TestTheSTSFindingsCiteTheirDocument`,
+`TestTheCommandLineReadsTheSTSPolicy`, `TestTheMTASTSRowSaysWhatWasRead`,
 `TestTheServiceFetchesTheSTSPolicyOnlyWhereItRequiredProof`,
 `TestTheTrustStoreReachesTheMailCheck`,
 `TestNoSenderRecipientOrMessageIsEverNamed`,
@@ -3167,11 +714,9 @@ nothing in between, and a TXT record is bytes.
 `TestAnExchangerWithoutSTARTTLSIsMeasuredAsNotOffering`,
 `TestTheCertificateIsJudgedOnTrustAndNameSeparately`,
 `TestDataBeforeEncryptionStopsTheConversation`,
-`TestTheEHLONameCannotCarryACommand`,
-`TestTheEHLONameIsTheClientsOwn`,
+`TestTheEHLONameCannotCarryACommand`, `TestTheEHLONameIsTheClientsOwn`,
 `TestExchangersAreAskedOnlyWhereTheDeploymentAllows`,
-`TestANullMXIsNeverContacted`,
-`TestTheExchangersAskedAreBounded`,
+`TestANullMXIsNeverContacted`, `TestTheExchangersAskedAreBounded`,
 `TestWhatAnExchangerAnsweredReachesTheReport`,
 `TestTheDefaultExchangerProberCarriesTheStoreAndTheName`,
 `TestAnEnforcingPolicyGradesAnExchangerThatCannotSatisfyIt`,
@@ -3185,243 +730,60 @@ nothing in between, and a TXT record is bytes.
 
 ### N15 — Over plain HTTP the service answers only to an address or to localhost
 
-A copy of `porchd` on loopback with no password is offered to its operator on
-the argument that nobody else can reach it: the name inventory runs there
-without proof, an address range is walked, and with no scope every check scans
-whatever it is given (N12). A browser can reach it for somebody else. A page on
-another site points its own name at 127.0.0.1 once it has loaded, and its
-script then calls "its own" server — the browser sends the request to this
-service as same-origin and reads the answer. Every guard the API had was
-satisfied, because `Sec-Fetch-Site` said `same-origin` and it was. What the
-page got was an open scanner leaving from the operator's address, the
-operator's inventory, and the operator's reverse records.
+*Enforced in:* `internal/httpapi.Server.GuardHost`,
+`internal/httpapi.servedHost`, `cmd/porchd.run`
 
-The `Host` header is the one thing that attack cannot change: the browser sends
-the page's own name. So over plain HTTP a request is answered only when it
-names this machine by an address — which cannot be rebound, because the origin
-is then the address itself — or as `localhost`, which a browser resolves
-without asking anybody. Every other name is refused with 421 and a sentence
-stating the rule, never the name, and counted as `host_not_served`.
-
-Over TLS it is not asked. A browser that rebinds a name to this machine still
-expects that name's certificate and cannot get it, so no request is ever made.
-An operator who serves the installation under a name uses HTTPS, which is what
-P6 already requires of a password.
-
-It wraps everything the service answers, outside the gate: the pages carry the
-script that calls the API, and a guard in one of them is a guard the other
-walks around (N6). A copy behind a password was already safe from this — the
-gate refuses a session on plain HTTP to any name but this machine's — and the
-guard costs it nothing; a copy without one had nothing at all.
-
-*Enforced in:* `internal/httpapi.Server.GuardHost`, `internal/httpapi.servedHost`,
-`cmd/porchd.run`
 *Guarded by:* `TestARebindingPageIsNotAnswered`,
 `TestTheHostGuardIsInFrontOfEverything`, `TestEveryRefusalCodeCanBeProduced`
 
 ## Input
 
-
-Every bug found in this project so far has been here. Six of them: an empty
-port, brackets left on a hostname, several colons, a signed port number, a
-name with no dot, and a path discarded in silence. None was reachable as an
-attack, and all six were the same shape — input that parsed into something
-other than what the person meant, so that the value checked was not the value
-dialled.
-
-Treat a change to `SplitTarget` as a change to a security boundary, whatever
-it looks like. Add a fuzz seed for anything new it accepts or refuses.
-
 ### N14 — The organisation promises once, and a product may only promise more narrowly
 
-Two readers arrive with two questions, and they are not the same question.
-Somebody deciding whether to *run* a tool wants to know what it does to the
-machine it runs on and what it keeps. Somebody deciding whether to trust the
-*people* who wrote it wants to know what those people receive. A page answering
-both makes every sentence something to read twice — is this about the tool or
-about them — and buries the answers that matter most in the details of one
-check.
-
-That was tolerable with one product and stops being tolerable with two. The
-organisation's undertakings would then exist as prose in two places, and two
-places drift: the day one copy is improved and the other is not, a reader has
-two documents from the same people that do not agree, which is worse evidence
-than one vague document. Nobody has to be careless for that; it is what copies
-do.
-
-So `internal/promises` holds the organisation's undertakings once, and each
-product holds its own additions. `denyfirst.dev/privacy` renders the
-organisation's and links each product's; Porch's privacy page renders Porch's
-first and links back. Each page says one list, once.
-`TestTheOrganisationsPrivacyPageCarriesEveryPromise` and
-`TestPorchsPrivacyPageCarriesItsPromises` hold that.
-
-**Only the organisation's own conduct belongs in the organisation's list**: what
-it receives, what it holds, what it publishes, how that can be checked. Nothing
-about what a product measures. This is not tidiness. This organisation has more
-than one product and they are built by different hands, so an organisation
-undertaking describing a product's behaviour would be one repository promising
-on behalf of code it cannot see — which is how a policy becomes untrue without
-anybody lying.
-
-**A product may undertake to keep less than the organisation requires, never
-more, and may not restate one of the organisation's undertakings in its own
-words.** An addition that redefined one is how a weaker promise arrives wearing
-a stronger promise's name, and a reader comparing the two would find them
-agreeing on the identifier and disagreeing on the meaning.
-`TestNoProductRedefinesWhatTheOrganisationUndertakes` refuses an addition
-carrying an organisation identifier, and refuses one not named for the product
-it belongs to.
-
-**Every undertaking says how to check it, and that field is required.** An
-undertaking nobody can establish for themselves is a request to be trusted,
-which is the thing this organisation is trying not to make — and it would be the
-most comfortable entry to add and the only worthless one.
-`TestEveryUndertakingCanBeCheckedAndIsNamed` holds it, along with the
-identifiers being stable and unique, because anything referring to an
-undertaking refers to its identifier rather than its wording: the sentence may
-be improved and the promise is still the same promise.
-
-**The organisation's list names no product, no file and no site.** It is what
-a second product inherits unchanged, and every installation shows it, so a
-sentence in it about how one product is built is a promise the next product
-breaks or is bent to keep. Until 2026-10-05 `nothing-from-third-parties` said
-no dependency is fetched to build anything denyfirst publishes, with `go.mod` as
-the proof: true of Porch, and a choice about Porch. That half is
-`porch-builds-from-its-own-source-alone` now, unchanged in what it promises
-about Porch, and the organisation keeps what is about its conduct — no page
-loads anything from anywhere else. `faults-have-an-address` pointed at the
-`security.txt` "on this site", which every installation showing the list does
-not serve; it names `https://denyfirst.dev/.well-known/security.txt` now
-(`TestTheOrganisationNamesNoProduct`).
-
-**Nothing served to a visitor carries these sentences in its own words.**
-`TestTheUndertakingsAreNotCopiedIntoAnyPage` walks every `.html`, `.js` and
-non-test `.go` file and refuses a distinctive run of words from any of them.
-Documentation is deliberately outside that walk: `docs/invariants.md` is where
-several of the product's undertakings were drawn from, it explains and cites
-rather than promising, and forbidding the words here would make the explanations
-worse without protecting a reader. What can drift harmfully is two *pages*
-telling somebody two versions of one undertaking.
-
-**Porch's promises are the first thing its privacy page says**, first in the
-jump list, so somebody asking what the makers promise does not read about port
-443 first; the organisation's are a link away
-(`TestPorchsPrivacyPageCarriesItsPromises`). An installation is Porch alone and
-links to `denyfirst.dev/privacy` for the maker's.
-
-**A page says what *this* installation does, and a claim about configuration is
-rendered from the configuration.** The self-hosted privacy page carried one
-sentence — *no certificate transparency log and no revocation responder is
-asked by this service* — printed whatever the operator had started the service
-with. `-ask-responder` made the second half false when it was added, and
-`-names-monitor` the first half when the inventory arrived; the sentence went on
-being served for weeks on the page an operator would quote to the people they
-scan. Nothing lied: nobody passed the flags to the page, and a template cannot
-ask.
-
-So `web.Configure` takes an `Installation` rather than a list of booleans, and
-every third party this copy may ask is a field on it: the monitor, the passive
-register, reading the hosts' own certificates, and the responder. The page names
-each one that is on and says the old sentence only when none of them is
-(`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`). The scope is one of them:
-it turns on the TLS check's search of the transparency logs, and until
-2026-09-28 a proven copy with no monitor configured told its readers that no
-transparency log was asked while it named every checked name to crt.sh. The test
-asserted that sentence; it now asserts the opposite, and the page names crt.sh. The wiring itself is pinned
-as text in `cmd/porchd`, because a flag connected to the scanner and not to the
-page produces exactly the page this fixed
-(`TestThePagesAreToldWhatThisInstallationAsks`).
-
-The general rule, which is what the next flag needs: **a capability that reaches
-a third party is not finished when it works. It is finished when the privacy
-page says it is there.**
+*Guarded by:* `TestTheOrganisationsPrivacyPageCarriesEveryPromise`,
+`TestPorchsPrivacyPageCarriesItsPromises`,
+`TestNoProductRedefinesWhatTheOrganisationUndertakes`,
+`TestEveryUndertakingCanBeCheckedAndIsNamed`,
+`TestTheOrganisationNamesNoProduct`,
+`TestTheUndertakingsAreNotCopiedIntoAnyPage`,
+`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`,
+`TestThePagesAreToldWhatThisInstallationAsks`
 
 ### I1 — One implementation of target parsing
 
-The command line receives typos; the service receives whatever a stranger
-sends. Two implementations would diverge, and the stricter requirement must
-set the rule for both.
-
 *Enforced in:* `internal/scan.SplitTarget`
+
 *Guarded by:* `TestSplitTarget`, `TestSplitTargetRejectsMalformedInput`
 
 ### I2 — Interior control characters are refused
 
-Surrounding whitespace is trimmed, because people paste it and nothing
-survives the trim. What remains inside the string is different: a newline in a
-hostname is where header injection starts, and a NUL byte is how a truncating
-parser is made to read a name other than the one that was checked.
-
 *Enforced in:* `internal/scan.SplitTarget`
+
 *Guarded by:* `TestSplitTargetRejectsMalformedInput`
 
 ### I3 — Error messages describe the rule, never repeat the input
 
-Anything a caller sent that comes back in a response is a reflection, and a
-reflection becomes cross-site scripting the moment something renders it. This
-applies to the port as well as the host: `net.SplitHostPort` does not require
-a port to be numeric.
-
 *Enforced in:* `internal/httpapi`, in every `writeError` call
+
 *Guarded by:* `TestErrorsDoNotEchoInput`
 
 ### I4 — Request bodies are capped before parsing
 
 *Enforced in:* `internal/httpapi`, `http.MaxBytesReader` ahead of the decoder
+
 *Guarded by:* `TestBodySizeLimit`
 
 ### I5 — Unknown JSON fields are refused
 
-A misspelled key fails loudly rather than being silently ignored.
-
 *Enforced in:* `internal/httpapi`, `Decoder.DisallowUnknownFields`
+
 *Guarded by:* `TestRejectsMalformedBodies`
 
 ### I6 — Error messages do not describe this machine
 
-A published error names the shape of a failure and nothing else. Not the
-resolver this service uses, not the address that was dialled, not a path on
-disk.
-
-I3 covers the input side: what a caller sent is never repeated back. This is
-the output side, and it was open for longer because the leak arrives from a
-library rather than from our own formatting. Go writes network errors for an
-operator reading a terminal, so they name whatever helps there — and one of
-those things is the resolver's address, which belongs to whoever runs the
-machine.
-
-The rule is that every branch of `classifyHandshakeError` returns a phrase
-written in that function. There is no pass-through, and the default case is a
-phrase rather than the error: an unrecognised failure is the one most likely
-to carry an address, and the one nobody has reviewed.
-
-**Both probes, and the second one was open for two rule sets.** The web check
-wrote `hop.Err` straight from the library, so a name that did not resolve
-recorded the resolver this machine asked and a destination safedial declined
-recorded the address it declined. It was reachable only from the command line,
-where the operator reading the report runs the machine described — which is
-why it survived. It stops being that the day the check has an address on the
-service, and a report is then a reply to a stranger. `classifyProbeError` is
-the same rule applied to the other probe, written before that endpoint rather
-than after it.
-
-The phrases differ only where the checks differ. This client verifies, which
-the TLS probe deliberately does not, so a certificate a browser would refuse
-stops a hop here; that is a finding about how the secure address behaves for a
-visitor, and it is answered with a phrase rather than the library's text,
-which carries a second half-description of a certificate the TLS report
-already describes in full.
-
-**A refusal is recognised by what it is, not by how it reads.** The policy
-branch is asked before every message test, because its text is the one certain
-to carry an address. Nothing today depends on that order — no `ErrBlocked`
-message contains a phrase a later branch matches — and that is a fact about
-safedial's current wording rather than a property of the function, so the
-order is pinned by a test rather than by a comment.
-
 *Enforced in:* `internal/tlsprobe.classifyHandshakeError`,
 `internal/tlsprobe.legacyReason`, `internal/webprobe.classifyProbeError`
+
 *Guarded by:* `TestHandshakeErrorsCarryNoInfrastructure`,
 `TestReportFromAFailedProbeNamesNoAddress`,
 `TestAFailedHopNamesNoInfrastructure`,
@@ -3430,71 +792,28 @@ order is pinned by a test rather than by a comment.
 
 ### I7 — One host has one spelling
 
-DNS is case-insensitive and a trailing dot names the same zone, so
-`EXAMPLE.COM`, `example.com` and `example.com.` reach one server. Parsing
-returns one of them.
-
-This is the same rule the port already had — `checkPortSyntax` refuses `+443`
-and `0443` so that one value has one spelling — and it was missing for the
-thing that matters more. Something downstream compares hostnames for a living:
-the per-target rate limit hashes the name to recognise a repeat, and a hash is
-exact where DNS is not. Without folding, a caller spelled the name differently
-on each request and was handed a fresh budget every time. That budget is the
-only limit in this project that protects the party being scanned rather than
-this service, and one scan is up to fifty handshakes at the other end.
-
-Folding happens where parsing happens, so one form reaches the exclusion list,
-the limiter, the client hello, and the target echoed back in the report. A
-canonical form computed in one place and not another is how a check comes to
-describe something other than what was dialled. The limiter folds again on its
-own, which is the same argument N3 makes about where a guard belongs.
-
-Two trailing dots is not a spelling but an empty label, and is refused rather
-than folded.
-
 *Enforced in:* `internal/scan.canonicalHost`, `internal/httpapi.foldHost`
+
 *Guarded by:* `TestSplitTargetFoldsSpelling`, `TestSplitTargetFoldsAddresses`,
 `TestHostWithATrailingEmptyLabelIsRefused`, `TestFoldingIsStable`,
-`TestTargetLimiterIgnoresSpelling`,
-`TestSpellingCannotBuyExtraScansOfOneHost`, `FuzzSplitTarget`
+`TestTargetLimiterIgnoresSpelling`, `TestSpellingCannotBuyExtraScansOfOneHost`,
+`FuzzSplitTarget`
 
 ### I8 — A DKIM selector is a DNS name, and a bound counts what it bounds
 
-A selector is joined to `._domainkey.` and the domain and asked of a resolver,
-so it is input that reaches a query, and it had no syntax at all. The service
-bounded the list by counting entries and the scanner split each entry on
-commas: one entry holding forty names passed the bound as one and was looked
-under as forty, cut to sixteen without a word — the list the bound says is
-refused rather than cut short. Spaces and control characters went through the
-same way, as names no zone can hold.
-
-Each selector is now checked to be what RFC 6376 §3.1 says it is — labels of
-letters, digits and hyphens separated by dots, with an underscore allowed
-because DNS carries one — and refused otherwise, in a sentence stating the rule
-and never the selector (I3). The command line holds `-dkim-selector` to the same
-rule and the same bound before anything is asked, and the page splits what is
-typed on spaces as well as commas, because `s1 google` means two names.
-
 *Enforced in:* `internal/dkim.CheckSelector`, `internal/httpapi.handleScan`,
 `cmd/porch-scan.checkSelectors`, `internal/web/assets/app.js`
-*Guarded by:* `TestASelectorIsADNSName`, `TestASelectorIsADNSNameAndCountsAsOne`,
-`TestTheSelectorsAnOperatorNamesAreCheckedBeforeAnythingIsAsked`
 
----
+*Guarded by:* `TestASelectorIsADNSName`,
+`TestASelectorIsADNSNameAndCountsAsOne`,
+`TestTheSelectorsAnOperatorNamesAreCheckedBeforeAnythingIsAsked`
 
 ## Availability
 
 ### A1 — Rate limiting is per client and cannot be chosen by the client
 
-`X-Forwarded-For` is ignored unless a proxy is declared, because otherwise
-every client can mint a new limit key per request. Where a proxy is declared,
-the entry is counted from the right: each proxy appends the address it
-received the request from, so the leftmost entry is whatever the client typed.
-
-IPv6 is keyed on the /64. A subscriber holds a whole prefix and can present a
-new address per request, which would make a per-address limiter decorative.
-
 *Enforced in:* `internal/httpapi`, `clientKey` and `limiter`
+
 *Guarded by:* `TestRateLimitIsPerClient`, `TestIPv6IsLimitedPerPrefix`,
 `TestForwardedHeaderIgnoredWithoutTrustedProxy`,
 `TestForwardedHeaderIsIgnoredFromUndeclaredNetworks`,
@@ -3503,160 +822,47 @@ new address per request, which would make a per-address limiter decorative.
 
 ### A2 — The rate limiter's memory is bounded
 
-An unbounded map turns a rate limiter into a memory exhaustion primitive,
-because an attacker rotating source addresses adds an entry per request. Idle
-buckets are swept, and past a cap new clients are refused rather than
-admitted.
-
 *Enforced in:* `internal/httpapi`, `limiter.maxKeys` and `limiter.sweepLocked`
+
 *Guarded by:* `TestLimiterMemoryIsBounded`, `TestLimiterSweepsIdleClients`
 
 ### A3 — Concurrent scans are capped
 
-A scan holds a socket for as long as the request timeout allows, and a slow
-target holds it for all of it.
-
 *Enforced in:* `internal/httpapi`, `semaphore`
+
 *Guarded by:* `TestConcurrencyLimit`
 
 ### A4 — Every endpoint has a budget
 
-The scan endpoint was limited from the first day; the two read-only endpoints
-were not. That was an omission rather than a decision — `/api/v1/stats` clones
-a map on every call, so a client asking a few thousand times a second turns a
-health check into a way of spending this machine's processor.
-
-The two allowances are separate. A monitor polling every few seconds is the
-intended use of the read endpoints and must not consume a scan allowance; a
-client that has spent its scan budget must not be able to refill it by asking
-for statistics instead.
-
 *Enforced in:* `internal/httpapi.Server.readLimited`
+
 *Guarded by:* `TestReadEndpointsAreLimited`
 
 ### A5 — A full limiter does not become a lock
 
-Every limiter here has a bounded map, because an unbounded one turns a rate
-limit into a way of exhausting memory. The bound has its own failure mode: if
-reaching it means refusing every client the service has not already seen, then
-one client able to produce many keys can shut the door on everybody.
-
-So a full map is swept first — it is usually stale rather than busy — and then
-one entry is dropped to make room. Which entry does not matter much; losing a
-bucket costs its owner a fresh allowance and nothing else. The map stays
-bounded and the service stays open, which is the pair of properties that has
-to hold together.
-
-The same reasoning governs what may become a key. X-Forwarded-For is written
-by the first client in the chain, so an entry that is not an address is not an
-identity: the connection's own address stands instead. Otherwise a client
-willing to send different nonsense on each request fills the map by itself.
-
-The header is read as every line joined, not as the first one. A proxy may
-extend the header the client sent or add a line of its own; both are
-conforming, and several load balancers do the second. `Header.Get` returns
-only the first line, so against such a proxy it returns what the client wrote
-— a fresh key of the client's choosing on every request, which is this
-invariant failing while looking like it holds.
-
 *Enforced in:* `internal/httpapi.limiter.makeRoomLocked`,
 `internal/httpapi.clientKey`
+
 *Guarded by:* `TestFullLimiterStillAdmitsNewClients`,
 `TestForgedForwardedForCannotMakeNewKeys`,
 `TestForwardedForReadsTheProxyLineNotTheClients`
 
 ### A6 — A refusal is cheap, not free, so a refusal is limited too
 
-Two checks used to run before the rate limiter: the cross-site check and the
-content type check. The reason was sound — a page on another site must not be
-able to spend the visitor's scan allowance on their behalf — and the
-conclusion drawn from it was not. An early refusal still takes the counter
-lock and still moves a figure this service publishes, so an unlimited refusal
-path is both a way to spend this machine's processor and a way to write into
-the only numbers an operator has to watch.
-
-The allowance spent by a refusal is the read one, so the original reason still
-holds: a cross-site request cannot touch the scan budget.
-
-"Another site" includes another name on this one since 2026-10-05.
-`Sec-Fetch-Site: same-site` was let through while the demonstration's pages and
-its scanner had different names. They share one now, and the allowance a
-sibling name was trusted with reached every name under the domain — names added
-later, names somebody else hosts, and a forgotten record taken over by whoever
-holds its address now (`TestCrossSiteRequestsAreRefused`).
-
-That last sentence was, until it was tested, only a sentence. Every test around
-it passed with the two checks in either order, because in either order the
-request is refused, with 403, counted as `cross_site`. What the order decides
-is who pays for it — and behind the wrong order, a page on another site empties
-a visitor's scan allowance in a handful of requests and leaves this service
-refusing that visitor for reasons they cannot see.
-
 *Enforced in:* `internal/httpapi.Server.handleScan`, the read limiter at the
 top
-*Guarded by:* `TestCrossSiteRequestsAreRefused`, `TestRefusalsBeforeTheScanAreLimited`,
-`TestReadAndScanBudgetsAreSeparate`,
+
+*Guarded by:* `TestCrossSiteRequestsAreRefused`,
+`TestRefusalsBeforeTheScanAreLimited`, `TestReadAndScanBudgetsAreSeparate`,
 `TestPollingReadsDoesNotSpendTheScanAllowance`,
 `TestACrossSiteRefusalDoesNotSpendTheVisitorsScanBudget`
 
 ### A7 — Every reason a request can be refused is counted, and a counted reason can occur
 
-The first half was already true: `refuse` counts before it writes, so a
-refusal cannot be added without being counted, and a code outside the list is
-dropped rather than counted.
-
-The second half was not, and it is the half that misleads. `blocked_destination`
-was declared, documented as the signal that somebody is aiming this service at
-the network it runs in, and permanently zero — safedial's refusal became a
-note inside a successful report, so nothing ever reached the counter.
-`timeout` was the same: a probe does not fail, it measures, so the error
-branch that counted it could not run. A counter that cannot move is not a low
-number. It is silence, and an operator reads silence as nothing happening.
-
-One code remains unreachable by construction and is named in the test rather
-than left to be discovered: `scan_failed`, because `scan.Scan` cannot fail
-once the handler has validated the target. It is written as a counted refusal
-anyway, since the signature permits an error and an uncounted one would be the
-same hole in a different place. A deployment that requires proof of control
-adds one way through it — the challenge lookup itself failing — which is this
-service being unable to ask rather than the domain being unproven, and is why
-the two are answered separately (N9).
-
-`not_verified` is driven in the test rather than left defensive, and the
-difference from `not_demonstrated` is why. That one needs a build tag, so only
-the demonstration's own test can produce it. This one needs nothing but a
-configured scope, and a figure nobody drives is a figure nobody notices has
-stopped moving. What it says is worth having: people asking about domains they
-have not published a record for is either a procedure nobody was told about or
-a record that stopped resolving, and no scan count shows either.
-
-**The fact is carried as a field, and the field comes before the entry point
-that counts it.** `blocked_destination` was silent on the TLS check until
-`tlsprobe.Report.BlockedDestination` existed, because the reason lived in
-prose inside a successful report and a count built by matching prose breaks
-the first time the prose is improved. `webprobe.Report` carries the same field
-for the same reason, and it was given it *before* the web check had an address
-on the service — the order N6 argues for, so that an entry point written later
-inherits the signal instead of having to remember it.
-
-It is true only where every hop was refused. A name reached on one port and
-declined on the other has been measured, and answering that with a refusal
-would hide the half that succeeded.
-
-**And the first half had a hole the test could not see.** Six refusals were
-answered through `refuse` with codes the list did not hold — every refusal the
-name inventory makes, and the bound on DKIM selectors — so each was dropped on
-its way to the counter. The inventory had refused unproven domains, strangers'
-address ranges and wordlist-length lists since it existed, and the figures said
-nothing had ever been turned away there. `TestEveryRefusalCodeCanBeProduced`
-drives the codes the list holds, so a code the list did not hold was not in its
-loop. `TestEveryCodeThisPackageRefusesWithIsCounted` reads the codes out of the
-source instead, from every place one is written, and each is now in the list
-and driven.
-
 *Enforced in:* `internal/httpapi.Server.refuse`,
 `internal/tlsprobe.Report.BlockedDestination`,
 `internal/webprobe.Report.BlockedDestination`
+
 *Guarded by:* `TestEveryRefusalCodeCanBeProduced`,
 `TestEveryCodeThisPackageRefusesWithIsCounted`,
 `TestOnlyKnownRefusalCodesAreCounted`,
@@ -3668,114 +874,27 @@ and driven.
 
 ### A8 — The per-target table regenerates faster than this service can spend it
 
-Every bucket empty means every user refused, and that failure is worse than an
-ordinary flood for being quiet: nothing is overloaded, no limit visibly fires,
-the service simply says no to everybody.
-
-Whether it is reachable is arithmetic, and the arithmetic was guessed before it
-was measured. A scan of a name that does not resolve takes 16 to 19 ms on the
-live service, so eight concurrent scans is about 470 a second. At twelve bits
-the table regenerated 137 slots a second — so roughly sixteen hundred addresses
-could hold the whole table dry while using under a third of this machine's
-capacity, and nothing about the machine would look wrong. At sixteen bits it
-regenerates 2185 a second, more than this service can spend at full tilt, so
-the attempt now requires saturating the service; and a saturated service says
-`too_busy`, which somebody can see.
-
-Three numbers decide it and two live in other files, which is why the check is
-a test rather than a comment: raising `MaxConcurrent`, or making a scan faster,
-moves the same line.
-
 *Enforced in:* `internal/httpapi.targetKeyBits`
+
 *Guarded by:* `TestTargetTableOutrunsTheService`
 
 ### A9 — A shared limit does not answer questions about other people
 
-A limit that refuses on the strength of somebody else's activity is a question
-anybody outside can ask: scan a host, be refused, and you have learnt that
-somebody else scanned it. Truthfully saying why — which this project insists on
-everywhere else — is exactly what makes it an oracle.
-
-It is closed by where the threshold sits rather than by refusing to answer. At
-two scans the threshold was inside ordinary use: one person retrying after a
-typo reached it, so the answer described a real user. At eight it is outside
-anything this service sees, so a probe is answered "go ahead" and learns
-nothing. Pushing the limit to where it speaks costs the prober eight scans of
-the victim from several addresses — the very thing they were trying to detect,
-performed by them, and visible in the victim's own logs.
-
-Raising the threshold does not loosen what a scanned host carries. Sustained
-load is set by the refill interval, not by the burst, and that has not moved;
-and a single caller was never held by this limit anyway, because the per-client
-limiter allows five scans a minute. What moves is the peak, which now takes
-eight separate callers inside one window to produce.
-
-The threshold is also varied per bucket from the per-process key, so even the
-edge is not a fixed line to aim at.
-
-What that varying does and does not buy is worth stating exactly, because it is
-easy to claim too much for it. It hides the *count*: a probe measures the
-allowance minus the prior scans and cannot separate the two terms, so being
-served tells a prober nothing and being served twice tells them nothing more.
-It cannot hide the *refusal*. Anyone who is refused has learnt one fact for
-certain — that host has had at least `targetBurstMin` scans inside one refill
-interval — and no arrangement of secret thresholds removes that, because the
-refusal is the limit doing its job. Closing it would mean raising the minimum
-again, and every point of the minimum is peak load the scanned server absorbs.
-That residual is named in Known gaps and on the privacy page rather than left
-to be found.
-
 *Enforced in:* `internal/httpapi.targetBurstMin`,
 `internal/httpapi.targetLimiter.burstFor`
+
 *Guarded by:* `TestSecretBurstBlursAProbeFromOutside`,
 `TestSustainedTargetRateDoesNotDependOnTheBurst`,
 `TestBurstStaysWithinItsBounds`,
 `TestBurstIsStablePerBucketAndSecretPerProcess`
 
----
-
 ## Privacy
 
 ### P1 — Nothing about a request is recorded
 
-Not the target, not the client address, not the result. Addresses held for
-rate limiting live in memory and are swept as they go idle — on a timer while
-anything is held, not only when the next request arrives. Until the 2026-09-16
-audit (A22) the sweep ran on a request, so the last client of a quiet day was
-held until the next day, whatever the privacy page said.
-
-**Where an operator asked for results to be kept, a failure to keep one is the
-one line this package writes**, and it names the operation and the system's
-reason and nothing else. The history file is named after the target, so a
-file-system error carries the target in its path; before the same audit (A23)
-it was logged whole, with a time of day.
-
-**What is kept is written one writer at a time.** A history is appended and
-then trimmed, and two writers interleaving those — two scans of one host
-finishing together, or `porchd` and `porch-scan` sharing a directory — could
-drop each other's lines (A24). A mutex per file covers one process and a lock
-file beside it covers several; a trim is written aside and renamed into place;
-and a history is read back from its newest end, to a bound, without deleting
-anything.
-
-**The privacy page of a self-hosted copy is that copy's.** The demonstration's
-page describes a machine this project runs; served by an installation somebody
-else runs it promised things that installation does differently (A21). A
-self-hosted build serves a page filled in from how it was started, and the
-demonstration keeps its own.
-
-This includes the parts nobody wrote. Go's `http.Server` logs lines such as
-`http: panic serving 203.0.113.7` to standard error by default, so the server
-must be given a discarding logger. A promise that depends on a library's
-default staying convenient is not a promise.
-
-A test cannot prove that no future line will ever be written, but it can fail
-the moment one is, which is the difference between a promise and a habit. It
-drives every path a request can take, because a line is usually added on the
-unhappy ones.
-
 *Enforced by:* the absence of logging in `internal/httpapi`, and
 `httpapi.SilentErrorLog` passed to `http.Server.ErrorLog`
+
 *Guarded by:* `TestNothingIsLogged`, `TestClientAddressesAreForgotten`,
 `TestAnIdleClientIsForgottenWithoutAnotherRequest`,
 `TestAnIdleTargetIsForgottenWithoutAnotherScan`,
@@ -3785,203 +904,76 @@ unhappy ones.
 `TestConcurrentWritersKeepEveryRecord`, `TestALockIsWaitedForUnlessItIsStale`,
 `TestALargeHistoryIsReadFromItsNewestEnd`, `TestTrimmingLeavesNoTemporaryFile`,
 `TestATrimReplacesTheHistoryWhole`, `TestReadingAHistoryWritesNothing`,
-`TestAReadDoesNotWaitForAnotherProcess`,
-`TestASelfHostedCopySaysWhatItDoes`, `TestTheSelfHostedPrivacyPageFollowsTheConfiguration`,
-`TestTheSelfHostedPageStatesTheRealRetentionPeriod`, `TestTheDemonstrationKeepsItsOwnPrivacyPage`
+`TestAReadDoesNotWaitForAnotherProcess`, `TestASelfHostedCopySaysWhatItDoes`,
+`TestTheSelfHostedPrivacyPageFollowsTheConfiguration`,
+`TestTheSelfHostedPageStatesTheRealRetentionPeriod`,
+`TestTheDemonstrationKeepsItsOwnPrivacyPage`
 
 ### P2 — The target travels in a request body, not a URL
 
-A URL is written to browser history, to the `Referer` header of anything the
-page later loads, and to the access log of every proxy on the path. Promising
-not to record what was scanned while putting it in a URL hands that record to
-everyone else.
-
 *Enforced in:* `internal/httpapi`, `POST /api/v1/scan` only
+
 *Guarded by:* `TestMethodAndPathRouting`
 
 ### P3 — Responses are never cached
 
-A shared cache would hold what somebody scanned.
-
 *Enforced in:* `internal/httpapi.setSecurityHeaders`, `Cache-Control: no-store`
+
 *Guarded by:* `TestSecurityHeadersOnEveryResponse`
 
 ### P4 — Session resumption is not offered
 
-A TLS session ticket is state the server hands to the client and reads back on
-its next connection. Nothing is stored here — the state travels inside the
-ticket — so it does not breach the promise about records directly.
-
-It breaches it indirectly, which is worse for being harder to see. Anyone
-watching the wire sees the same ticket presented twice and learns that two
-connections are the same person: across a change of address, across a change
-of network, across days. This project undertakes that nobody learns who asked
-about what from us. Handing a third party the means to work it out instead is
-the same undertaking broken by somebody else.
-
-What it costs is a full handshake per connection. The site is four small files
-and the certificate is ECDSA, so the exchange is one nobody will notice.
-
 *Enforced in:* `cmd/porchd` — `SessionTicketsDisabled`
-
----
 
 ### P5 — No plaintext listener exists
 
-Nothing listens on port 80. A request that arrives there is refused by the
-firewall, not answered by a redirect.
+*Enforced in:* nftables, which opens 443 and nothing else; `porchd` binds one
+listener
 
-A redirect looks like the safer choice and is not. By the time a server can
-answer, the client has already sent a request line and a `Host` header in
-cleartext, and anyone on the path has read them. A closed port means the
-request was never composed. The cost is that a client typing `http://` sees a
-connection refused rather than a redirect, and for this domain no browser ever
-will: `.dev` is on the HSTS preload list as a whole top-level domain, with
-`include_subdomains` and `force-https`, so every browser rewrites the scheme
-before a packet leaves the machine. There is no first insecure request to
-protect.
-
-The `preload` directive stays in the header even though this domain will never
-be submitted, because it is already covered by its TLD. It is there for
-whoever runs this code on a domain that is not: the correct header should be
-the default rather than something an operator has to know to add.
-
-Command line clients and HTTP libraries have no standardised HSTS handling, so
-they do not benefit from either mechanism. They also do not type a scheme by
-accident.
-
-*Enforced in:* nftables, which opens 443 and nothing else; `porchd` binds
-one listener
-*Guarded by:* `TestHeadersOnEveryResponse` covers the header; the absence of a
-second listener is enforced by there being no flag that would create one
+*Guarded by:* `TestHeadersOnEveryResponse`
 
 ### P6 — An installation behind a password shows nothing to whoever cannot sign in, and what it keeps is sealed by the password
 
-An installation somebody runs keeps what nobody else should read: which names
-it checked and what it found on them, which is a map of an estate's
-weaknesses, and the domains somebody runs. So `-access-file` puts one password
-in front of all of it, and the compose file turns it on.
+*Enforced in:* `internal/access`, `internal/vault`, `cmd/porchd.createAccess`,
+`cmd/porchd.retireSealed`, `cmd/porchd.run`, `internal/web.Configure`,
+`internal/web.PublicPaths`
 
-**The gate is in front of the whole mux**, not beside the routes that happen
-to hold something today. A route added later is behind it without anybody
-remembering to put it there — N6's argument about where a guard goes, applied
-to reading rather than scanning. Unsigned, a page is sent to `/login` and
-anything else answers 401; only the sign-in page and what it draws and runs
-with are public, and none of them says anything about the installation.
-
-**The password is never written down.** The access file holds a random key
-sealed with AES-256-GCM under a key PBKDF2-SHA256 derives from the password at
-600,000 iterations; opening the seal is the check, so there is no separate
-hash to attack. The key is in memory from the first sign-in until the process
-stops, and what the workspace keeps is encrypted under it, so a copy of the
-disk or of a backup holds nothing of it readable without the password. That is
-the history: every report the installation answers is kept whole by
-`internal/vault`, one file per report under a random name so a listing says
-nothing about which names were checked, sealed with AES-256-GCM with the
-file's own name authenticated beside it so a report moved to another name
-does not open. A report is kept as it was drawn, so it carries the time it
-was measured: the history is where this installation keeps what was checked
-and when, on purpose, and the privacy page says so rather than the
-demonstration's "nothing records when" (audit 2026-09-18, D11). Nothing
-records who asked. Without a key nothing is written, not even in the clear. It is read back only through the gate, and deleting a
-report removes its file for good. The domains somebody adds are kept the same way, in one
-sealed file: names and the date each was added, never whether each is proven,
-which is asked of DNS each time the list is shown. The
-command line's `-results-dir` store is the operator's own file on their own
-machine and is not this. A forgotten password is
-therefore unrecoverable, by design, and the log line that prints the first one
-says so.
-
-**A session is a cookie no script can read and no other site can send**:
-HttpOnly, SameSite=Strict and Secure, twelve hours at most, held on the
-server by its hash and forgotten on restart. Since 2026-10-05 it is also one
-**no other name under the same domain can plant**: it is called
-`__Host-porch_session`, and a browser stores a cookie of that name only when it
-is Secure, has `Path=/` and names no `Domain`. Without the prefix, any sibling —
-`porch.example.com` beside a wiki, a status page, a record left pointing at a
-deleted server — can set a cookie of the same name for the whole domain, and
-the browser sends both. Measured in Chromium before the change: the prefix is
-accepted over https and at `http://localhost`, which is the SSH tunnel, and a
-cookie of that name carrying a `Domain` is refused. Secure always, so the
-password and the session travel only over TLS or to localhost, which is how
-the SSH tunnel in the self-hosting guide reaches it; signing in over plain
-HTTP to any other address does not work, by design. The server refuses it too, before the
-password is read, and does not count a session sent by hand on such a request:
-only TLS, or a request addressed to this machine's own name, which is what the
-browser at the near end of an SSH tunnel sends, carries a password or a session.
-Beyond loopback `porchd` will not serve without `-access-file`, and since
-2026-09-29 nothing turns that off; every configuration this project ships
-carries it; one
-example in the guide dropped it once, because a compose command replaces the
-default rather than adding to it. A plain `-results-dir` beside a password is
-refused at start, since it would keep in the clear, under each checked name,
-what the password seals. The session endpoints take JSON
-only and refuse a request another site made the browser send, so a form
-elsewhere cannot sign somebody in, out, or change their password. Changing it
-ends every other session, so a password changed because it leaked stops
-working wherever it leaked to. Guessing is held to a burst per address and one
-derivation at a time. An IPv6 address counts by its /64, as a scan's does: until
-2026-10-05 it counted address by address, so a guesser on IPv6 had a fresh
-burst for every guess. And a full table of a thousand networks refuses a
-newcomer rather than forgetting everyone, which used to hand the guesser who
-filled it a fresh burst too. A newcomer then waits at most until the table's
-entries go idle, five minutes; a session already open is not asked.
-
-The demonstration refuses the flag. It is public by design and keeps nothing
-to protect, and a password in front of it would be a claim about a service it
-is not.
-
-A new password is a new key, and what the old key sealed is moved aside before
-the new one is made, never deleted. The review of 2026-09-18 found the guide's
-reset left `domains.sealed` in place (D03): the new key could not open it, so
-the domain list refused every addition until somebody found the file by hand.
-And the history passed over files it could not open (D09), so "at most a
-thousand" bounded the list and not the disk. Now `createAccess` moves the
-history and the domain list into `retired-<date>/` and says where; the old
-access file and its password still open them there, and only the person who
-runs the machine deletes them. A file the key does not open is never removed by
-the bound, because it is not that key's to judge; it is counted, with its size,
-and History says so, as it says when the bound could not remove a report.
-
-Signing out is done when the server says the session ended, not when the
-browser reaches the sign-in page. The review of 2026-09-18 found the page moving
-there whatever the answer (D07), so a sign-out a proxy swallowed looked like one
-that worked while the session stayed good; and a request that never came back
-left every form disabled. Every form now gets its button back and says what
-happened, and a failed sign-out stays on the page and says so.
-
-*Enforced in:* `internal/access`, `internal/vault`, `cmd/porchd.createAccess`, `cmd/porchd.retireSealed`, `cmd/porchd.run`,
-`internal/web.Configure`, `internal/web.PublicPaths`
 *Guarded by:* `TestNothingIsReachableWithoutSigningIn`,
 `TestTheRightPasswordOpensASession`, `TestASessionEnds`,
 `TestChangingThePasswordEndsOtherSessions`, `TestGuessingIsLimited`,
-`TestASignInAllowanceIsPerIPv6Network`, `TestAFullSignInTableRefusesRatherThanForgets`,
+`TestASignInAllowanceIsPerIPv6Network`,
+`TestAFullSignInTableRefusesRatherThanForgets`,
 `TestAnotherSiteCannotUseTheSessionEndpoints`, `TestTheSessionTableIsBounded`,
 `TestOnlyThePasswordOpensTheKey`, `TestThePasswordAndTheKeyAreNotOnDisk`,
 `TestAnAlteredFileDoesNotOpen`, `TestAnAccessFileIsNeverReplacedByCreate`,
 `TestChangingThePasswordKeepsTheKey`, `TestTheWorkFactorIsOWASPs`,
 `TestAMissingAccessFileIsCreatedAndItsPasswordSaidOnce`,
-`TestTheGateIsInFrontOfEverything`, `TestTheSignInPageShowsNothingBehindTheGate`,
+`TestTheGateIsInFrontOfEverything`,
+`TestTheSignInPageShowsNothingBehindTheGate`,
 `TestOnlyTheSignInPageAndWhatItNeedsArePublic`,
-`TestEveryPageBehindAPasswordOffersAWayOut`, `TestTheSessionScriptDoesOnlyThat`,
+`TestEveryPageBehindAPasswordOffersAWayOut`,
+`TestTheSessionScriptDoesOnlyThat`,
 `TestAFileSealedAtALowerWorkFactorIsRefused`, `TestAPublicPathIsExact`,
 `TestAPasswordChangeNeedsALiveSession`, `TestOnlyThisPageMaySignIn`,
 `TestTheSessionCookieCannotBePlantedByANeighbour`,
 `TestAKeptReportComesBackWhole`, `TestNothingOnDiskIsReadable`,
-`TestWithoutTheKeyNothingIsKeptOrRead`, `TestAReportMovedToAnotherNameDoesNotOpen`,
+`TestWithoutTheKeyNothingIsKeptOrRead`,
+`TestAReportMovedToAnotherNameDoesNotOpen`,
 `TestDeleteRemovesTheReportAndOnlyIt`, `TestTheHistoryIsNewestFirstAndBounded`,
 `TestTheHandlerListsOpensAndDeletes`, `TestEveryReportAnsweredIsKeptWhole`,
 `TestTheHistoryExistsOnlyBehindThePassword`,
 `TestHistoryBehindAPasswordListsOpensAndDeletes`, `TestTheSealBindsTheName`,
-`TestOnlyThisPackagesNamesAreNames`, `TestAFileNameSaysNothingAndADateIsOnlyADate`,
-`TestAReportNotKeptIsStillAnswered`, `TestAKeptReportIsListedUnderTheNameAsTyped`,
+`TestOnlyThisPackagesNamesAreNames`,
+`TestAFileNameSaysNothingAndADateIsOnlyADate`,
+`TestAReportNotKeptIsStillAnswered`,
+`TestAKeptReportIsListedUnderTheNameAsTyped`,
 `TestAPasswordIsTakenOnlyOverAPrivateTransport`,
 `TestAPublicServiceWithoutAPasswordIsRefused`,
 `TestAPasswordAndAPlainResultsDirectoryAreRefusedTogether`,
 `TestEveryShippedConfigurationCarriesAPassword`,
 `TestTheDomainListAddsListsAndRemoves`, `TestOnlyADomainIsAdded`,
-`TestTheDomainListIsSealed`, `TestTheDomainListIsBounded`, `TestTheDomainHandler`,
-`TestDomainsBehindAPasswordKeepsAListAndAsksEachOne`,
+`TestTheDomainListIsSealed`, `TestTheDomainListIsBounded`,
+`TestTheDomainHandler`, `TestDomainsBehindAPasswordKeepsAListAndAsksEachOne`,
 `TestANewPasswordMovesWhatTheOldOneKeptAside`,
 `TestWhatTheListCannotShowIsCountedAndNeverTrimmed`,
 `TestTheSessionScriptRecoversAndSignsOutOnlyOnSuccess`,
@@ -3992,131 +984,24 @@ happened, and a failed sign-out stays on the page and says so.
 
 ### R1 — Verdicts come from the policy package and name their version
 
-Grading logic anywhere else means the same server can be graded differently
-depending on which code path reached it, and an upstream library changing its
-opinion silently changes ours.
-
 *Enforced in:* `internal/policy`; `tlsprobe` and `certinfo` only measure
+
 *Guarded by:* `TestGradeCipherDelegatesToPolicy`, `TestReportNamesThePolicy`
 
 ### R2 — Every verdict cites a document, and the document is the current one
 
-A verdict without a citation is an assertion. The reader must be able to
-disagree with the standard rather than with us.
-
 *Enforced in:* `internal/policy`, every rule carries `References`
+
 *Guarded by:* `TestEveryFindingCitesASource`,
 `TestEveryCertificateFindingCitesASource`
 
 ### R3 — What could not be measured is stated
 
-Go's TLS stack offers roughly twenty-seven of the three hundred suites in the
-IANA registry, and gives no way to choose among TLS 1.3 suites. A report that
-omits this reads as exhaustive.
-
-**The TLS 1.3 half is now asked by hand, and believed only when calibrated.**
-A server was listed with the one TLS 1.3 suite it negotiated, so one also
-accepting the integrity-only suites of RFC 9150 — every record in the clear —
-was reported as strong. Each suite in the registry is now asked alone, with a
-hello carrying supported_versions and a real X25519 key share, and the
-version is read from the ServerHello's own supported_versions, bounded. A
-hello Go did not write can fail for reasons of its own, and each such failure
-would read as a suite refused, so the suite Go's handshake negotiated is asked
-too: unless it comes back accepted at TLS 1.3, none of the answers is used, the
-negotiated suite alone is listed and the report says why. Once calibrated, an
-answer at another version or with a suite not offered is not believed, and a
-suite nobody answered about leaves the list incomplete rather than refused.
-
-A limit of this scan and a limit of this program are different claims, and
-until 2026-09-01 they were printed under one heading with everything the scan
-had established. R18 is what separates them; this invariant is what requires
-them to be said at all.
-
-**The largest of them was unwritten until 2026-09-02: everything measured
-here describes one hop.** Every version, every suite, the cipher order and the
-key exchange are properties of whatever endpoint answered at the address the
-report names. Where a content delivery network, a reverse proxy or a load
-balancer terminates TLS, that endpoint is what was measured, and the link from
-it to the server behind it cannot be seen from here.
-
-The live scans of 2026-09-01 are the demonstration. `kapitalbank.az` resolved
-to `172.66.1.19` and its report carried Cloudflare's fingerprint — a CAA
-string character-for-character identical to `cloudflare.com`'s and a cipher
-list of the same shape — while stating that *the hybrid post-quantum group
-X25519MLKEM768 was accepted*. True of the edge. A reader takes it as a fact
-about the bank, and the difference matters precisely for the harvest-now
-threat that sentence exists to address, because the classical link may be the
-one behind the edge.
-
-It is a standing limit and not a note about the host, for two reasons.
-It is true of every scan this program runs, which is what `standing` means;
-and deciding which hosts sit behind an intermediary would mean publishing a
-claim no handshake establishes. The limit says the honest thing instead —
-including that a name resolving to several addresses was measured at one of
-them, which is true here whether or not this name did.
-
-It is raised only where something answered. Over a report that reached
-nothing it would describe an empty set, and a limit that bounds no measurement
-is the kind of sentence that taught readers to skip the limits.
-
-**Nor was it established that one hop meant one machine.** A full scan is
-thirteen separate connections and each one resolves the name again, so a
-rotating answer set — which is what most recursive resolvers return — can hand
-successive handshakes to different servers. The report recorded the address of
-the newest version that answered, printed it at the top, and presented every
-version, suite and certificate below as though one machine had produced them
-all. No row was false. The report as a whole made a claim it had never
-checked, and had thrown away the evidence that would have settled it: four of
-the five handshake call sites discarded the address they reached.
-
-Every handshake now records it, into a set held for the length of one probe —
-never on the `Prober`, which serves every scan the service runs. Where the set
-holds more than one entry the report says so and names them. This is a note
-about the host rather than a limit of the method, because it is established
-here: these are the addresses the handshakes reached, and this scan knows
-whether there was more than one.
-
-**And then each address is asked on its own, so a machine the resolver did not
-offer is not missed.** Recording where the handshakes landed stopped the report
-claiming one machine; it did nothing for a name with four machines behind it
-where one of four is misconfigured and no handshake happened to reach it. So
-the name's addresses are listed once, from the resolver the dialler asks, in
-the dialler's order and under its cap of eight, and each is asked one
-handshake, dialled at that address and naming the host. Through the prober's
-own dialler, so an address the dialler refuses is refused here too (N1). One
-handshake rather than a scan of each, because a scan is thirteen connections;
-the version, suite and certificate a client is given are what differ when one
-machine is behind the others. What each answered is shown, the report says
-whether they agree, and nothing is graded: no document requires a name's
-machines to match, and a migration in progress is exactly a name whose machines
-do not. An address that does not answer is not established either way, with a
-fixed reason (I6), and these handshakes are not added to the addresses the
-measurements came from.
-
-**And "trusted" is one store's opinion.** A chain verifies against one root
-store: the machine's own on Linux and the other unix systems, and on Windows
-and macOS the copy of Microsoft's or Apple's store this build carries. The
-second half dates from the 2026-09-16 audit (A25). A pool from
-`x509.SystemCertPool` is not only a pool on those two platforms: crypto/x509
-reads its mark as "ask the platform verifier first", and on Windows that is
-`CertGetCertificateChain` without the flag that keeps it off the network, so it
-fetches the intermediates a scanned certificate's AIA extension names — an
-address the scanned server chose, reached outside safedial, private ones
-included. So `internal/truststore` never returns a system pool there; the
-challenge and MTA-STS fetchers, which had passed their pool straight through,
-now resolve it too. Chrome, Apple and Microsoft each ship
-their own, remove authorities on their own timetables, and a packaged store
-lags the programme it is built from — so a chain trusted here can fail in a
-browser, and one untrusted here can be accepted. The report said *the* trust
-store, with the definite article, as though there were one. It is a standing
-limit, raised wherever a chain was checked, because a reader of `untrusted`
-needs the caveat as much as a reader of `trusted`.
-
 *Enforced in:* `internal/tlsprobe`, the `Notes` field
+
 *Guarded by:* `TestSupportedVersionsCarryTheCoverageNote`,
 `TestDescribeTransparencySeparatesTheFourSituations`,
-`TestEveryNoteInAReportCarriesAKind`,
-`TestAReportSaysItMeasuredOneHop`,
+`TestEveryNoteInAReportCarriesAKind`, `TestAReportSaysItMeasuredOneHop`,
 `TestAReportThatReachedNothingClaimsNoHop`,
 `TestAReportNamesTheAddressesItReached`,
 `TestAScanThatReachedTwoMachinesSaysSo`,
@@ -4124,10 +1009,12 @@ needs the caveat as much as a reader of `trusted`.
 `TestEveryRegistryTLS13SuiteIsAskedAlone`,
 `TestTheTLS13SuitesAServerAcceptsAreListedAndGraded`,
 `TestASilentTLS13SuiteLeavesTheListIncomplete`,
-`TestWithoutCalibrationOnlyTheNegotiatedSuiteIsListed`, `TestAGoServerIsEnumeratedAtTLS13`,
+`TestWithoutCalibrationOnlyTheNegotiatedSuiteIsListed`,
+`TestAGoServerIsEnumeratedAtTLS13`,
 `TestAProbeListsEveryTLS13SuiteTheServerAccepts`,
 `TestAProbeSaysWhyTheTLS13SuitesWereNotEnumerated`,
-`TestATLS13HelloNamesTLS13AndCarriesAKeyShare`, `TestAnOrdinaryHelloDoesNotClaimTLS13`,
+`TestATLS13HelloNamesTLS13AndCarriesAKeyShare`,
+`TestAnOrdinaryHelloDoesNotClaimTLS13`,
 `TestTheVersionSupportedVersionsNamesIsRead`,
 `TestAnExtensionBlockThatDoesNotAddUpLeavesTheLegacyVersion`,
 `TestExtensionsPastTheBoundAreNotRead`,
@@ -4135,77 +1022,22 @@ needs the caveat as much as a reader of `trusted`.
 `TestEachAddressIsDialledAsItselfThroughTheDialler`,
 `TestAddressesThatAnswerAlikeAreSaidToAnswerAlike`,
 `TestAnAddressThatDoesNotAnswerIsNotEstablished`,
-`TestTheAddressesAskedAreCappedAndTheReportSaysSo`, `TestOneAddressAsksNothingMore`,
-`TestAnAddressListedTwiceIsAskedOnce`, `TestCandidatesAreTheAddressesDialContextWouldTry`,
-`TestAVersionAloneIsADifference`,
-`TestEachAddressIsARowInThePagesWords`, `TestOneAddressPrintsNoAddressSection`,
+`TestTheAddressesAskedAreCappedAndTheReportSaysSo`,
+`TestOneAddressAsksNothingMore`, `TestAnAddressListedTwiceIsAskedOnce`,
+`TestCandidatesAreTheAddressesDialContextWouldTry`,
+`TestAVersionAloneIsADifference`, `TestEachAddressIsARowInThePagesWords`,
+`TestOneAddressPrintsNoAddressSection`,
 `TestThePageReadsTheAddressFieldsTheAPISends`,
 `TestTheReportSaysWhoseRootStoreDecided`
 
 ### R3a — No authority is asked, and the claim about revocation is made where the answer is known
 
-A chain reported as trusted reaches a root and is in date. It may still have
-been withdrawn.
-
-No connection is opened to a responder unless an operator asks for one. Asking
-a certificate authority whether a serial is still good tells that authority
-which certificate somebody is looking at, from which address and when. That is
-why the demonstration compiles the question out.
-
-**An operator asks for it in one of two places, and neither of them is a
-scan.** `porch-scan -ask-responder` is the choice made target by target.
-`porchd -ask-responder` is the same choice made once at start, and it is refused
-without a verification scope, because the disclosure is about a certificate:
-it is one to make about an estate the installation has been shown control of,
-never about a name somebody typed into a box.
-
-This invariant read *the service is never given it, even with proof of
-control — its operator did not choose it scan by scan* until 2026-09-24. A flag
-at start **is** that operator choosing, once, for every scan the installation
-will run. The sentence described a service that had no way to be told and was
-being read as a reason it should not be, which is the shape of mistake the
-zone-transfer sentences had on the same day.
-
-**The command-line form is off by default.** An
-operator examining their own certificate may decide the authority learning that
-is no disclosure at all, and a revoked certificate is the most serious thing a
-scan can find. The question is built from the certificate and its issuer, posted
-under the guards N11 gives revocation lists — safedial, ports 80 and 443, http
-and https only, credentials stripped, no redirect, two responders at most, a cap
-that refuses rather than truncates — and the answer is believed only after
-`internal/ocsp` verifies it against the issuer and finds it current. A verified
-revoked raises `cert.revoked` once, whatever else said it; a question that
-established nothing is said and graded for nothing.
-
-What changed is everything after it. Until 2026-09-01 this invariant read
-*revocation is not checked, and the report says so*, and `internal/certinfo`
-appended that sentence to every report it produced. It was written when
-nothing here parsed a stapled response. **R3b, directly below, records that
-v0.3.0 made this project read one and verify it against the issuer** — so from
-that release the two invariants on this page contradicted each other, and so
-did the report: a stapling server was told *Revocation was not checked*
-directly above *The stapled response was read and verified*. Around a third of
-the hosts measured here staple. The contradiction survived a release, a policy
-version and a public deployment.
-
-Two things kept it alive, and both are worth naming. The sentence lived in a
-package that cannot know the answer — whether a response verified is settled
-in `policy.GradeStapling`, and a sentence written where the answer is unknown
-is a sentence that cannot be made conditional. And a test asserted the words,
-so the change that made them false left the test green. That is the third time
-in this repository a test has held a stale sentence in place by nailing its
-prose, and the rule it produced is applied here: assert the property, in the
-package that can establish it.
-
-The claim now sits in `policy.GradeStapling`, which has every outcome and a
-sentence for each, with one standing note across all of them saying no
-authority is asked. `internal/certinfo` says nothing about revocation at all,
-and a test enforces that it does not.
-
 *Enforced in:* `policy.GradeStapling`, in the notes
+
 *Guarded by:* `TestNoAuthorityIsAskedOnAnyStapleOutcome`,
 `TestThisPackageClaimsNothingAboutRevocation`,
-`TestTheResponderIsAskedOnlyWhenAskedFor`, `TestWhatAServiceAsksBeyondTheHandshake`,
+`TestTheResponderIsAskedOnlyWhenAskedFor`,
+`TestWhatAServiceAsksBeyondTheHandshake`,
 `TestAskingTheResponderWithoutProofIsRefused`,
 `TestAScanGivenAResponderAsksItAndReportsWhatItVerified`,
 `TestAScanGivenNoResponderAsksNone`,
@@ -4223,87 +1055,19 @@ and a test enforces that it does not.
 
 ### R3b — A stapled response is read, and what reading it cannot settle is said
 
-A certificate stops deserving trust before it expires when its key is stolen,
-when it was issued in error, or when a domain changes hands. Revocation is the
-mechanism, and a stapled OCSP response is the authority's signed statement
-that a certificate was not revoked as of a moment — handed to the client by
-the server, so the client never tells the authority which site it is visiting.
-
-Until 2026-08-22 this project observed that bytes arrived and reported *a
-status response was stapled*. It parsed nothing. A server can staple anything:
-an empty file, a year-old response, a response about a different certificate,
-one signed by nobody, or one that says revoked. Every one of them produced the
-same sentence, and a reader takes that sentence to mean revocation was
-checked.
-
-The direction is the worst available. Revocation is the emergency brake of the
-whole system, and the case it exists for — a certificate that really has been
-withdrawn — is exactly the case a server has a motive to paper over by
-continuing to staple the last response that said good.
-
-**Four things have to hold before a status is reported.** The responder
-answered successfully with a basic response. The entry describes *this*
-certificate, by issuer name hash, issuer key hash and serial number, all
-three — the serial alone is unique per authority rather than globally, and the
-issuer hashes alone describe every certificate that authority ever signed. It
-was produced in the past and has not expired. And it is signed by the issuer,
-or by a responder the issuer both signed and marked with the OCSP-signing
-extended key usage — without that second condition any certificate the
-authority ever issued, including the one being checked, could vouch for its
-own revocation status.
-
-Anything else is a response that establishes nothing, reported as such, and
-never as good news.
-
-**What still is not checked, and why it stays that way.** The responder
-certificate's own revocation status. Checking it means fetching another
-response, over the network, from an address the scanned party chooses; nothing
-in this package fetches anything, and only bytes the server already sent are
-read. RFC 6960 §4.2.2.2.1 lets an issuer waive the check, and responder
-certificates carry short lifetimes for that reason.
-
-**A missing issuer is not a failure of the response.** Every check is against
-the issuer, so a chain that omits it establishes nothing — and produces no
-finding here, because `cert.chain-incomplete` already grades the omission and
-charging one mistake twice reports it as two.
-
-Everything this reads is chosen by the scanned server, which makes it the most
-hostile input this project accepts and the only cryptographic parser it owns.
-It is bounded at every length, it returns errors rather than panicking, and it
-is fuzzed on the nightly schedule.
-
-One more thing decides whether any of it runs against the right certificate.
-Every check is against the issuer, and the issuer used to be taken as
-`chain[1]` — the second certificate the server sent. RFC 8446 dropped the
-requirement that a chain be ordered: a sender SHOULD order it and a receiver
-MAY accept any order, so a server sending an unrelated cross-signed
-alternative first is not doing anything wrong. Taking the wrong one there
-produces a `cert.staple-unverifiable` finding against a server doing
-everything right, which is the false-accusation direction again. The issuer is
-now found by checking which certificate in the chain actually signed the leaf.
-
-The certificate section says which of those happened, and for a policy version
-it did not. `internal/ocsp` landed, the notes and the findings were rewritten,
-and the one line a reader looks at for revocation went on saying *a status
-response was stapled* — the sentence the whole round existed to replace. The
-same defect as R12, in the same file, one round later, found by reading a live
-report rather than by any test. `StapleFinding` now carries the outcome as
-serialised fields rather than leaving a front end to infer it from a rule
-identifier, and a test requires the page to read them.
-
 *Enforced in:* `internal/ocsp.Check`, `internal/policy.GradeStapling`,
 `internal/scan.issuerOf`, `internal/web/assets/app.js` (`revocationText`)
+
 *Guarded by:* `TestAGoodResponseIsRead`, `TestARevokedCertificateIsReported`,
 `TestAnUnknownStatusIsNotGood`,
 `TestAResponseAboutAnotherCertificateIsRefused`,
-`TestAResponseFromAnotherAuthorityIsRefused`,
-`TestAnExpiredResponseIsRefused`, `TestAResponseFromTheFutureIsRefused`,
-`TestAResponseSignedByNobodyIsRefused`, `TestADelegatedResponderIsAccepted`,
+`TestAResponseFromAnotherAuthorityIsRefused`, `TestAnExpiredResponseIsRefused`,
+`TestAResponseFromTheFutureIsRefused`, `TestAResponseSignedByNobodyIsRefused`,
+`TestADelegatedResponderIsAccepted`,
 `TestACertificateCannotVouchForItselfWithoutTheDelegation`,
 `TestAResponderFromAnotherAuthorityIsRefused`,
 `TestAnUnsuccessfulResponseIsNotAStatus`,
-`TestWithoutTheIssuerNothingIsClaimed`,
-`TestRubbishIsRefusedWithoutPanicking`,
+`TestWithoutTheIssuerNothingIsClaimed`, `TestRubbishIsRefusedWithoutPanicking`,
 `TestAnUnknownResponseTypeIsRefused`,
 `TestTheStapledNoteSaysWhichOfTheThreeHappened`,
 `TestTheShapesRealRespondersEmit`, `TestTheRightEntryIsFoundAmongSeveral`,
@@ -4314,76 +1078,11 @@ identifier, and a test requires the page to read them.
 
 ### R3c — Transparency receipts are counted, and checked against a list that names its date
 
-A publicly trusted certificate has to be recorded in append-only logs, and each
-log answers with a signed receipt. Those receipts reach a client three ways:
-embedded in the certificate, sent as a handshake extension, or carried inside a
-stapled status response.
-
-Two of the three are read. The count and the number of distinct logs come from
-the certificate and the handshake together, because a figure from either alone
-misleads: almost every authority embeds them, so counting only the handshake
-reports zero for a properly logged certificate, which is a claim that most of
-the web is absent from certificate transparency.
-
-Both numbers are reported rather than one. Browsers ask for receipts from
-distinct logs so that a single misbehaving log cannot satisfy the requirement
-alone, and three receipts from one log is a different situation from three from
-three.
-
-The second number is a union rather than a sum. Each route names the logs
-behind its own receipts, and the usual arrangement is that both name the same
-ones; adding two counts reports a log twice, which is how a certificate logged
-in two places comes to be described as logged in four.
-
-Each receipt is checked, offline. This said for a long time that nothing was
-verified, because checking needs the issuing log's key and carrying a copy of
-the list would be a dependency on somebody else's judgement that goes stale
-between releases. Both halves are answered rather than ignored. **The judgement
-is not edited:** `internal/ctlogs` carries Google's published list byte for
-byte, and believes it only if Google's signature verifies against a key
-written into the source rather than fetched beside the list; a test checks the
-carried copy on every build, so a list changed by hand fails. **Staleness is
-said, not hidden:** every report names the list's date and version; a receipt
-from a log the list does not name is unsettled, never false, because a newer
-log looks exactly like that; and a weekly job compares the carried logs with
-the published ones and opens an issue when they differ. It cannot update the
-list itself: that would need a signing key on a machine this project does not
-control (S6), so a person refreshes it and signs the commit.
-
-Four outcomes are kept apart: verified; a signature that fails, which vouches
-for nothing; a log the list does not name; and a receipt that could not be
-checked at all, usually for want of the issuer. The embedded receipt is
-checked against the precertificate RFC 6962 says the log signed — the
-certificate with the receipt list and poison extension removed, re-encoded —
-and against the issuer found in the chain the server sent.
-
-Nothing is graded either, for the same reason as R3b. The third delivery
-channel is not read, so a certificate showing none by the first two may still
-be presenting them by the third — and grading on two channels out of three
-would fail a working configuration, which R6 forbids. How many receipts and
-from which logs is in any case each browser's policy, revised on their
-schedule, not ours to enforce.
-
-Four situations are distinguished, because they look alike and are not: a
-logged certificate, one outside the public authorities that owes nobody a
-receipt, one whose receipts may be inside a stapled response nobody read, and
-one a browser will refuse.
-
-The list is parsed from attacker-chosen lengths — the certificate comes from
-whatever host was named in the request — so every declared length is checked
-against what remains rather than trusted, and a mismatch ends the parse rather
-than being clamped to fit. There is a fuzz target.
-
-The count sits on a line of the report and the caveats sit in the notes, which
-is not an accident of layout. The line adds only the measured fact of how many
-signatures verified, and nothing when none were checked; why a receipt could
-not be checked needs room the line does not have, and on the line it would read
-as though the count itself were uncertain.
-
 *Enforced in:* `internal/certinfo.embeddedSCTs` for the count,
 `internal/ctlogs.Parse` and `internal/ctlogs.CheckEmbedded` for the check,
 `internal/policy.DescribeTransparency` for what it means, joined in
 `internal/scan.checkReceipts`
+
 *Guarded by:* `TestParseSCTListCountsTimestampsAndLogs`,
 `TestParseSCTListRefusesMalformedInput`, `FuzzParseSCTList`,
 `TestDescribeTransparencySeparatesTheFourSituations`,
@@ -4407,40 +1106,19 @@ as though the count itself were uncertain.
 `TestTheTransparencyLineSaysHowManySignaturesVerified`,
 `TestCoverageSaysVerifiedOnlyWhenEveryReceiptWas`,
 `TestTheReceiptsLimitNamesTheListAndNoPolicy`,
-`TestAScanChecksTheReceiptsItCounts`, `TestAChainWithoutItsIssuerVerifiesNothing`,
+`TestAScanChecksTheReceiptsItCounts`,
+`TestAChainWithoutItsIssuerVerifiesNothing`,
 `TestNoCertificateMeansNothingChecked`, `TestAHandshakeReceiptIsCheckedToo`,
-`TestTheTransparencyJoinChecksTheReceipts`, `TestAListNamingTooManyLogsIsRefused`,
-`TestThePoisonExtensionIsRemovedToo`, `TestAReceiptNamingAnotherHashIsUnsupported`,
+`TestTheTransparencyJoinChecksTheReceipts`,
+`TestAListNamingTooManyLogsIsRefused`, `TestThePoisonExtensionIsRemovedToo`,
+`TestAReceiptNamingAnotherHashIsUnsupported`,
 `TestCheckExitsOneWhenTheLogsChanged`
 
 ### R3d — A limit of this scanner's network is not a fault of the server
 
-A name that publishes only AAAA records is unreachable from a host with no
-IPv6 route, however healthy the server is. The report said *the host could not
-be reached* — a statement about somebody else's server, arrived at from a fact
-about this one.
-
-`safedial` now records which address families it actually attempted, after the
-policy check rather than before it, so an address refused for being private
-does not count as a family that was tried. When every attempt used one family
-and none of them answered, the failure carries that family, and the reply says
-so: *the host could not be reached, and every address published for this name
-is IPv6; a scanner with no IPv6 route reaches none of them.*
-
-Two things are deliberate about that sentence. It names a property of the
-**target's** DNS rather than of this machine, so I6 still holds: what is
-published in a name's own records is checkable by the reader in a second, and
-what this scanner has configured is nobody's business. And it is said only
-where it can be the explanation — a refused connection or a reset proves the
-path works, and neither reaches the branch that adds it.
-
-The check is symmetric. An IPv6-only network reaching an IPv4-only name has
-exactly the same problem, and writing the rule for one family because the
-other is rarer is how a scanner comes to be correct only on the machine it was
-written on.
-
 *Enforced in:* `internal/safedial.SingleFamilyError`,
 `internal/safedial.soleFamily`, `internal/tlsprobe.classifyHandshakeError`
+
 *Guarded by:* `TestASingleFamilyIsNamedAndAMixedOneIsNot`,
 `TestTheFamilyWrapperHidesNothing`,
 `TestAnUnreachableHostSaysWhichFamilyWasTried`,
@@ -4449,38 +1127,12 @@ written on.
 
 ### R4 — Nothing measured is not the same as passing, or as failing
 
-An unreachable server is ungraded, not strong.
-
-The second half was added on 2026-08-22, after the package was found giving
-three different answers to one question. An unrecognised protocol version was
-graded weak with a sentence saying it had not been graded, which is right. An
-unrecognised cipher suite was graded **insecure** and told the reader its
-session key came from a long-term key — a specific claim, invented, and false
-of every TLS 1.3 suite that collected it. An unrecognised certificate key
-algorithm was graded **strong** with a footnote, which is the same error
-pointing the other way.
-
-So the rule is symmetric now and stated as one sentence: what could not be
-graded is weak, says it was not graded, and asserts nothing further about the
-thing it could not read. Weak rather than ungraded, because `Worst` skips
-ungraded and an unreadable suite would otherwise drop out of the aggregate
-while the server that offered it was called strong.
-
-**And nothing is left out of a report because it was empty.** A row drawn only
-when it has a value disappears exactly when a reader most needs it: a
-certificate with no names, a scan that never searched the transparency logs.
-What is drawn instead says which kind of nothing it was — `none`, `not
-checked`, `not searched` — because a row that is not there reads as a question
-nobody had, and a reader cannot tell it from an answer of none. The page's row
-helper returned early on an empty value and the terminal had wrapped eight rows
-in conditions one at a time; both say it now. A caller that means *this does
-not apply here* leaves the call out, which is a decision at the call site
-rather than a silence in the helper.
-
 *Enforced in:* `internal/policy.Ungraded`, `policy.Worst`,
 `policy.GradeVersion` (`version.unknown`), `policy.GradeCipher`
 (`cipher.unrecognised`), `policy.GradeLeaf` (`cert.key-algorithm-unrecognised`)
-*Guarded by:* `TestNothingMeasuredIsUngraded`, `TestUnreachableTargetIsUngraded`,
+
+*Guarded by:* `TestNothingMeasuredIsUngraded`,
+`TestUnreachableTargetIsUngraded`,
 `TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty`,
 `TestEveryDeclarationIsListedWhetherOrNotItWasThere`,
 `TestTheContentPolicyAndThePageAreSaidInWords`,
@@ -4491,10 +1143,8 @@ rather than a silence in the helper.
 `TestTheServiceDoesNotSpeakHTTP2`,
 `TestTheMailPathDrawsItsRowsWhateverTheMXSays`,
 `TestAChainNothingWasAttemptedAtSaysSo`,
-`TestEveryStatedReasonIsTrueOfTheSuite`,
-`TestAClosedConnectionIsNotARefusal`,
-`TestSilenceIsNotARefusal`,
-`TestOnlyAFatalAlertIsARefusal`,
+`TestEveryStatedReasonIsTrueOfTheSuite`, `TestAClosedConnectionIsNotARefusal`,
+`TestSilenceIsNotARefusal`, `TestOnlyAFatalAlertIsARefusal`,
 `TestLegacyNeverTurnsNoVerdictIntoStrong`,
 `TestAnExchangerThisClientCouldNotNegotiateWithIsNotGraded`,
 `TestExchangersNotContactedAreSaidNotToHaveBeen`,
@@ -4503,61 +1153,26 @@ rather than a silence in the helper.
 
 ### R4a — A verdict's stated reason is true of the thing it grades
 
-A verdict is believed because it names a reason. Naming one that does not hold
-is worse than declining to grade, and it is not caught by any check that a
-grade is severe enough.
-
-`FuzzGradeCipher` asserted that a suite graded strong really is forward-secret
-and AEAD. That is the direction which fails safe for this service. The other
-direction — that a suite told it has no forward secrecy really has none — was
-unchecked, and `TLS_SM4_GCM_SM3` collected that sentence for two years of
-policy versions while being a TLS 1.3 suite, where the property is guaranteed
-by the protocol.
-
-Every rule now declares what must be observable about a suite for its sentence
-to be honest, and a rule added without such a declaration fails the test.
-
 *Enforced in:* `internal/policy.cipherRules`
-*Guarded by:* `TestEveryStatedReasonIsTrueOfTheSuite`,
+
+*Guarded by:* `FuzzGradeCipher`, `TestEveryStatedReasonIsTrueOfTheSuite`,
 `TestForwardSecrecyIsNeverDeniedOfASuiteThatHasIt`
 
 ### R4b — Trust and expiry are separate questions, asked separately
 
-An expired certificate from an authority nobody trusts is not a trusted
-certificate.
-
-Go checks a certificate's dates before it looks for an issuer, so `Expired` is
-the error it returns whether or not anything would ever have vouched for the
-certificate. Reading that as "trusted apart from the dates" was right for a
-real certificate past its renewal date and wrong for every self-signed or
-private-CA certificate that had gone stale — which is what a scan of an
-abandoned service finds. Three statements went wrong together: the trusted
-flag, the suppression of `cert.chain-untrusted`, and a transparency note that
-turned round to tell a private certificate that browsers refuse it for not
-being logged.
-
-The question is now asked again at the midpoint of the certificate's own
-validity window, and that answer is the one reported.
-
 *Enforced in:* `internal/certinfo.trustedWithinValidity`
+
 *Guarded by:* `TestAnExpiredUntrustedChainIsNotReportedTrusted`,
 `TestTrustWithinValidityAsksARealQuestion`
 
 ### R5 — One insecure option makes the configuration insecure
 
-The attacker chooses which version and suite are negotiated, so aggregation is
-worst-case rather than average.
-
-The hand-written hellos are folded in the same way and only upwards: a server
-that accepts SSL 3.0 or an export suite by hand is insecure however well it
-answers everything else, and nothing they find can lift a verdict.
-
 *Enforced in:* `internal/policy.Worst`, used by `tlsprobe.summarise` and
 `tlsprobe.mergeLegacy`
+
 *Guarded by:* `TestWorstCaseAggregation`,
 `TestAServerSpeakingOnlySSL3IsGradedInsecure`,
-`TestAnExportSuiteAcceptedIsGraded`,
-`TestANullSuiteAcceptedIsGraded`,
+`TestAnExportSuiteAcceptedIsGraded`, `TestANullSuiteAcceptedIsGraded`,
 `TestAFiniteFieldOrAnonymousSuiteAcceptedIsGraded`,
 `TestAnUnansweredDHEOrAnonymousHelloIsSaidToBeUnsettled`,
 `TestNeitherFamilyIsAskedWhenNothingAnswered`,
@@ -4565,11 +1180,8 @@ answers everything else, and nothing they find can lift a verdict.
 
 ### R6 — Correct configuration is not penalised
 
-A server that refuses TLS 1.0 has done the right thing; grading the refusal
-would report it as insecure. One problem produces one finding: a self-signed
-certificate does not also raise chain-untrusted and chain-incomplete.
-
 *Enforced in:* `tlsprobe.summarise`, `policy.GradeLeaf`, `certinfo.Analyse`
+
 *Guarded by:* `TestUnsupportedVersionsDoNotContributeFindings`,
 `TestSelfSignedDoesNotAlsoReportUntrustedChain`,
 `TestPresentIssuerIsNotAnIncompleteChain`,
@@ -4577,213 +1189,60 @@ certificate does not also raise chain-untrusted and chain-incomplete.
 
 ### R7 — Results do not depend on the platform
 
-Chain completeness is determined from what the server sent, not from whether
-verification succeeded. On Windows and macOS the platform verifier fetches a
-missing intermediate over the network; on Linux it does not. Reading the
-verification result would make the same server complete on one machine and
-incomplete on another.
-
-What the rule did not cover, until 2026-08-22, was the sentence written beside
-the result. A chain reported incomplete that verified anyway was explained as
-"this platform's verifier fetched the missing certificate over the network" —
-true on macOS and Windows, false on Linux, which is where this service runs.
-The other explanation is that the issuer is in the trust store already. The
-note now gives both and says which one applies is a property of the machine
-that ran the scan, because that is all that was established.
-
-The finding's own wording was also stronger than the measurement behind it. It
-claimed the server "did not send every intermediate needed to reach a root",
-while `chainComplete` looks only for the issuer of the leaf; a chain missing a
-second intermediate passes it. Measured: leaf and one intermediate sent, the
-next one omitted, `chainComplete` true, and a real client refusing the
-connection. The finding now says what is checked.
-
-**The store a chain is judged against is the store this program checked.** The
-same rule read one layer down, and it was broken in the layer nobody looked
-at. `x509.Verify` with a nil `Roots` does not mean "the system pool"; it means
-*decide for yourself*, and on Windows and macOS deciding hands the whole
-question to the platform verifier — a different store, reading neither the
-pool `porchd` reads when it starts nor `SSL_CERT_FILE`. So the service
-satisfied itself that its trust store was not empty and then judged every
-chain against something else, on the two platforms self-hosting is most likely
-to run on. It refused to start on a machine with no store and would have
-reported chains as trusted on one it never consulted.
-
-The pool is a parameter now, `porchd` hands the scanner the pool it
-checked, and nothing leaves `Roots` nil. A non-nil `Roots` takes the pure-Go
-path everywhere, so one store decides on every platform — which is what this
-invariant asks for and what the nil was quietly preventing.
-
-The symptom was visible for months and read as something else. Two tests in
-`internal/certinfo` failed on Windows and macOS from the day they were
-written, because the fixture installed its private authority through
-`SSL_CERT_FILE` and only Go's unix root loader reads it. That looked like a
-fixture that did not port. It was the program measuring against a store it had
-never looked at, and the fixture was the only thing saying so. The tests pass
-the pool now, which is what the program does, so they exercise the real path
-rather than a second one arranged for them — and the package runs on every
-platform.
-
-**A store that cannot be read is a fact about this machine.** It is said in
-words rather than reported as an untrusted chain, which would be a finding
-about somebody else's certificate produced by a local failure (R4). The pool
-returned in that case is empty rather than nil, because nil would send the
-verification back to the platform — and on the machine whose store could not
-be read, that path reports chains as trusted.
-
-**And the same hole was in the other check.** `internal/certinfo` was fixed on
-2026-09-10; `internal/webprobe` set no `TLSClientConfig` at all, so every web
-chain was verified with a nil `RootCAs` — which reaches `x509.Verify` as a nil
-`Roots` and hands the question to the platform. A service that read its own
-store, refused to start without one, and passed it to the TLS scanner was
-judging half its chains against something it had never looked at.
-
-Here it is worse than a wrong grade. A certificate the deciding store cannot
-verify is a handshake that **fails**, and a failed handshake on both ports reads
-as a site that is not served over HTTPS. The report would not say "trusted" when
-it should not; it would say the server does not offer HTTPS at all.
-
-Which is why the fix carries a second half. `truststore.Resolve` answers an
-unreadable store with an **empty** pool — safe, and unusable — so closing the
-first defect would have opened a worse one: every chain failing, with nothing
-saying why. `webprobe.Report.TrustStoreUnreadable` carries the fact,
-`webscan.Grade` turns it into an unsettled note, and the sentence is
-`policy.TrustStoreUnreadable()` because both checks say it and two copies of a
-claim about whose store decided the word "trusted" are two copies that drift
-(R16).
-
-**The rule itself is `internal/truststore`, and that is the point of the
-package.** It holds one decision — nil means the system store, loaded
-explicitly; a failure means an empty pool and never nil — and it exists because
-that decision was about to be written a second time. Each check keeps a
-`resolveRoots` variable pointing at it, so a test can make the failure happen on
-the machine no test runs on, and neither keeps a copy of the rule.
-
-**Setting a `tls.Config` moves responsibility for everything it does not say.**
-What is deliberately absent is asserted rather than assumed: no
-`InsecureSkipVerify`; no `ServerName`, which would be checked against the
-certificate of every host a redirect moved on to; no `ClientSessionCache`, which
-is shared across hosts and would resume somebody else's session; and no
-`MinVersion` or `MaxVersion`, because naming one would move a *measurement* — a
-host reachable only over an older protocol would begin to be reported as not
-reachable at all.
-
-**A check that cannot run on a platform is a check that does not run there, and
-this rule is about that too.** The CAA lookup said *not checked* on every
-Windows machine from the day it was written until 2026-09-11. Nothing was
-wrong with the check: `internal/dnsclient` found the resolver by reading
-`/etc/resolv.conf`, Windows has no such file, and the honest failure was
-reported honestly. So the same scan of the same host produced a complete report
-on Linux and a report missing a whole row on Windows — which is precisely what
-this invariant forbids, arriving as a platform the code did not have a path for
-rather than as a wrong answer.
-
-The comment saying so had been there the whole time. Written down as a known
-limit, a missing platform reads as a decision; it was not one, and nothing
-ever came back to it. **An honest note about a gap is not a substitute for
-closing it**, and "the report says the check did not happen" is the floor
-rather than the answer.
-
-Two things came out of fixing it, and the second is the one worth keeping. The
-resolver is now found per platform — resolv.conf on unix, the registry on
-Windows — which was the obvious half. The other half is that **one resolver is
-not a machine's answer**: the first attempt read the Windows registry
-correctly, returned the primary resolver of the live adapter, and the check
-still said *not checked*, because that resolver belongs to a virtual adapter
-and does not answer. Windows had a second one configured for exactly that case
-and was using it for everything else. So every configured resolver is tried in
-order, the one that answered is asked first next time — a CAA walk makes up to
-six queries and must not pay a dead resolver's timeout on each — and the same
-change closes the same latent defect on unix, where `resolv.conf` lists several
-for the same reason and only the first was read.
-
-**The service can be told which resolver to ask, the same as the command
-line.** A machine whose resolver rewrites answers — a home router is the
-ordinary case — gives answers about the router, and porchd had no way to step
-around it. `-resolver` reaches every lookup the service makes itself: the CAA
-walk, the mail check through httpapi, and the proof-of-control challenge. It
-must be an address and a port, because a resolver named by hostname would be
-found through the machine's resolver first. The addresses a scan connects to
-are still resolved by the machine, and the flag's help says so.
-
-**And a platform's file is compiled nowhere, so it is vetted everywhere.** `go
-vet ./...` on Linux does not read a file behind `//go:build windows`; it is not
-merely unvetted, it is never compiled, so a syntax error in it passes every
-gate and fails in `scripts/build.sh` on a release evening. CI now vets `linux`,
-`darwin` and `windows`. vet type-checks rather than links, so it costs seconds
-and needs no cross toolchain.
-
-**Other clients' stores are said beside the verdict, never instead of it.** One
-store deciding is what makes a verdict reproducible, and it is also one store
-among several: Mozilla, Chrome, Microsoft and Apple each ship their own and
-remove authorities on their own timetables. So a report says, beside the
-verdict, what each of those four makes of the chain — from copies carried in
-`internal/rootstores` and dated in the report. Only which roots a store includes,
-and Mozilla's dates for distrusting a root, are evaluated; Chrome's
-version-dependent constraints and Microsoft's "NotBefore" roots are reported as
-conditional rather than guessed at. None of it moves a verdict. The copies are
-not signed by their publishers: a refresh refuses any certificate that does not
-hash to the fingerprint its publisher lists, a test checks every carried root
-against its recorded hash on every build, a weekly workflow opens an issue when a
-store changes, and a person reads the diff before signing it. That is less than
-a signature, and it is said as that.
-
-*Enforced in:* `internal/certinfo.chainComplete`, `internal/truststore.defaultStore`,
-`internal/rootstores.Parse`, `internal/rootstores.Set.Judge`,
-`internal/certinfo.judgeStores`, `internal/policy.StoresLine`,
-`internal/certinfo.resolveRoots`, `internal/scan.Scanner.Roots`,
-`cmd/porchd`, `internal/truststore`, `internal/webprobe.Prober.Roots`,
-`internal/webscan.Scanner.Roots`, `internal/policy.TrustStoreUnreadable`,
-`internal/dnsclient` (`resolver_unix.go`, `resolver_windows.go`, `Client.ask`),
+*Enforced in:* `internal/certinfo.chainComplete`,
+`internal/truststore.defaultStore`, `internal/rootstores.Parse`,
+`internal/rootstores.Set.Judge`, `internal/certinfo.judgeStores`,
+`internal/policy.StoresLine`, `internal/certinfo.resolveRoots`,
+`internal/scan.Scanner.Roots`, `cmd/porchd`, `internal/truststore`,
+`internal/webprobe.Prober.Roots`, `internal/webscan.Scanner.Roots`,
+`internal/policy.TrustStoreUnreadable`, `internal/dnsclient`
+(`resolver_unix.go`, `resolver_windows.go`, `Client.ask`),
 `.github/workflows/ci.yml`
+
 *Guarded by:* `TestMissingIssuerIsAnIncompleteChain`,
 `TestPresentIssuerIsNotAnIncompleteChain`,
 `TestARootThatDoesNotMatchItsFingerprintIsRefused`,
 `TestAnUnknownStoreOrStatusIsRefused`, `TestEachStoreAnswersForItself`,
-`TestTheDistrustDateIsTheLastDayTrusted`, `TestTheCarriedStoresTrustARealChain`,
+`TestTheDistrustDateIsTheLastDayTrusted`,
+`TestTheCarriedStoresTrustARealChain`,
 `TestTheSummaryIgnoresWhenAFileWasFetched`,
 `TestChromeAnchorsAreReadWithTheirConstraints`,
 `TestACertificateNotMatchingItsListedFingerprintIsRefused`,
 `TestCheckExitsOneWhenAStoreChanged`, `TestTheStoresLineGroupsByWhatEachSaid`,
-`TestAllStoresTrustingIsOneSentence`, `TestAStoreThatRefusesIsSaidBesideTheVerdict`,
+`TestAllStoresTrustingIsOneSentence`,
+`TestAStoreThatRefusesIsSaidBesideTheVerdict`,
 `TestAConditionalStoreIsUnsettled`, `TestADistrustDateThatAppliesIsSaid`,
 `TestStoresNotUsedAreUnsettledWithTheReason`,
 `TestTheTrustStoreLimitSaysWhatTheOtherStoresAre`,
 `TestThePageReadsTheStoresLineTheAPISends`, `TestTheReportPrintsTheStoresLine`,
 `TestAnalyseNamesWhatEachStoreMakesOfTheChain`,
-`TestAFileNamingTooManyRootsIsRefused`, `TestAnExpiredChainIsJudgedWithinItsValidity`,
-`TestTheSummaryNamesTheStore`, `TestTheBestPathToARootDecides`,
-`TestBuildCarriesWhatEachStoreTrustsForTLS`,
+`TestAFileNamingTooManyRootsIsRefused`,
+`TestAnExpiredChainIsJudgedWithinItsValidity`, `TestTheSummaryNamesTheStore`,
+`TestTheBestPathToARootDecides`, `TestBuildCarriesWhatEachStoreTrustsForTLS`,
 `TestAnUnparseableRootMatchingItsFingerprintIsLeftOut`,
 `TestTheRootsPassedInAreTheOnesThatDecide`,
 `TestANilPoolBecomesTheSystemPoolRatherThanThePlatformVerifier`,
-`TestEachPlatformResolvesToAPoolThatIsOnlyAPool`, `TestTheCarriedPoolIsACopy`, `TestTheClientResolvesItsStoreAndKeepsNothingOpen`,
-`TestTheServiceTakesItsStoreFromTheResolver`,
-`TestAPoolPassedInIsNotReplaced`,
+`TestEachPlatformResolvesToAPoolThatIsOnlyAPool`, `TestTheCarriedPoolIsACopy`,
+`TestTheClientResolvesItsStoreAndKeepsNothingOpen`,
+`TestTheServiceTakesItsStoreFromTheResolver`, `TestAPoolPassedInIsNotReplaced`,
 `TestAnUnreadableStoreIsNotReportedAsAnUntrustedServer`,
 `TestTheTestRootIsTheStoreAnalyseUses`,
 `TestTheScannersTrustStoreIsWhatJudgesTheChain`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
 `TestADeadResolverIsFollowedByTheNextOne`,
 `TestTheResolverThatAnsweredIsAskedFirstNextTime`,
-`TestEveryResolverFailingKeepsTheFirstReason`,
-`TestAnEmptyResolverSetSaysSo`,
-`TestAConfiguredResolverIsTheOnlyOneAsked`,
-`TestEveryNameserverIsRead`, `TestAnUnusableNameserverIsSkipped`,
-`TestTheNameserverListIsBounded`,
-`TestAFileWithNoNameserverIsNoResolver`,
-`TestAMissingResolvConfIsNoResolver`,
+`TestEveryResolverFailingKeepsTheFirstReason`, `TestAnEmptyResolverSetSaysSo`,
+`TestAConfiguredResolverIsTheOnlyOneAsked`, `TestEveryNameserverIsRead`,
+`TestAnUnusableNameserverIsSkipped`, `TestTheNameserverListIsBounded`,
+`TestAFileWithNoNameserverIsNoResolver`, `TestAMissingResolvConfIsNoResolver`,
 `TestANameserverListIsSplitHoweverItWasWritten`,
-`TestARegistryStringIsDecoded`,
-`TestTheMachineReportsUsableResolvers`,
-`TestTheResolverListDropsWhatCannotBeAsked`,
-`TestTheResolverListIsBounded`,
+`TestARegistryStringIsDecoded`, `TestTheMachineReportsUsableResolvers`,
+`TestTheResolverListDropsWhatCannotBeAsked`, `TestTheResolverListIsBounded`,
 `TestTheResolverFlagReachesTheScanner`,
 `TestNoResolverFlagLeavesTheMachinesOwnConfiguration`,
 `TestTheResolverFlagReachesEveryLookup`, `TestEveryInstallationHasAResolver`,
 `TestAResolverThatIsNotAnAddressAndPortIsRefused`,
-`TestAServiceResolverReachesTheMailCheck`,
-`TestEveryReleasedPlatformIsVetted`,
+`TestAServiceResolverReachesTheMailCheck`, `TestEveryReleasedPlatformIsVetted`,
 `TestAnUnreadableStoreResolvesToAnEmptyPoolRatherThanNil`,
 `TestTheRootsPassedInAreWhatVerifiesAWebChain`,
 `TestAStoreWithoutTheAuthorityRefusesTheChain`,
@@ -4793,71 +1252,23 @@ a signature, and it is said as that.
 `TestTheScannersTrustStoreDecidesTheHandshake`,
 `TestAProberWithItsOwnTrustStoreKeepsIt`,
 `TestAnUnreadableStoreIsSaidInWordsRatherThanAsAnUnreachableSite`,
-`TestAReadableStoreAddsNoNote`,
-`TestOneSentenceSaysTheStoreCouldNotBeRead`,
+`TestAReadableStoreAddsNoNote`, `TestOneSentenceSaysTheStoreCouldNotBeRead`,
 `TestTheConstructorGivesEveryCheckTheSameTrustStore`,
 `TestReplacingTheWebScannerCannotDropTheTrustStore`
 
 ### R8 — Rules that change on a schedule are written as schedules
 
-The CA/Browser Forum maximum certificate validity falls from 398 days to 200
-on 15 March 2026, to 100 on 15 March 2027, and to 47 on 15 March 2029.
-Compliance is judged at issuance, not at scan time, so a 398-day certificate
-issued in January 2026 is valid and the same certificate issued in April is a
-misissuance.
-
 *Enforced in:* `internal/policy.MaxValidityDays`
+
 *Guarded by:* `TestMaxValidityDaysFollowsTheSchedule`,
 `TestValidityIsJudgedAtIssuance`
 
 ### R11 — A measurement that stopped early is not a measurement
 
-Cipher enumeration makes one handshake for every suite a server accepts — up
-to twenty-two at TLS 1.2. A host that rate-limits, resets, or simply tires of
-answering will end that before the list does, and until 2026-08-22 every such
-ending was read the same way as the one legitimate ending: the server saying it
-had nothing left in common.
-
-The direction of the error is what makes it serious. A Go server answers with
-its strongest suite first, so a list cut short loses the weak end — the suites
-that would have set the verdict. Measured: a server accepting two GCM suites
-and two CBC suites was graded **strong** instead of weak when the connection
-stopped answering after the second handshake. It also means the scanned host
-can choose its own grade: answer twice, then go quiet.
-
-Two things follow, and the second is the one that matters.
-
-**Only the server saying no finishes a list.** A handshake failure alert, or
-insufficient security, is the server having considered what was left. A
-timeout, a reset, a refused connection, an unexpected close, or the round cap
-is the question going unanswered, and the suites not yet reached stay unknown.
-
-**An unfinished list forfeits `strong` and keeps everything worse.** The
-asymmetry is the one R5 already rests on: worst-case aggregation only moves one
-way, so a suite that was seen stays seen however the enumeration ended, while
-the absence of anything worse is precisely what an unfinished list cannot
-support. `Strong` is the verdict that claims an absence, so it is the one that
-is withdrawn — to `Ungraded`, not to `Weak`, because the server has not been
-shown to be doing anything wrong and R6 forbids grading a correct
-configuration down for a connection that dropped.
-
-The field is `CipherListComplete`, and its zero value is `false` on purpose. A
-producer that forgets it gets `Ungraded` rather than a grade it did not earn.
-
-**And the withdrawal has to survive the join.** `policy.Worst` passes over
-`Ungraded`, which is right for a list of verdicts and wrong for a whole report:
-`internal/scan` joined the transport's `Ungraded` with a strong certificate and
-reported the scan strong. The 2026-09-16 audit (A10) found it. A scan whose
-transport did not finish now ends `Ungraded` wherever it would have ended
-strong. The mail check had the same shape one level up (A11): a sender policy,
-DMARC record or exchanger list that could not be read leaves every rule about
-it silent, and three failed lookups came back strong. An unread principal
-record now withdraws `Strong` there too. In both, only `Strong` goes; a finding
-that was raised stays.
-
 *Enforced in:* `internal/tlsprobe.enumerateCiphers`,
 `internal/tlsprobe.isNoSharedSuite`, `internal/tlsprobe.summarise`,
 `internal/scan.settle`, `internal/policy.principalUnread`
+
 *Guarded by:* `TestATruncatedSuiteListIsNotReportedAsComplete`,
 `TestAnUnfinishedListCannotProduceStrong`,
 `TestOnlyARefusalFinishesAnEnumeration`,
@@ -4867,191 +1278,37 @@ that was raised stays.
 
 ### R12 — A failure to measure is never drawn as a measurement
 
-R11 settled this inside the probe. This is the same rule at the two places a
-person actually reads: the page and the terminal. Four ways it was broken were
-found on 2026-08-22, all in rendering, none visible from the packages that get
-the facts right.
-
-**A version row said `refused` whenever the handshake did not succeed.** Only
-one kind of failure is a refusal — the server answered and declined. Our own
-client not offering a version, a name that did not resolve, a timeout, a reset,
-a destination the service will not dial: every one of them leaves `Supported`
-false as well, and every one of them was printed as a refusal. The direction is
-what makes it serious rather than untidy. *"TLS 1.0 refused"* is a row in the
-server's favour, and both front ends were awarding it on the strength of a
-handshake that never took place. `tlsprobe` had already written the careful
-sentence — *"not tested: this build of Go declined to offer TLS 1.0"* — and the
-page discarded it while the terminal printed it in the same line as the word it
-contradicted.
-
-**A truncated cipher list was drawn under a heading that claims completeness.**
-R11 withdraws `Strong` when enumeration stopped early and raises a note saying
-so, but the note lives in a block the page keeps shut under every verdict except
-`Ungraded`. Under a weak or insecure verdict the reader met a table headed
-*"Cipher suites accepted"* with nothing on it to say the weak end was never
-reached. The mark now sits on the table.
-
-**Receipts that could not be read were counted as though they had been.** A
-transparency timestamp too short to hold a log identifier contributes to the
-total and to no log, so a certificate whose timestamps were all unreadable
-produced *"3 timestamps from 0 logs"* — this scanner reporting its own failure
-in a sentence shaped like a fact about the certificate.
-
-**The sentence bounding what this client offers was attached to success.** A
-server speaking only suites Go does not implement answers every probe with a
-handshake failure, which is the same alert as a version refusal; every row then
-reads `refused`, and the note explaining that a refusal here is not proof the
-version is switched off was skipped precisely because nothing had been
-accepted.
-
-The general form, and the thing to check when a field is added: **a bit saying
-a measurement failed has to exist in the data rather than be inferred from the
-absence of a result, and every renderer has to read it.** `Refused` exists for
-that reason and carries no `omitempty`, for the same reason `CipherListComplete`
-does not.
-
-The smallest instance of this is worth keeping, because it took no protocol
-knowledge to make and none to miss. `cert.serial-entropy` reads a bit count,
-and a bit count of zero means two things: a serial that is zero, and a serial
-nobody read. The first version of the rule fired on both, so every certificate
-whose facts were built by hand without a serial was accused of carrying a
-counter. The existing tests in the package caught it on the first run. The rule
-now requires a measurement before it says anything, and a serial that really is
-not positive is reported as a note, because a malformed field and an unread one
-are not the same finding either.
-
 *Enforced in:* `internal/tlsprobe.VersionResult.Refused`,
 `internal/tlsprobe.classifyHandshakeError`,
 `internal/tlsprobe.suiteCoverageApplies`, `internal/web/assets/app.js`
-(`outcomeCell`, `ciphers`, `transparencyText`),
-`cmd/porch-scan.printVersions`, `cmd/porch-scan.printCiphers`
+(`outcomeCell`, `ciphers`, `transparencyText`), `cmd/porch-scan.printVersions`,
+`cmd/porch-scan.printCiphers`
+
 *Guarded by:* `TestOnlyAServerRefusalIsCalledOne`,
-`TestARefusedVersionIsTheWordAlone`,
-`TestATruncatedListSaysSoWhereItIsShown`,
+`TestARefusedVersionIsTheWordAlone`, `TestATruncatedListSaysSoWhereItIsShown`,
 `TestAVersionThatCouldNotBeMeasuredIsNotCalledRefused`,
 `TestATruncatedCipherListIsMarkedOnTheTable`,
 `TestUnreadableTimestampsDoNotBecomeAMeasurement`,
 `TestTheLimitsOfThisClientAreStatedWhenNothingWasAccepted`,
 `TestTheClassesTheScriptAddsAreStyled`, `TestClientRefusalIsNotServerRefusal`,
 `TestAVersionThatCouldNotBeMeasuredIsNotDrawnAsRefused`,
-`TestASerialTooSmallToBeRandom`,
-`TestThePostQuantumQuestionHasThreeAnswers`
+`TestASerialTooSmallToBeRandom`, `TestThePostQuantumQuestionHasThreeAnswers`
 
 ### R13 — An exit status is a verdict, and `ungraded` is not zero
 
-`porch-scan` exists partly to gate a pipeline, and its status was the one
-reader of a verdict that could not be corrected afterwards. It exited `0` on
-`Ungraded`.
-
-That is the whole of R11 undone at the shell. An unfinished enumeration
-withdraws `Strong` and returns `Ungraded` — and the host decides when to stop
-answering, so `Ungraded` is a state the party being gated can choose. Answer
-twice, go quiet, exit zero, pipeline green. The protection ended one layer
-before the only layer that acts on it.
-
-There was a second half. `policy.Worst` ignores `Ungraded` entries, correctly:
-aggregating grades has to skip the things that are not grades. Reading the
-status off it alone therefore published a pass for a target nobody measured
-whenever another target in the same run came back clean.
-
-`Ungraded` now has a status of its own, `4`, ranked below a weak or insecure
-finding — an operator with both is sent to the finding first — and above a
-clean run. The decision is a function of the results rather than a switch at
-the end of `run`, so it can be exercised without a network.
-
 *Enforced in:* `cmd/porch-scan.exitCode`
+
 *Guarded by:* `TestUngradedIsNotAPass`,
 `TestAnUngradedTargetIsNotHiddenByAGoodOne`,
 `TestSeverityOutranksAnAbsentResult`
 
 ### R14a — A chain is graded, not only checked for trust
 
-Until 2026-09-02 all twenty-four certificate rules looked at the certificate
-served for the host. The chain was checked for trust — does it reach a root —
-and never for strength, so a report could say
-
-```
-Chain   4 certificates, trusted
-```
-
-beside a `strong` verdict while three of those four had been graded by
-nothing. An intermediate signed with SHA-1, or holding a 1024-bit key, passed
-in silence.
-
-It matters more on an issuer than on a leaf. A forged leaf impersonates the
-names inside it; a forged intermediate issues certificates for **any** name,
-accepted by every client that trusts the chain. That is R5 applied upwards: a
-chain is only as sound as the weakest certificate a client must accept on the
-way to a root.
-
-What is not graded is as deliberate as what is. **Names** are a question about
-a certificate presented for a name, and an issuer is not presented for one.
-**Self-signature** is what a root is. **Validity length** is measured in
-decades for an authority by design. **Being an authority** and holding
-`keyCertSign` are required of an issuer — the exact inverse of the leaf rules.
-
-**And the root is not graded at all.** A root is trusted because the client
-already holds a copy, not because of the signature it carries; no client
-verifies that signature, and one that did would be asking a certificate to
-vouch for itself. Grading it would raise an alarm about a risk nobody runs,
-and roots predating SHA-256 sit in every store today doing no harm. Any
-self-signed certificate in the chain is skipped, which is how a client treats
-it — and where the server sent one, the report says so and says why.
-
-The identifiers are `chain.` rather than `cert.` because a pipeline filtering
-on `cert.signature-sha1` had already fixed that identifier's meaning. A new
-identifier is additive; a widened one is a silent change.
-
-The rules are written twice — once for the leaf, once for an issuer — because
-the consequence differs and the sentences have to say so. What must not differ
-is *when* they fire, so a test drives thirteen key and signature combinations
-through both graders and fails if either fires where the other does not.
-
-**The tests needed a trust store before they could see any of this.** A root
-generated in a test is in no store, so every chain these tests built failed
-verification and every report came out `insecure` from `cert.chain-untrusted`
-whatever else was true. An issuer's contribution to the verdict was invisible,
-and a sabotage that replaced the fold with the leaf's own verdict passed the
-whole suite.
-
-`internal/certinfo`'s `TestMain` now writes one root to a PEM and points
-`SSL_CERT_FILE` and `SSL_CERT_DIR` at it before anything verifies — the system
-pool is built once per process, so that is the only moment early enough. A
-chain built the ordinary way verifies; a test that wants one that does not
-calls `newUntrustedRoot` and says so by calling it. Both variables are set
-because Go consults them separately and either one alone lets the machine's
-own 150-odd authorities back in, which a test asserts by counting the pool.
-
-An impeccable leaf under an issuer expiring in ten days is the shape that was
-unreachable before: the chain verifies, the leaf grades `strong`, the report
-grades `weak`. The issuer's fault is deliberately one Go's verifier tolerates
-— a SHA-1 issuer would break the chain and put the leaf back at `insecure`,
-which is the blind spot again.
-
-**What an issuer is not allowed to do is reported, and only where it says.**
-Name constraints bound which names an authority may issue for; a path length
-bounds how many authorities it may create beneath itself. Both matter for one
-reason: an unconstrained intermediate whose key is stolen issues certificates
-for any name on the internet, and a constrained one issues for a handful of
-domains and nothing else.
-
-Only the positive case is reported. An issuer with no constraints produces no
-sentence, and that is not the kind of silence the rest of this document closes.
-The silences that mattered — one hop, one address, one root store — changed
-what a claim covered. This one does not: an unconstrained issuer is the
-ordinary state of nearly every certificate on the internet, and saying so on
-every report would be true, add nothing, and teach a reader to skip the block
-it sits in. That is how the old *What this did not measure* heading stopped
-being read. It is also, for once, a report with something good to say.
-
-A root's constraints are skipped for the same reason its signature is not
-graded: the root a client uses is the copy in its own store, not the one the
-server sent, and the two need not carry the same extensions.
-
 *Enforced in:* `internal/policy/chain.go`, `internal/certinfo.worstAcross`,
 `internal/certinfo.issuerConstraints`
-*Guarded by:* `TestASoundIssuerRaisesNothing`, `TestWhatAnIssuerIsGradedOn`,
-`TestBothGradersFireOnTheSameCryptography`,
+
+*Guarded by:* `TestMain`, `TestASoundIssuerRaisesNothing`,
+`TestWhatAnIssuerIsGradedOn`, `TestBothGradersFireOnTheSameCryptography`,
 `TestAnIssuerIsNotGradedOnWhatItIsNot`, `TestAWeakIssuerReachesTheVerdict`,
 `TestARootIsNotGradedAndTheReportSaysWhy`,
 `TestAnIssuerSubjectCannotRewriteTheReport`,
@@ -5059,40 +1316,13 @@ server sent, and the two need not carry the same extensions.
 `TestAFindingAboutAnIssuerReachesTheFindings`,
 `TestASoundLeafTakesItsIssuersVerdict`, `TestTheTestRootIsTheStoreAnalyseUses`,
 `TestAConstrainedIssuerIsDescribed`, `TestAnUnconstrainedIssuerSaysNothing`,
-`TestARootsConstraintsAreNotReported`,
-`TestAConstraintCannotRewriteTheReport`
+`TestARootsConstraintsAreNotReported`, `TestAConstraintCannotRewriteTheReport`
 
 ### R14 — A chain reachable at any version is a chain reachable
 
-A server picks its certificate from what the client offered, so an old client
-can be handed a different one — and the chain kept for old clients is the one
-most likely to be weak. This report took the chain from the newest handshake
-that completed and described that, which meant a SHA-1 or small-key
-certificate sitting behind TLS 1.0 was invisible beside a clean modern chain,
-in a report whose subject is exactly that kind of leftover.
-
-R5 settles what to do about it. An attacker chooses which version to
-negotiate, so a certificate reachable at any version is a certificate
-reachable, and the worse of the two has to set the verdict.
-
-Every version that completed a handshake is compared by every certificate's
-own DER bytes, in order — not by subject, serial or names, each of which a
-server can repeat across two genuinely different certificates. The leaf alone
-was compared until the 2026-09-16 audit (A19), which missed one leaf served
-over a different intermediate. A chain that is not the chain already described
-is analysed in full, its findings join the list, its
-notes name the version and the certificate by fingerprint, and its verdict
-joins the aggregate. Two versions served the same second chain count once.
-
-What the report still shows in detail is the newest handshake's chain, because
-that is the one nearly every visitor's browser is given. The note says the
-other exists and what it is; the findings say what is wrong with it.
-
-Two handshakes to an ordinary server return the identical certificate, so in
-the ordinary case nothing here runs.
-
 *Enforced in:* `internal/tlsprobe.differingChains`, `internal/scan.Scan`,
 `internal/scan.Result.Findings`, `internal/scan.Result.Notes`
+
 *Guarded by:* `TestAChainServedOnlyToOldClientsIsSeen`,
 `TestTheSameLeafOverAnotherPathIsAnotherChain`,
 `TestAChainDigestCoversEveryCertificateInOrder`,
@@ -5102,107 +1332,27 @@ the ordinary case nothing here runs.
 `TestOneCertificateForEveryVersionProducesNoAlternate`,
 `TestAWeakCertificateBehindAnOldVersionIsGraded`
 
-
 ### R15 — A rule that cannot fire is named, not counted
-
-A rule set is read as a list of what a scanner checks. Some of these rules
-cannot fire here at all: the front end is Go's TLS client, which offers what it
-implements, and a rule matching a suite Go does not implement will never see
-one. It is still correct — it is simply not coverage, and the difference
-matters to anyone deciding whether this report is enough.
-
-The Known gaps said this of exactly one rule, `cipher.ffdhe`, because somebody
-noticed it. Measuring the rest found nine of thirteen cipher rules in the same
-position, and two of three version rules. A list naming one case out of nine
-reads as though the other eight do not exist, which is worse than naming none.
-
-So the set is measured rather than remembered. Everything this prober can offer
-— every version in `probedVersions`, every suite in `candidateSuites`, SSL 3.0,
-and every suite in `rawhello.SSL3`, `rawhello.Export` and `rawhello.Null` — is
-graded, the rule ids that come back are the reachable set, and every rule
-outside it has to be named with a reason. The hand-written hellos are in that
-list because they are graded the way `askLegacy` grades a real reply, so a rule
-counted reachable through them is one an answer can actually raise. A rule that is neither reachable nor
-named fails the test, and so does a rule named as unreachable that has started
-firing: Go gaining an FFDHE suite would close that gap, and a gap list still
-claiming it is the stale-list failure this document warns about elsewhere.
-
-The rule inventory is read out of the policy package's own source rather than
-kept beside it. Cipher rules come from a table and version rules from literals
-in a switch, so there is no list to ask for, and a list maintained by hand is
-one that goes quietly out of date — which is the thing being guarded against.
-
-Only versions and suites are decided here, and the limit is deliberate.
-Certificate rules depend on the certificate a server chooses to present, which
-nothing in this repository can enumerate; claiming to have measured that would
-be the false completeness this invariant exists to prevent.
 
 *Enforced in:* `internal/tlsprobe.probedVersions`,
 `internal/tlsprobe.candidateSuites`, `internal/rawhello.SSL3`,
 `internal/rawhello.Export`, `internal/rawhello.Null`, the list in
 `internal/tlsprobe/reachable_test.go`
+
 *Guarded by:* `TestEveryGradingRuleIsReachableOrNamed`,
 `TestEveryUnreachableRuleIsInTheKnownGaps`
 
 ### R16 — One result, two renderers, one set of facts
 
-A scan produces one result and two things render it: `app.js` for a browser
-and `cmd/porch-scan` for a terminal. They are different code in different
-languages, nothing compared them, and on 2026-08-31 they were answering
-different questions. The page carried an Issuance line — which authorities may
-issue a certificate for this name, the whole CAA analysis — and the terminal
-carried nothing. Not a shorter version of it, and not a note: it was absent,
-and had been since the row was added.
+*Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
+`internal/scan.Result.Notes`
 
-The reason it survived is worth more than the defect. A test did guard the
-issuance row, and it read the source of `app.js` to check the row was there.
-It was there. Nothing asked the other renderer the same question, because
-nothing could: everything the terminal printed went to standard output, so no
-test could read a line of it. The first test that built a report and read it
-found this on its first run.
-
-So the report is now written to a writer, and the two faces are compared by
-the questions they answer rather than by the sentences they use. Wrapping and
-punctuation may differ; which facts appear may not. A difference that is
-deliberate has to be named with what it would take to close it, and a named
-difference that has been closed fails the test in the other direction — the
-same shape as R15, and for the same reason: a carried gap that is no longer
-real reads as though it still is.
-
-Two were named the day this was written, `Revocation` and `Transparency`, and
-both are closed. Their sentences were composed in `app.js` and only there,
-which put them out of reach of the terminal and out of reach of anything that
-could execute them — the revocation sentence went on saying "a status response
-was stapled" for a whole policy version after the service had begun parsing
-that response, matching it to the certificate, checking its freshness and
-verifying the issuer's signature. Writing a second copy in Go would have been
-worse than leaving it, so they moved to `internal/policy`, beside the facts
-they are made of and the notes written from the same facts, and both faces
-read the one string.
-
-The migration was proved rather than asserted. The two composers were lifted
-out of the version on `main` and run in a JavaScript engine against every
-combination of the facts they read — one hundred of them — beside the Go
-functions replacing them, and every sentence matched. The page was then
-rendered from a real scan through both versions of `app.js` and compared: the
-output is identical. Neither check lives in this repository, because neither
-should — a JavaScript engine in CI is a moving part this project does not need
-once the sentences are in Go and tested there.
-
-The same reading found a second thing. `Result.Notes` collected notes from the
-probe, the certificate, the alternate chains and the stapling, and not from
-issuance — so the sentences saying where a CAA answer came from, whether the
-resolver claimed it was validated, and why a restriction is not a guarantee
-reached a reader of the JSON and no one else. They are collected now.
-
-*Enforced in:* `cmd/porch-scan.printReport`,
-`cmd/porch-scan.printCertificate`, `internal/scan.Result.Notes`
 *Guarded by:* `TestBothFacesOfTheReportShowTheSameFacts`,
-`TestAReportSaysWhatWasMeasured`,
-`TestThePageReadsTheLegacyFieldsTheAPISends`,
+`TestAReportSaysWhatWasMeasured`, `TestThePageReadsTheLegacyFieldsTheAPISends`,
 `TestSSL3IsAVersionRowInTheSameWords`,
 `TestTheHandWrittenHellosArePrintedWithWhatTheyFound`,
-`TestSSL3HasOneRowAndItNamesTheSuite`, `TestTheLegacySectionMatchesTheTerminal`,
+`TestSSL3HasOneRowAndItNamesTheSuite`,
+`TestTheLegacySectionMatchesTheTerminal`,
 `TestNothingIsPrintedForAQuestionNotAsked`,
 `TestThePageReadsTheExchangerFieldsTheAPISends`,
 `TestEachExchangerIsARowInThePagesWords`,
@@ -5210,110 +1360,18 @@ reached a reader of the JSON and no one else. They are collected now.
 
 ### R17 — A finding claims what was measured, not what it implies
 
-`cert.roca` is the sharpest case this project has. Detecting the fingerprint of
-Infineon's RSALib costs thirty-eight modular reductions and is close to
-certain; factoring a key of that shape costs weeks to months of computation and
-this service does not do it, will not do it, and does not need to in order to
-have something worth reporting. Between the two sits a temptation, because the
-implication is real: a key with that fingerprint can be factored by anybody
-willing to spend the time.
-
-The finding says the first thing. *This key carries the fingerprint of a
-generator known to produce factorable keys* is what was established; *this key
-has been factored* is what was not. The difference costs a reader nothing and
-it is the difference between a report that can be checked and one that has to
-be believed.
-
-It is also what keeps the finding true if the test is ever wrong. The residue
-test is a necessary condition rather than a sufficient one — a modulus with no
-relation to RSALib would have to land inside the reachable set modulo all
-thirty-eight primes at once, which the published corpora have never seen and
-which nothing rules out. A report claiming a factorisation would be false in
-that case. A report describing a fingerprint is not.
-
-The same discipline is already elsewhere and is worth naming once: R12 covers
-the case where a measurement failed and R3d the case where the path was not
-what it seemed. This is the third member of that family — the measurement
-succeeded, and the sentence stops where the measurement stopped.
-
 *Enforced in:* the rationale of `cert.roca` in `internal/policy/cert.go`
-*Guarded by:* `TestTheFingerprintReachesTheReport`, which requires the finding
-to name a fingerprint and refuses one that claims a factorisation
+
+*Guarded by:* `TestTheFingerprintReachesTheReport`
 
 ### R19 — A report says how much of the picture it reached, and never more than once
 
-A report described two things: rules that had not been broken, and absences
-that had been observed. The strongest sentence it could produce was *Nothing
-here fell short of the rules*, which is two negatives, and the prose beside it
-listed what a server does not do. On a `strong` result read live, four of five
-observations named a shortcoming.
+*Enforced in:* `internal/policy/coverage.go`, `internal/scan.coverageFacts`,
+`internal/web/assets/app.js`, `internal/web/assets/style.css`
 
-The first answer was a block called **What holds**: nine sentences stating
-what the scan had established in the affirmative. It was right about the
-problem and wrong about the shape, and reading it on the live site is what
-showed why. **Seven of the nine restated something already on the page.** TLS
-1.3 accepted and preferred is in the version table. Two transparency
-timestamps from two logs is a certificate row, word for word. *The server
-imposes its own cipher order* was already printed under the cipher table. A
-block that is three-quarters restatement does not earn a screen, and the
-reader who learns to scroll past it has also learned to skip the part that was
-not a repeat.
-
-What no table says is **how much of the picture the scan reached**, and that
-is what a verdict rests on. The cipher table shows four rows whether four was
-all of them or whether the host stopped answering after four, and those two
-reports mean opposite things: `strong` is the verdict that claims an absence,
-and an absence can only be claimed from a complete look.
-
-So one line says what was reached, and it obeys three rules.
-
-**It says only what was reached.** Never what was missed — that belongs once
-to the unsettled notes, and a gap named in two places is a gap two sentences
-can disagree about.
-
-**It is read from the measurements, never from the findings.** Read off the
-findings, *no rule fired* becomes a reassurance, which is what an empty scan
-looks like and what a scan looks like when the rule that would have fired is
-one nobody has written. A scan that reached nothing says nothing.
-
-**It carries no marks and no colour.** A row of green ticks beside an insecure
-verdict reads as approval — kapitalbank.az is graded insecure and every
-dimension of it was reached — and a red mark against a name with no CAA record
-would be a grade this rule set deliberately does not give (R9). Colour would
-put a second opinion on the page beside the first, and two opinions can
-disagree.
-
-Beside it, a weak or insecure verdict says what it means. That is the report's
-likeliest misreading: a red stamp sits next to a trusted chain, a verified
-staple, transparency, CAA and an accepted post-quantum group, and nothing else
-on the page says why one option outweighs all of that. `policy.WorstCase` is
-one sentence, written once and read by both faces.
-
-**Both are written under the verdict, never in the row with it.** The summary
-was one flex row — a column holding the target and the address, the stamp
-beside it — and this line was added to that column as a `dl`. A `dl` is a
-block, so the column took the whole width and the stamp wrapped to a line of
-its own. On a live report the reader met the hostname, then *Worst case: an
-attacker chooses which option to negotiate…*, then four lines of coverage, and
-only then the word INSECURE: the explanation of a verdict arriving before the
-verdict, and the one element the page exists to deliver last in its own block.
-Nothing was false and nothing failed. It rendered, and it read backwards,
-which is why it survived a release — and why the rule is now about position
-and not only about wording.
-
-The tests over `Coverage` run every combination of what a scan can reach —
-thirty-two of them — because the first version of them ran one live scan,
-that scan had no transparency and no CAA, and it therefore never saw two of
-the five clauses it claimed to check. A sabotage that put the word *no* into
-one of those clauses went straight past it.
-
-*Enforced in:* `internal/policy/coverage.go`,
-`internal/scan.coverageFacts`, `internal/web/assets/app.js`,
-`internal/web/assets/style.css`
 *Guarded by:* `TestCoverageNamesNothingItDidNotReach`,
 `TestCoverageIsEmptyWhenNothingWasReached`,
-`TestEachClauseWaitsForWhatItDescribes`,
-`TestCoverageIsOneSentence`,
+`TestEachClauseWaitsForWhatItDescribes`, `TestCoverageIsOneSentence`,
 `TestCoverageClaimsOnlyTheSuitesThisClientOffers`,
 `TestTheCoverageLineSaysWhatWasReached`,
 `TestAScanThatReachedNothingClaimsNoCoverage`,
@@ -5324,65 +1382,10 @@ one of those clauses went straight past it.
 
 ### R18 — A note carries the kind of claim it makes
 
-A report says three different things that are not verdicts, and for as long as
-this project has existed it said all three under one heading.
-
-The heading was *What this did not measure*. Under it went every sentence that
-was not a finding: what the scan established and chose not to grade, what it
-could not settle about this host, and what this program never claims about any
-host. A scan of kapitalbank.az on 2026-09-01 produced eleven of them. Three
-were limits of that scan. The rest were a post-quantum key exchange that had
-been measured and had passed, a stapled revocation response that had been read
-and verified, a CAA restriction that had been found, five transparency
-receipts that had been counted, and the standing properties of the instrument.
-
-Nothing in that list was false. The heading was, for eight of the eleven, and
-a reader takes the heading — so a report that establishes a great deal read as
-a report that had established almost nothing. Being wrong about the frame is
-not a smaller fault than being wrong about the fact; it is the same fault at
-the point where the reader actually meets it.
-
-Every note now carries one of three kinds, and the kind is chosen where the
-sentence is written, by the code that knows which it is:
-
-| Kind | What it claims | Where it appears |
-|---|---|---|
-| `observed` | Established by this scan, deliberately not graded | Under **Observed**, open by default |
-| `unsettled` | This scan could not settle it, and the reason lies with this host | Under **Not established for this host** |
-| `standing` | True of every scan this program runs | Not on the report. Counted, and linked to `/method` |
-
-The third is not printed. A limit that is the same on every report is one
-nobody reads by the third report, and sitting beside a host's own
-shortcomings it reads as though it were one of them. They are declared once
-in `internal/policy/standing.go`; `/method` ranges over that declaration and
-`porch-scan -limits` prints it, so the page cannot fall out of step with
-the code and somebody offline is not sent to a website.
-
-Nothing says how many there are. Both faces count the list at render time,
-because a sentence naming a number is a sentence that goes stale the day
-another limit is written — which happened on 2026-09-02, when the first-hop
-limit made four into five.
-
-Moving them is only honest if the report still says they exist. It gives the
-count and names both places to read them, and a test fails if it stops doing
-either — or if a standing sentence is written inline rather than added to the
-declaration, which would leave a report counting the limits it points at while
-carrying one more that nothing explains.
-
-Classifying afterwards by reading the finished prose was the alternative and is
-rejected for the reason R12 gives: it puts the sentence and its label in two
-places, and two places drift. There is no way to append a note without naming
-its kind — the packages expose `observe`, `unsettled` and `standing`, and
-nothing writes to the list directly.
-
-Both faces of the report take the sections, their order and their words from
-one declaration each, and a test reads both sources and compares them. A
-section renamed on the page and not in the terminal fails; a section on one
-face and not the other fails.
-
 *Enforced in:* `internal/policy/note.go`, `internal/policy/standing.go`;
 `noteSections` in `cmd/porch-scan`; `NOTE_SECTIONS` in
 `internal/web/assets/app.js`; `assets/method.html`
+
 *Guarded by:* `TestEveryNoteInAReportCarriesAKind`,
 `TestBothFacesNameTheSameNoteSections`,
 `TestLimitsOpenOnlyWhenTheyAreTheWholeReport`,
@@ -5391,166 +1394,24 @@ face and not the other fails.
 
 ### R9a — A CAA value is an authority and its parameters, not one string
 
-RFC 8659 §4.2 puts parameters after the authority inside a single value:
-`pki.goog; cansignhttpexchanges=yes` names one authority and sets one
-parameter. The whole value used to go into the list unchanged, and the list is
-joined with commas while the clauses around it are joined with semicolons — so
-a real record set rendered as
-
-> issuance limited to comodoca.com, digicert.com; cansignhttpexchanges=yes,
-> letsencrypt.org, pki.goog; cansignhttpexchanges=yes and ssl.com
-
-which a reader cannot parse, and which invites reading
-`cansignhttpexchanges=yes` as an authority of its own. Measured on
-kapitalbank.az, 2026-08-23, from a live report.
-
-The parameter is shown rather than dropped. `cansignhttpexchanges` authorises
-that authority to sign Signed HTTP Exchanges, which is a wider power than
-issuing an ordinary certificate, and a reader judging whether a zone's
-restrictions are tight enough needs to see it. An empty value permits nobody
-and is named rather than allowed to vanish from a list.
-
-This is the third instance of one pattern in as many days: the packages
-computed the right answer and the sentence built from it said something else.
-It was found by reading a live report, which no test in this repository does.
-
 *Enforced in:* `internal/policy.readable`, applied by
 `internal/policy.describeAuthorities`
+
 *Guarded by:* `TestCAAParametersAreNotMistakenForAuthorities`,
 `TestAuthoritiesWithoutParametersAreUnchanged`
 
 ### R10 — A report cannot act on the display that shows it
 
-Every field taken from a certificate is text, and only text. Control
-characters are replaced before the field is carried anywhere.
-
-The bytes are chosen by the server being examined. Go parses a subject and its
-alternative names as bytes and escapes only what X.500 requires, so an ESC
-survives — and a terminal reads ESC as an instruction rather than as a
-character. A subject of `\x1b[2K\x1b[1A    Verdict      strong` rewrites the
-line printed above it, and the scanned server has edited the report about
-itself. A tool whose argument is that it says only what it measured cannot
-have its output written by the thing it is measuring.
-
-The browser was never exposed: JSON escapes the byte and every value reaches
-the page through `textContent`. Two other layers holding is not a reason to
-pass it on, and the command line has neither of them. This is the rule
-`dnsclient` already applies to a CAA value, which is attacker-chosen for the
-same reason.
-
-Replaced rather than dropped, so a reader can see that something was there.
-The cut that bounds a long field lands on a character boundary for the same
-reason: half a rune reaches a reader as corruption this report introduced.
-
-**And the same attack aimed at the person rather than the pipe**, which this
-rule missed until 2026-08-22. A control byte makes a terminal act; a Unicode
-format character makes a reader misread, and neither is caught by a rule about
-bytes below 0x20. U+202E reverses the display of everything after it, so a
-certificate whose subject is `safe.test` followed by U+202E and
-`moc.knab-live` is shown as `safe.testevil-bank.com` — by a terminal, and by a
-browser, because `textContent` does not switch off the bidirectional
-algorithm. The zero-width characters do the quieter version: `goo` U+200B
-`gle.test` reads as `google.test` and is a different name. Measured: fifteen
-such characters passed through untouched.
-
-This is the published Trojan Source class, CVE-2021-42574, and it lands
-squarely on a tool whose entire output is a claim about which name a server
-presented. The whole Unicode `Cf` category is replaced rather than a list of
-the dangerous ones, for the reason N1 gives about address families: a deny
-list is worth exactly its completeness, and the characters added after this
-was written would be on nobody's list. The cost is stated rather than hidden —
-a subject legitimately using U+200D to join glyphs in an Indic or Persian name
-renders with a replacement mark. A name shown imperfectly is recoverable; a
-name shown as somebody else's is not.
-
-There is a second half this cannot fix, and it is said instead. A subject
-spelling a familiar name with a Cyrillic `\u0430` where a Latin `a` belongs is
-not hiding anything: the two are different characters that render identically,
-and folding one into the other would corrupt every legitimate name written in
-those scripts. So nothing is rewritten, and a note says when a name draws on
-more than one of the three alphabets whose letters are routinely mistaken for
-each other.
-
-Each value is examined on its own rather than the printed distinguished name.
-`CN=` is Latin whatever follows it, so a check over the printed form would
-find two alphabets in every certificate ever issued to a Cyrillic or Greek
-name and tell most of the world that its own alphabet looks like a forgery.
-One script throughout is a language, not a disguise.
-
-The verdict is untouched. A company with a Cyrillic name and a Latin domain
-suffix is an ordinary customer of an ordinary authority, and grading that down
-would be this project inventing a fault.
-
-**Since 2026-09-02 the printed name is assembled here rather than by the
-standard library**, so it is worth saying which rule does which job. RFC 4514
-escaping is about the *grammar of a name*: a comma inside a value is what
-separates two attributes outside one, so an organisation called `Bank, Inc.`
-has to be escaped or the name a reader sees is not the name the certificate
-holds. `sanitise` is about the *display*, and it runs afterwards, over the
-finished string, exactly as it did when Go built it. Neither substitutes for
-the other and the order is not interchangeable.
-
-The reason for assembling it here is that Go renders an attribute type it has
-no name for as the dotted identifier and the DER bytes in hexadecimal. On an
-extended-validation certificate that is three attributes —
-`1.3.6.1.4.1.311.60.2.1.2=#130844656c6177617265` carries the word *Delaware*
-and shows none of it — and they are precisely the attributes extended
-validation exists to carry. Go had already read the values; only the rendering
-discarded them.
-
-The arrangement is Go's, deliberately: same attribute order, same separators,
-same escaping. A certificate carrying only attributes Go names renders
-character-for-character as it always has, checked against Go's own output as
-the oracle on a name that came off the wire — a hand-built `pkix.Name` has an
-empty `Names` field and never exercises the path where the two could diverge,
-which is how the first version of that check passed a change that printed
-`CN`, `O` and `C` twice.
-
-**A monitor's answer is held to the same rule.** What a transparency monitor
-says about a certificate — its issuer and the names on it — is chosen by
-whoever obtained the certificate, and it reaches a person: the certificates a
-TLS report counts are listed under it, and the inventory prints names.
-`internal/ctsearch` dropped C0 and nothing else, so 0x9b and U+202E went
-through; now C1 and the format characters become the replacement mark, never
-dropped, because dropping a zero-width space turns the disguised name into the
-name it imitates.
-
-So did every other package that reads a string somebody else chose — the
-addresses in a DMARC record and a `security.txt`, the hosts a page links to —
-and an SPF include name had no cleaning at all. One rule now, in
-`internal/display`, applied where each package keeps what it read.
-
-**Applied where each package keeps what it read, and so missed wherever one
-did not.** On 2026-10-05 the rule was turned into a check that does not depend
-on remembering it. Six readers of what a domain publishes are fuzzed, and
-everything each one returns is walked for a character that acts on a display
-(`internal/display/displaytest`). It found two on its first run:
-- a DKIM record's `k=` printed as the key's description, inside "Signing keys
-  were found at";
-- a DMARC destination such as `http:` followed by ESC, kept as a domain.
-
-Both records are often a provider's, behind a CNAME. Following the same
-question by hand found three more:
-- the headers a web check keeps, where the standard library refuses a control
-  byte and lets a C1 control and U+202E through;
-- the addresses of a redirect chain;
-- a DNS text record, which is bytes rather than text and reached the terminal
-  as it stood.
-
-And `Mark` itself let a byte that is not UTF-8 through, because read as a
-rune it is U+FFFD. A lone 0x9B is CSI to a terminal reading eight-bit
-controls, so such bytes are replaced too. A DMARC destination that is not a
-host name is no longer a destination at all: it is asked about in DNS as well
-as shown.
-
 *Enforced in:* `internal/certinfo.sanitise`, applied by `trimmer.text`;
 `internal/certinfo.mixedScriptNote`, `internal/certinfo.confusableScripts`;
 `internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
 `internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
-`internal/markup`, `internal/spf`, `internal/dkim`, `internal/webprobe.recorded`,
-`internal/dnsscan`
-*Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`, `TestNothingCanActOnTheDisplay`,
-`TestAContactCannotActOnTheDisplay`, `TestAReportAddressCannotActOnTheDisplay`,
+`internal/markup`, `internal/spf`, `internal/dkim`,
+`internal/webprobe.recorded`, `internal/dnsscan`
+
+*Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`,
+`TestNothingCanActOnTheDisplay`, `TestAContactCannotActOnTheDisplay`,
+`TestAReportAddressCannotActOnTheDisplay`,
 `TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
 `TestControlCharactersInCertificateFieldsAreNeutralised`,
 `TestC1ControlsAreNeutralisedToo`, `TestTrimmingCutsOnARuneBoundary`,
@@ -5567,105 +1428,18 @@ as shown.
 
 ### R20 — A value does not repeat the heading it is printed under
 
-Every suite in a report is printed under the protocol version it was accepted
-at: the page groups by version, the command line groups by version, and the
-JSON nests the suites inside the version. The key exchange for a TLS 1.3 suite
-read `ephemeral (TLS 1.3)`, so a table headed **TLS 1.3** printed the words
-"TLS 1.3" again on every one of its rows.
-
-The parenthesis looks like the reason for the value and is not. It is the
-heading a second time. Where the ephemerality actually comes from — the suite
-name in TLS 1.3 carries an AEAD and a hash and nothing else, the group is
-chosen in an extension, and RFC 9846 removed static exchange from the protocol
-— is a paragraph, and it belongs on `/method`, not in a parenthesis repeated
-six times down a column.
-
-Enforced where the name is made rather than in either of the two places it is
-shown, so both faces agree without either being asked to. Checked across every
-suite the standard library names, plus the two RFC 9150 suites it does not,
-plus a name it has no entry for.
-
-A second rule falls out of the same fact: every TLS 1.3 suite has to report the
-same key exchange, because none of them measures one. A row that said
-something different would be claiming a measurement nobody made.
-
 *Enforced in:* `internal/policy.DescribeCipher`
+
 *Guarded by:* `TestACipherDescriptionDoesNotRepeatItsProtocolVersion`,
 `TestEveryTLS13SuiteReportsTheSameKeyExchange`
 
----
-
 ### R21 — Where no document sets a threshold, the measurement is reported and not graded
 
-A verdict here rests on something a reader can open. Where nothing publishes a
-line, the honest output is the number and what it means, not a number this
-project made up and then failed a server for missing.
-
-`denyfirst-web-v1` leans on this three times in its first ten rules, and each
-one was a rule that could have been written and was not:
-
-- **The length of an HSTS `max-age`.** No standards body publishes a minimum,
-  and OWASP's cheat sheet explicitly recommends a short one during a rollout.
-  So the value is described — in years or days, with what a browser does when
-  it lapses — and the one-year figure appears only as what it is: the entry
-  requirement for one browser programme's list.
-- **The absence of `includeSubDomains`.** A host with nothing beneath it needs
-  no subdomain clause, and a scan of one host cannot see what is beneath it.
-- **A temporary redirect from the plaintext address.** A 302 to the secure
-  address works. It is described, because a browser may repeat the cleartext
-  request where a permanent one would not, but it is not a fault on its own.
-
-This is R6 and R9 pointed at a new rule set rather than a new idea: R6 says
-correct configuration is not penalised, R9 says issuance policy is reported
-and not graded, and both exist because a scanner that invents thresholds
-teaches its readers to ignore it. The failure mode is specific and cheap to
-reach: a threshold with no source behind it is one nobody can argue with,
-which means nobody can correct it either, and it survives into a report that
-tells somebody their correct decision is a fault.
-
-Where a rule *does* fire, the opposite obligation holds: it cites a document,
-and a test refuses a finding that cites nothing.
-
-**The test is not whether a document says MUST.** Every case above is one a
-correctly configured server legitimately produces: a host with nothing beneath
-it needs no subdomain clause, a rollout wants a short `max-age`, and a 302 to
-the secure address works. That is the line — *can a correct server look like
-this?* — and it is not the same as asking whether some specification uses the
-word.
-
-The cookie rules were written against it, because cookies are where the
-temptation is strongest: there is a large body of advice about them and almost
-none of it is a line anybody published. What is graded is the set of cases
-where **a browser does not store the cookie at all** — a `__Host-` prefix whose
-three conditions are not met, `SameSite=None` without `Secure`, and a cookie
-set over TLS without `Secure`, which a browser then sends in the clear. Those
-are not opinions about configuration; they are what happens next, and a site
-that has one is usually the last to know, because the response looks exactly as
-intended and the failure appears somewhere else.
-
-What is reported instead is the advice. `HttpOnly` is missing from a great many
-cookies that are meant to be read by script — a CSRF token, a locale, a consent
-flag — and this check cannot tell which it is looking at, because it never
-records a value. Grading that would fail correct servers for a rule nobody
-wrote, which is exactly the failure this invariant is named for.
-
-**And what is graded is read the way a browser reads it.** The 2026-09-16
-audit found four places it was not (A13–A16). A Strict-Transport-Security
-header repeating a directive is one a browser discards (RFC 6797 §6.1, §8.1),
-and was read by its first `max-age`. A policy is kept by the host that sent it,
-and another host's, reached by a redirect, was graded as the scanned host's.
-`frame-ancestors` is what supersedes `X-Frame-Options`, and only in an
-enforcing header — CSP Level 3 has it ignored in a meta element — while any
-policy at all was taken as framing protection. And a redirect this scan did not
-follow was read as the place a chain ends, and graded
-`reach.never-reaches-tls`; a chain stopped by scope or by the redirect limit is
-now said as not followed, and a site whose reach was not established is not
-strong.
-
 *Enforced in:* `internal/policy/web.go`, `internal/policy/cookies.go`,
-`internal/policy/headers.go`, `internal/tlsprobe.Fallback` (whether a downgraded
-hello carrying `TLS_FALLBACK_SCSV` is refused: described, never graded, because
-what a downgrade costs is the grade of the version it lands on)
+`internal/policy/headers.go`, `internal/tlsprobe.Fallback` (whether a
+downgraded hello carrying `TLS_FALLBACK_SCSV` is refused: described, never
+graded, because what a downgrade costs is the grade of the version it lands on)
+
 *Guarded by:* `TestAShortMaxAgeIsDescribedAndNotGraded`,
 `TestTheFallbackSignalIsReadInAllThreeWays`,
 `TestTheFallbackIsNotAskedOfASingleVersion`,
@@ -5675,13 +1449,11 @@ what a downgrade costs is the grade of the version it lands on)
 `TestATemporaryRedirectIsDescribedNotGraded`,
 `TestAPermanentRedirectIsNotCalledTemporary`,
 `TestNothingOnPortEightyIsObservedRatherThanGraded`,
-`TestEveryWebFindingIsUsableOnItsOwn`,
-`TestAdviceIsReportedAndNotGraded`,
+`TestEveryWebFindingIsUsableOnItsOwn`, `TestAdviceIsReportedAndNotGraded`,
 `TestACookieABrowserWillNotStoreIsGraded`,
 `TestACorrectlySetCookieIsNotGraded`,
 `TestACookieSetOverPlaintextIsNotChargedForMissingSecure`,
-`TestNoCookiesProducesNothing`,
-`TestOneFaultAcrossManyCookiesIsOneFinding`,
+`TestNoCookiesProducesNothing`, `TestOneFaultAcrossManyCookiesIsOneFinding`,
 `TestEveryCookieFindingCitesSomethingAndNamesItsRuleSet`,
 `TestACookieNameIsCarriedThroughAsText`,
 `TestTheCookieRulesReachAGradedReport`,
@@ -5696,68 +1468,26 @@ what a downgrade costs is the grade of the version it lands on)
 `TestOnlyFrameAncestorsInAHeaderSupersedesXFrameOptions`,
 `TestARepeatedDirectiveMakesTheHeaderNothing`,
 `TestAPolicyFromAnotherHostIsNotThisHostsPolicy`,
-`TestAnUnfollowedRedirectIsNotADestination`, `TestAnUnfollowedChainIsNeitherGradedNorSound`,
-`TestEmptyDirectivesAreNotRepeats`, `TestAReportOnlyFrameAncestorsIsNotFramingProtection`,
+`TestAnUnfollowedRedirectIsNotADestination`,
+`TestAnUnfollowedChainIsNeitherGradedNorSound`,
+`TestEmptyDirectivesAreNotRepeats`,
+`TestAReportOnlyFrameAncestorsIsNotFramingProtection`,
 `TestALocationTooLongToFollowIsUnfollowed`,
 `TestAReportOnlyPolicyIsDescribedAsNotYetEnforcing`,
 `TestAHostThatAnsweredNothingIsNotDescribedAsSendingNoHeaders`,
-`TestASiteThatSendsEverythingIsToldNothing`,
-`TestTheReportedListIsStable`,
+`TestASiteThatSendsEverythingIsToldNothing`, `TestTheReportedListIsStable`,
 `TestTheHeaderRulesReachAGradedReport`,
 `TestTheHeadersReadAreTheOnesOnTheResponseAVisitorLandsOn`
 
----
-
 ### R22 — One rule set grades one check, and every verdict names its own
-
-A number on its own stopped meaning one thing the moment a second check
-existed, which it now does. `denyfirst-tls-v6` grades a handshake and a
-certificate; `denyfirst-web-v1` grades an HTTP response, which most of the
-ports this project dials do not have.
-
-**The identifier follows the value.** `policy.Version` beside
-`policy.WebVersion` reads as *the* version and the web one, which is exactly
-the confusion renaming the value to `denyfirst-tls-v6` in v0.13.0 was meant to
-end. It is `policy.TLSVersion` now. No rule moved with either rename.
-
-**Each rule set has its own standing limits.** What a TLS scan cannot
-establish and what a header check cannot establish are different lists, and
-one list read under both headings is a list nobody reads. A web limit must not
-even be mistakable for a TLS one: `IsStandingLimit` answers for the TLS set,
-and a test fails if it answers true for a web limit, because a report could
-then carry it under the wrong heading with every existing guard still green.
-
-**Both rule sets appear on the change log.** A second rule set that can move
-without a record is the first one's problem repeated.
-
-**The counters obey it too, and they are published.** `Snapshot` carried one
-verdict breakdown, so a second check counted into it would have produced a
-`strong` adding a handshake to an HTTP response — a figure describing nothing
-anybody can check, on the one endpoint this project publishes precisely
-because it can be checked. Each check has its own block naming its own rule
-set, keyed on the check rather than on the rule set so that a version bump
-does not restart a counter under a new name.
-
-**Nothing already published moved.** The fields at the top of a `Snapshot` are
-the TLS check's, spelled the same way and counting the same thing, and the
-`tls` block repeats them. A field that keeps its name and changes its meaning
-is the change nobody notices until a graph has been wrong for a month, and it
-would survive a rollback as well: `cmd/porchd` reads the file with a plain
-`json.Unmarshal`, so an older binary ignores the new field — and what it then
-reads at the top has to still be one check's figures rather than a total with
-another check's scans folded in.
-
-**A key appears only once that check has been counted**, because a block of
-zeros for a check this build cannot run is the silence A7 is about. Keys are
-filtered on restore exactly as the refusal codes are, and the published map is
-cloned: the freeze in P-series that keeps a pollable counter from being a
-clock is free for an integer and is not free for a map.
 
 *Enforced in:* `internal/policy` (`TLSVersion`, `WebVersion`,
 `WebStandingLimits`); `internal/httpapi` (`checkNames`, `CheckCounts`,
 `Snapshot.Checks`)
-*Guarded by:* `TestEveryRuleSetNamesTheToolAndTheCheck`, `TestTheWebLimitsAreItsOwn`,
-`TestEveryWebFindingIsUsableOnItsOwn`, `TestTheChangeLogCoversTheCurrentPolicy`,
+
+*Guarded by:* `TestEveryRuleSetNamesTheToolAndTheCheck`,
+`TestTheWebLimitsAreItsOwn`, `TestEveryWebFindingIsUsableOnItsOwn`,
+`TestTheChangeLogCoversTheCurrentPolicy`,
 `TestThePublishedFieldsKeepTheirNamesAndTheirMeaning`,
 `TestTheTopLevelFiguresAreTheTLSCheck`,
 `TestEveryCheckBlockNamesItsOwnRuleSet`,
@@ -5771,135 +1501,14 @@ clock is free for an integer and is not free for a map.
 `TestSnapshotEqualityCoversTheCheckBlocks`,
 `TestTheDailyFigureResetsForEveryCheck`,
 `TestThePublishedCheckFiguresStandStillToo`,
-`TestAWebScanIsCountedAgainstItsOwnCheck`,
-`TestTheWebEndpointAnswersAReport`
-
----
+`TestAWebScanIsCountedAgainstItsOwnCheck`, `TestTheWebEndpointAnswersAReport`
 
 ### R24 — The DNS check grades what breaks resolution, and reports the zone's own choices
 
-DNS is the part of the internet with the most advice and the fewest
-requirements, and every scanner that reports on it grades the advice. A serial
-number not in `YYYYMMDDnn`, a refresh timer outside somebody's preferred range,
-a primary server not listed at the parent: these are the "errors" a domain
-health report opens with, and none of them is one. RFC 1912 calls its ranges
-recommendations. A zone whose records are written by an API has no reason to
-carry a serial a human can read, and telling its operator otherwise is R21's
-failure with a different record type.
+*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`,
+`internal/dnsclient.Client.AskServer`, `internal/httpapi.Server.dnsCheck`,
+`cmd/porch-scan.runDNS`, `internal/web.consoleChecks`
 
-So `porch-dns-v2` grades three things, each of which stops a resolver:
-
-- **Fewer than two name servers**, which RFC 1034 requires and RFC 2182 — a
-  best current practice — explains: one server is one power supply and one
-  maintenance window between a domain and everybody trying to reach it. Every
-  server on one network is the same finding one step out, and is graded against
-  the prefix rather than the owner, because which organisation an address
-  belongs to cannot be read from the address and asking a third party on every
-  scan is not something this project does.
-- **A name server that resolves to nothing** — RFC 1912's lame delegation.
-- **An address the zone above hands out that the zone does not publish.** A
-  server inside the zone it serves cannot be looked up without being told where
-  it is, so the glue its parent hands out is what a resolver starting at the
-  root dials, and nothing in the zone's own records shows what that copy says.
-  RFC 1912 §2.3 describes both halves: an address left behind at the parent,
-  where "random people still see the old IP address", and a multi-homed server
-  whose addresses are not all listed, which it states as a requirement. A
-  server outside the zone it serves has no glue and nothing is compared.
-- **A zone above that hands out different servers.** RFC 1912 asks for one
-  list, not two, and a resolver starting at the root follows the parent's: a
-  name only the parent hands out is where some lookups go, and whatever is at
-  that address answers them whether or not it still holds the zone. A resolver
-  cannot show this — it answers an NS question from the zone itself — so one
-  server of the zone above is asked directly, with recursion off, and what
-  comes back is a referral.
-- **A name server that is an alias**, which RFC 2181 forbids in a delegation:
-  resolvers disagree about what to do with one, so some reach the zone and
-  others do not.
-- **A signing algorithm RFC 8624 retired**, graded insecure because validators
-  are dropping it, and separately one it no longer recommends, graded weak
-  because it still works. Both are read off the keys the zone publishes, so
-  they are facts in the record rather than opinions about it.
-- **Hashing absent names more than once**, which RFC 9276 — a best current
-  practice — closed: the count is zero, the work lands on every resolver, and
-  the secrecy it was meant to buy was measured and is not there. Which kind of
-  proof a zone uses is reported and not graded, because nothing requires the
-  hashed kind; what plain names cost is that anybody can list the zone.
-- **A DNSSEC chain that does not check out.** This is the finding the check
-  exists for. A key rotated without the registrar being told leaves every
-  validating resolver — which is what the large public resolvers are — answering
-  with a failure, while the operator's own browser, behind whatever resolver is
-  in the office, is fine. The digest is computed here rather than taken from
-  the AD bit: the bit is the resolver's word (A06), and the arithmetic is a
-  hash over a name and a key.
-
-Four of those are asked of servers directly, over TCP and through the guard
-that refuses private, loopback and reserved destinations, because a resolver
-has already smoothed them over: a resolver that reached one working server
-reports a working zone, and it answers a question about name servers from the
-zone itself, so the parent's list never appears. An installation asks them
-where control of the domain has been proven; the command line asks them always,
-running as it does on the operator's own machine. A server belonging to a
-provider is asked about this zone — whether it answers for it, and whether it
-hands it out — and never about its own behaviour: whose server it is does not
-change whose zone is being given away, while whether it answers for strangers
-is its operator's business. The zone above is asked about this domain and never
-about itself.
-
-**Every line of the report says which record it came from.** "Alias (CNAME)",
-"Zone (SOA)", "Signature (RRSIG)": the plain word for a reader who does not know
-the type, and the type because the interface they will open to change it calls
-the field by that name and nothing else. It is R16's rule about the DNSSEC
-algorithm applied to every line beside it.
-
-**When the signatures run out is reported, and only a signature that has
-already run out is graded.** RFC 4035 §5.3.1 has a validating resolver refuse a
-signature whose validity period does not contain the current time, so a zone
-whose signatures have expired is already gone for everybody behind one — the
-same outcome as a broken chain and graded the same way. How long is left is not
-graded: no document names a number of days, and a zone re-signed hourly with a
-two-day window is as correct as one re-signed weekly with a month (R21). The
-date costs no question — every query already asks for DNSSEC data, so the
-signature arrives with the answer and only the field in it was going unread.
-
-**Whether the zone can be read whole is asked, reported, and not graded.** A
-server that grants AXFR to the internet gives up every name in the zone at
-once, including the ones nobody publishes a link to, and no other question a
-scan can ask reaches them: every other one asks about a name somebody already
-knows. It is not graded because RFC 5936 §5 declines to call it a fault — it
-says a general-purpose implementation ought to let an operator open transfers
-to all, that it must not be the default, and that the arguments for concealing
-a zone have been argued to be questionable. R21 is what that leaves, and it is
-the same treatment plain absence proofs get, which expose the same thing by a
-different route.
-
-**The transfer is asked for and not taken.** The first reply's header says
-whether the server began one and the connection is closed there, so what is
-established is that the zone is readable and never what is in it. A scanner
-that copied somebody's zone to tell them it was copyable would be the thing it
-was warning them about, and the records are not read off the socket at all —
-`AskTransfer` returns a boolean, so a caller has nowhere to put one.
-
-Everything else is reported: the addresses, the servers, the text records, the
-SOA and its timers, whether the servers hold the same copy of the zone — a
-serial difference is ordinary while a transfer runs and no document bounds how
-long that is, so R21 leaves it at what each server answered — a digest type
-this does not compute, and an unsigned zone —
-which is a choice rather than a fault. A digest this cannot compute is never
-read as a chain that failed, and a name inside a zone is never read as an
-unsigned one: no zone begins there, so nothing about a chain was asked, and the
-zone above it is often signed. Both are the reason R4 exists.
-
-An alias is read wherever a name is one, and only one of them is graded: a
-CNAME at the top of a zone, which RFC 1034 and RFC 2181 both forbid outright
-and which costs the zone its mail and its name servers on every resolver that
-follows it. An alias whose target does not exist is reported rather than
-graded, because no document sets a rule about one — and the sentence says what
-it leads to, which is the half worth having: the name resolves to nothing, and
-where the target is a name at a provider that hands out unclaimed ones,
-whoever claims it next answers for this name.
-
-*Enforced in:* `internal/policy.GradeDNS`, `internal/dnsscan`, `internal/dnsclient.Client.AskServer`,
-`internal/httpapi.Server.dnsCheck`, `cmd/porch-scan.runDNS`, `internal/web.consoleChecks`
 *Guarded by:* `TestAZoneThatIsServedAndSignedReadsStrong`,
 `TestTheDelegationIsGradedAgainstWhatIsRequired`,
 `TestABrokenChainIsTheFindingThisExistsFor`,
@@ -5931,71 +1540,27 @@ whoever claims it next answers for this name.
 `TestTheAddressTheZoneAboveHandsOutIsReadAndCompared`,
 `TestTheAddressesInAReferralAreReadForTheNamesItDelegatedTo`,
 `TestTheGlueTheZoneAboveHandsOutIsDrawnInBothFaces`,
-`TestEveryLineSaysWhichRecordItCameFrom`,
-`TestATransferIsAskedForAndNotTaken`, `TestATransferIsAskedThroughTheGuard`,
+`TestEveryLineSaysWhichRecordItCameFrom`, `TestATransferIsAskedForAndNotTaken`,
+`TestATransferIsAskedThroughTheGuard`,
 `TestATransferReplyMustAnswerTheQuestionAsked`,
 `TestAServerThatHandsOutTheZoneIsDrawnInBothFaces`,
 `TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence`,
-`TestAnAliasIsReadAndItsTargetIsAskedAbout`, `TestAnAliasAtTheTopOfAZoneIsGraded`,
-`TestTheAliasAtANameIsRead`, `TestTheDigestAndTheTagBothHaveToAgree`,
-`TestTheDNSEndpointTakesADomain`, `TestEveryCheckOfferedCanBeRunAndIsExplained`,
+`TestAnAliasIsReadAndItsTargetIsAskedAbout`,
+`TestAnAliasAtTheTopOfAZoneIsGraded`, `TestTheAliasAtANameIsRead`,
+`TestTheDigestAndTheTagBothHaveToAgree`, `TestTheDNSEndpointTakesADomain`,
+`TestEveryCheckOfferedCanBeRunAndIsExplained`,
 `TestEveryCheckNamedCanBeRunAndReachesItsOwnCode`,
-`TestTheDNSReportSaysWhatWasReadAndWhatItMeans`, `TestEveryCheckPointsAtItsOwnPage`,
+`TestTheDNSReportSaysWhatWasReadAndWhatItMeans`,
+`TestEveryCheckPointsAtItsOwnPage`,
 `TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten`,
 `TestThePublishedRecordsAreBounded`, `TestNoStringLiteralInAScriptIsLeftOpen`,
 `TestEveryRuleSetNamesTheToolAndTheCheck`
 
----
-
 ### R23 — The policy read is the one a browser would hold
-
-A browser applies `Strict-Transport-Security` from **every** response that
-arrives over a secure transport, and discards it from every response that
-arrives any other way. A chain of three redirects therefore has three chances
-to set a policy, a later one replaces an earlier one, and the response a
-visitor finally lands on may set none at all while the browser still holds one.
-
-So the value graded is **the last one carried by a hop that was made over
-TLS**. Reading the last hop describes a policy no browser holds the moment a
-site downgrades to plaintext at the end of its chain; reading the first
-describes one a later hop replaced. Both are wrong in the same way: they are
-answers to a question about the server that were actually decided by which
-line of code was easiest to write.
-
-**A hop that failed is not a response with no headers.** A refused connection
-says nothing about what a server declares, and the difference decides a
-verdict rather than a detail: a host answering `200` in the clear is insecure,
-and a host with nothing listening on port 80 is the safest arrangement there
-is. One boolean separates them.
-
-**A policy sent only over plaintext is looked for on purpose.** It is a common
-arrangement and one nothing else in a report would show — the site is
-configured and unprotected at the same time — so the plaintext chain is read
-for the header the rules then grade as having no effect.
-
-**There is one copy of the grading.** `Grade` is exported so that a test with
-no network calls it rather than reimplementing it; a reimplementation keeps
-passing after the original stops doing what it copied, which is the shape of
-every drifted second copy this repository has caught.
-
-**Silence is not a verdict, in either direction.** This is the same rule read
-twice, and `denyfirst-web-v1` broke it both ways on the day it shipped.
-
-A sound arrangement was reported as `ungraded`, which means *nothing was
-established* and is what an unreachable host gets. The check had established a
-great deal, and on a command line whose exit status is the whole product the
-two came out as the same number — so a pipeline gated on it failed on every
-host that passed. Where the secure address answered over TLS and nothing was
-wrong, the verdict is `strong`.
-
-And a host that answered nothing at all was graded `weak` for declaring no
-policy, which is a claim about a server this program never spoke to: an empty
-list of headers is what both a silent host and a bare response produce, so the
-rules are told which it was rather than left to guess. Both directions are R4
-and R17 applied to a rule set that was written the day before them.
 
 *Enforced in:* `internal/webscan` (`securePolicy`, `plaintextPolicy`, `hops`,
 `answered`, `Grade`); `internal/policy/web.go` (`GradeReach`, `GradeHSTS`)
+
 *Guarded by:* `TestThePolicyReadIsTheOneABrowserWouldHold`,
 `TestAPolicySentOverPlaintextIsFoundSoItCanBeReported`,
 `TestAFailedHopIsNotAResponseWithNoHeaders`,
@@ -6005,209 +1570,57 @@ and R17 applied to a rule set that was written the day before them.
 `TestAChainEndingOnPlaintextIsNeverSound`,
 `TestEveryReportCarriesTheLimitsOfTheMethod`,
 `TestNoTLSLimitIsCarriedByAWebReport`,
-`TestTheReportSerialisesWithoutItsSecrets`,
-`TestScanAndGradeAgreeOnTheHost`,
+`TestTheReportSerialisesWithoutItsSecrets`, `TestScanAndGradeAgreeOnTheHost`,
 `TestATargetThatIsNotAHostnameIsRefusedBeforeAnythingIsAttempted`
-
----
 
 ## The page
 
-The frontend had no entry here while it was the only part of this project a
-visitor actually runs. The properties below carry it, all load-bearing, and
-each undoable in one line by somebody with a good reason.
-
 ### W1 — Nothing from a report reaches a markup parser
 
-Every node is built with `createElement` and `textContent`. `innerHTML`,
-`outerHTML`, `insertAdjacentHTML`, `document.write`, `eval` and
-`createContextualFragment` appear nowhere.
+*Enforced in:* `internal/web/assets/app.js`,
+`internal/web.contentSecurityPolicy`
 
-A successful scan returns the target the caller sent, by design, and hostnames
-are attacker-chosen; so are a certificate's subject and its alternative names.
-The moment one of those reaches a markup parser it stops being data. Building
-nodes directly means there is no parser to reach: a string assigned to
-`textContent` is a string, whatever it contains.
-
-A test reads the shipped script and fails if any of those names appears. The
-content security policy carries `require-trusted-types-for 'script'` and
-`trusted-types 'none'`, which is the same rule expressed where a browser can
-enforce it on the script that actually ran — the test checks the file this
-repository ships, the header checks the thing in front of the user. Browsers
-without Trusted Types ignore both directives, which costs nothing.
-
-Class names come from one fixed list rather than from a value in the response.
-A class is not a script, but it decides what the page looks like, and a page
-that will paste any string into a class attribute has handed its appearance to
-whoever answered. Two of the three places already did this and the third did
-not, and the difference was invisible from either.
-
-*Enforced in:* `internal/web/assets/app.js`, `internal/web.contentSecurityPolicy`
 *Guarded by:* `TestScriptCannotInjectMarkup`,
 `TestPolicyForbidsScriptReachingAMarkupParser`,
 `TestScriptBuildsClassNamesFromOneList`
 
 ### W2 — The page loads nothing from anyone else
 
-No analytics, no fonts from elsewhere, no content delivery network, no tag of
-any kind: one stylesheet and one script, both from this server, both embedded
-in the binary.
-
-That held because nobody had added one. `Cross-Origin-Embedder-Policy:
-require-corp` makes a browser refuse the resource if somebody does. Same-origin
-subresources need nothing extra, so it costs nothing today and fails loudly
-the first time the promise on the privacy page would stop being true.
-
 *Enforced in:* `internal/web.setHeaders`
+
 *Guarded by:* `TestNothingFromAnyoneElseIsEnforcedByAHeader`,
 `TestContentSecurityPolicyAllowsOnlySelf`
 
 ### W2a — Only the demonstration says where it is, and it says what it is
 
-A search for this project returned what it was months ago: a TLS checker
-called denyfirst. The pages had changed and nothing on them said so — no
-canonical address, no page title naming the tool, nothing pointing a crawler
-at what exists now. So each page on the demonstration carries its own address
-— on `denyfirst.dev` or `porch.denyfirst.dev`, whichever serves it (W8a) — repeats its title and description in the tags a link
-preview reads, and names both the tool and the maker: Porch is what it is,
-denyfirst is who publishes it. Each name's `/sitemap.xml` is its part of the
-page table rather than a list kept in step by hand, and a test fails when the
-two differ.
-
-An installation somebody runs carries none of it. Its pages are on its own
-address, and a canonical address pointing here would tell a search engine that
-one company's instrument is a copy of our site. Its `robots.txt` asks not to
-be indexed at all — a request rather than a guard, because the password is the
-guard, but one every crawler anybody is likely to meet honours.
-
-Where the demonstration runs is named on its privacy page: a server rented
-from Hetzner Online GmbH, in Germany. Anybody could read that from the address
-it answers on, so saying it costs nothing and leaves the page describing the
-arrangement as it is. An installation somebody runs says nothing of the sort,
-because it is not where they are.
-
 *Enforced in:* `internal/web.render`, `internal/web.buildPlain`,
 `internal/web/assets/layout.html`
+
 *Guarded by:* `TestACrawlerIsToldWhatThisDeploymentIs`,
 `TestEveryPageSaysWhichAddressItIs`,
 `TestTheDemonstrationTitlesNameTheToolAndTheMaker`,
-`TestPrivacyPageAnswersEveryUrgentQuestion`, `TestASelfHostedCopySaysWhatItDoes`
+`TestPrivacyPageAnswersEveryUrgentQuestion`,
+`TestASelfHostedCopySaysWhatItDoes`
 
 ### W3 — A table with the same columns is drawn with the same columns
 
-The cipher suites are printed one table per protocol version, one under
-another, with the same four headings each time. Each table used to size its
-own columns to its own contents, which is what a browser does when nothing
-tells it otherwise. Measured in a browser on a live report, "Key exchange"
-began 92 pixels further right under TLS 1.2 than under TLS 1.3, and "Cipher"
-68 pixels further left. Every row was correct. A table exists so that a reader
-can run an eye down a column, and down two of these nobody could.
-
-The geometry is declared on a `<colgroup>` and the layout is fixed, so the
-widths are read before any row is. The widths are written in `ch` on the
-`<col>` elements rather than on the header cells, because a fixed layout takes
-its geometry from the columns first and because the header is set in a smaller
-font than the body — a width in `ch` on a `<th>` would be measured in the
-wrong font. Each column is given its own worst case: the longest suite name
-the standard library can print is 45 characters, the longest key exchange is
-`ephemeral (TLS 1.3)`, the longest cipher is `ChaCha20-Poly1305`, the longest
-grade is `insecure`.
-
-A suite name is never broken. The column previously carried
-`word-break: break-all` so that a long name would fit a narrow screen; it fits
-by arriving as `TLS_ECDHE_RSA_W` / `ITH_AES_128_GCM` / `_SHA256`, and the name
-is the finding. A reader copying that by hand writes down a suite that does
-not exist. The table is put in a container that scrolls instead, and the
-container is shaded at whichever edge it can still travel towards — without
-that, a reader on a phone sees Grade and Suite and never learns that the key
-exchange and the mode of encryption were recorded at all. The shade is a
-colour token defined in both schemes, because a black shadow on a dark page is
-no shadow.
-
-Paper does not scroll, so the fix for the screen is a way to lose data on a
-printed page. Under `@media print` the container stops scrolling, the table
-gives up its minimum width, the columns are given shares of the sheet so that
-the two tables still agree with each other, and the identifier is allowed to
-wrap — the one place where breaking a name is better than dropping it.
-
-Measured, not inferred: 380, 794 and 1000 pixels wide, in both colour schemes,
-with the longest value in every column present. In each, the two tables' four
-headings sit at identical x positions, no name wraps, no cell is clipped, and
-the page itself never scrolls sideways.
-
 *Enforced in:* `internal/web/assets/app.js`, `internal/web/assets/style.css`
+
 *Guarded by:* `TestEveryCipherTableIsGivenTheSameColumns`,
 `TestASuiteNameIsNeverBrokenOnScreen`,
 `TestTheCipherTableScrollsInsideItsOwnContainer`,
-`TestNothingIsLostOffTheEdgeOnPaper`,
-`TestTheClassesTheScriptAddsAreStyled`
+`TestNothingIsLostOffTheEdgeOnPaper`, `TestTheClassesTheScriptAddsAreStyled`
 
 ### W4 — A shipped asset does not carry instructions for editing itself
 
-Two comments reading `Append this to internal/web/assets/style.css. Nothing
-above it changes.` and `Replace the ".prose" block near the end of style.css
-with this` were served to every visitor from the stylesheet they describe.
-They were patch instructions written for a person applying a change, left in
-the file the change was applied to.
-
-A browser ignores them and no reader is harmed. They are still a file saying
-something untrue about itself on a site whose entire claim is that it does not
-say what it cannot support, and the same slip in a file that is executed
-rather than parsed for style would not have been cosmetic.
-
 *Enforced in:* `internal/web/assets/style.css`, `internal/web/assets/app.js`
+
 *Guarded by:* `TestTheAssetsDoNotCarryInstructionsForEditingThemselves`
 
 ### W5 — A colour text is set in is legible on the paper it is set on
 
-The stylesheet opens by saying that what could not be measured is set in the
-same weight as what could, "because a reader who is not told what was skipped
-will read silence as a clean result". The weight was equalised. The colour was
-not.
-
-Measured in a browser across a full report and both prose pages, in both
-colour schemes: the faint ink came to **3.11:1** against paper in the light
-scheme and 3.92:1 against the sunk paper in the dark one, against the 4.5:1 a
-reader with ordinary vision needs at the sizes this page uses — and nothing on
-the page is large enough for the 3:1 allowance. What that ink carries is not
-decoration: the coverage line, the count of what was observed and not graded,
-the pointer to the standing limits, the dash that stands for a value there
-was none of, and the words "not measured". The amber of a weak verdict came to
-3.93:1 against paper and **3.60:1** against the sunk paper a finding is drawn
-on — below the threshold on the one word the whole report exists to deliver.
-
-Both were deepened until they clear it and no further, keeping hue and
-saturation, so the palette still reads as print rather than as an alarm panel:
-`--ink-faint` `#8a8f98` → `#676c75` and `--weak` `#a6740c` → `#8f640a` in the
-light scheme, `--ink-faint` `#767b84` → `#82878f` in the dark. The ink
-hierarchy survives it — 15.6 : 7.2 : 4.6 against the worse of the two paper
-surfaces.
-
-Every colour used for text is checked against **both** paper surfaces in both
-schemes, because a colour legible on one and not the other is a colour waiting
-for the day somebody moves the element. The list of colours is read out of the
-stylesheet rather than written down, so one added later is checked without
-anybody remembering to add it. The one inversion on the page — the submit
-button, which prints paper on ink — is checked against ink instead.
-
-`--rule` is excluded and separately forbidden from being used for text: a
-hairline between rows that met the text threshold would be a bar, not a
-hairline. The exclusion is itself checked, so it cannot quietly protect a
-colour that would now pass anyway.
-
-**No control is drawn in a verdict's colour, since 2026-10-05.** Red, amber
-and green say how a host fared. Porch's buttons, links and chosen tab were the
-brand red until then, and measured in Chromium the button and an insecure
-verdict were the same `rgb(179, 32, 46)`; for a reader with protanopia that red
-was also ΔE 10.7 from the strong green, and for deuteranopia 12.1 from the weak
-amber. They are Porch's violet now (`--tool`, `--accent`, `--link`), held at
-least ΔE 20 from every verdict colour in both schemes, for ordinary vision and
-the three common deficiencies (Machado 2009); the closest pair is 33. The brand
-red is the wordmark's, and the accent of the demonstration's two organisation
-pages, which show no verdict. An installation is violet throughout. Rootwell's
-colour is blue, so the violet was also measured against it.
-
 *Enforced in:* `internal/web/assets/style.css`
+
 *Guarded by:* `TestEveryColourTextIsSetInIsLegible`,
 `TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`,
 `TestPorchsColourIsNeverAVerdictsColour`,
@@ -6216,72 +1629,15 @@ colour is blue, so the violet was also measured against it.
 
 ### W6 — A state is said in words and in colour, never by fading
 
-The submit button carried `opacity: 0.55` while a scan ran. Opacity fades an
-element's text and its own background together against the page, so the label
-and the ink under it lose contrast at the same rate: measured in a browser,
-**2.29:1** in the light scheme and **2.54:1** in the dark — below even the 3:1
-a non-text control needs, let alone the 4.5:1 for the word on it.
-
-That is the only thing the page shows for the several seconds a scan takes,
-and a scan is thirteen to fifty handshakes, each a real connection to
-somebody's server. A visitor who cannot tell whether anything is happening
-presses the button again, and the cost of that is paid by the scanned host,
-not by us. Reading the word "Checking" is the entire purpose of the state.
-
-The ink is softened instead — `--ink-soft` behind the same paper-coloured
-label, 7.9:1 — which says the same thing and can be read while it says it.
-The label already changes from "Check" to "Checking"; the colour now agrees
-with it rather than arguing.
-
-Opacity below 1 is allowed inside `@keyframes`, where it is a transition
-rather than a resting state and nobody is asked to read anything mid-fade.
-Everywhere else it is refused outright, because the next state somebody fades
-will be faded for the same reason this one was.
-
 *Enforced in:* `internal/web/assets/style.css`
+
 *Guarded by:* `TestNoRestingStateIsFadedOut`, `TestTheWorkingStateIsLegible`
 
 ### W7 — The furniture is the right size and there is not too much of it
 
-Three measurements on the parts of the page that are not the report.
-
-**The footer wrapped with room to spare.** `.colophon p` carried
-`max-width: var(--measure)` — 34rem, the width running text can be read at —
-and the row of links is written as a paragraph, so it inherited it. The five
-links come to 677 pixels against a 578 pixel measure, and they broke onto a
-second line inside a footer 884 pixels wide. A measure is a constraint on
-reading sentences; applied to a row of links it is only a narrower box. The
-measure now excludes the row at the selector rather than being overridden
-below it, because `.colophon p` beats a bare `.colophon-links` on specificity
-whatever the order — an override there has to be written stronger than it
-looks, and the next reader would not know why. The row still wraps on a phone,
-where there is no width at which five links fit and wrapping is the answer.
-
-**Two notices stood under one field.** The link to what a scan sends had a
-paragraph to itself beneath the paragraph about the terms. A page papered with
-notices is a page whose notices are skipped, and the skipping generalises to
-the next one. The link joined the sentence above it — the sentence a reader is
-already reading before pressing the button, which already carried the link to
-the terms. Nothing was removed: the home page still links `/privacy#scans`,
-and the test that has always required it still passes.
-
-It is also the better target there. A link alone in a paragraph is a control
-16 pixels high, under the 24 a pointer needs; the same link inside a sentence
-is an inline link, exempt because the sentence around it is what makes it
-findable.
-
-**The mark cleared the floor by accident.** The wordmark measures 106 by 26
-pixels, which passes the 24 a pointer needs — by two pixels, and because 26 is
-what a 1rem line box happens to be. A font-size trimmed by a tenth of a rem
-one afternoon would have taken the target under the floor and changed nothing
-anybody would notice. `min-height` says it instead: it costs nothing today and
-holds on the day the type shrinks. The `inline-block` is what lets a height
-apply at all, and an inline-block takes its baseline from its last line box,
-so the mark still sits on the same baseline as the note beside it — measured
-before and after, unchanged.
-
 *Enforced in:* `internal/web/assets/style.css`,
 `internal/web/assets/index.html`
+
 *Guarded by:* `TestTheFooterLinksAreNotHeldToAProseMeasure`,
 `TestTheLandingPageDoesNotStackNoticesUnderTheField`,
 `TestTheWordmarkDeclaresATargetFloor`,
@@ -6289,141 +1645,22 @@ before and after, unchanged.
 
 ### W8 — The project's addresses and a check's addresses are different addresses
 
-This project has one check and expects more. A site with one service and a
-service with one site are the same thing right up until the second service —
-and by then every report anybody has shared points at `/`, so the front page
-cannot become a front page without moving the tool out from under those links.
-
-The check was therefore given an address of its own while moving it costs
-nothing:
-
-| | |
-|---|---|
-| `/tls` | the check |
-| `/tls/method` | what *this* check cannot establish |
-| `POST /api/v1/tls/scan` | the check's API |
-| `/web` | the web check |
-| `/web/method` | what the web check sends, and cannot establish |
-| `POST /api/v1/web/scan` | the web check's API |
-| `/privacy`, `/terms` | the project's promises |
-| `/.well-known/security.txt`, `/pgp-key.txt` | how a person is reached |
-| `GET /api/v1/stats` | the project's counter |
-
-There are two checks now, so the rule that was written ahead of time is being
-used: the test holds a list of check prefixes rather than one, and a third
-check added without an entry fails rather than quietly putting a page at the
-root. The method page arrived before the page a visitor scans from, because
-the web probe's user agent had been naming that address in other people's
-access logs since the endpoint landed (N7).
-
-**A page says which check it is, and the script believes the page.** One
-script serves both, because the builders, the verdict handling, the findings,
-the notes, the download and the failure path are the same work — two copies of
-all of it would be the drift this file is mostly about. What differs is a
-table: the endpoint, the method page, the waiting message and the renderer.
-The page declares its row in a data attribute rather than the script inferring
-it from the path, because a path is a thing that moves and this project has
-moved two already; a script reading the URL would be wrong the day one moves
-again, quietly, by drawing a web report with the transport check's renderer.
-
-**And the footer goes to no one check's limits.** The footer is the one
-piece of markup every page shares, so it carried a single method address while
-there was a single check — and the day `/web` served a report, "How a report
-is read" underneath it pointed at the limits of a TLS handshake. Each page then
-named its own, with the transport page as the default. That held until pages
-ran all three checks, where any one address was the wrong one for two of the
-reports above it. Since 2026-09-17 the footer carries no method link: each
-report links its own check's page, and `/docs` lists them all, which is
-where a reader who arrived from a report gets back to what it means.
-
-Privacy and terms are promises about everything this project runs, not about
-one scan, and a copy under each check would be several copies of a promise to
-keep in step. The standing limits are the opposite: what a TLS scan cannot
-establish is not what a mail check will not establish, and a page trying to be
-both would be true of neither.
-
-**The two redirects are deliberately different kinds.** `/method` → `/tls/method`
-is **301**: it is not coming back to the root, and the address is printed in
-reports that have already been shared. `/` → `/tls` is **302**, because `/` is
-going to stop redirecting the day there is a front page to put there. A
-permanent redirect is a promise that an address has finished changing, and that
-one has not. Nothing may appear in both tables: an address has either finished
-moving or it has not. (Every response carries `Cache-Control: no-store`, so
-neither is cached in practice; the status code is still the honest one, because
-it is read by people and by intermediaries that ignore the header.)
-
-**The API path is aliased, not redirected.** A page can be redirected because a
-browser follows a redirect on a `GET` and nothing is lost. A `POST` cannot: 307
-and 308 preserve the body, 301 and 302 do not, and clients disagree about which
-they follow. A caller whose body is silently dropped receives an error that
-looks like it came from the scan rather than from the move. So
-`/api/v1/scan` is served by the same handler as `/api/v1/tls/scan` and answers
-identically, and both refuse a `GET` — a target in a URL is a target in a
-browser history, in a `Referer` header, and in every proxy log on the path.
-
-Every internal link on every page is followed against the routing tables, so a
-page that moves cannot leave a dead `href` behind — and the footer is on every
-page, which means one stale link is stale everywhere at once.
-
-**And the heading a link aims at exists on the page it aims at.** Stripping
-the fragment and stopping there was enough while every link pointed at a page
-somebody had just written. It stopped being enough the first time a page was
-written against another page's headings: a link to `/privacy#exclusion`
-resolved, because `/privacy` resolves, and would have dropped a reader at the
-top of a long page with no sign of which part answered them. The section it
-meant has never existed under that name.
-
 *Enforced in:* `internal/web.pages`, `internal/web.moved`,
 `internal/web.standingIn`, `internal/httpapi.New`
+
 *Guarded by:* `TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot`,
 `TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt`,
 `TestEveryInternalLinkResolves`, `TestEachCheckCallsItsOwnPaths`,
-`TestEachScanPageDeclaresItsCheck`,
-`TestEachFooterLinksItsOwnSitesDocuments`,
+`TestEachScanPageDeclaresItsCheck`, `TestEachFooterLinksItsOwnSitesDocuments`,
 `TestEveryAddressThisProjectSendsOutResolves`,
 `TestBothScanPathsAreServedAndNeitherRedirects`,
 `TestNeitherScanPathAnswersAGet`, `TestOldPathsRedirect`
 
-
 ### W8a — The organisation and Porch each answer at their own name
-
-Since 2026-10-05 the demonstration is two names on one binary.
-`denyfirst.dev` is the organisation: its front page, its undertakings
-(`/organisation`), and the contacts RFC 9116 points at — `security.txt`, the
-PGP key, and `releases@denyfirst.dev`, which signs every release and is pinned
-in every install. `porch.denyfirst.dev` is Porch: its page at `/`, its checks,
-their method pages, its documents, its privacy page and terms, and its API.
-
-The reasons are the ones W8 gave for a check's own address, one level up. A
-second product would otherwise live under the first one's name or move it.
-A name each is a separate origin, so a browser keeps their pages apart and a
-fault in one product's script cannot read the other's. And the address a report
-is shared at says which tool wrote it.
-
-Nothing printed before the split stops working. One binary serves both names,
-and an address that belongs to the other one is answered with a permanent
-redirect to the same path and query there: 301 for GET and HEAD, 308 for
-anything else, so a POST to the API at the old name keeps its method and body.
-The target is one of two constant addresses with the request's own path after
-it, so it cannot be steered off this site. Any other name or an address — a
-test, a local run — is served everything, as one name was; so is every name on
-an installation, which is one name, its operator's. Both names serve the
-stylesheet, the scripts, the icon and `/healthz`: the last is about the
-machine rather than either product, and a deploy check that asks the
-organisation's name for it expects "ok", not a redirect.
-
-Each page states the address it is served at, and each name's sitemap lists
-its own pages and nothing else; between them every page is listed once and
-answers there without a redirect. The layout links across the two by their
-full address on the demonstration, and by path on an installation. The user
-agents every installation sends, and `porch-scan`'s pointers to the method
-pages, name `porch.denyfirst.dev`, and so does the sentence on the privacy page
-about the reverse DNS of the demonstration's address: `scanner.denyfirst.dev`
-was a third name for the same machine, and the one an administrator who looks
-it up should land on is the page about the tool that reached them.
 
 *Enforced in:* `internal/web/hosts.go`, `internal/web.render`,
 `internal/web.buildPlain`, `internal/web/assets/layout.html`, `cmd/porchd.run`
+
 *Guarded by:* `TestTheOrganisationAndPorchEachAnswerAtTheirOwnName`,
 `TestTheRedirectsStayOnThisSite`, `TestAnyOtherNameIsServedEverything`,
 `TestEveryPageIsAnsweredAtTheAddressItStates`,
@@ -6433,122 +1670,18 @@ it up should land on is the page about the tool that reached them.
 
 ### W9 — A report fits the screen it is read on
 
-Reach, Mail and DNS draw their evidence as rows of a label and a value.
-Transport draws its own as a list that stacks on a phone. The rows' labels were
-kept on one line, and their values broke only at spaces, so on a phone the
-longest of each set the table's width. On 2026-10-02 a report at 390 pixels
-had a 342-pixel column. "Cross-Origin-Embedder-Policy" held 251 pixels of it on
-every row, the Reach table came to 441 and the page scrolled sideways. It did
-so on every report except Transport.
-
-On a phone a label now wraps at its spaces and hyphens. A value may break
-anywhere, as a certificate's values already could, but only where it does not
-fit. A label may not break anywhere: its column is sized to its narrowest
-content, so it would end up one letter wide. The one table with two columns of
-values, a zone's servers beside their addresses, now has the same gutter as
-the label column. Before, a long name ran into the address next to it.
-
-Measured, not inferred: at 320, 360, 390, 768 and 1280 pixels, Reach, Mail
-and DNS reports shaped like this domain's leave the page without a sideways
-scroll.
-
-That check measured the page and missed what happened inside it. Nothing
-crossed the edge of the screen, but the next day a phone showed two of
-Reach's columns drawn over each other. A chain's columns are shares of its
-width, and at 390 pixels a fifth was 62 pixels. "Transport" needs 69 and
-"plaintext" 64, so both ran on under "Response" and "308" in both chains. On a
-phone the two short columns now take the width of their longest content, and
-the address, which may break anywhere, takes the rest. The widths are still
-declared on the columns, so the two chains still line up (W3). At 320 pixels a
-notes section's count ran 23 pixels past its panel. It now goes under the
-title.
-
-Measured the second time cell by cell, which is what the first check should
-have been. At 320, 340, 360, 390, 412, 430 and 768 pixels, every report was
-checked, Transport included, from a real scan of a local server. No element's
-text runs past its own box, except the cipher tables, which scroll inside
-their own container by design. No cell's text crosses into the next cell.
-
 *Enforced in:* `internal/web/assets/style.css`
+
 *Guarded by:* `TestAReportTableFitsAPhone`,
 `TestAChainsShortColumnsHoldTheirWordsOnAPhone`,
 `TestANotesCountWrapsRatherThanRunningOff`
-
----
 
 ## Disclosure
 
 ### D1 — A reporter can find a way to reach us, and the way is current
 
-`security.txt` is served at `/.well-known/security.txt` over HTTPS, in the
-format RFC 9116 defines. `/security.txt` redirects there rather than serving a
-second copy, so the canonical URL in the file stays true.
-
-**Only denyfirst.dev serves it, and the key beside it.** Every build did until
-2026-09-28, and on an installation somebody else runs each part of the file
-was wrong. Its `Canonical` named denyfirst.dev, so by RFC 9116 it was not
-authoritative for the host serving it. It sent whoever found a fault in that
-host — somebody else's machine — to us, who cannot fix it and should not be
-told about it. Its `Expires` date is fixed in the binary, so an installation
-left on one release would one day serve a lapsed file, which this entry calls
-worse than none. And it answered anyone who could reach an installation with
-our name, a way to find copies of this tool their operators never agreed to.
-An installation now answers all three addresses with a 404, and an operator
-who wants a `security.txt` publishes their own, naming themselves. On an
-installation the tests below read the embedded file rather than the served
-one, so the expiry reminder still fails on every build.
-
-The file ends with a line break. RFC 9116's grammar ends every line with one,
-the last included; most parsers forgive the omission and a strict one does
-not, and it was missing.
-
-The `Expires` date in that file is the only copy of it, and a test parses the
-served bytes rather than a constant beside them. The test fails sixty days
-before the date passes.
-
-An expired `security.txt` is worse than none. A parser treats it as stale, and
-a person reads it as a project that stopped paying attention — which is the
-opposite of what publishing one is for. Sixty days is enough to notice a
-failing build, decide the contacts are still right, and merge a change without
-hurrying.
-
-The file names `security@denyfirst.dev` for vulnerabilities and points a
-domain owner at `abuse@denyfirst.dev` for exclusion requests. Those are
-different queues: a takedown request sitting behind an embargoed report helps
-nobody.
-
-`Encryption` names an OpenPGP key served from `/pgp-key.txt`, and the key's
-fingerprint is published twice: in `security.txt` and in `SECURITY.md` in the
-repository.
-
-Twice, because once proves nothing. A key served from this domain and
-identified only by this domain is exactly what an attacker who takes the
-domain would also serve — their key beside their fingerprint, and a reporter
-encrypting an unpublished vulnerability straight to them. `SECURITY.md` sits
-on GitHub behind a different account and different credentials, so a reporter
-comparing the two is comparing two things that would have to fall together.
-
-A test fails when the copies disagree, because two sources that agree only
-because nobody checks are one source written twice.
-
-Comparing the copies was, until 2026-08-22, the whole of the check, and it
-never looked at the key. A key file swapped for another, leaving both
-published fingerprints alone, passed everything in this repository — which is
-precisely the attack the fingerprint exists to stop, since the reporter
-compares the two numbers and then encrypts to whatever was actually served.
-The fingerprint is now computed from the bytes this server sends: the armour's
-own checksum is verified, the first packet is required to be a public key, and
-its version 4 fingerprint is SHA-1 over `0x99`, the packet length and the
-packet body. Sixty lines of standard library, no dependency, and the gap that
-said it needed "an OpenPGP parser" needed the first packet of one.
-
-The key certifies and encrypts and does nothing else, and is unrelated to the
-release signing key, which is an SSH key pointing outward rather than in.
-
-`security.txt` is not signed. A clearsigned file would be verified with the
-key it points at, which answers nothing a forger could not arrange.
-
 *Enforced in:* `internal/web`, the route table and `assets/security.txt`
+
 *Guarded by:* `TestSecurityTxtIsServedAtTheWellKnownPath`,
 `TestAnInstallationPublishesNoContactOfOurs`,
 `TestLegacySecurityTxtPathRedirects`, `TestSecurityTxtHasTheRequiredFields`,
@@ -6559,34 +1692,9 @@ key it points at, which answers nothing a forger could not arrange.
 
 ### R9a2 — What an issuer says it checked is reported and not graded
 
-A certificate names the policy it was issued under, and the CA/Browser Forum
-reserves four identifiers for the levels every public authority issues at:
-domain, individual, organisation and extended validation. They differ in what
-was verified about the applicant and in nothing else — the key, the algorithms
-and the transport are identical at every level.
+*Enforced in:* `internal/certinfo.validationLevel`, shown by `cmd/porch-scan`
+and `internal/web/assets/app.js`
 
-It is shown because it is the one thing about a certificate a reader cannot
-infer from anything else on the page, and because browsers stopped drawing the
-distinction. A visitor to a bank cannot tell from the address bar whether that
-certificate proves only that somebody controlled the name, or whether an
-authority checked the company exists. The certificate says so and nothing was
-showing it.
-
-It is never graded, for the reason R9 gives about CAA in another form: which
-level to buy is the operator's decision, and a cheaper one is not a fault. A
-domain-validated certificate protects the connection exactly as well as an
-extended-validation one, and grading the difference would be this project
-selling certificates.
-
-A certificate naming no identifier this table knows gets no row rather than
-the word *unknown*. A private authority issues under its own identifiers,
-which say nothing that can be read here, and putting a word where a
-measurement is missing is the defect this document exists to prevent. A
-certificate naming more than one is described by the strongest, which is the
-claim its issuer is standing behind.
-
-*Enforced in:* `internal/certinfo.validationLevel`, shown by
-`cmd/porch-scan` and `internal/web/assets/app.js`
 *Guarded by:* `TestTheValidationLevelIsNamed`,
 `TestACertificateWithNoKnownPolicySaysNothing`,
 `TestTheStrongestPolicyIsTheOneNamed`, `TestTheValidationLevelIsNotGraded`,
@@ -6595,100 +1703,21 @@ claim its issuer is standing behind.
 
 ### R9 — Issuance policy is reported and not graded
 
-A CAA record names the authorities allowed to issue certificates for a domain.
-Without one, any of around a hundred publicly trusted authorities may, which
-means the weakest of them sets the standard. Checking it has been mandatory
-for authorities since 2017, and it is one of the few controls a domain owner
-can apply to authorities they have no relationship with.
-
-It is reported and not graded, and the reason is where it comes from rather
-than what it says. Everything else this policy grades arrives in the
-handshake: a protocol version, a cipher suite, a certificate. This arrives
-from a resolver, over a path nothing here authenticates, describing a system
-the person who configured the server often does not administer. A verdict on
-the transport that moved because of a DNS record would be a verdict about
-somebody else's zone.
-
-The answer is reported as what it is. Not "this could not be measured" — it
-was measured, by asking a resolver, and the resolver answered. The note says
-which resolver, how far up the tree the search went, and whether the answer
-carried the AD bit. That bit is the resolver's claim to have verified the
-DNSSEC chain and not this service's, and its absence is ambiguous by
-construction: an unsigned zone and an answer nobody validated look the same
-from here, and most zones are unsigned.
-
-**A walk that ran out of budget is a tenth state, and it was reading as the
-one that means the opposite.** CAA is inherited, so the search goes label by
-label towards the root, and the budget bounds it. A walk that reached the top
-and found nothing means any authority may issue; a walk that stopped partway
-means the name carrying the policy was never asked. Both produced an empty
-record list, and the report published the first sentence for both. At the old
-budget of four, `a.b.c.d.example.com` was searched as far as `d.example.com`
-and reported as unrestricted, while a policy on `example.com` would have
-governed it. The budget is six now, which covers seven labels, and
-`Answer.Complete` says when it still stopped short.
-
-Ten states are distinguished, and a test fails when two of them read the
-same. One exists because `microsoft.com` publishes a record set carrying only
-`contactemail`: a CAA record set exists, no `issue` property is in it, and
-nothing is restricted. A report saying CAA is present would have been true and
-useless. That state was found by pointing the client at live hosts, not by
-reading the RFC.
-
-The line goes on the face of the report rather than into the notes, which fold
-shut under every verdict but ungraded. For a name with no CAA it is often the
-most useful sentence in the report: one DNS record, nothing to break by adding
-it, and a hundred authorities that stop being able to issue.
-
-It sits above the transparency line because the two are halves of one question
-in the order the halves happen. A restriction is checked by an authority at
-the moment it issues, so it does not help against a resolver poisoned at that
-moment or an authority that has itself been compromised; the logs record the
-result either way.
-
-The lookup runs last and is bounded by what remains of the caller's deadline,
-so a scan that spent its time on handshakes reports the check as not made
-rather than running over. Every failure produces the same description, because
-none of them is a fault of the name being scanned.
-
 *Enforced in:* `internal/dnsclient` for the query,
 `internal/policy.DescribeIssuance` for what it means, joined in
 `internal/scan.Scan`
+
 *Guarded by:* `TestDescribeIssuanceSeparatesEveryState`,
 `TestNotCheckedIsNotAnAccusation`, `TestProvenanceIsAlwaysStated`,
-`TestEveryCheckedStateMentionsTransparency`, `TestNoRecordSaysWhatFollowsFromIt`,
-`TestIssuanceIsOnTheFaceOfTheReport`, `TestIssuanceSitsAboveTransparency`,
+`TestEveryCheckedStateMentionsTransparency`,
+`TestNoRecordSaysWhatFollowsFromIt`, `TestIssuanceIsOnTheFaceOfTheReport`,
+`TestIssuanceSitsAboveTransparency`,
 `TestAnUnfinishedWalkDoesNotClaimNobodyIsRestricted`
 
 ### N5 — A resolver's reply is treated as hostile
 
-The CAA lookup builds its own DNS message, because the standard library
-exposes no general query. Everything it reads comes over plaintext UDP, where
-whoever answers first is the resolver.
-
-The question carries a random identifier and randomised letter case, and the
-reply is compared against it byte for byte: a forger who did not see the
-request cannot reproduce it, and DNS comparison is case-insensitive so the
-randomisation costs nothing. Compression pointers may only point backwards and
-their number is capped — two rules where one would do, because a name pointing
-at itself is the bug every hand-written DNS parser has had at least once.
-Every declared length is checked against what remains rather than clamped to
-fit. A CAA value that is not printable is refused rather than passed on.
-
-A record is read only if its owner name is the name that was asked about.
-Everything above establishes that the message came from something that saw the
-query; none of it establishes that the records inside describe the right name.
-A resolver — hostile, broken, or expanding a CNAME this client does not follow
-— can put another name's record set in the answer section, and read without
-this the report presents that other name's policy as this one's. The
-comparison folds case, because the query randomises it on purpose and a
-byte-for-byte match here would discard every legitimate answer.
-
-SERVFAIL is not an empty answer. It is what a validating resolver returns when
-a signature does not check out, and reporting it as no records would turn a
-broken DNSSEC chain into a clean result.
-
 *Enforced in:* `internal/dnsclient`
+
 *Guarded by:* `TestReplyMustAnswerTheQuestionAsked`,
 `TestResponseCodesAreNotAllTheSame`, `TestCompressionPointersCannotLoop`,
 `TestMalformedRecordsAreRefused`, `TestQuestionCaseIsRandomised`,
@@ -6698,310 +1727,57 @@ broken DNSSEC chain into a clean result.
 `TestHowAZoneHashesAbsentNamesIsRead`,
 `TestAServerAskedDirectlySaysWhatItHoldsAndWhatItIs`,
 `TestAServerThatRefusesIsNotAnAnswerAboutTheZone`,
-`TestAServerIsDialledThroughTheGuard`,
-`TestAZoneThatDoesNotExistSaysSo`, `TestARecordDoesNotHoldOnToTheReply`,
-`FuzzParseReply`, `FuzzSkipName`
+`TestAServerIsDialledThroughTheGuard`, `TestAZoneThatDoesNotExistSaysSo`,
+`TestARecordDoesNotHoldOnToTheReply`, `FuzzParseReply`, `FuzzSkipName`
 
 ## Supply chain
 
 ### S1 — No third-party dependencies
 
-`go.mod` has no `require` block. The CI workflow uses no third-party actions:
-checkout is four lines of git, and the Go toolchain downloads itself.
-
-*Guarded by:* `go mod verify` and the tidy check in CI
-
 ### S2 — Known vulnerabilities block a release
 
-`govulncheck` reports only what is reachable from this module's code, so a hit
-is a real problem rather than a version-range guess. Because this project uses
-`crypto/tls` and `crypto/x509` heavily, and Go issues security releases
-roughly monthly, this check will fail periodically. That is the mechanism
-working.
-
-The job in CI runs on pushes and pull requests, which is not the same claim.
-`govulncheck` answers from a database, and its answer changes when Go
-publishes a security release without a line of this repository changing — so a
-commit that was clean when it merged can be tagged weeks later and shipped
-carrying a known reachable vulnerability, with every check on the page still
-green. The release workflow therefore runs it again, against the tagged
-source, before anything is staged.
-
-*Guarded by:* the `Known vulnerabilities` job in CI, and the
-`Refuse to stage a build with a known vulnerability` step in
-`build-release.yml`
-
 ### S3 — The procedure that builds a release is pinned to that release
-
-A signature says the artifacts came from whoever holds the key. Building in
-public and signing on a separate machine is what makes it also say they
-correspond to the source, and that argument has a hole if the build command
-itself is mutable.
-
-It was. Both the release build and the reproduction fetched
-`scripts/build.sh` from the default branch at run time, so somebody able to
-move that branch could change what a tagged, honest commit compiled into — and
-the reproduction, reading the same file, would rebuild the same altered bytes
-and report a match. Two parties were involved and both consulted the same
-mutable third.
-
-Three things close it. The tag's own script is used when it has one. The hash
-of whichever script ran is recorded in `BUILD`, and the reproduction refuses
-to proceed unless the script it holds hashes to that value. And the signing
-script refuses to sign unless that hash is one this repository contains.
-
-`BUILD` is written before the checksums are taken, so it is listed in
-`SHA256SUMS` and therefore covered by the signature. It used to be written
-afterwards, which left the provenance record unsigned while the reproduction
-used it to decide whether a mismatch was tampering or a different toolchain.
-
-**v0.1.0 is outside this and will always be.** It was cut before both the
-script and the `buildscript` field, so nothing records what produced it.
-`reproduce.yml` was dispatched against it on 2026-08-20 — the first time it had
-ever run — and refused: no field to compare the script against, therefore no
-statement it could honestly make. That refusal is the invariant holding, not
-breaking. A reproduction that cannot name the procedure it reproduced would be
-reporting agreement with itself.
 
 *Enforced in:* `.github/workflows/build-release.yml`,
 `.github/workflows/reproduce.yml`, `scripts/release.ps1`
 
 ### S4 — A published release cannot be replaced by a workflow
 
-The release build replaces a draft, because a rerun after a failure must not
-leave half of one attempt beside half of another. It refuses to touch a
-published one: `gh release view` finds those too, so the check that looked for
-"a release for this tag" deleted signed releases — signature and all —
-whenever the workflow was dispatched with a tag that had already shipped.
-
-Rebuilding is a recovery step. Deleting what users are verifying against is
-not.
-
 *Enforced in:* `.github/workflows/build-release.yml`
 
 ### S5 — There is one build command, and it is the one the documents name
 
-S3 pins the build procedure to the release. That pin is worth exactly as much
-as the number of copies of the procedure there are, and there were three: the
-script itself, a transcription inside `scripts/release.ps1` that the maintainer
-runs to check a release before signing it, and a third in `docs/verify.md` that
-a stranger runs to check it afterwards.
-
-The third had drifted. It named `-X main.version=v0.1.0`, a symbol this program
-does not define. Go accepts an unknown `-X` without a word and folds the whole
-link command into the build ID, which it writes into the binary; so the
-published instructions for proving a release untampered produced a hash that
-differed from the published one — on the right source, with the right compiler,
-for everybody who followed them. Measured: identical size, forty bytes apart,
-all of them in the build ID notes.
-
-That is the worse direction for this to fail in. It does not conceal tampering,
-it manufactures it, and a check that reports tampering on every honest release
-teaches its readers to disregard the one that does not. The same script's own
-header had said as much about a different pair of copies since the day it was
-written.
-
-Both transcriptions are gone. `release.ps1 -Compare` now extracts the script
-whose hash `BUILD` records and runs that, refusing to compare at all if it
-cannot — a comparison that quietly did not happen reads, three lines later,
-exactly like one that passed.
-
 *Enforced in:* `scripts/build.sh`, `scripts/release.ps1`, `docs/verify.md`
-*Guarded by:* the `One build command, and a release script that parses` job in
-CI, which fails if the release build flags appear anywhere but
-`scripts/build.sh`
 
 ### S7 — The toolchain is a supported one, and the analysis gates still run
 
-Go supports each major release until two newer ones exist. On 2026-08-22 that
-made the supported lines 1.27 and 1.26, and this project was on 1.25.13 —
-receiving no further security fixes, while being built almost entirely on
-`crypto/tls` and `crypto/x509`.
-
-The `go` directive is the only place a version is named. Nothing pins a
-toolchain in CI, in `scripts/build.sh`, or on the server, so one line moves all
-three: an older toolchain downloads the named one through the module mechanism
-and re-execs it, verified against the checksum database.
-
-**1.26.7 rather than 1.27.0 on 2026-08-22, and the reasoning is worth
-keeping.** Both were supported, so the security argument was satisfied either
-way. 1.27 cost something then: staticcheck `v0.7.0` supported Go 1.26 and read
-no 1.27 module. Measured on the branch — `Build and test` passed on 1.27 while
-`Static analysis` and `Known vulnerabilities` both failed. Trading a static
-analysis gate for a security benefit that 1.26.7 already provided was not a
-trade, so the rule was to move when the tools did.
-
-**1.27.1 since 2026-10-02, with staticcheck `v0.8.1` and govulncheck
-`v1.8.0`.** By then 1.26.7 was five weeks behind 1.26.8 and 1.27.1, both
-released on 2026-08-28. The second attempt failed the same two jobs as the
-first, for a different reason: `go install tool@version` builds a tool with the
-oldest toolchain the tool accepts, 1.26 here, and a tool built by an older Go
-cannot type-check code for a newer one — every package "requires newer Go
-version". The first reason was real: staticcheck `v0.7.0`, built with 1.27.1,
-still cannot decode 1.27's export data, checked again that day. Each tool is
-now built with `GOTOOLCHAIN="$(go env GOVERSION)"`, the toolchain go.mod names,
-in every workflow and in `CONTRIBUTING.md`
-(`TestEveryAnalysisToolIsBuiltByTheModulesToolchain`). Measured before the change:
-`go vet` on all three platforms, every test with and without the demonstration
-tag, staticcheck and gosec, all clean on 1.27.1. The three govulncheck pins
-move together, because a release gate and a merge gate that disagree about
-what is known are two different answers (`TestEveryGovulncheckIsTheSameOne`).
-
-**The version is read on a line of its own, since 2026-10-05.** Inside the
-install line, `GOTOOLCHAIN="$(go env GOVERSION)" go install …`, a failure of the
-read is ignored: the shell stops on the exit status of `go install`, not of the
-substitution in front of it. That day the checksum database timed out while the
-runner fetched 1.27.1, the variable came back empty, `go install` fell back to
-1.26.8, and `Known vulnerabilities` reported every package as needing a newer
-Go — the symptom of the bug above, for a cause nobody would look for. Read in a
-statement of its own, the failure stops the step and names the timeout, and
-`${toolchain:?…}` stops a shell that does not stop on errors. Reproduced with
-a `go` that fails the read: the old form ran the install with `GOTOOLCHAIN=''`,
-the new one stops before it. The weekly watch also tells the two failures apart:
-govulncheck exits 3 for a finding and 1 when it could not look, and only a 3 is
-explained as a reachable vulnerability
-(`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`). A security alarm that is
-wrong about why it rang teaches its reader to stop reading it.
-
-**When to move, so the next one is not a judgement call.** A patch release of
-the line in use (1.27.1 to 1.27.2) within a week: it changes no behaviour a
-program relies on, and it is usually security fixes in exactly the packages
-this project is built on. A new line (1.28) once staticcheck and govulncheck
-read it, and before the line in use stops being supported. Always by pull
-request with every gate green; never on a server. `security-watch.yml` checks
-weekly that `go.mod` names the newest patch of a supported line, and fails
-when it does not.
-
-The three GODEBUG settings 1.27 removes — `tlsrsakex`, `tls3des`,
-`tls10server` — all govern defaults, and this scanner sets `MinVersion` and
-`CipherSuites` explicitly, so the eventual move costs nothing in what it can
-detect. Measured: explicit `MinVersion` reaches TLS 1.0 and 1.1, and the
-library still lists seven static-RSA and two 3DES suites.
-
 *Enforced in:* `go.mod`, `.github/workflows/security-watch.yml`
-*Guarded by:* the `Build and test`, `Static analysis` and `Known
-vulnerabilities` jobs in CI, which is where the first 1.27 attempt was caught,
-`TestEveryGovulncheckIsTheSameOne`, `TestTheToolchainIsWatchedWeekly`,
-`TestEveryAnalysisToolIsBuiltByTheModulesToolchain` and
-`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`
+
+*Guarded by:* `TestEveryAnalysisToolIsBuiltByTheModulesToolchain`,
+`TestEveryGovulncheckIsTheSameOne`,
+`TestTheWatchSaysAVulnerabilityOnlyWhenOneWasFound`,
+`TestTheToolchainIsWatchedWeekly`
 
 ### S6 — What reaches `main` is what was signed
 
-Everything above rests on being able to say who wrote a line. Commits are
-signed with an SSH key, and `.github/commit-signers` publishes the public half
-so that anybody can check, rather than only GitHub.
-
-The part that had to be learnt: **the merge does this, not the checks.** Every
-check runs against the branch, and the merge happens afterwards, so a merge
-that rewrites the commits rewrites them after the last thing that could have
-objected.
-
-- **Merge commit** — the branch's commits enter `main` byte for byte, keeping
-  their signatures. GitHub adds one commit of its own on top, signed with its
-  own key; it carries no content, only two parents.
-- **Squash** — GitHub writes one new commit and signs it. The originals never
-  reach `main`, so what is on the branch is what the maintainer signed and what
-  is on `main` is what GitHub says they signed.
-- **Rebase** — a signature covers the parent hash, and rebasing changes the
-  parent, so the signature cannot survive. GitHub does not re-sign. The commits
-  arrive unsigned.
-
-On 2026-08-20 this project used all three across three pull requests and got
-three different answers, the last of which put four unsigned commits on `main`
-past ten green checks. They are `1fdf674`, `cc163a3`, `01fc49f` and `7cd2cfa`;
-the same trees, signed, are the tag `signed/2026-08-20-docs-and-build`, and
-`git diff` between the two is empty. That is stated here rather than repaired,
-because repairing it means allowing a force-push to `main`, and a branch that
-accepts force-pushes for a minute is a worse thing to own than four commits
-whose provenance is recorded one ref away.
-
-Squash and rebase merging are disabled in the repository settings. That is not
-a thing a test can assert from inside a checkout, so it is written here, and it
-is the first thing to re-check if this ever happens again.
-
 *Enforced in:* the repository's pull request settings (merge commits only);
 `.github/commit-signers`
-*Guarded by:* the `Every commit in this pull request is signed by a known key`
-job in CI, which covers commits arriving on a branch and explicitly does not
-cover what a merge does to them afterwards
-
----
 
 ### S8 — A release is built only from source that passes its own gates
 
-A tag can be put on any commit. CI runs on pushes and pull requests, so the
-default branch is green; nothing checked that the commit being released was
-one of those. A tag placed on an older commit, on an unmerged branch, or on
-anything reachable by whoever holds the token produced a draft release with no
-gate in front of it at all — and the human step that follows is *check the
-hashes*, which confirms that the bytes are the bytes and says nothing about
-whether they work.
-
-`build-release.yml` now runs `go vet`, `go test ./...` and `govulncheck`
-against the tagged source before staging the draft.
-
-They run **after** the build rather than before it. Nothing a gate installs or
-compiles can then have influenced the bytes that were produced, so the
-reproduction still compares like with like — which matters more here than the
-few seconds saved by failing early.
-
-*Enforced in:* `.github/workflows/build-release.yml`, the two `Refuse to
-stage` steps
+*Enforced in:* `.github/workflows/build-release.yml`, the two `Refuse to stage`
+steps
 
 ### S9 — A published release is checked, in public, for a signature
 
-*Nothing reaches a user unsigned* was a procedure and not a property.
-
-The signature is made on the maintainer's machine and uploaded by hand, which
-is the arrangement that keeps the key out of GitHub and is worth keeping. What
-it means is that publishing is one button and signing is several steps before
-it, in a different place — so a draft published a step early, or published by
-somebody who took the account, reaches every user with no signature and
-nothing anywhere says so. The one person who would notice is the person who
-just failed to sign it.
-
-`reproduce.yml` runs on publication. It now downloads `SHA256SUMS.sig` and
-verifies it with `ssh-keygen -Y verify` against `.allowed_signers` before it
-rebuilds anything, and the result is a public red mark on a public log.
-
-It then requires the tag's `.allowed_signers` to be byte-identical to the
-default branch's. Either copy can be moved by anyone who can write here, so
-neither is a root of trust; what is worth catching is the two disagreeing,
-because `docs/verify.md` sends a reader to the default branch's copy while the
-signature was checked against the tag's.
-
-*Enforced in:* `.github/workflows/reproduce.yml`, the
-`Check that the release is actually signed` and
-`Check that the tag trusts the same keys` steps
+*Enforced in:* `.github/workflows/reproduce.yml`, the `Check that the release
+is actually signed` and `Check that the tag trusts the same keys` steps
 
 ### S10 — A binary can say which release it is
 
-`-buildvcs=false` is deliberate: the embedded VCS stamp varies with how the
-tree was fetched, so leaving it on makes two honest builds of one tag differ
-and destroys the property S3 and the reproduction workflow exist to establish.
-The consequence was that nothing inside a released binary said what it was.
-The tag is in the filename, and a filename survives until somebody renames the
-file, packages it, or copies it onto a server as `porch-scan`.
-
-For a program people run to answer security questions, *am I running the build
-that fixed this* is not a cosmetic question, and it had no answer.
-
-`scripts/build.sh` links the tag in with `-X main.version`. Both commands
-print it beside the policy version, which answers a different question — the
-build, and the rules it grades by. A binary built any other way says so rather
-than guessing.
-
-Determinism is unaffected: the value is the tag, both callers pass the same
-one, and two builds of a tag remain byte-identical. Measured on 2026-08-22,
-twice, all ten artifacts.
-
-Every rule set, not three of four. Both programs printed the TLS, web and mail
-rule sets and never the DNS check's, so a reader holding a DNS report could not
-learn from the binary which rules had produced it. The reach line stays last,
-where the deploy check reads it.
-
 *Enforced in:* `scripts/build.sh`, `cmd/porch-scan.version`,
 `cmd/porchd.version`, `cmd/porch-scan.versionLine`, `cmd/porchd.versionLines`
+
 *Guarded by:* `TestTheBuildScriptStampsTheVersionSymbolThisProgramDefines`,
 `TestAnUnstampedBinaryDoesNotClaimAVersion`,
 `TestThePolicyVersionIsNotTheReleaseVersion`,
@@ -7009,608 +1785,114 @@ where the deploy check reads it.
 
 ### S11 — A rule set that changes says what changed
 
-Verdicts carry the name of the rule set that produced them (R1) precisely so
-that two reports can be compared. That only helps if a reader can find out
-what moved: a server graded `strong` under `denyfirst-v1` and `weak` under
-`denyfirst-v2` may not have changed at all, and a pipeline that reads the
-output needs to tell a configuration that got worse from a rule that got
-stricter.
-
-`docs/policy-changes.md` is that record. Bumping `policy.Version` without
-adding to it fails a test, and naming a rule identifier that does not exist
-fails another — the same rule as the invariant citations here, for the same
-reason: a page naming things nobody can find is a page nobody can check.
-
-The record also has to say **which release** moved the rule set, because that
-is the first thing a reader comparing two reports needs: which upgrade to
-distrust. A section is written before the release that carries it exists, so
-it says "Unreleased" until somebody returns to it, and on 2026-09-01 nobody
-had — `denyfirst-v4` was still marked unreleased five releases and three weeks
-after v0.4.0 shipped it. So a rule set that is no longer the one in force must
-name its release, and the procedure stops on the word before a tag is cut.
-
-**The name carries the check as well as the number.** A number on its own
-stops meaning one thing the moment this project runs a second check:
-`denyfirst-v7` over a mail report and `denyfirst-v7` over a TLS report would be
-the same name over two different rule sets, which is exactly the confusion the
-name is printed to prevent. So `denyfirst-v6` became `denyfirst-tls-v6` while
-there was one rule set to rename — **renamed, not renumbered**: no rule moved
-with the name, the change log says so, and the two names are comparable.
-
-The older names in the record stay as they were. Reports carrying
-`denyfirst-v4` exist, and the page is a record of what shipped rather than of
-what it would be called today. The test that reads the page therefore accepts
-both shapes and keys its sections by the whole name, because a rename
-introduces a new name for a number that already had one.
-
 *Enforced in:* `internal/policy.Version`, `docs/policy-changes.md`,
 `docs/releasing.md`
+
 *Guarded by:* `TestTheChangeLogCoversTheCurrentPolicy`,
 `TestTheChangeLogNamesRulesThatExist`,
 `TestEveryRuleSetThatShippedNamesItsRelease`
 
 ### S12 — A tag cannot be moved or deleted
 
-A signature over a tag is a statement about which commit was released. If the
-tag can be moved, the statement expires the moment somebody moves it: the
-hashes people verified against stay valid, the signature still checks out, and
-the tag now names something else. If it can be deleted, a release can be
-withdrawn from the record rather than superseded in it.
-
-Both restrictions are on. They are a repository ruleset rather than anything a
-checkout can assert, which is why they are written here beside S6's merge
-settings, and this is the first thing to look at if a signature ever appears to
-cover the wrong source.
-
-The cost is real and worth naming: a dry run leaves a signed tag behind for
-ever. `gh release delete --cleanup-tag` fails on the second half, correctly,
-and the recovery is to delete the draft release and leave the tag — which is
-why release candidates carry `-rcN` rather than reusing the number that will
-ship. Measured on 2026-08-22, on `v0.2.0-rc1`, which is still there.
-
 *Enforced in:* the repository's tag ruleset — restrict deletions and restrict
 updates, both on
-*Guarded by:* nothing a test can reach. `docs/releasing.md` records it as a
-prerequisite so that a procedure depending on it says so.
 
 ### S13 — The release procedure is written down, and its first instruction works
 
-Every property above depends on somebody carrying out a sequence of steps in
-order, on one machine, a few times a year. Until 2026-08-22 that sequence
-existed in a chat window and nowhere in this repository — so the one procedure
-that decides what people download was the one procedure a reader could not
-check, and a maintainer who lost the window would have had to reconstruct it
-from three workflow files and a PowerShell script.
-
-`docs/releasing.md` is that sequence, including the dry run, what each step
-establishes, and the two repository settings it rests on.
-
-The first instruction has to work, which is not a detail. `release.ps1`'s own
-example was `.\scripts\release.ps1 -Tag v0.1.0`, and on a default Windows
-installation PowerShell refuses to run a script file at all — so the release
-procedure's entry point was a documented command that fails before the script
-starts, on the single kind of machine it exists to run on. This is the same
-class of defect as the `-X main.version` recipe in `docs/verify.md`: a document
-naming a command nobody had run. The example now names the invocation that
-works, and says why not to fix it by relaxing the machine's policy — the
-execution policy is not a security boundary, so making it permanent buys
-nothing and loses the accident it does prevent.
-
-The same reasoning reaches every command in it, not only the first. A
-procedure is a set of instructions, and an instruction that opens a menu is
-one somebody answers wrongly at two in the morning: `gh run watch` with no run
-named lists every recent run and waits, and on 2026-08-23 the CI run was
-chosen instead of the build, the draft release was taken to exist, and the
-next command answered `release not found`. Every run command in these pages
-now names the run it acts on.
-
-The page also carries what happens before a release, because that is where the
-release goes wrong. Four pull requests were left green and unmerged in one
-day, and one of them was the only reason v0.3.1 existed — so the tag was cut,
-signed, reproduced and deployed without the fix it was for. A commit is also
-now looked at twice, before staging and after, which is what would have kept
-two saved workflow logs out of `main` on 2026-08-31.
-
-A step that hands over a file has to hand over the one the previous step made.
-On 2026-10-01 v0.26.0 was published with the signature the v0.26.0-rc1 dry run
-had left in `dist\SHA256SUMS.sig`: `release.ps1` had not run for v0.26.0, and
-the upload read the same path for every tag. Nothing was believed that should
-not have been: `reproduce.yml` said so in public within the minute, and every
-installation that checked refused. But a release went out with nothing that
-verified it. The signature now lives under `dist\<tag>`, the upload line names
-the tag, and the script empties `dist` before the first check that can stop it
-and removes any signature it did not make and verify
-(`TestTheSignatureUploadedIsTheOneMadeForThatTag`).
-
 *Enforced in:* `docs/releasing.md`, `scripts/release.ps1`
-*Guarded by:* `TestTheReleaseProcedureIsWrittenDown`,
+
+*Guarded by:* `TestTheSignatureUploadedIsTheOneMadeForThatTag`,
+`TestTheReleaseProcedureIsWrittenDown`,
 `TestTheDocumentedInvocationIsTheOneThatWorks`,
-`TestEveryRunCommandNamesItsRun`,
-`TestTheSignatureUploadedIsTheOneMadeForThatTag`
+`TestEveryRunCommandNamesItsRun`
 
 ### S14 — A gate goes red for its own subject, and for nothing else
 
-The nightly fuzz run is the only check here that can find something nobody
-thought to look for. Every other check asserts a property somebody already knew
-to write down; this one searches. That makes its red mark the most valuable one
-in the repository, and makes it the check least able to survive being ignored.
-
-On 2026-08-27 it went red for a reason that had nothing to do with this code.
-`go test -fuzz` installs the `-fuzztime` budget as a context deadline on its
-coordinator, and on the way out the coordinator means to swallow that deadline:
-it compares the error it is holding against the workers' context error with
-`==`, which is a comparison between two different contexts' errors made on a
-shutdown path with several goroutines on it. When it does not hold, a run that
-found nothing ends by reporting `context deadline exceeded` as a test failure.
-
-Nothing was found, and that is established rather than assumed. Executions were
-still climbing at twenty-six thousand a second at the moment the budget
-expired, so no worker was stuck on an input. No file was written under
-`testdata/fuzz`. And `go` prints `Failing input written to` for every error
-that carries a crash, so an error printed without that line carries none.
-
-The mark then went unread for five days and was noticed by accident. That is
-the predictable outcome, and it is the reason this is an invariant rather than
-a one-off fix: a gate that can go red for a reason other than its own subject
-trains whoever watches it to skip it, and they will skip it on the night it
-means something. One target-run in the fifty-five on the last five nights is
-thin evidence for a rate, but it is not thin evidence that the problem exists.
-
-So the step classifies its result rather than propagating it. A written
-reproducer is looked for first, so a run that both found an input and tripped
-the deadline is still reported as a finding. Then exactly one shape is allowed
-through, and every part of it is required: one failing target, the
-coordinator's deadline as the whole of the message, a duration that reached the
-budget, none of the lines the toolchain prints when something real went wrong,
-and a re-run of the seed corpus — with no deadline anywhere in the picture —
-that comes back clean. Everything else fails, including anything the step does
-not recognise.
-
-The risk of classifying is that a real failure is filed as noise, and it is
-worth naming rather than waving away. Three things hold it down: the shape is
-narrow, the step fails closed on anything outside it, and the discriminator is
-the toolchain's own crash reporting rather than a guess about what a crash
-looks like.
-
-The same edit closes a second gap the incident exposed. A reproducer was only
-ever printed into the job log, and a job log expires after ninety days — so the
-one artefact that turns a random discovery into a permanent regression test was
-kept in the most perishable place in the system, and this one came within days
-of being lost. It now goes to the job summary and an annotation as well as the
-log. Nothing uploads an artifact, because no third-party action runs here (S1),
-and that constraint is not one to work around.
-
 *Enforced in:* `.github/workflows/fuzz.yml`, the classification in the fuzz
 step
-*Guarded by:* nothing a test can reach — the shape it recognises is produced by
-a race inside the toolchain's own shutdown path and cannot be provoked on
-demand. The step fails closed instead, which is the property a test would have
-been asserting.
 
 ### S15 — The deploy is a step with a procedure, not the end of one
 
-Everything S1 to S14 establishes is about bytes in a release. A user reaches a
-running process, and the claim that the two are the same thing is made by a
-person typing commands into a server a few times a year.
-
-That sequence was written nowhere until 2026-09-01. `docs/releasing.md` said
-*then deploy* and gave one command — `porchd -version` — which is not on
-`PATH` on the machine it was written for, so the single instruction that
-existed failed on the evening it was first followed. This is the defect S13
-records about the release procedure's entry point, in the one procedure S13
-did not cover.
-
-What every deploy establishes, in order. The release was reproduced before it
-was installed, because a signature and a public build without a reproduction
-say only that one laptop's output is self-consistent. The signature is checked
-again on the server rather than only on the laptop that downloaded it, against
-a key fetched from the repository rather than from the release beside it — a
-signature verifies against whatever key it is handed. Only the demonstration
-build is installed there, and the file has to say so first. The file is put in
-place so that the live path never holds one that is half-written or owned by
-the account that runs it, and it carries no file capability. The previous
-binary is kept under the version it holds. And the running process is checked
-rather than the file on disk: a restart that failed leaves the previous process
-alive, still answering, with the new file in place and looking correct.
-
-**The commands are private since 2026-10-01.** They named the binary's path,
-the service's account, its state directory and the monitoring around them —
-nothing a verifier needs, and a map for whoever would attack the machine. They
-are kept with the rest of what describes it. What each deploy does stays on the
-public page, and the public page is held to naming none of the machine
-(`TestTheDeployProcedureIsWrittenDown`).
-
 *Enforced in:* `docs/releasing.md`, and the private deployment notes
+
 *Guarded by:* `TestTheDeployProcedureIsWrittenDown`,
 `TestTheServiceIsNamedByThePathItIsAt`
 
 ### S16 — What somebody runs is what they verified
 
-The tool is now the thing people run, and denyfirst.dev is a demonstration of
-it (N6). That moves the weight of every supply-chain property in this file: a
-compromised release used to reach one server we operate, and now it reaches
-whoever ran it.
-
-**The image has no base system and builds nothing.** `FROM scratch`, one
-stage, no `RUN`. A container built on alpine or debian carries several hundred
-packages this project does not audit and cannot reproduce, which would put a
-supply chain underneath a program that deliberately has none — `go.mod` has no
-`require` block. And a builder stage would produce bytes nobody has checked:
-the argument here is that the release is signed and reproduced by a machine
-the maintainer does not control, so the image is a wrapper around **the binary
-from that release**, verified before it goes in. A second distribution channel
-with weaker guarantees than the first would become the real security level.
-
-**The trust store comes from the machine running it, not from the image.** Not
-a convenience. Every verdict about a chain is a verdict against some trust
-store, and a report should reflect the reader's rather than one baked in by
-whoever built an image. The standing limits already say a scan consults one
-trust store; the compose file is where somebody chooses which, mounted
-read-only.
-
-**An empty trust store stops the service starting.** This is the failure that
-does not look like one: a machine with no store does not fail to verify
-chains, it verifies them all as untrusted, and every report then says the
-scanned server's certificate does not reach a trusted root — a finding about
-the container, printed as a finding about somebody else's server. A container
-built `FROM scratch` with nothing mounted is the ordinary way to arrive there.
-
-The check takes the pool rather than fetching it, because the standard library
-builds the system pool once per process: a test that arranged an empty store
-would get whatever the first caller in the test binary had cached and would
-pass or fail on test order. The decision is the testable part, so the decision
-is what is separable — and a second assertion reads the source to confirm
-something still calls it before anything is served, because removing the call
-left every assertion about the decision green.
-
-**The self-hosting page checks the signature the way the verification
-procedure does.** It pointed at `docs/verify.md` and restated nothing, on the
-rule that two copies drift and the copy nobody reads is the one that goes
-wrong. The cost was steps that downloaded and started without checking
-anything, behind a link a reader skips. Since the release image (S17) the
-install checks one file — the compose file, which names the image by digest —
-in one line on the Porch page and in the guide, and the drift is held by a
-test instead: that line has to use the key file, identity and namespace
-`docs/verify.md` gives.
-
-**And it names the fingerprint the check has to print.** The key file and the
-release both come from GitHub, so a signature checked against that key alone
-proves only that the two agree; whoever could replace one could replace both.
-The Porch page is served by denyfirst.dev, which GitHub does not run, and it
-prints the key's fingerprint beside the command: a key changed on GitHub
-alone prints a fingerprint that does not match. The test works the fingerprint
-out from `.allowed_signers` rather than copying it, so a rotated key fails
-here and not on somebody's server
-(`TestTheInstallNamesTheReleaseKeysFingerprint`).
-
-**And since 2026-10-05 it carries the key rather than fetching it, and fails
-closed.** A fingerprint printed beside a command is a check a reader does by
-eye, which is the step most often skipped. The install now writes the key out
-in the command itself, the line `.allowed_signers` holds, so a release signed
-by any other key fails without anybody having to notice. It is still the
-Porch page, served by denyfirst.dev, that carries it. A check that failed also
-used to leave `docker-compose.yml` where step 2 would start it, and only the
-reader stood between a failed signature and a running container. The same
-line now removes the file and says `STOP`, so there is nothing to start
-(`TestTheInstallCarriesTheReleaseKeyAndFailsClosed`).
-
 *Enforced in:* `Dockerfile`, `docker-compose.yml`, `docs/self-host.md`,
 `cmd/porchd.trustStoreUsable`
-*Guarded by:* `TestTheImageHasNoBaseSystem`,
-`TestTheInstallNamesTheReleaseKeysFingerprint`,
+
+*Guarded by:* `TestTheInstallNamesTheReleaseKeysFingerprint`,
 `TestTheInstallCarriesTheReleaseKeyAndFailsClosed`,
-`TestTheComposeFileTakesAwayWhatItSays`,
+`TestTheImageHasNoBaseSystem`, `TestTheComposeFileTakesAwayWhatItSays`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
 `TestSelfHostChecksTheSignatureTheWayVerifyMdDoes`,
 `TestTheSelfHostingPageIsReachableAndItsLinksResolve`
 
----
-
 ### S17 — The image a server runs is the one the release signed
-
-Until v0.26.0 a server built its image: the Porch page had it download the
-binary for its processor, a Dockerfile and an ignore file, rename the binary
-and run `docker compose up --build`. Eight lines, each a place to go wrong —
-the ignore file was missing from the release for one version, and the build
-was then sent the secret. A project that publishes an image to a registry asks
-for two lines instead, and the usual cost is that the image is trusted on the
-registry's word: a tag that can be moved, nothing signed, a base system nobody
-audited.
-
-**The image is named by its digest, and the digest is under the signature.**
-The release's `docker-compose.yml` starts `ghcr.io/denyfirst/porch@sha256:…`
-and nothing else: no tag, no build, no other registry
-(`TestTheComposeFilePinsEveryServiceToTheDigest`). A digest is the image's own
-SHA-256, and Docker refuses bytes that do not hash to it, so a registry cannot
-answer it with anything else. The compose file is listed in `SHA256SUMS`, so
-the one file a server checks is the one that names the image. The repository's
-copy carries zeros in place of the digest, so a checkout run as it is fails to
-pull rather than pulling something.
-
-**It is built the same way everywhere, so the maintainer can check it before
-signing.** A Docker build stamps times and compresses as its version does, and
-two builds of the same binaries name two digests. `internal/ociimage` writes
-every byte itself — entries sorted, owners and times fixed, the standard
-library's gzip at a fixed level, configuration with no time in it — so the
-release workflow and the maintainer's machine arrive at the same digest from
-the same binaries (`TestTheSameBinariesMakeTheSameImage`,
-`TestTheImageRecordsNoTime`). That is what keeps the split `build-release.yml`
-describes — the workflow builds and cannot sign, the maintainer signs and does
-not build — for the image as well: the workflow builds and pushes, and
-`release.ps1 -Compare` rebuilds the archive and the compose file and signs only
-if every byte matches. An image the maintainer
-signed without rebuilding would be the workflow's word, and the split would be
-gone. Until 2026-10-01 that sentence was a description of the maintainer rather
-than of the script: it printed the difference count and went on to the
-passphrase prompt. It now refuses on any file built here that is not the
-release's, and on any file the list names that was not built here
-(`TestADifferenceInTheComparisonSignsNothing`). Measured on 2026-10-01:
-built twice, from binaries with different times, modes and umask, the archive
-and the digest were identical; pushed to a registry, pulled by digest and
-started, it ran as `65534:65534` with proof of control and a password on.
-
-**The image is the two binaries and nothing else**, for `amd64` and `arm64`,
-as the Dockerfile always described (`TestTheImageIsTheTwoBinariesAndNothingElse`,
-`TestTheImageStartsWhatTheDockerfileStarts`). The Dockerfile stays, for
-whoever builds their own.
-
-**It is published by digest, after the release's gates, and read back as a
-stranger would.** `build-release.yml` pushes it only after `go vet`, the tests
-and `govulncheck` pass, with the workflow's own token and `packages: write` on
-that one job, and writes no tag. It then reads it back anonymously and fails
-before staging the draft if any byte differs or the package is not public. After
-publication, `reproduce.yml` reads it back again from the rebuilt archive
-(`TestTheReleaseImageIsPublishedByDigestAndChecked`,
-`TestTheImageIsPushedByDigestAndReadBackExactly`,
-`TestARegistryServingOtherBytesFailsTheCheck`).
-
-**The token goes to the registry and nowhere else.** The push follows a bearer
-challenge only to a token endpoint on the registry's own host, and sends a blob
-only to an upload location there; a registry anywhere but this machine is
-spoken to over TLS (`TestTheCredentialsGoNowhereButTheRegistry`,
-`TestAPushWithoutCredentialsIsRefused`). The client is this repository's own,
-on the standard library, because one that re-compressed a layer on the way out
-would change its digest.
-
-**What this costs, said rather than left to be found.** A pull reaches
-`ghcr.io`, which is GitHub, as the release downloads always did; Docker sends a
-little more about the machine than `curl` does — its own version, the kernel's,
-the OS. A machine that has run `docker login ghcr.io` pulls as that account,
-and GitHub then knows which account installed it; the guide says so. The
-release workflow can now publish packages, and what it could do with that is
-push an image no signed compose file names.
-
-**The Porch page shows the compose file the release ships.** The demonstration
-is built after the image and carries its digest, so the file on the page is the
-template with this release's digest written in, and a test renders it and
-compares it with what `Compose` makes (`TestThePorchPageShowsTheComposeFileThatShips`).
 
 *Enforced in:* `internal/ociimage`, `scripts/build.sh`, `docker-compose.yml`,
 `.github/workflows/build-release.yml`, `.github/workflows/reproduce.yml`,
 `internal/web.pageImageDigest`
-*Guarded by:* `TestTheSameBinariesMakeTheSameImage`, `TestTheImageRecordsNoTime`,
+
+*Guarded by:* `TestTheComposeFilePinsEveryServiceToTheDigest`,
+`TestTheSameBinariesMakeTheSameImage`, `TestTheImageRecordsNoTime`,
+`TestADifferenceInTheComparisonSignsNothing`,
 `TestTheImageIsTheTwoBinariesAndNothingElse`,
 `TestTheImageStartsWhatTheDockerfileStarts`,
-`TestALayoutIsReadBackAndATamperedOneIsRefused`,
+`TestTheReleaseImageIsPublishedByDigestAndChecked`,
 `TestTheImageIsPushedByDigestAndReadBackExactly`,
 `TestARegistryServingOtherBytesFailsTheCheck`,
 `TestTheCredentialsGoNowhereButTheRegistry`,
 `TestAPushWithoutCredentialsIsRefused`,
-`TestTheComposeFilePinsEveryServiceToTheDigest`,
-`TestTheReleaseImageIsPublishedByDigestAndChecked`,
 `TestThePorchPageShowsTheComposeFileThatShips`,
-`TestADifferenceInTheComparisonSignsNothing`
+`TestALayoutIsReadBackAndATamperedOneIsRefused`
 
 ---
 
 ## Known gaps
 
-Listed rather than hidden. An unnamed gap is a surprise; a named one is work.
+Listed rather than hidden. A gap closed in code stays here until somebody
+removes it, so a stale entry is a bug in this page.
 
-A stale list is worse than no list, because a reader takes it as current. Four
-entries were removed when this was last read: the server binary, the pinned CI
-tools, release signing, and fuzzing all exist now. Two more went at the review
-after that: P1 has a test, and the flag that could not take effect was removed
-rather than fixed. One more went with "no independent review", because that
-review has happened; what it found is written into the rules above rather than
-summarised here — A6 to A9, R10, S3 to S5, W1 and W2 all exist, or say what
-they now say, because of it.
-
-One more goes on 2026-08-22, and it had already been fixed. Unnamed extended
-key usages were closed in `internal/certinfo` that morning and stayed on this
-list until the afternoon, which is this document doing, on its own front page,
-the thing it warns about — the entry now has a test rather than a paragraph.
-The reason it lingered is worth keeping in mind for the entries below: a gap
-closed in code is not closed on this page until somebody comes back for the
-page.
-
-Four more go the same day, and these were closed on purpose rather than found
-already closed. The published key is now verified from the bytes the server
-sends (D1). A chain a server serves only to old clients is now graded, and the
-worse of the two sets the verdict (R14). An address family that could not be
-reached is now named, so a limit of this scanner's network is no longer
-reported as a fault of the server (R3d). And a name written in two alphabets
-now raises a note, which is the most a report can do about a pair of letters
-that are genuinely different characters rendering identically (R10).
-
-Each of those was on this list with a sentence explaining why it was hard. Two
-of the four sentences were wrong: "needs an OpenPGP parser and SHA-1" needed
-the first packet of one, and the address-family entry described a budget
-problem that `interleaveFamilies` had already solved, leaving only the missing
-sentence. A reason written when an entry is added is worth re-reading before
-it is believed.
-
-Anything below is open today.
-
-- **Transparency receipts are counted and not verified.** R3c. Checking one
-  needs the issuing log's public key, and the qualified-log list is maintained
-  by browsers on their own schedule.
-- **A stapled response's responder is not itself checked for revocation.**
-  R3b. The response is now parsed and verified; what remains is the responder
-  certificate's own status, and checking it means fetching a second response
-  over the network from an address the scanned party chooses. This scanner
-  fetches nothing. RFC 6960 lets an issuer waive the check and responder
-  certificates are short-lived for the same reason, so this is a residual
-  rather than a hole — but it is a residual, and a compromised responder key
-  would not be caught here.
-- **No real responder's bytes are in the test corpus.** Every OCSP response
-  the tests read was built by the tests. What that used to mean was worse than
-  it sounds: the built responses all had one shape — name-form responder
-  identifier, SHA-1 CertID, ECDSA signature, one entry, no extensions, an
-  omitted version — and a real authority varies every one of those. Nine
-  variants are now exercised, together and separately, including a key-form
-  responder identifier, a SHA-256 CertID, an RSA signature from a delegate, a
-  nonce, an archive cutoff, an absent `nextUpdate`, an explicit version and
-  three entries with ours last. They are also fuzz seeds.
-
-  What remains is that no authority's actual bytes have been through it. The
-  failure that would cause is the one this project minds most: a
-  `cert.staple-unverifiable` finding, which is `Weak`, raised against a server
-  doing everything correctly — a false accusation, which a reader cannot tell
-  from a real finding. Capture the first response a live scan verifies and
-  commit it as a fixture.
-
-  *Closed 2026-08-23.* Measured from a host with unintercepted egress: of
-  fourteen well-known sites, five staple — DigiCert, Sectigo, Apple, Microsoft
-  and PayPal — and nine, including GitHub, Cloudflare and Mozilla, send
-  nothing. All five verified on the first attempt, across four encoders,
-  response sizes from 471 to 2341 bytes, and both signing arrangements. The
-  bytes are in `internal/ocsp/testdata` with the moment to judge each at,
-  because a real response expires within days and a test that goes red on a
-  Tuesday teaches people to ignore it.
-
-  It could not be closed from the author's own machine, and the reason is
-  worth keeping. Every outbound TLS connection there is intercepted and
-  re-presented by a gateway that staples nothing, so twenty-one hosts each
-  appeared to staple nothing — a confident measurement of the path rather than
-  of the servers, which is precisely the error R3d exists to name. The tell
-  was that every one of them showed a chain of exactly three certificates.
-
-  What the measurement also settles: this check reaches about a third of
-  hosts. A revoked certificate on a server that does not staple is invisible
-  here, and `revoked.badssl.com` — a host that exists to serve one — is among
-  the nine. Each report says so on its own Revocation line rather than leaving
-  it to be inferred.
-- **The per-target limit still answers at its edge.** A9. The threshold now
-  sits outside ordinary traffic, so a probe learns nothing about a person; what
-  remains is that a host genuinely being checked eight times in a window can be
-  observed to be busy. That is a fact about load rather than about anybody, and
-  its own administrator can already read it in their logs. The secret spread
-  hides how many scans there were; it cannot hide that there were at least
-  `targetBurstMin`, because that is what the refusal means. Closing that would
-  mean raising the minimum again, which spends a scanned host's peak to buy a
-  stranger's privacy — a trade this project will not make on a third party's
-  behalf without saying so, which is why it is also on the privacy page.
+- **Transparency receipts are counted, not verified.** R3c. Verifying one
+  needs each log's public key, from a list browsers keep on their own
+  schedule.
+- **A stapled response's responder is not checked for revocation.** R3b.
+  That would mean fetching from an address the scanned party chooses, and
+  this scanner fetches nothing.
+- **Revocation is seen only where the server staples.** R3a. About a third of
+  hosts do. A report says so on its Revocation line.
+- **The per-target limit still answers at its edge.** A9. A host checked many
+  times in a window can be seen to be busy. That is a fact about load, not
+  about a person.
 - **Truncation defends enumeration, not confirmation.** A bucket identifier
-  cannot be turned back into a name. It was never a defence against somebody
-  who already suspects one name and tests it, and the comment in
-  `targetlimit.go` used to imply otherwise by claiming billions of names per
-  bucket; against a realistic candidate list twelve bits gave two hundred
-  thousand, and sixteen gives fifteen thousand. The figure is corrected and
-  the limit of what it protects is now stated.
-- **`scan_failed` cannot be reached.** A7. `scan.Scan` cannot fail once the
-  handler has validated the target, so the branch is defensive. Named in
-  `TestEveryRefusalCodeCanBeProduced` rather than left to be discovered, and
-  the test fails if the list of such codes grows without an explanation.
-- **One reader is not an audit.** The rules above came from one careful
-  reading, not a funded engagement. As of 2026-08-22 that reading has covered
-  every file in the tree: `internal/policy` and `internal/certinfo`, which were
-  its thinnest ground and held the errors that mattered most — a prohibited
-  suite graded strong, a verdict whose stated reason was false, a certificate
-  reported trusted because Go stopped checking at the dates — then
-  `internal/tlsprobe`, `internal/dnsclient` in full including the reply parser,
-  `internal/safedial`, `internal/httpapi`, `internal/scan`, `internal/web`, and
-  finally the two front ends, `internal/web/assets/app.js` and
-  `cmd/porch-scan`, which had never been read and held R12 and R13 between
-  them, and `cmd/porchd`. That last fact is the one to take from this entry rather than the
-  coverage: the packages that compute the answer were careful, and every defect
-  found on the final pass was in the code that shows it. Nothing was wrong with
-  what this project knew; four things were wrong with what it said. Completing
-  a reading is not the same as having been audited, and one reader who wrote
-  the code is the least independent reader available.
-- **A refused version and a version with no suite in common look identical.**
-  Both answer with a handshake failure alert, so a server configured only for
-  suites Go does not implement is reported as refusing every version it in fact
-  speaks. R12 puts the sentence saying so into any report containing a refusal,
-  which is the honest half; the row itself still reads `refused`, because from
-  outside there is nothing else it could say. Closing it needs a client that
-  can offer suites Go does not implement. `internal/rawhello` is that client,
-  and it is used today only to ask about SSL 3.0 and the export and NULL
-  families; the ordinary enumeration still goes through Go, so this entry
-  stands.
-- **Five grading rules cannot fire through this front end.** Measured rather
-  than estimated: every version in `probedVersions`, every suite in
-  `candidateSuites`, SSL 3.0, and every suite a hand-written hello offers is
-  graded, and the rules that never come back are these. Until 2026-09-13 there
-  were eleven; asking about SSL 3.0 and the export and NULL suites by hand
-  closed six.
-
-  `cipher.no-encryption` (RFC 9150 integrity-only) cannot fire because nothing
-  here offers such a suite — Go implements none and the hand-written hellos do
-  not ask. `cipher.md5` is shadowed: every MD5 suite offered by hand is matched
-  first by a more specific rule, NULL or export or RC4, so the MD5 rule is
-  never the one that answers. `version.unknown` cannot fire because
-  `probedVersions` is a fixed list and a hand-written hello rejects a version
-  it did not claim. `cipher.unrecognised` cannot fire because every suite
-  offered, by Go or by hand, is one this project names.
-
-  `cipher.not-current-practice` is different and is listed for honesty rather
-  than for the same reason. It is the catch-all that grades a suite matching no
-  specific rule, and it is reachable in principle; for every suite this prober
-  can offer, a more specific rule matches first and stops the search. It is
-  shadowed rather than impossible.
-
-  Two of the six that left the list are reachable only narrowly, and a reader
-  should know how narrowly. `cipher.ffdhe` fires because the SSL 3.0 hello
-  offers finite-field DHE suites; the ordinary enumeration still offers none,
-  so a TLS 1.2 server configured for DHE alone is still measured as accepting
-  nothing, and the report still does not distinguish that from a server that
-  refused everything. `cipher.anonymous` fires because the export hello offers
-  two anonymous export suites; an anonymous suite that is not export-grade is
-  still never offered. `cipher.des` is reachable through the SSL 3.0 hello
-  alone, for the same reason.
-
-  None of this makes the rules wrong. They are correct and they are not
-  coverage, and the second half is what a reader deciding whether this report
-  is enough needs to be told. R15 keeps the list from drifting in either
-  direction — a rule that quietly stops firing, and a gap still claimed after
-  Go closes it.
-
-- **A lookalike alphabet is reported, not resolved.** R10 raises a note when a
-  name draws on more than one of Latin, Cyrillic and Greek, which is as far as
-  a report can honestly go: the characters are genuinely different and folding
-  them together would corrupt every legitimate name in those scripts. What the
-  note cannot do is tell a disguise from a company whose name really is
-  written in two alphabets, and it says nothing at all about a name spelled
-  wholly in one script that resembles a name in another — `рaypal` in Cyrillic
-  throughout raises nothing, because one script is a language. Hostname
-  matching is unaffected either way; it compares bytes.
+  cannot be turned back into a name, but somebody who already suspects a name
+  can test it.
+- **`scan_failed` cannot be reached.** A7. The branch is defensive, and
+  `TestEveryRefusalCodeCanBeProduced` names it.
+- **A refused version and a version with no suite in common look the same.**
+  R12. Both answer with a handshake failure, and the report says so.
+- **Five grading rules cannot fire through this front end.** R15.
+  `cipher.no-encryption`, `cipher.md5`, `version.unknown`,
+  `cipher.unrecognised` and `cipher.not-current-practice`. The rules are
+  correct; they are not coverage.
+- **A lookalike alphabet is reported, not resolved.** R10. A name mixing
+  Latin, Cyrillic or Greek raises a note. A name written wholly in one script
+  that looks like a name in another raises nothing.
 - **Four commits on `main` carry no signature.** S6. `1fdf674`, `cc163a3`,
-  `01fc49f`, `7cd2cfa` — rebase-merged, which strips the signature the author
-  put on them. The signed originals are the tag
-  `signed/2026-08-20-docs-and-build` and the trees are identical, so the
-  provenance exists; it is one `git diff` away rather than in the log, which is
-  not the same thing. Closing it needs a force-push to `main`, and opening that
-  door costs more than the four commits are worth.
-- **The prose pages drift, and only some sentences have a test behind them.**
-  The privacy page and the README each carried a claim that stopped being true
-  the day OCSP validation landed — *revocation is not checked* — and the
-  privacy page stated the per-target threshold twice, as eight in one section
-  and twice in another, with a test guarding only the first. Both are fixed and
-  both now have a test. It happened a third time with the counters: the page
-  said one number per scan plus strong, weak and insecure, and ended *that is
-  the whole record*, while `/api/v1/stats` had grown `ungraded`, a block per
-  check naming its own rule set, a count of refusals by reason, and three
-  figures about dates. Nothing in any of that describes a person, so it was not
-  a privacy failure — it was the page being unusable for the one thing it is
-  for, which is checking. Its lede was loose in the same way, offering *not the
-  result* while verdicts were being counted.
-
-  That one is now mechanical rather than remembered: the figures are read off
-  the published type by reflection and each must be described on the page, so a
-  counter cannot be added without this failing. What remains is the general
-  case. These pages make claims in prose, a test can only check the sentences
-  somebody thought to pin, and every rule added to `internal/policy` is a
-  chance for one of them to go quietly wrong. Re-read them whenever a policy
-  version changes, and where a claim can be pinned to a type rather than to a
-  phrase, pin it to the type.
+  `01fc49f`, `7cd2cfa` were rebase-merged. The signed originals are the tag
+  `signed/2026-08-20-docs-and-build`, with identical trees.
+- **Each address of a name gets one handshake, not a full scan.** Up to
+  eight addresses are asked alike. A machine that differs only in what else it
+  would accept, behind the same preferred answer, looks identical.
+- **The hosts a proven domain names have no budget of their own** (A05). Its
+  exchangers and the revocation lists its certificates name are reached as a
+  mail server or a browser would reach them. A per-exchanger budget, and
+  fetching a list only for a chain that reaches a trusted root, each change
+  what a report says and wait for a rule-set version.
+- **One reader is not an audit.** Every file has been read, by the people who
+  wrote it. That is not an independent review.
+- **Prose drifts.** A test can only check the sentences somebody pinned.
+  Where a claim can be pinned to a type rather than a phrase, it is.

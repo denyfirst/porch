@@ -275,10 +275,8 @@ func PostQuantumLine(f PostQuantumFacts) string {
 // against its own opinion — the thing it says other tools do. What it can do
 // is state the measurement and the reason somebody would act on it.
 func DescribePostQuantum(f PostQuantumFacts) []Note {
-	const why = "Traffic recorded today can be kept and decrypted by whoever first builds a quantum " +
-		"computer large enough to break the key exchange, which is why the attack is called harvest " +
-		"now, decrypt later. Forward secrecy does not prevent it: forward secrecy protects against a " +
-		"private key stolen afterwards, not against the exchange itself being broken."
+	const why = "Traffic recorded today can be decrypted later by whoever builds a quantum computer large enough " +
+		"to break the key exchange: harvest now, decrypt later. Forward secrecy does not prevent it."
 
 	switch {
 	case !f.Measured:
@@ -295,18 +293,16 @@ func DescribePostQuantum(f PostQuantumFacts) []Note {
 		// framing damaged most, because it is the strongest result a server
 		// can earn here.
 		return []Note{Observed(fmt.Sprintf(
-			"%s combines X25519 with ML-KEM-768, so recovering the session key means breaking both, and "+
-				"the second has no known quantum attack. %s A recording of this connection is not "+
-				"exposed to that. This is not graded — no document this rule set follows requires it — "+
-				"and it is the strongest thing a server can do about it today.", f.Group, why))}
+			"%s combines X25519 with ML-KEM-768, so recovering the session key means "+
+				"breaking both, and ML-KEM has no known quantum attack. %s A recording of this "+
+				"connection is protected. It is not graded: no document this rule set follows "+
+				"requires it yet.", f.Group, why))}
 
 	default:
 		return []Note{Observed(fmt.Sprintf(
-			"%s was offered and the server did not take it. %s Nothing is wrong with this connection "+
-				"today and no client fails because of this: a client that offers the hybrid falls back "+
-				"to X25519 and the handshake succeeds. It is not graded, because no document this rule "+
-				"set follows requires it yet, and it is reported because the traffic being recorded now "+
-				"is what the decision is about.", f.Group, why))}
+			"%s was offered and the server did not take it. %s Nothing is wrong today and no client fails "+
+				"because of this: clients fall back to X25519. It is not graded, because nothing requires it yet; "+
+				"it matters because traffic recorded now can be decrypted later.", f.Group, why))}
 	}
 }
 
@@ -328,9 +324,9 @@ func DescribePostQuantum(f PostQuantumFacts) []Note {
 // report has no other way to tell a fault on their server from a fault on the
 // one that looked at it.
 func TrustStoreUnreadable() Note {
-	return Unsettled("The trust store on this machine could not be read, so whether the " +
-		"certificates presented reach a trusted root was not established. That is a fact about " +
-		"the machine running this scan and not about the server it looked at.")
+	return Unsettled("The trust store on this machine could not be read, so whether the certificates " +
+		"reach a trusted root was not established. That is about the machine running this scan, " +
+		"not the server.")
 }
 
 // LogFacts is what a search of the public certificate logs established.
@@ -455,13 +451,10 @@ func DescribeLogged(f LogFacts) []Note {
 	var out []Note
 
 	if f.Unseen > 0 {
-		out = append(out, Observed("Every publicly trusted certificate is recorded in append-only "+
-			"logs before a browser will accept it, so a certificate obtained for this name by "+
-			"anybody, from any authority, appears there. "+plural(f.Unseen, "certificate")+
-			" valid today was not the one this server presented. That is not a finding: an early "+
-			"renewal, a content delivery network issuing on your behalf, and a second server all "+
-			"look the same from here. It is a list only you can check, and the reason to check it "+
-			"is that a certificate somebody else obtained looks exactly like one you did."))
+		out = append(out, Observed("Certificate transparency logs record every publicly trusted certificate. They "+
+			"hold "+plural(f.Unseen, "certificate")+" valid today for this name besides the "+
+			"one this server presented: an early renewal, a CDN, a second server, or one "+
+			"somebody else obtained. Only you can tell which, so check the list."))
 	}
 
 	if f.Truncated {
@@ -470,9 +463,8 @@ func DescribeLogged(f LogFacts) []Note {
 	}
 
 	if !f.SubdomainsSearched {
-		out = append(out, Unsettled("Only this exact name was searched for. A certificate "+
-			"obtained for a subdomain would not appear above, and obtaining one for a subdomain "+
-			"is a way this is done."))
+		out = append(out, Unsettled("Only this exact name was searched for, so certificates obtained for its "+
+			"subdomains do not appear above."))
 	}
 
 	return out

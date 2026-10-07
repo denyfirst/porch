@@ -40,6 +40,13 @@ var organisationPaths = map[string]bool{
 // privacy page and the crawler files.
 var sharedPaths = map[string]bool{"/": true, "/privacy": true, "/robots.txt": true, "/sitemap.xml": true}
 
+// organisationIcons are the icon addresses a browser asks of every name,
+// answered at denyfirst.dev with the organisation's mark rather than Porch's.
+var organisationIcons = map[string]string{
+	"/favicon.ico":          "/denyfirst.ico",
+	"/apple-touch-icon.png": "/denyfirst-touch.png",
+}
+
 // orgPrivacy is the page denyfirst.dev serves at /privacy. Its key in the
 // table is not /privacy, which is Porch's privacy page.
 const orgPrivacy = "/organisation"

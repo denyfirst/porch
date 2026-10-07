@@ -239,8 +239,9 @@ func GradeStapling(f StapleFacts) StapleFinding {
 		}
 		add("cert.must-staple-not-stapled", Insecure,
 			"Certificate requires stapling and no valid response was sent",
-			"The certificate carries the TLS Feature extension asking for a stapled status response, "+what+
-				". Clients that honour the extension will refuse the connection; the rest will connect believing a revocation check took place that did not.",
+			"The certificate's TLS Feature extension asks for a stapled status response, "+what+
+				". Clients that honour it refuse the connection; the rest connect believing "+
+				"revocation was checked.",
 			rfc7633, rfc6960, rfc9325)
 	}
 
@@ -257,8 +258,9 @@ func GradeStapling(f StapleFacts) StapleFinding {
 		}
 		add("cert.revoked", Insecure,
 			"The certificate has been revoked",
-			"The stapled status response, verified against the issuing authority, says this certificate was revoked"+when+
-				". Revocation is how a certificate is withdrawn before it expires, usually because its key was exposed or it was issued in error. Clients that check will refuse the connection.",
+			"The stapled status response, verified against the issuing authority, says this "+
+				"certificate was revoked"+when+". Clients that check revocation refuse the "+
+				"connection.",
 			rfc6960, rfc9325)
 	}
 
@@ -284,8 +286,9 @@ func GradeStapling(f StapleFacts) StapleFinding {
 		}
 		add("cert.revoked", Insecure,
 			"The certificate has been revoked",
-			"A revocation list published by the issuing authority, verified against it and current, names this certificate as revoked"+when+
-				". Revocation is how a certificate is withdrawn before it expires, usually because its key was exposed or it was issued in error. Clients that check will refuse the connection."+asOf,
+			"The issuing authority's current revocation list, verified against it, names "+
+				"this certificate as revoked"+when+". Clients that check revocation refuse the "+
+				"connection."+asOf,
 			rfc5280, rfc9325)
 	}
 
@@ -300,14 +303,17 @@ func GradeStapling(f StapleFacts) StapleFinding {
 		}
 		add("cert.revoked", Insecure,
 			"The certificate has been revoked",
-			"The certificate's own responder, asked directly and its answer verified against the issuing authority, says this certificate was revoked"+when+
-				". Revocation is how a certificate is withdrawn before it expires, usually because its key was exposed or it was issued in error. Clients that check will refuse the connection.",
+			"The certificate's own responder, asked directly and verified against the "+
+				"issuing authority, says this certificate was revoked"+when+". Clients that "+
+				"check revocation refuse the connection.",
 			rfc6960, rfc9325)
 	}
 	if f.QueryStatus == "unknown" && !(f.Validated && f.Status == "unknown") {
 		add("cert.revocation-unknown", Weak,
 			"The authority does not recognise this certificate",
-			"The certificate's own responder, asked directly and its answer verified against the issuing authority, says the status of this certificate is unknown. That is not the same as not revoked: the responder is authoritative for this issuer and does not have a record of this serial.",
+			"The certificate's own responder, verified against the issuing authority, says "+
+				"this certificate's status is unknown: it has no record of this serial. That is "+
+				"not the same as not revoked.",
 			rfc6960)
 	}
 
@@ -317,7 +323,9 @@ func GradeStapling(f StapleFacts) StapleFinding {
 	if f.Validated && f.Status == "unknown" {
 		add("cert.revocation-unknown", Weak,
 			"The authority does not recognise this certificate",
-			"The stapled response verifies against the issuing authority and says the status of this certificate is unknown. That is not the same as not revoked: the responder is authoritative for this issuer and does not have a record of this serial.",
+			"The stapled response verifies against the issuing authority and says this "+
+				"certificate's status is unknown: the responder has no record of this serial. "+
+				"That is not the same as not revoked.",
 			rfc6960)
 	}
 
@@ -332,8 +340,8 @@ func GradeStapling(f StapleFacts) StapleFinding {
 	if f.Stapled && !f.Validated && !f.IssuerMissing {
 		add("cert.staple-unverifiable", Weak,
 			"The stapled status response could not be verified",
-			"A certificate status response was stapled into the handshake and it does not establish anything: "+f.Unverifiable+
-				". A response that cannot be verified is not a revocation check, and a client that does not insist on one will connect believing it got a guarantee it did not.",
+			"A status response was stapled but establishes nothing: "+f.Unverifiable+". A "+
+				"response that cannot be verified is not a revocation check.",
 			rfc6960, rfc7633)
 	}
 
@@ -356,46 +364,42 @@ func GradeStapling(f StapleFacts) StapleFinding {
 	// asked it, beside the finding that quoted the answer. Where a responder
 	// was asked, the report says that instead.
 	if f.QueryStatus != "" || f.QueryReason != "" {
-		out.observe("This certificate's own responder was asked whether it has been revoked, because " +
-			"whoever ran this scan asked for that. The question names this certificate's serial to its " +
-			"authority, from the address the scan ran from; no scan asks it unless told to.")
+		out.observe("This certificate's own responder was asked about it because whoever ran this " +
+			"scan asked for that. The question tells the authority this certificate's " +
+			"serial, from the scan's address.")
 	} else {
 		out.standing(LimitNoAuthorityAsked)
 	}
 	switch {
 	case f.Stapled && f.IssuerMissing:
 		out.unsettled(
-			"A certificate status response was stapled and could not be checked, because the server did not " +
-				"send the certificate that issued this one. Every check a response needs is against the issuer: " +
-				"matching it to this certificate, and verifying its signature. This is not held against the " +
-				"response — the incomplete chain is reported separately — but nothing about revocation was established.")
+			"A status response was stapled but could not be checked, because the server did not send the " +
+				"certificate that issued this one, which every check needs. The incomplete chain is reported " +
+				"separately; nothing about revocation was established.")
 
 	case f.Stapled && f.Validated:
 		// This sentence used to say the response was not read, and it was
 		// the most important sentence in the file for exactly that reason.
 		// It is now the other half: what was checked, and what still is not.
 		out.observe(
-			"The stapled response was read and verified: it describes this certificate by issuer and serial, " +
-				"it is current, and its signature checks out against the issuing authority. What is still not " +
-				"checked is the responder's own revocation status, which would need a second request over the " +
-				"network; RFC 6960 lets an issuer waive that, and responder certificates are short-lived for " +
-				"the same reason.")
+			"The stapled response was read and verified: it names this certificate, it is current, and the " +
+				"issuing authority signed it. The responder's own revocation status was not checked, which " +
+				"RFC 6960 lets an issuer waive.")
 
 	case f.Stapled:
 		out.unsettled(
-			"A certificate status response was stapled and it established nothing. Reading it is what tells " +
-				"a stapling server apart from a server stapling whatever it has: the response has to describe " +
-				"this certificate, be current, and carry the issuing authority's signature.")
+			"A status response was stapled and established nothing: to count, it has to " +
+				"describe this certificate, be current, and carry the issuing authority's " +
+				"signature.")
 
 	case f.HasResponder:
 		// Not a finding. See the reasoning at the top of this file; this is
 		// the branch to change if that reasoning ever stops holding.
 		out.observe(
-			"No status response was stapled, and the certificate names a responder. A client that " +
-				"checks revocation therefore has to ask the certificate authority directly, which tells " +
-				"that authority which site is being visited. Stapling would answer the same question " +
-				"without disclosing the visit. This is not graded: the authority, not the server, " +
-				"decides whether a response exists to staple.")
+			"No status response was stapled, and the certificate names a responder, so " +
+				"clients that check revocation must ask the authority directly, telling it which " +
+				"site is being visited. Stapling avoids that. It is not graded: the authority " +
+				"decides whether a response exists.")
 
 	case f.HasCRL:
 		// The common case for a certificate issued now, and the one every
@@ -407,27 +411,22 @@ func GradeStapling(f StapleFacts) StapleFinding {
 		// does not fetch lists must not imply that one was consulted, and a
 		// report from one that did must not leave a reader thinking the
 		// question went unanswered.
-		said := "No status response was stapled, and the certificate names no responder to fetch one from. " +
-			"The CA/Browser Forum no longer requires certificate authorities to run OCSP, and several " +
-			"have withdrawn it, so there is nothing here for the server to have sent. "
+		said := "No status response was stapled, and the certificate names no responder. The " +
+			"CA/Browser Forum no longer requires OCSP, so there was nothing to send. "
 
 		switch {
 		case f.ListStatus != "":
-			said += "Revocation for this certificate is published as a list instead, and this scan " +
-				"fetched that list, verified it against the issuing authority and checked it was " +
-				"current. A list is a snapshot published on a schedule, so what it establishes is " +
-				"true as of its publication date rather than as of this moment — which is the same " +
-				"position every client checking this way is in."
+			said += "Revocation is published as a list instead; this scan fetched it, verified it " +
+				"and checked it was current. A list is true as of its publication date, as it is " +
+				"for every client."
 
 		case f.ListReason != "":
-			said += "Revocation for this certificate is published as a list instead. This scan tried " +
-				"to read it and could not, so revocation was not established here: " + f.ListReason +
-				". That is a limit of this scan rather than a fault of the server."
+			said += "Revocation is published as a list instead, and this scan could not read it: " +
+				f.ListReason + ". That is a limit of this scan, not a fault of the server."
 
 		default:
-			said += "Revocation for this certificate is published as a list instead, which clients " +
-				"fetch on their own schedule rather than per connection. This deployment does not " +
-				"fetch it, so nothing here says whether this certificate has been withdrawn."
+			said += "Revocation is published as a list instead, which this deployment does not " +
+				"fetch, so nothing here says whether this certificate has been withdrawn."
 		}
 
 		out.observe(said)
@@ -443,10 +442,8 @@ func GradeStapling(f StapleFacts) StapleFinding {
 		// faulty for lacking a public revocation channel would be wrong. The
 		// consequence is stated and the reader decides whether it applies.
 		out.observe(
-			"No status response was stapled, and the certificate names neither an OCSP responder nor a " +
-				"CRL distribution point. There is no published way to learn whether it has been revoked: " +
-				"a client that wanted to check has nowhere to ask. Withdrawing this certificate before it " +
-				"expires would mean reaching every client another way.")
+			"No status response was stapled, and the certificate names neither an OCSP responder nor a CRL, " +
+				"so a client that wants to check revocation has nowhere to ask.")
 	}
 
 	verdicts := make([]Verdict, 0, len(out.Findings))

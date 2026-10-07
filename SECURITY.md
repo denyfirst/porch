@@ -55,8 +55,8 @@ commit, steps, and what an attacker gains. Proof-of-concept code is welcome.
 | Initial assessment | 7 days |
 | Fix or mitigation plan | 30 days for high and critical |
 
-This project is maintained by one person outside of a day job. If a deadline
-slips you will hear why rather than hearing nothing.
+denyfirst is a small independent team. If a deadline slips you will hear why
+rather than hearing nothing.
 
 ## Disclosure
 
@@ -72,15 +72,12 @@ would waste your time.
 
 ## In scope
 
-- The hosted instance at `denyfirst.dev`
+- The sites at `denyfirst.dev` and `porch.denyfirst.dev`
 - Source code in this repository
 - Release artifacts and the workflows that produce them
-- **The documentation**, on the same terms as the code. `docs/verify.md` and
-  `docs/invariants.md` are instructions a stranger is meant to follow in order
-  to check this project; a command in them that does not do what it says is a
-  finding, not a typo. One already was: the rebuild recipe named a linker flag
-  that changed the binary's hash, so every honest verifier got the exact result
-  that means "tampered with".
+- **The documentation**, on the same terms as the code. A command in
+  `docs/verify.md` or `docs/self-host.md` that does not do what it says is a
+  finding, not a typo.
 
 Of particular interest, because these are where this project claims to be
 careful:
@@ -121,5 +118,5 @@ legal action. Good faith means: do not access, modify, or exfiltrate other
 people's data; do not degrade the service; stop as soon as you have confirmed
 the issue; report it before disclosing it.
 
-This authorisation covers the hosted instance and this repository only. It does
-not extend to third-party services, and it does not override the law.
+This authorisation covers the two sites above and this repository only. It
+does not extend to third-party services, and it does not override the law.

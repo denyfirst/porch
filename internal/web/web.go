@@ -23,6 +23,7 @@ import (
 	"encoding/xml"
 	"html/template"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -276,7 +277,40 @@ var pages = map[string]*page{
 
 // homePage is what assets/home.html reads.
 type homePage struct {
-	Fingerprint string
+	// Release and Sum are the release answering and the SHA-256 of the
+	// program file, for the receipt's last lines. Empty until Running is
+	// told, and the lines are left out then.
+	Release string
+	Sum     string
+}
+
+// releaseTag is a tag build.sh stamps; anything else is a build of
+// somebody's own, which has no signed list to find its hash in.
+var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// sha256Hex is a SHA-256 as SHA256SUMS writes it.
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// Running tells the front page which release is answering and the SHA-256 of
+// the file it was started from, so the receipt can say both and a visitor can
+// find that line in the release's signed SHA256SUMS. It is the server's own
+// word: a machine somebody else controls could print anything here, and the
+// signature on the list is what a visitor checks it against. Only a tagged
+// release with a well-formed sum is shown. Called once, before anything is
+// served; an installation has no front page and ignores it.
+func Running(release, sum string) {
+	if !demo.Enabled || !releaseTag.MatchString(release) || !sha256Hex.MatchString(sum) {
+		return
+	}
+	p := pages["/"]
+	data, _ := p.Data.(homePage)
+	data.Release, data.Sum = release, sum
+	p.Data = data
+	body, err := render(p)
+	if err != nil {
+		panic("web: rendering /: " + err.Error())
+	}
+	rendered["/"] = body
 }
 
 // groupedFingerprint writes a fingerprint as gpg prints it: groups of four,
@@ -479,6 +513,23 @@ var files = map[string]servedFile{
 	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
 	// Porch's own icon: a p, and the stop in its violet.
 	"/porch-icon.svg": {"assets/porch-icon.svg", "image/svg+xml"},
+
+	// The same marks at the addresses the pages link since 2026-10-07. The
+	// marks changed under the old addresses on 2026-10-06, and a browser that
+	// had kept the earlier icon for an address went on showing it; a new
+	// address is fetched. The old ones still answer, for whoever kept them.
+	"/icon-denyfirst.svg": {"assets/favicon.svg", "image/svg+xml"},
+	"/icon-porch.svg":     {"assets/porch-icon.svg", "image/svg+xml"},
+
+	// For what reads no SVG: an .ico of the mark at 16, 32 and 48 pixels, and
+	// a square of it at 180 for a phone's home screen. Browsers ask every name
+	// for /favicon.ico and /apple-touch-icon.png whatever a page links, so
+	// those two addresses are Porch's here and denyfirst's at denyfirst.dev
+	// (organisationIcons).
+	"/favicon.ico":          {"assets/porch.ico", "image/x-icon"},
+	"/apple-touch-icon.png": {"assets/porch-touch.png", "image/png"},
+	"/denyfirst.ico":        {"assets/denyfirst.ico", "image/x-icon"},
+	"/denyfirst-touch.png":  {"assets/denyfirst-touch.png", "image/png"},
 	// The one typeface every page is set in, served from here so a reader's
 	// browser asks nobody else for it. Schibsted Grotesk, under the SIL Open
 	// Font License 1.1 (schibsted-grotesk-OFL.txt beside it).
@@ -538,7 +589,7 @@ func init() {
 			Organisation: true,
 			Description:  "denyfirst builds security and privacy tools that keep your data with you. Porch checks TLS, websites, mail and DNS.",
 			Fragment:     "assets/home.html",
-			Data:         homePage{Fingerprint: groupedFingerprint(PGPFingerprint)},
+			Data:         homePage{},
 		}
 		// denyfirst.dev/privacy: the organisation's promises, and this
 		// site's own facts. An installation is Porch alone and links here.
@@ -574,7 +625,7 @@ func init() {
 			Description: "Porch checks what your servers show the outside world: TLS, website, mail and DNS. Self-hosted. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
 			Script:      true,
-			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest()},
+			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest(), Fingerprint: groupedFingerprint(PGPFingerprint)},
 		}
 	}
 
@@ -767,7 +818,7 @@ var signedIn bool
 // PublicPaths are what anybody may reach on an installation behind a
 // password: the sign-in page and what it draws and runs with.
 func PublicPaths() []string {
-	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/porch-icon.svg", FontPath}
+	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/icon-porch.svg", "/favicon.ico", "/apple-touch-icon.png", FontPath}
 }
 
 // renderSignIn is the one page an installation behind a password shows to
@@ -928,7 +979,13 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if file, found := files[r.URL.Path]; found {
+	path := r.URL.Path
+	if siteOf(r.Host) == organisationSite {
+		if own, found := organisationIcons[path]; found {
+			path = own
+		}
+	}
+	if file, found := files[path]; found {
 		body, err := assets.ReadFile(file.name)
 		if err != nil {
 			// Unreachable unless the table and the embedded tree disagree,
@@ -1087,6 +1144,10 @@ type porchPage struct {
 
 	// ImageDigest is the release's image, as its compose file pins it.
 	ImageDigest string
+
+	// Fingerprint is the key a vulnerability report is encrypted to, as gpg
+	// prints it, for the security band at the foot of the page.
+	Fingerprint string
 }
 
 // imageDigest is set by scripts/build.sh on the demonstration build, from the

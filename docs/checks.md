@@ -45,12 +45,12 @@ SSL 3.0 is asked the same way and shown in the version table.
 
 ### Limits
 
-- **Only the first hop was measured.** The endpoint that answered was measured. Behind a CDN, proxy or load balancer, the link to the server behind it is not visible and may differ. A name with several addresses was measured at one of them; each other address gets one handshake.
-- **Only the suites this client can offer were offered.** Suites were enumerated among those Go's TLS stack implements. SSL 3.0 and the export-grade, NULL, finite-field DHE and anonymous families were asked with a hand-written hello, which shows whether any suite of a family is accepted, not every one. SSLv2 and other suites are not covered. A version refused here may only share no suite with this client.
-- **TLS 1.3 suites are asked from the registry.** Each TLS 1.3 suite in the IANA registry is asked with a hand-written hello, because Go cannot choose among them. Suites outside the registry are not asked. Where that hello is not answered like the scan's own handshake, only the negotiated suite is listed and the report says so.
-- **The verdict rests on one root store.** Trust is checked against one root store, and the verdict rests on that store: on Linux and other unix systems, the store of the machine that ran this scan; on Windows and macOS, the copy of Microsoft's or Apple's store this build carries. What Mozilla, Chrome, Microsoft and Apple make of the chain comes from copies of their stores dated in the report. Only which roots they include, and Mozilla's distrust dates, are applied; other conditions are named, not applied.
-- **No authority is asked about this certificate.** No certificate authority is asked about this certificate, because the question carries its serial number and tells the authority which certificate is being looked at. -ask-responder turns that on, only for a domain a service has been shown control of, and the report then says so. A response the server stapled is read, and a revocation list the certificate names is fetched, because one list names no single certificate. Without either, a trusted, in-date chain may still have been withdrawn.
-- **Transparency receipts are checked against one browser's log list.** Receipts are checked against Chrome's log list as it stood on the date in the report. A receipt from a log the list does not name cannot be checked, and nothing here decides how many receipts a browser requires.
+- **Only the first hop was measured.** The endpoint that answered was measured; behind a CDN, proxy or load balancer, the server behind it is not visible. A name with several addresses was measured at one, with one handshake to each other.
+- **Only the suites this client can offer were offered.** Suites were enumerated among those Go's TLS stack implements. SSL 3.0 and the export-grade, NULL, finite-field DHE and anonymous families were asked with a hand-written hello, which shows whether any suite of a family is accepted, not every one. SSLv2 is not covered, and a refused version may only share no suite with this client.
+- **TLS 1.3 suites are asked from the registry.** Each TLS 1.3 suite in the IANA registry is asked with a hand-written hello, because Go cannot choose among them; suites outside the registry are not asked. Where that hello is answered differently, only the negotiated suite is listed and the report says so.
+- **The verdict rests on one root store.** Trust is checked against one root store, and the verdict rests on that store: on Linux and other unix systems, the store of the machine that ran this scan; on Windows and macOS, the copy of Microsoft's or Apple's store this build carries. Mozilla, Chrome, Microsoft and Apple are compared from dated copies of their stores: which roots they include and Mozilla's distrust dates are applied, and other conditions are named, not applied.
+- **No authority is asked about this certificate.** No certificate authority is asked about this certificate, because the question carries its serial number and tells the authority which certificate is being looked at. -ask-responder turns that on, only for a domain a service has been shown control of, and the report then says so. A stapled response is read and a revocation list is fetched, since one list names no single certificate. Without either, a trusted, in-date chain may still have been withdrawn.
+- **Transparency receipts are checked against one browser's log list.** Receipts are checked against Chrome's log list as of the date in the report. A receipt from a log the list does not name cannot be checked, and nothing here decides how many receipts a browser requires.
 
 ## Web
 
@@ -82,7 +82,7 @@ HTTPS hop.
 ### Limits
 
 - **Only the root was asked.** Only the root of the site was requested. Another page may send different headers and load different things.
-- **No browser ran here.** Nothing was executed. Where the page was read, what it loads was read from its markup, so anything a script fetches later was not seen. Whether a declared policy is enforced is visible only to a browser.
+- **No browser ran here.** Nothing was executed: what a page loads was read from its markup, so anything a script fetches later was not seen, and whether a declared policy is enforced only a browser can tell.
 - **One answer, from one machine, at one moment.** A name served by several machines can answer the next visitor differently. This is what one address said once.
 
 ## Mail
@@ -107,7 +107,7 @@ and pass it with `-helo`. A blocked outbound port 25 is reported as such.
 
 ### Limits
 
-- **No message was sent.** No message was sent: there is no DATA, so nothing can be delivered or queued. A mail exchanger inside the domain is also asked whether it forwards mail for a domain it does not serve: an empty sender, a recipient at a name RFC 2606 reserves so it cannot exist, and a reset before any message. An exchanger run by somebody else is never asked that. DANE is checked only against a certificate an exchanger presented, and DNSSEC is the resolver's word. A DKIM key is read only under a selector this scan was told to look under, and the report says which.
+- **No message was sent.** No message was sent: there is no DATA, so nothing is delivered or queued. An exchanger inside the domain is asked whether it would relay for a domain it does not serve, with an address that cannot exist (RFC 2606), and reset before any message; an exchanger run by somebody else is never asked. DANE is checked only against presented certificates, DNSSEC is the resolver's word, and DKIM is read only under the selectors given.
 
 ## DNS
 
@@ -125,7 +125,7 @@ target next can answer for your name. This is reported, not graded.
 
 ### Limits
 
-- **Everything here came from one resolver.** Most answers came from this installation's resolver, as it returns them today. Four questions go directly to name servers over TCP port 53, where this installation may ask them: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers one server of the parent zone hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing the digests of the zone's keys with the parent's; whether every signature verifies is the resolver's word.
+- **Everything here came from one resolver.** Most answers came from this installation's resolver. Four questions go directly to name servers over TCP port 53: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers a parent server hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing key digests with the parent's; whether every signature verifies is the resolver's word.
 
 ## Names
 

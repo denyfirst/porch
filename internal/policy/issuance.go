@@ -118,10 +118,8 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 			Facts: f,
 			Line:  "not checked",
 			Notes: []Note{Unsettled(
-				"Whether any authority is restricted from issuing certificates for this name was not " +
-					"checked. That takes a DNS lookup, and none was made: either no resolver was " +
-					"configured or the time this scan had was spent elsewhere. It is not a finding " +
-					"about the name.")},
+				"Whether any authority is restricted from issuing certificates for this name was " +
+					"not checked: no DNS lookup was made. That is not a finding about the name.")},
 		}
 	}
 
@@ -144,8 +142,8 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 		provenanceText += "The resolver reported the answer as DNSSEC-validated, which is its claim rather " +
 			"than a check this service performed."
 	} else {
-		provenanceText += "The answer was not marked as DNSSEC-validated, which means either that the zone " +
-			"is not signed — most are not — or that it was not verified. Those look the same from here."
+		provenanceText += "The answer was not marked DNSSEC-validated: either the zone is not signed, as " +
+			"most are not, or it was not verified, and the two look the same from here."
 	}
 	provenance := Unsettled(provenanceText)
 
@@ -153,10 +151,9 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 	// of the report. Stated on every branch, because a reader who has just
 	// been told issuance is restricted is exactly the reader most likely to
 	// stop reading.
-	const pairing = "A restriction is checked by an authority at the moment it issues, so it does not " +
-		"help against a resolver poisoned at that moment or an authority that has itself been " +
-		"compromised. Certificate transparency, on the line below, is what records the result either " +
-		"way. The record format is RFC 8659."
+	const pairing = "An authority checks CAA when it issues, so it does not help against a resolver " +
+		"poisoned at that moment or a compromised authority; certificate transparency, " +
+		"below, records the result either way. The format is RFC 8659."
 
 	switch {
 	case len(f.Authorities) == 0 && len(f.Wildcards) == 0 && f.Other > 0:
@@ -167,10 +164,9 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 			Facts: f,
 			Line:  fmt.Sprintf("CAA present at %s, and none of it restricts issuance", f.FoundAt),
 			Notes: []Note{
-				Observed(fmt.Sprintf("A CAA record set exists at %s and carries no issue property, so it names "+
-					"nobody and restricts nobody: any publicly trusted authority may still issue for "+
-					"this name. Whoever published it knows what CAA is, which makes this more likely "+
-					"to be a step not finished than a decision. %s", f.FoundAt, pairing)),
+				Observed(fmt.Sprintf("A CAA record set exists at %s but has no issue property, so it restricts "+
+					"nobody: any public authority may still issue for this name. Probably an "+
+					"unfinished step. %s", f.FoundAt, pairing)),
 				provenance,
 			},
 		}
@@ -185,10 +181,8 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 			Line:  fmt.Sprintf("no CAA found, but the search stopped at %s before reaching the top", f.SearchedTo),
 			Notes: []Note{
 				Unsettled("No CAA record was found between this name and " + f.SearchedTo + ", and the search " +
-					"stopped there rather than continuing towards the root. CAA is inherited, so a " +
-					"policy published on a shorter name would govern this one and would not have been " +
-					"seen. Whether any authority is restricted from issuing for this name is therefore " +
-					"not established either way. " + pairing),
+					"stopped there. CAA is inherited, so a record on a shorter name could govern " +
+					"this one; whether any authority is restricted was not established. " + pairing),
 				provenance,
 			},
 		}
@@ -198,11 +192,10 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 			Facts: f,
 			Line:  fmt.Sprintf("no CAA at this name or above it, searched to %s", f.SearchedTo),
 			Notes: []Note{
-				Observed("No CAA record was found for this name or for any parent up to " + f.SearchedTo + ". " +
-					"Any publicly trusted certificate authority may therefore issue for it, and there " +
-					"are around a hundred of them, so the weakest sets the standard. Publishing one " +
-					"record naming the authorities actually used tells the rest to refuse; checking it " +
-					"has been mandatory for authorities since 2017. " + pairing),
+				Observed("No CAA record was found for this name or any parent up to " + f.SearchedTo + ". Any " +
+					"publicly trusted certificate authority may therefore issue for it, of around a " +
+					"hundred. One record naming the authorities you use tells the rest to refuse; " +
+					"checking it has been mandatory for authorities since 2017. " + pairing),
 				provenance,
 			},
 		}

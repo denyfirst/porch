@@ -323,20 +323,17 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 		// Not graded, and the reason is R21: no document sets a rule about an
 		// alias whose target is gone. What can be said is what was measured,
 		// and what it leads to — which is the more useful half anyway.
-		note("This name is an alias for " + f.Alias + ", and " + f.Alias + " does not exist. " +
-			"The name resolves to nothing at all. Where the target is a name at a provider that " +
-			"hands out unclaimed names — a bucket, an app, a page host — whoever claims it next " +
-			"answers for this name, with a certificate they can obtain for it.")
+		note("This name is an alias for " + f.Alias + ", and " + f.Alias + " does not exist, so the " +
+			"name resolves to nothing. If the target is at a provider that hands out " +
+			"unclaimed names, whoever claims it next answers for this name.")
 	}
 
 	if f.Apex && f.Alias != "" {
 		add("dns.alias-at-zone-apex", Insecure,
 			"The top of the zone is an alias",
-			"RFC 1034 lets a name be an alias or carry records, never both, and RFC 2181 says the "+
-				"same in one line. The top of a zone carries its start of authority and its "+
-				"delegation, so an alias here contradicts them: resolvers disagree about which "+
-				"answer wins, and the ones that follow the alias lose the zone's mail and its "+
-				"name servers with it.",
+			"RFC 1034 and RFC 2181 let a name be an alias or carry records, never both. At "+
+				"the top of a zone an alias contradicts the zone's own records, so resolvers "+
+				"that follow it lose the zone's mail and name servers.",
 			rfc1034, rfc2181)
 	}
 
@@ -364,18 +361,16 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	case len(f.NameServers) < 2:
 		add("dns.one-name-server", Weak,
 			"The zone is served by fewer than two name servers",
-			"RFC 1034 requires a zone to be served by at least two, and RFC 2182 — a best current "+
-				"practice — says why: one server is one power supply, one network and one maintenance "+
-				"window between a domain and everybody trying to reach it. This zone names "+
+			"RFC 1034 requires at least two name servers, and RFC 2182 explains why: one "+
+				"server is a single point of failure. This zone names "+
 				strconv.Itoa(len(f.NameServers))+".",
 			rfc1034, rfc2182)
 	case f.Networks == 1:
 		add("dns.name-servers-one-network", Weak,
 			"Every name server answers from the same network",
-			"RFC 2182 asks for servers that do not fail together: separate networks, and ideally "+
-				"separate places. These "+strconv.Itoa(len(f.NameServers))+" answer from one, so whatever "+
-				"takes that network out takes the domain with it — and a domain nobody can resolve is "+
-				"one nobody can reach by any other route either.",
+			"RFC 2182 asks for name servers that do not fail together. These "+
+				strconv.Itoa(len(f.NameServers))+" answer from one network, so whatever takes it "+
+				"out takes the domain with it.",
 			rfc2182)
 	}
 
@@ -397,22 +392,17 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	if len(lame) > 0 {
 		add("dns.name-server-not-authoritative", Weak,
 			"A name server this zone names does not answer for it",
-			"Asked for this zone directly, "+strings.Join(lame, ", ")+" answered without claiming the "+
-				"zone as its own. RFC 1912 calls that a lame delegation: a resolver that tries it waits "+
-				"and then tries another, so every lookup that lands there is slower, and if enough of "+
-				"them are like this the zone stops resolving. A resolver reaching one working server "+
-				"hides this, which is why it is asked of each server rather than of a resolver.",
+			"Asked for this zone directly, "+strings.Join(lame, ", ")+" answered without "+
+				"claiming it. RFC 1912 calls that a lame delegation: lookups that land there are "+
+				"slower, and enough of them stop the zone resolving.",
 			rfc1912)
 	}
 	if len(recursing) > 0 {
 		add("dns.name-server-offers-recursion", Weak,
 			"A name server this zone names answers questions about other domains",
-			"Asked about a domain it has nothing to do with, "+strings.Join(recursing, ", ")+" went and "+
-				"found the answer. RFC 5358 — a best current practice — says an authoritative server "+
-				"should not do that: a server anybody can ask anything is one anybody can use to point "+
-				"traffic at somebody else, because a small question produces a large answer sent to "+
-				"whichever address asked. What it costs the operator is their own bandwidth and, once "+
-				"it has been used that way, their address's reputation.",
+			"Asked about a domain it has nothing to do with, "+strings.Join(recursing, ", ")+
+				" went and found the answer. RFC 5358 says an authoritative server should not: "+
+				"anyone can use it to aim large answers at somebody else.",
 			rfc5358)
 	}
 
@@ -434,11 +424,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 			}
 			add("dns.parent-and-zone-disagree", Weak,
 				"The zone above this one delegates to a different set of servers",
-				detail+" A resolver starting at the root follows the parent's list and never sees the "+
-					"zone's, so a name only the parent hands out is where some lookups go — and whatever "+
-					"is at that address answers them, whether or not it still holds this zone. A name "+
-					"only the zone lists carries none of the traffic it was added to carry. Either way "+
-					"the answer a visitor gets depends on which server their resolver tried first.",
+				detail+" Resolvers follow the parent's list, so which servers answer depends on "+
+					"which one a resolver tried first, and a name only the parent hands out may "+
+					"point somewhere that no longer holds this zone.",
 				rfc1912)
 		}
 	}
@@ -454,8 +442,8 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	// old IP address", and a multi-homed server whose addresses are not all
 	// listed, which it states as a requirement.
 	if stale, missing := glueDiff(f.NameServers); len(stale)+len(missing) > 0 {
-		detail := "A server inside this zone can only be reached through the address its parent hands " +
-			"out, so that copy is what a resolver starting at the root dials. "
+		detail := "A server inside this zone is reached only through the address its parent hands " +
+			"out. "
 		switch {
 		case len(stale) > 0 && len(missing) > 0:
 			detail += "The parent hands out " + strings.Join(stale, ", ") + ", which this zone does not " +
@@ -469,32 +457,27 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 		}
 		add("dns.glue-does-not-match", Weak,
 			"The address the parent hands out is not the one this zone publishes",
-			detail+" Whoever reaches the first address reaches whatever is there now, which may be a "+
-				"machine that no longer serves this zone or somebody else's entirely; whoever reaches the "+
-				"second gets the zone. Which one a visitor gets depends on their resolver, and nothing in "+
-				"this zone's own records can show it. It is changed where the delegation is — at the "+
-				"registrar — and not in the zone file.",
+			detail+" Some resolvers reach the old address, which may no longer serve this "+
+				"zone, and others reach the new one. It is fixed at the registrar, not in the "+
+				"zone file.",
 			rfc1912)
 	}
 
 	if len(aliased) > 0 {
 		add("dns.name-server-is-an-alias", Weak,
 			"A name server this zone names is an alias",
-			"RFC 2181 says the name in a delegation must have an address record and must not be an "+
-				"alias: "+strings.Join(aliased, ", ")+" is one. A resolver that follows the delegation "+
-				"asks for the address at the name it was given, and what it does with the alias it finds "+
-				"instead differs between implementations — which is why some resolvers reach this zone "+
-				"and others do not.",
+			"RFC 2181 says a name in a delegation must have an address and must not be an "+
+				"alias: "+strings.Join(aliased, ", ")+" is one. Resolvers handle that "+
+				"differently, so some reach this zone and others do not.",
 			rfc2181)
 	}
 
 	if len(unreachable) > 0 {
 		add("dns.name-server-without-address", Weak,
 			"A name server this zone names resolves to nothing",
-			"RFC 1912 calls this a lame delegation: "+strings.Join(unreachable, ", ")+" is named as "+
-				"serving this zone and has no address, so a resolver that tries it waits and then tries "+
-				"another. What it costs is time on every lookup that lands there, and what it usually "+
-				"means is a server decommissioned without the delegation being changed.",
+			"RFC 1912 calls this a lame delegation: "+strings.Join(unreachable, ", ")+" is "+
+				"named as a server for this zone and has no address. Every lookup that tries it "+
+				"waits; usually a server was retired without updating the delegation.",
 			rfc1912)
 	}
 
@@ -502,19 +485,16 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 
 	switch {
 	case !f.Signed:
-		note("The zone is not signed: the parent holds no delegation signer for it, so DNSSEC is not in " +
-			"use here. That is a choice rather than a fault, and where it is in use this check says " +
-			"whether the chain holds.")
+		note("The zone is not signed: the parent holds no delegation signer for it. That is a " +
+			"choice rather than a fault.")
 	case f.ChainReason != "":
 		unsettled("The DNSSEC chain could not be checked: " + f.ChainReason)
 	case len(f.Keys) == 0:
 		add("dns.dnssec-no-keys", Insecure,
 			"The parent anchors DNSSEC for this zone and the zone publishes no key",
-			"A delegation signer at the parent tells every validating resolver that answers from this "+
-				"zone are signed. With no key here nothing can be verified against it, and a validating "+
-				"resolver — which is what the large public resolvers are — answers with a failure rather "+
-				"than with the records. The domain is then unreachable for a large share of the internet "+
-				"and fine for whoever set it up, which is why this goes unnoticed.",
+			"The parent's delegation signer says this zone is signed, but no key is "+
+				"published here. Validating resolvers, including the large public ones, return a "+
+				"failure instead of the records, while it keeps working for whoever set it up.",
 			rfc4035)
 	case !f.ChainMatched && !computable(f.Signers):
 		// Every digest the parent holds is of a type this does not compute, so
@@ -523,10 +503,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	case !f.ChainMatched:
 		add("dns.dnssec-chain-broken", Insecure,
 			"No key this zone publishes matches the digest its parent holds",
-			"The parent's delegation signer is a hash of the key this zone is supposed to sign with. "+
-				"None of the keys published here hashes to it, which is what a key rotation that never "+
-				"reached the registrar looks like. Every validating resolver treats the whole zone as "+
-				"bogus and returns nothing at all.",
+			"None of the keys published here matches the parent's delegation signer, which "+
+				"is what a key rotation that never reached the registrar looks like. Validating "+
+				"resolvers treat the whole zone as bogus and return nothing.",
 			rfc4035)
 	}
 
@@ -534,9 +513,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 		if ds.DigestType == 1 && ds.Matched {
 			add("dns.dnssec-sha1-digest", Weak,
 				"The digest the parent holds for this zone is SHA-1",
-				"RFC 8624 says SHA-1 is not to be used for new delegation signers. The chain works "+
-					"today; what it costs is that its weakest link is a hash nobody would choose now, "+
-					"and replacing it is a change at the registrar rather than in the zone.",
+				"RFC 8624 says SHA-1 is not to be used for new delegation signers. The chain "+
+					"works today, but its weakest link is a hash nobody would choose now; replacing "+
+					"it is done at the registrar.",
 				rfc8624)
 			break
 		}
@@ -553,19 +532,17 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	if len(retired) > 0 {
 		add("dns.dnssec-retired-algorithm", Insecure,
 			"The zone signs with an algorithm RFC 8624 says must not be used",
-			"The keys published here use "+strings.Join(retired, ", ")+". A resolver that follows "+
-				"RFC 8624 treats a zone signed only with one of these as unsigned or as bogus "+
-				"depending on where it is, so the signatures buy nothing and may cost the zone the "+
-				"answers. Replacing the key means a rollover and a new digest at the registrar.",
+			"The keys published here use "+strings.Join(retired, ", ")+". Resolvers that "+
+				"follow RFC 8624 treat a zone signed only with these as unsigned or bogus. "+
+				"Replacing them needs a key rollover and a new digest at the registrar.",
 			rfc8624)
 	}
 	if len(weak) > 0 {
 		add("dns.dnssec-weak-algorithm", Weak,
 			"The zone signs with an algorithm RFC 8624 no longer recommends",
-			"The keys published here use "+strings.Join(weak, ", ")+", which RFC 8624 marks as not "+
-				"recommended for signing. Validators still accept it today; what it costs is that "+
-				"the zone rests on a hash and a construction nobody would choose now, and the move "+
-				"to ECDSA or Ed25519 is a rollover that has to happen eventually anyway.",
+			"The keys published here use "+strings.Join(weak, ", ")+", which RFC 8624 does "+
+				"not recommend for signing. Validators accept it today; moving to ECDSA or "+
+				"Ed25519 is a rollover that has to happen eventually.",
 			rfc8624)
 	}
 
@@ -576,19 +553,17 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	if f.NSEC3 && f.NSEC3Iterations > 0 {
 		add("dns.nsec3-iterations", Weak,
 			"The zone hashes absent names more than once",
-			"RFC 9276 says the iteration count must be zero: additional iterations cost every "+
-				"resolver that asks for a name which does not exist, they cost this zone's own "+
-				"servers the same work, and they do not keep the zone's names secret — a listing "+
-				"can be recovered from the hashes either way. This zone publishes "+
-				strconv.Itoa(int(f.NSEC3Iterations))+".",
+			"RFC 9276 says the NSEC3 iteration count must be zero: extra iterations cost "+
+				"every resolver and this zone's own servers work, and keep no names secret. This "+
+				"zone publishes "+strconv.Itoa(int(f.NSEC3Iterations))+".",
 			rfc9276)
 	}
 
 	for _, ds := range f.Signers {
 		if ds.Unsupported {
 			unsettled("The parent holds a digest of a type this check does not compute (type " +
-				strconv.Itoa(int(ds.DigestType)) + "), so that one was neither matched nor ruled out. " +
-				"Nothing measured is not the same as nothing wrong.")
+				strconv.Itoa(int(ds.DigestType)) + "), so that one was neither matched nor ruled " +
+				"out.")
 			break
 		}
 	}
@@ -599,16 +574,16 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	case f.AddressReason != "":
 		unsettled("The addresses could not be read: " + f.AddressReason)
 	case len(f.IPv4)+len(f.IPv6) == 0:
-		note("The name itself resolves to no address. A domain used only for mail, or only for names " +
-			"beneath it, is ordinary; what this says is that nothing answers at the domain on its own.")
+		note("The name itself resolves to no address. That is ordinary for a domain used only " +
+			"for mail or for the names beneath it.")
 	}
 
 	if f.SOAFound {
 		note("The zone's serial is " + strconv.FormatUint(uint64(f.SOASerial), 10) + ", it names " +
 			f.SOAPrimary + " as primary, and its timers are refresh " + duration(f.SOARefresh) +
-			", retry " + duration(f.SOARetry) + ", expire " + duration(f.SOAExpire) +
-			", minimum " + duration(f.SOAMinimum) + ". RFC 1912 gives ranges for these and calls them " +
-			"recommendations, so they are reported here and not graded.")
+			", retry " + duration(f.SOARetry) + ", expire " + duration(f.SOAExpire) + ", minimum " +
+			duration(f.SOAMinimum) + ". RFC 1912's ranges are recommendations, so these are " +
+			"reported and not graded.")
 	}
 
 	// When the signatures run out, which nothing else in a report carries.
@@ -620,12 +595,11 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	// against it.
 	if f.Signed && f.SignatureRead && !f.SignatureExpires.IsZero() && !f.SignatureExpires.Before(now) {
 		left := int(f.SignatureExpires.Sub(now).Hours() / 24)
-		note("The signature over the record at the top of this zone runs out on " +
-			f.SignatureExpires.Format("2006-01-02") + ", in " + strconv.Itoa(left) + " days, and was made " +
-			"by key " + strconv.Itoa(int(f.SignatureKeyTag)) + ". A signed zone is re-signed on a schedule; " +
-			"if that stops, the zone disappears for everybody behind a validating resolver on the date " +
-			"above and keeps working for whoever set it up. No document says how much room to leave, so " +
-			"this is the date and not a grade.")
+		note("The signature over the top of this zone runs out on " +
+			f.SignatureExpires.Format("2006-01-02") + ", in " + strconv.Itoa(left) + " days, and " +
+			"was made by key " + strconv.Itoa(int(f.SignatureKeyTag)) + ". If re-signing stops, " +
+			"the zone disappears for validating resolvers on that date. No document says how " +
+			"much room to leave, so this is not graded.")
 	}
 
 	// A signature that has run out, which is the one thing here a document
@@ -641,13 +615,10 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	if f.Signed && f.SignatureRead && !f.SignatureExpires.IsZero() && f.SignatureExpires.Before(now) {
 		add("dns.signature-expired", Insecure,
 			"The signature over this zone has run out",
-			"RFC 4035 requires a validating resolver to refuse a signature whose validity period "+
-				"does not contain the current time, and this zone's ran out on "+
-				f.SignatureExpires.Format("2006-01-02")+" at "+f.SignatureExpires.Format("15:04")+" UTC. "+
-				"For everybody behind such a resolver — which is what the large public resolvers are — "+
-				"this domain now answers with a failure rather than with an address, while it keeps "+
-				"working for anybody whose resolver does not validate. What causes it is signing that "+
-				"stopped running rather than anything that was changed.",
+			"This zone's signature ran out on "+f.SignatureExpires.Format("2006-01-02")+" at "+
+				f.SignatureExpires.Format("15:04")+" UTC, and RFC 4035 requires validating "+
+				"resolvers to refuse it. Behind the large public resolvers the domain now fails "+
+				"to resolve; usually the signing job stopped.",
 			rfc4035)
 	}
 
@@ -667,16 +638,12 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 		if len(open) > 1 {
 			began = "those servers began"
 		}
-		note("The zone can be read whole from " + strings.Join(open, ", ") + ": asked for a transfer, " +
-			began + " handing it over to an address it has never heard of. What that gives " +
-			"away is every name in the zone at once — the staging host, the build server, the name " +
-			"behind the VPN — which no other question here can reach, because every other one asks " +
-			"about a name somebody already knows. RFC 5936 does not call it a fault and neither does " +
-			"this: an operator may open transfers deliberately, and a zone whose names are not secret " +
-			"loses nothing by it. This check read the first reply's header and closed the connection, " +
-			"so the zone itself was not taken and nothing of its contents is reported here. To see " +
-			"what it hands over, read your own zone: porch-scan -check names -read-zone, which lists " +
-			"every name in it beside the names its certificates and records already publish.")
+		note("The zone can be read whole from " + strings.Join(open, ", ") + ": asked for a " +
+			"transfer, " + began + " handing it to an unknown address. That gives away every " +
+			"name in the zone at once. RFC 5936 does not call it a fault, and some operators " +
+			"allow it on purpose. This check closed the connection after the first reply's " +
+			"header, so nothing was taken. To see what it hands over, run porch-scan -check " +
+			"names -read-zone on your own zone.")
 	} else if len(unread) > 0 {
 		note("Whether the zone can be read whole was not established for " + strings.Join(unread, ", ") +
 			": the question did not complete. That is not a zone that refused one (R4).")
@@ -699,10 +666,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 				said = append(said, s.name+" at "+strconv.FormatUint(uint64(s.serial), 10))
 			}
 			note("The servers do not hold the same copy of the zone: " + strings.Join(said, ", ") +
-				". Immediately after a change that is ordinary and lasts as long as the transfer takes. " +
-				"A difference that stays means a server is no longer receiving the zone, and a resolver " +
-				"that happens to ask that one answers from the older copy — so the same name resolves " +
-				"differently depending on who is asking.")
+				". Right after a change that is ordinary; if it lasts, a server has stopped " +
+				"receiving the zone, and the same name resolves differently depending on who " +
+				"asks.")
 		}
 	}
 
@@ -715,11 +681,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 			strconv.Itoa(int(f.NSEC3Iterations)) + " extra times with a salt of " +
 			strconv.Itoa(f.NSEC3SaltLength) + " bytes.")
 	default:
-		note("Names that do not exist are proved absent by naming the next name that does, which " +
-			"is what lets anybody list every name in this zone by asking for one that is not there " +
-			"and following the answers. That is how DNSSEC worked before RFC 5155, and a zone whose " +
-			"names are not secret loses nothing by it. It is not graded, because nothing requires " +
-			"the hashed kind.")
+		note("Names that do not exist are proved absent by naming the next name that does, so " +
+			"anyone can list every name in this zone. Nothing requires the hashed kind (RFC " +
+			"5155), so this is not graded.")
 	}
 
 	if f.ResolverValidated {
@@ -778,13 +742,13 @@ var LimitDNSAsksTheResolver = StandingLimit{
 	ID:    "dns-asks-the-resolver",
 	Title: "Everything here came from one resolver",
 
-	Text: "Most answers came from this installation's resolver, as it returns them today. Four " +
-		"questions go directly to name servers over TCP port 53, where this installation may ask " +
-		"them: whether each answers for the zone, whether each allows a zone transfer, whether a " +
-		"server inside the domain (never a provider's) answers for other domains, and which " +
-		"servers one server of the parent zone hands out. The transfer is closed before any " +
-		"record is read. The DNSSEC chain is checked by comparing the digests of the zone's keys " +
-		"with the parent's; whether every signature verifies is the resolver's word.",
+	Text: "Most answers came from this installation's resolver. Four questions go directly " +
+		"to name servers over TCP port 53: whether each answers for the zone, whether " +
+		"each allows a zone transfer, whether a server inside the domain (never a " +
+		"provider's) answers for other domains, and which servers a parent server hands " +
+		"out. The transfer is closed before any record is read. The DNSSEC chain is " +
+		"checked by comparing key digests with the parent's; whether every signature " +
+		"verifies is the resolver's word.",
 }
 
 // DNSStandingLimits are true of every DNS check this program runs.
