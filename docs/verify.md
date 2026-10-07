@@ -249,7 +249,7 @@ policy porch-tls-v7
 policy porch-web-v3
 policy porch-mail-v3
 policy porch-dns-v2
-scans whatever it is pointed at, from this machine
+scans only domains this user has shown control of, from this machine
 ```
 
 The release and the rule sets are whatever the binary in front of you was built

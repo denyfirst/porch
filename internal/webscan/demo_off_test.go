@@ -14,9 +14,9 @@ import (
 // The ordinary build has no list to be outside of.
 //
 // Under the demo tag, because without it there is nothing to assert: this is
-// the tool, and the tool scans whatever it is pointed at. A guard that fired
-// here would be the deployment restriction leaking into every copy anybody
-// runs, which is the opposite of what this project decided.
+// the tool, and the tool scans whatever its operator has proven. A guard that
+// fired here would be the deployment restriction leaking into every copy
+// anybody runs, which is the opposite of what this project decided.
 func TestTheOrdinaryWebScannerIsNotADemonstration(t *testing.T) {
 	if demo.Enabled {
 		t.Fatal("built without the demo tag and demo.Enabled is true")
