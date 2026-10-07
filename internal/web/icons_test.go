@@ -138,8 +138,8 @@ func pngShape(t *testing.T, name string, raw []byte) (width, height, colour int)
 	return width, height, colour
 }
 
-// Pages link the marks at their new addresses, and each name answers the
-// addresses a browser asks for unprompted with its own mark.
+// Pages link the marks at their new addresses, one icon each, and each name
+// answers the addresses a browser asks for unprompted with its own mark.
 func TestEachNameLinksAndServesItsOwnMark(t *testing.T) {
 	layout, err := assets.ReadFile("assets/layout.html")
 	if err != nil {
@@ -147,15 +147,21 @@ func TestEachNameLinksAndServesItsOwnMark(t *testing.T) {
 	}
 	head := string(layout)
 	for _, want := range []string{
-		`<link rel="icon" href="/denyfirst.ico" sizes="16x16 32x32 48x48">`,
 		`<link rel="icon" href="/icon-denyfirst.svg" type="image/svg+xml">`,
 		`<link rel="apple-touch-icon" href="/denyfirst-touch.png">`,
-		`<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">`,
 		`<link rel="icon" href="/icon-porch.svg" type="image/svg+xml">`,
 		`<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
 	} {
 		if !strings.Contains(head, want) {
 			t.Errorf("the layout does not link %s", want)
+		}
+	}
+	// One icon per page. Chromium fetches every icon a page links, and the
+	// front page's receipt counts the files a visit loads; what reads no SVG
+	// asks for /favicon.ico unprompted, and is answered there.
+	for _, branch := range strings.Split(head, "{{else}}")[:2] {
+		if n := strings.Count(branch, `<link rel="icon"`); n != 1 {
+			t.Errorf("a page links %d icons, not one", n)
 		}
 	}
 	// The old addresses still answer, and nothing links them: a browser that
