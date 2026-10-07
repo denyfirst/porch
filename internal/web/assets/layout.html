@@ -22,7 +22,11 @@
 {{end}}
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="{{if .Organisation}}/favicon.svg{{else}}/porch-icon.svg{{end}}" type="image/svg+xml">
+{{if .Organisation}}<link rel="icon" href="/denyfirst.ico" sizes="16x16 32x32 48x48">
+<link rel="icon" href="/icon-denyfirst.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/denyfirst-touch.png">{{else}}<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="icon" href="/icon-porch.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">{{end}}
 <link rel="preload" href="/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>

@@ -479,6 +479,23 @@ var files = map[string]servedFile{
 	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
 	// Porch's own icon: a p, and the stop in its violet.
 	"/porch-icon.svg": {"assets/porch-icon.svg", "image/svg+xml"},
+
+	// The same marks at the addresses the pages link since 2026-10-07. The
+	// marks changed under the old addresses on 2026-10-06, and a browser that
+	// had kept the earlier icon for an address went on showing it; a new
+	// address is fetched. The old ones still answer, for whoever kept them.
+	"/icon-denyfirst.svg": {"assets/favicon.svg", "image/svg+xml"},
+	"/icon-porch.svg":     {"assets/porch-icon.svg", "image/svg+xml"},
+
+	// For what reads no SVG: an .ico of the mark at 16, 32 and 48 pixels, and
+	// a square of it at 180 for a phone's home screen. Browsers ask every name
+	// for /favicon.ico and /apple-touch-icon.png whatever a page links, so
+	// those two addresses are Porch's here and denyfirst's at denyfirst.dev
+	// (organisationIcons).
+	"/favicon.ico":          {"assets/porch.ico", "image/x-icon"},
+	"/apple-touch-icon.png": {"assets/porch-touch.png", "image/png"},
+	"/denyfirst.ico":        {"assets/denyfirst.ico", "image/x-icon"},
+	"/denyfirst-touch.png":  {"assets/denyfirst-touch.png", "image/png"},
 	// The one typeface every page is set in, served from here so a reader's
 	// browser asks nobody else for it. Schibsted Grotesk, under the SIL Open
 	// Font License 1.1 (schibsted-grotesk-OFL.txt beside it).
@@ -767,7 +784,7 @@ var signedIn bool
 // PublicPaths are what anybody may reach on an installation behind a
 // password: the sign-in page and what it draws and runs with.
 func PublicPaths() []string {
-	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/porch-icon.svg", FontPath}
+	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/icon-porch.svg", "/favicon.ico", "/apple-touch-icon.png", FontPath}
 }
 
 // renderSignIn is the one page an installation behind a password shows to
@@ -928,7 +945,13 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if file, found := files[r.URL.Path]; found {
+	path := r.URL.Path
+	if siteOf(r.Host) == organisationSite {
+		if own, found := organisationIcons[path]; found {
+			path = own
+		}
+	}
+	if file, found := files[path]; found {
 		body, err := assets.ReadFile(file.name)
 		if err != nil {
 			// Unreachable unless the table and the embedded tree disagree,
