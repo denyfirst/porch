@@ -28,7 +28,7 @@
 <script src="/theme.js"></script>
 </head>
 <body{{if .Brand}}{{if .Organisation}} data-owner="organisation"{{end}} data-site="demo"{{else}} class="workspace{{if eq .Section "login"}} workspace-signin{{end}}"{{end}}>
-{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span></p>
+{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>
 {{end}}
 {{if not .Brand}}
 <!--

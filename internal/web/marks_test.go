@@ -164,8 +164,19 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(layout), `{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span></p>`) {
+	if !strings.Contains(string(layout), `{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>`) {
 		t.Error("Porch's pages do not carry the mark a printed report is headed with")
+	}
+
+	// And the sheet says when it was printed: a fresh report on an
+	// installation carries no time of its own, and a PDF is read days later.
+	app, err := assets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(app), `window.addEventListener("beforeprint", () => {`) ||
+		!strings.Contains(string(app), `stamp.textContent = "Printed " + new Date().toISOString()`) {
+		t.Error("a printed report does not say when it was printed")
 	}
 
 	// The way around the installation and the things that are pressed do not

@@ -3780,6 +3780,15 @@ main > .band:last-child { border-bottom: 0; }
   /* Paper gets neither the header nor the rail, and with them went the only
      mark on the page; a report handed on should say what made it. Porch's
      mark heads the sheet, and the footer still names its maker. */
+  .print-date {
+    float: right;
+    margin-top: 0.5em;
+    font-size: 9pt;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--ink-faint);
+  }
+
   .print-mark {
     display: block;
     margin: 0 0 6mm;
