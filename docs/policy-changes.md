@@ -187,8 +187,8 @@ Released in v0.16.0, 2026-09.
 
 **The page itself is now read**, where the deployment reads pages: one GET of
 the final response, up to one megabyte, streamed, and nothing kept but a few
-booleans and host names. The demonstration reads no body. A
-`Content-Security-Policy` declared in markup is now seen.
+booleans and host names. A `Content-Security-Policy` declared in markup is
+now seen.
 
 **Corrected readings:** an HSTS header that repeats a directive is
 unparseable; only the graded host's own HSTS policy counts; a redirect not
