@@ -120,33 +120,50 @@
   </div>
 </section>
 
-<section class="band band-split band-tint disclosure" id="security">
-  <p class="eyebrow">04 / Security &amp; disclosure</p>
-  <div class="disclosure-body">
-    <h2 class="band-title">Found a vulnerability?</h2>
-    <div class="security-box">
-      <p>Write to <a href="mailto:security@denyfirst.dev">security@denyfirst.dev</a>,
-      encrypted to our key if you can. We reply within 72 hours.</p>
-      <p class="field-label">Key fingerprint</p>
-      <p class="fingerprint"><code>{{.Fingerprint}}</code></p>
-      <p class="security-links">
-        <a href="/pgp-key.txt">Download the key</a>
-        <a href="/.well-known/security.txt">security.txt</a>
-        <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Check the fingerprint on GitHub</a>
-      </p>
+<section class="band band-tint" id="this-visit">
+  <div class="receipt">
+    <div class="receipt-text">
+      <p class="eyebrow">04 / This visit</p>
+      <h2 class="band-title">Your receipt.</h2>
+      <p class="band-prose">Every site takes something when you open it. This is
+      everything this one took.</p>
+      <p class="band-prose">Open your browser&rsquo;s network panel and check each
+      line yourself.</p>
     </div>
-  </div>
-  <div class="disclosure-track">
-    <p class="disclosure-track-title" id="after-you-write">After you write</p>
-    <ol class="timeline" aria-labelledby="after-you-write">
-      <li><span class="timeline-when">Day 0</span><span class="timeline-what">You report it privately</span></li>
-      <li><span class="timeline-when">72 hours</span><span class="timeline-what">We acknowledge it</span></li>
-      <li><span class="timeline-when">7 days</span><span class="timeline-what">First assessment</span></li>
-      <li><span class="timeline-when">30 days</span><span class="timeline-what">A fix or a plan, if high or critical</span></li>
-      <li><span class="timeline-when">90 days</span><span class="timeline-what">Made public, with credit to you</span></li>
-    </ol>
-    <p class="timeline-note">Anonymous reports are accepted, and credit is yours to decline.
-    Good-faith research has <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md#safe-harbour">safe harbour</a>.</p>
+    <article class="slip" aria-labelledby="slip-title">
+      <p class="slip-mark" id="slip-title"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></p>
+      <p class="slip-head">Receipt &middot; this visit</p>
+      <dl class="slip-rows">
+        <div><dt>Cookies set</dt><dd>0</dd></div>
+        <div><dt>Trackers</dt><dd>0</dd></div>
+        <div><dt>Other servers asked</dt><dd>0</dd></div>
+        <div><dt>Files loaded</dt><dd>6</dd></div>
+      </dl>
+      <p class="slip-aside">All six from denyfirst.dev: this page, its stylesheet,
+      two small scripts, the typeface and the icon.</p>
+      <dl class="slip-rows">
+        <div><dt>Kept in your cache</dt><dd>0</dd></div>
+        <div><dt>Saved in your browser</dt><dd>nothing</dd></div>
+      </dl>
+      <p class="slip-aside">Switch the colour scheme and it keeps one word,
+      light or dark, which never leaves your browser.</p>
+      <dl class="slip-rows">
+        <div><dt>Told to the next site</dt><dd>nothing</dd></div>
+      </dl>
+      <dl class="slip-rows slip-ruled">
+        <div><dt>Recorded about you</dt><dd>nothing*</dd></div>
+      </dl>
+      <dl class="slip-rows slip-total">
+        <div><dt>Total collected</dt><dd>0</dd></div>
+      </dl>{{if .Release}}
+      <p class="slip-served">Served by porch <a href="https://github.com/denyfirst/porch/releases/tag/{{.Release}}">{{.Release}}</a></p>
+      <p class="slip-served slip-hash">sha256 {{.Sum}}</p>
+      <p class="slip-aside">Find this line in the release&rsquo;s signed SHA256SUMS.</p>{{end}}
+      <p class="slip-aside slip-ruled">* The one line you take on trust. The
+      <a href="/privacy">privacy page</a> says what is kept, and the
+      code that keeps it is public.</p>
+      <p class="slip-foot">No copy of this receipt was kept.</p>
+    </article>
   </div>
 </section>
 

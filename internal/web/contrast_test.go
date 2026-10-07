@@ -155,6 +155,11 @@ func TestEveryColourTextIsSetInIsLegible(t *testing.T) {
 			if strings.HasPrefix(token, "term-") {
 				on = []string{"term-bg", "term-bar"}
 			}
+			// The receipt is paper in both schemes, and its ink is set on it
+			// and nowhere else.
+			if strings.HasPrefix(token, "slip-") {
+				on = []string{"slip-paper"}
+			}
 			for _, surface := range on {
 				got := contrast(value, tokens[surface])
 				if got < readableContrast {

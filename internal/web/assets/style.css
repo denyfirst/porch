@@ -92,6 +92,13 @@
   --term-str:    #a6dc85;
   --term-var:    #f2c97d;
 
+  /* The receipt on the front page is paper in both schemes, as a receipt is,
+     so its colours are drawn on it and nowhere else. */
+  --slip-paper:  #fbf9f4;
+  --slip-ink:    #1d1e22;
+  --slip-faint:  #55565e;
+  --slip-red:    #b3202e;
+
   --sans: "Schibsted Grotesk", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
           -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo,
@@ -1684,7 +1691,8 @@ code.flag { white-space: nowrap; }
 
 .band-head .eyebrow::before,
 .band-split > .eyebrow::before,
-.team-text > .eyebrow::before {
+.team-text > .eyebrow::before,
+.receipt-text > .eyebrow::before {
   content: "";
   display: inline-block;
   width: 1.5rem;
@@ -1876,6 +1884,147 @@ code.flag { white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   .team-card, .team-card:hover { transition: none; transform: none; }
+}
+
+/*
+  The front page's receipt for the visit. Every line is a fact a reader can
+  see in their own browser, and demo_page_test.go holds each to the response
+  that makes it true. It tilts the other way from the team's card.
+*/
+.receipt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 23rem);
+  gap: 2.5rem 4rem;
+  align-items: center;
+}
+
+.receipt-text .band-prose + .band-prose { margin-top: -0.6rem; }
+
+.slip {
+  --tooth: 9px;
+  padding: 1.7rem 1.4rem 2.4rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--slip-ink);
+  background: var(--slip-paper);
+  box-shadow: 0 24px 40px -26px rgb(0 0 0 / 0.55);
+  transform: rotate(1.2deg);
+  transition: transform 220ms ease-out;
+  /* The torn edge at the foot: a row of teeth cut out of the paper. */
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--tooth)) 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--tooth)) 100%;
+}
+
+.slip:hover { transform: rotate(0deg); }
+
+.slip-mark {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-align: center;
+}
+
+.slip-mark .wordmark-deny { color: var(--slip-ink); }
+.slip-mark .wordmark-stop { color: var(--slip-red); }
+
+.slip-head {
+  margin: 0.15rem 0 0;
+  padding-bottom: 0.75rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  border-bottom: 1px dashed var(--slip-faint);
+}
+
+.slip-rows { margin: 0.75rem 0 0; }
+
+.slip-rows > div {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.slip-rows dt { white-space: nowrap; }
+
+/* The dotted leader between a line and its figure. */
+.slip-rows > div::before {
+  content: "";
+  order: 1;
+  flex: 1;
+  min-width: 0.8rem;
+  border-bottom: 1px dotted var(--slip-faint);
+  transform: translateY(-0.3rem);
+}
+
+.slip-rows dd {
+  order: 2;
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.slip-aside {
+  margin: 0.3rem 0 0;
+  padding-left: 1.2em;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--slip-faint);
+}
+
+.slip-aside a, .slip-served a { color: var(--slip-ink); }
+
+.slip-ruled {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--slip-faint);
+}
+
+.slip-total {
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 3px double var(--slip-ink);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.slip-total dd { color: var(--slip-red); }
+
+.slip-served {
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--slip-faint);
+  font-size: 0.74rem;
+}
+
+.slip-served + .slip-served {
+  margin-top: 0.1rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.slip-hash { overflow-wrap: anywhere; }
+
+.slip-foot {
+  margin: 1rem 0 0;
+  font-size: 0.72rem;
+  text-align: center;
+  color: var(--slip-faint);
+}
+
+@media (max-width: 52rem) {
+  .receipt { grid-template-columns: 1fr; }
+  .slip { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slip, .slip:hover { transition: none; transform: none; }
 }
 
 .cards {
@@ -2443,95 +2592,9 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
 
-/*
-  The security band: how to write on one side, and under the label the track a
-  report follows after it arrives. Every stop on the track is SECURITY.md's,
-  and demo_page_test.go holds each to it. On a phone the track comes after
-  the box, so the way to write is read first.
-*/
-.disclosure {
-  grid-template-areas: "label body" "track body";
-  grid-template-rows: auto 1fr;
-}
-
-.disclosure > .eyebrow { grid-area: label; }
-.disclosure-body { grid-area: body; }
-.disclosure-track { grid-area: track; align-self: start; max-width: 24rem; }
-
-.disclosure-track-title {
-  margin: 0.4rem 0 0.6rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.timeline {
-  position: relative;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The line the stops sit on, from the rule's grey into the accent: a report
-   travels from private towards public. */
-.timeline::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 0.95rem;
-  bottom: 0.95rem;
-  width: 2px;
-  background: linear-gradient(var(--rule), var(--accent));
-}
-
-.timeline li {
-  position: relative;
-  display: grid;
-  grid-template-columns: 4.6rem minmax(0, 1fr);
-  gap: 0.2rem 0.9rem;
-  align-items: baseline;
-  padding: 0.5rem 0 0.5rem 1.7rem;
-}
-
-.timeline li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.82rem;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  background: var(--paper-sunk);
-}
-
-.timeline li:last-child::before { background: var(--accent); }
-
-.timeline-when {
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  color: var(--ink-faint);
-}
-
-.timeline-what { font-size: 0.95rem; color: var(--ink); }
-
-.timeline-note {
-  margin: 0.9rem 0 0 1.7rem;
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-
-@media (max-width: 52rem) {
-  .disclosure {
-    grid-template-areas: "label" "body" "track";
-    grid-template-rows: auto;
-  }
-  .disclosure-track { max-width: none; }
-}
-
-/* How to report a vulnerability, on the front page. */
+/* How to report a vulnerability, on Porch's page. The footer's Security link
+   lands here; when the box is already on screen, it flashes, so the click is
+   seen to have done something. */
 .security-box {
   max-width: 44rem;
   margin-top: 1.4rem;
@@ -2562,6 +2625,17 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
   flex-wrap: wrap;
   gap: 0.4rem 1.4rem;
   font-size: 0.92rem;
+}
+
+.security-band:target .security-box { animation: arrived 1.4s ease-out; }
+
+@keyframes arrived {
+  from { box-shadow: 0 0 0 4px var(--accent); }
+  to   { box-shadow: 0 0 0 4px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .security-band:target .security-box { animation: none; outline: 2px solid var(--accent); outline-offset: 4px; }
 }
 
 @media (max-width: 52rem) {
