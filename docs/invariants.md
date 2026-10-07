@@ -1884,6 +1884,14 @@ removes it, so a stale entry is a bug in this page.
 - **Four commits on `main` carry no signature.** S6. `1fdf674`, `cc163a3`,
   `01fc49f`, `7cd2cfa` were rebase-merged. The signed originals are the tag
   `signed/2026-08-20-docs-and-build`, with identical trees.
+- **Each address of a name gets one handshake, not a full scan.** Up to
+  eight addresses are asked alike. A machine that differs only in what else it
+  would accept, behind the same preferred answer, looks identical.
+- **The hosts a proven domain names have no budget of their own** (A05). Its
+  exchangers and the revocation lists its certificates name are reached as a
+  mail server or a browser would reach them. A per-exchanger budget, and
+  fetching a list only for a chain that reaches a trusted root, each change
+  what a report says and wait for a rule-set version.
 - **One reader is not an audit.** Every file has been read, by the people who
   wrote it. That is not an independent review.
 - **Prose drifts.** A test can only check the sentences somebody pinned.
