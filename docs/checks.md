@@ -125,7 +125,7 @@ target next can answer for your name. This is reported, not graded.
 
 ### Limits
 
-- **Everything here came from one resolver.** Most answers came from this installation's resolver, as it returns them today. Four questions go directly to name servers over TCP port 53, where this installation may ask them: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers one server of the parent zone hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing the digests of the zone's keys with the parent's; whether every signature verifies is the resolver's word.
+- **Everything here came from one resolver.** Most answers came from this installation's resolver. Four questions go directly to name servers over TCP port 53: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers a parent server hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing key digests with the parent's; whether every signature verifies is the resolver's word.
 
 ## Names
 
