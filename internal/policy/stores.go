@@ -100,8 +100,9 @@ func DescribeStores(f StoreFacts) []Note {
 	var out []Note
 	if names := f.named(storeNotTrusted); len(names) > 0 {
 		out = append(out, Observed(andList(names)+" "+includes(len(names))+" no root this chain reaches, as of "+
-			f.Retrieved+", so a client relying on that store refuses the connection whatever the verdict "+
-			"above says. The verdict rests on the one store the limits below name."))
+			f.Retrieved+", so a client relying on that store refuses the connection whatever "+
+			"the verdict above says; that verdict rests on the one store the limits below "+
+			"name."))
 	}
 	for _, s := range f.Stores {
 		if s.Verdict == storeDistrusted {
@@ -111,8 +112,8 @@ func DescribeStores(f StoreFacts) []Note {
 	}
 	if names := f.named(storeConditional); len(names) > 0 {
 		out = append(out, Unsettled(andList(names)+" "+includes(len(names))+" the root this chain reaches under "+
-			"conditions this report does not evaluate — a client version, or a date the store does not publish "+
-			"with it — so whether the certificate is accepted there is not established."))
+			"conditions this report does not evaluate, such as a client version or a date, "+
+			"so whether it is accepted there is not established."))
 	}
 	if len(trusted) > 0 {
 		out = append(out, Observed(andList(trusted)+" "+includes(len(trusted))+" a root this chain reaches, as of "+

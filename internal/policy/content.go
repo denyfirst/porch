@@ -100,12 +100,8 @@ func GradeContent(f ContentFacts) WebResult {
 			Verdict: Weak,
 			Title:   "The page loads resources over plaintext that a browser refuses",
 			Rationale: "This page is served over TLS and asks for " + count(len(f.Blocking), "resource") +
-				" over plain HTTP: " + namedHosts(f.Blocking) + ". Scripts, stylesheets, frames and plugin " +
-				"data are blockable mixed content, which every current browser refuses rather than " +
-				"downgrades — so the resources do not arrive and the page runs without them. Before " +
-				"browsers blocked it this was a way to replace a page's own script from the network; " +
-				"now it is a page that is broken in a way its author may not have seen, because a " +
-				"blocked subresource fails quietly.",
+				" over plain HTTP: " + namedHosts(f.Blocking) + ". Browsers block these, so they do " +
+				"not load and the page quietly runs without them.",
 			References: []Reference{mixedContent, owaspHeaders},
 		})
 	}
@@ -117,11 +113,9 @@ func GradeContent(f ContentFacts) WebResult {
 			RuleID:  "content.form-posts-in-the-clear",
 			Verdict: Insecure,
 			Title:   "A form on this page submits over plaintext",
-			Rationale: "The page is served over TLS and carries " + count(len(f.Forms), "form") +
-				" whose action is a plain HTTP address: " + namedHosts(f.Forms) + ". A browser submits it, " +
-				"with a warning, so whatever a visitor types — a password, a card number, a message " +
-				"— travels in the clear and can be read and altered by anyone on the path. The lock " +
-				"in the address bar is about the page and says nothing about where the form goes.",
+			Rationale: "The page is served over TLS and carries " + count(len(f.Forms), "form") + " whose " +
+				"action is a plain HTTP address: " + namedHosts(f.Forms) + ". Whatever a visitor " +
+				"types there travels in the clear, despite the lock in the address bar.",
 			References: []Reference{mixedContent, owaspHeaders},
 		})
 	}
@@ -135,12 +129,10 @@ func GradeContent(f ContentFacts) WebResult {
 	// open (R21), and it would land on a site whose behaviour depends on which
 	// browser the visitor uses.
 	if len(f.Passive) > 0 {
-		out.observe("The page asks for " + count(len(f.Passive), "image or media file") +
-			" over plain HTTP: " + namedHosts(f.Passive) + ". These are optionally-blockable mixed " +
-			"content: a browser may upgrade the request to HTTPS, may block it, or may load it, " +
-			"and they do not all do the same thing. Where one is loaded, somebody on the path " +
-			"chooses what the visitor sees. It is not graded because what happens depends on the " +
-			"browser rather than on this server.")
+		out.observe("The page asks for " + count(len(f.Passive), "image or media file") + " over plain " +
+			"HTTP: " + namedHosts(f.Passive) + ". These are optionally-blockable: browsers may " +
+			"upgrade, block or load them, and where one loads, anyone on the path chooses " +
+			"what the visitor sees. It is not graded, because that depends on the browser.")
 	}
 
 	// Code from somebody else's origin, unchecked.
@@ -159,15 +151,11 @@ func GradeContent(f ContentFacts) WebResult {
 	// One who has not thought about it usually cannot name the origins, which
 	// is the whole reason for printing them.
 	if len(f.Unverified) > 0 {
-		out.observe("This page loads " + count(len(f.Unverified), "script or stylesheet") +
-			" from " + another(len(f.Unverified)) + " without a subresource integrity attribute: " +
-			namedHosts(f.Unverified) + ". A browser executes whatever those origins send, with " +
-			"this page's own authority, and checks nothing about it. An integrity attribute makes " +
-			"the browser refuse anything that is not the exact file expected. No specification " +
-			"requires one and pinning a file has a real cost — a provider shipping a fix breaks " +
-			"every page pinned to the version before it — so this is named rather than graded. " +
-			"Whether the trade is worth making depends on the provider and on what the code does, " +
-			"which this scan did not read." + alreadyVerified(f.Verified))
+		out.observe("This page loads " + count(len(f.Unverified), "script or stylesheet") + " from " +
+			another(len(f.Unverified)) + " without subresource integrity: " +
+			namedHosts(f.Unverified) + ". The browser runs whatever those origins send. " +
+			"Pinning has a cost, since a provider's fix breaks pinned pages, so this is " +
+			"named rather than graded." + alreadyVerified(f.Verified))
 	}
 
 	// A form posting to another origin over TLS.
@@ -179,10 +167,9 @@ func GradeContent(f ContentFacts) WebResult {
 	if len(f.OffOrigin) > 0 {
 		out.observe("A form on this page posts to " + another(len(f.OffOrigin)) + ": " +
 			namedHosts(f.OffOrigin) + ". The connection is encrypted, so this is not the same " +
-			"thing as a form submitting in the clear, and it is ordinary — a payment processor " +
-			"or a search provider looks exactly like this. It is named because a visitor sees " +
-			"this page's address while typing, and because whoever runs this site is the only " +
-			"person who can say which of these are meant to be there.")
+			"thing as a form submitting in the clear, and it is often ordinary, such as a " +
+			"payment processor; it is named because only the site's owner knows which are " +
+			"meant to be there.")
 	}
 
 	// A sample that does not say it is one is a list a reader treats as the
@@ -195,8 +182,8 @@ func GradeContent(f ContentFacts) WebResult {
 	// Past the bound nothing was seen, and an empty list must not read as a
 	// clean page (R4).
 	if f.Truncated {
-		out.unsettled("The page was longer than this check reads and the rest was not examined, so " +
-			"anything it loads further down was not established either way.")
+		out.unsettled("The page was longer than this check reads, so anything it loads further down " +
+			"was not established either way.")
 	}
 
 	// The same silence, for another reason: the read failed part way. Until
@@ -265,11 +252,9 @@ func alreadyVerified(verified []string) string {
 	if len(verified) == 0 {
 		return ""
 	}
-	return " " + strings.ToUpper(another(len(verified))[:1]) + another(len(verified))[1:] +
-		" on this page " + isAre(len(verified)) + " pinned this way already: " +
-		namedHosts(verified) + ". That says the attribute is there; whether each hash is " +
-		"well formed and matches the file served was not checked, because this scan fetches " +
-		"none of them."
+	return " " + strings.ToUpper(another(len(verified))[:1]) + another(len(verified))[1:] + " on " +
+		"this page " + isAre(len(verified)) + " pinned this way already: " + namedHosts(verified) +
+		". Whether each hash matches the file served was not checked."
 }
 
 func isAre(n int) string {

@@ -128,9 +128,8 @@ func GradeCookies(cookies []CookieFacts) WebResult {
 			Verdict: Insecure,
 			Title:   "A cookie set over TLS will also travel in the clear",
 			Rationale: fmt.Sprintf("%s set without the Secure attribute on a response that arrived over TLS. "+
-				"A browser sends such a cookie on plaintext requests to this host as well, so anyone on the "+
-				"path reads it — and the site cannot tell, because the secure request that set it looked "+
-				"correct. Secure is what confines a cookie to the transport it was issued on.",
+				"Browsers also send it on plaintext requests to this host, where anyone on the "+
+				"path can read it.",
 				namedCookies(insecure)),
 			References: []Reference{rfc6265bis, owaspSession},
 		})
@@ -142,9 +141,8 @@ func GradeCookies(cookies []CookieFacts) WebResult {
 			Verdict: Weak,
 			Title:   "A __Host- cookie does not meet the prefix and is discarded",
 			Rationale: fmt.Sprintf("%s named with the __Host- prefix without meeting it: the prefix requires "+
-				"Secure, Path=/, and no Domain attribute. A browser rejects the cookie entirely rather than "+
-				"storing it with weaker scope, so the site is running without a cookie it believes it set, "+
-				"and every symptom of that appears somewhere other than this header.",
+				"Secure, Path=/ and no Domain. Browsers reject the cookie entirely, so the site "+
+				"runs without it.",
 				namedCookies(brokenHost)),
 			References: []Reference{rfc6265bis},
 		})
@@ -155,9 +153,8 @@ func GradeCookies(cookies []CookieFacts) WebResult {
 			RuleID:  "cookie.secure-prefix-broken",
 			Verdict: Weak,
 			Title:   "A __Secure- cookie does not meet the prefix and is discarded",
-			Rationale: fmt.Sprintf("%s named with the __Secure- prefix but sent without the Secure attribute. "+
-				"The prefix is enforced by the browser, which rejects the cookie rather than storing it, so "+
-				"the name claims a guarantee the cookie does not have and the cookie is not there at all.",
+			Rationale: fmt.Sprintf("%s named with the __Secure- prefix but sent without the Secure attribute, so "+
+				"browsers reject it and the cookie is not there at all.",
 				namedCookies(brokenPfx)),
 			References: []Reference{rfc6265bis},
 		})
@@ -168,10 +165,8 @@ func GradeCookies(cookies []CookieFacts) WebResult {
 			RuleID:  "cookie.samesite-none-without-secure",
 			Verdict: Weak,
 			Title:   "SameSite=None without Secure is rejected",
-			Rationale: fmt.Sprintf("%s declared SameSite=None without the Secure attribute. Browsers reject "+
-				"that combination, so the cookie is not stored: the cross-site behaviour the site asked for "+
-				"is not what it gets, and neither is the ordinary behaviour it would have had by saying "+
-				"nothing.", namedCookies(sameSiteNon)),
+			Rationale: fmt.Sprintf("%s declared SameSite=None without the Secure attribute. Browsers reject that "+
+				"combination, so the cookie is not stored.", namedCookies(sameSiteNon)),
 			References: []Reference{rfc6265bis},
 		})
 	}
@@ -183,22 +178,20 @@ func GradeCookies(cookies []CookieFacts) WebResult {
 	// scan cannot tell the difference from outside.
 
 	if len(noHTTPOnly) > 0 {
-		out.observe(fmt.Sprintf("%s readable by script, having no HttpOnly attribute. Whether that is a "+
-			"fault depends on what the cookie is for: a session identifier should not be reachable from "+
-			"script, and a CSRF token, a locale or a feature switch is meant to be. This check does not "+
-			"read cookie values and so cannot tell which it is looking at.", namedCookies(noHTTPOnly)))
+		out.observe(fmt.Sprintf("%s readable by script, having no HttpOnly attribute. That is a fault for a "+
+			"session identifier and intended for a CSRF token or a preference; this check "+
+			"does not read values, so it cannot tell which.", namedCookies(noHTTPOnly)))
 	}
 
 	if len(noSameSite) > 0 {
-		out.observe(fmt.Sprintf("%s sent with no SameSite attribute. Browsers now treat that as Lax, so it "+
-			"is not left unconstrained — but that is a property of the browser rather than of this server, "+
-			"and an older client applies no restriction at all.", namedCookies(noSameSite)))
+		out.observe(fmt.Sprintf("%s sent with no SameSite attribute. Current browsers treat that as Lax; older "+
+			"clients apply no restriction.", namedCookies(noSameSite)))
 	}
 
 	if len(widened) > 0 {
-		out.observe(fmt.Sprintf("%s scoped with a Domain attribute, which widens it beyond the host that "+
-			"set it to that domain and everything under it. That is often deliberate and is stated here "+
-			"because it decides how far a cookie travels.", namedCookies(widened)))
+		out.observe(fmt.Sprintf("%s scoped with a Domain attribute, which sends it to that domain and everything "+
+			"under it. That is often deliberate, and is stated because it decides how far "+
+			"the cookie travels.", namedCookies(widened)))
 	}
 
 	return out
