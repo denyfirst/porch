@@ -146,10 +146,13 @@ func GradeHeaders(f HeaderFacts) WebResult {
 	// would have had by saying nothing.
 	if strings.TrimSpace(f.ACAO) == "*" && strings.EqualFold(strings.TrimSpace(f.ACAC), "true") {
 		out.add(Finding{
-			RuleID:     "headers.cors-wildcard-with-credentials",
-			Verdict:    Weak,
-			Title:      "The CORS headers contradict each other and are refused",
-			Rationale:  "Access-Control-Allow-Origin is * and Access-Control-Allow-Credentials is true. A browser refuses that combination rather than choosing between them, so no cross-origin request with credentials succeeds — the sharing this site configured does not work, and nothing about the response says so. A site that means to share with credentials names the origins; a site that means to share publicly does not send the credentials header.",
+			RuleID:  "headers.cors-wildcard-with-credentials",
+			Verdict: Weak,
+			Title:   "The CORS headers contradict each other and are refused",
+			Rationale: "Access-Control-Allow-Origin is * with Access-Control-Allow-Credentials true, a " +
+				"combination browsers refuse, so no credentialed cross-origin request works. " +
+				"Name the origins to share with credentials, or drop the credentials header to " +
+				"share publicly.",
 			References: []Reference{fetchSpec, owaspHeaders},
 		})
 	}
@@ -198,10 +201,8 @@ func GradeHeaders(f HeaderFacts) WebResult {
 	}
 
 	if len(missing) > 0 {
-		out.observe(fmt.Sprintf("%d headers a site can send and this response did not. None of them is "+
-			"required by any specification, and a correct site can legitimately send none: what each one "+
-			"buys depends on what the site does, which a scan of one response cannot see. They are listed "+
-			"so that somebody closing gaps has the list rather than a grade. %s.",
+		out.observe(fmt.Sprintf("%d headers a site can send and this response did not. None is required, and "+
+			"what each buys depends on the site, so they are listed rather than graded. %s.",
 			len(missing), strings.Join(missing, "; ")))
 	}
 
@@ -221,22 +222,18 @@ func GradeHeaders(f HeaderFacts) WebResult {
 	// consequence follows from the scan alone, because the scan established
 	// that the plaintext address is reachable.
 	if !f.Present["X-Content-Type-Options"] {
-		out.observe("X-Content-Type-Options: nosniff was not sent. Without it a browser may disregard " +
-			"the declared Content-Type and decide for itself what a response is, so a file served with " +
-			"the wrong type — an upload, an error page, a generated document — can be treated as script " +
-			"or as markup. Unlike most of the headers above there is no arrangement that wants this one " +
-			"absent: it changes nothing about a response whose type is already correct. It is reported " +
-			"rather than graded because whether it matters here depends on content this scan did not " +
-			"read.")
+		out.observe("X-Content-Type-Options: nosniff was not sent, so a browser may ignore the " +
+			"declared Content-Type and treat a mistyped file as script or markup. It changes " +
+			"nothing for correct responses; it is not graded, because that depends on " +
+			"content not read.")
 	}
 
 	// A policy that is present but reported-only tells a browser nothing.
 	// Stated rather than graded: a site midway through writing a policy
 	// legitimately runs it in report-only mode, which is what the mode is for.
 	if (f.Present["Content-Security-Policy-Report-Only"] || metaReportOnly) && !hasCSP {
-		out.observe("A Content-Security-Policy is sent in report-only mode and not in enforcing mode. " +
-			"A browser reports violations and blocks nothing, which is what the mode is for during a " +
-			"rollout and is not protection yet.")
+		out.observe("A Content-Security-Policy is sent in report-only mode, so browsers report " +
+			"violations and block nothing. That suits a rollout but is not protection yet.")
 	}
 
 	// What a check that read no body could not see.
@@ -251,9 +248,8 @@ func GradeHeaders(f HeaderFacts) WebResult {
 	// between "this site has no policy" and "no policy was seen", and only the
 	// second was established (R4).
 	if !f.MarkupRead && !hasCSP {
-		out.unsettled("The page itself was not read, so a Content-Security-Policy declared in the " +
-			"markup with <meta http-equiv> would not have been seen. A browser applies one either " +
-			"way. Anything above about a policy is about the headers alone.")
+		out.unsettled("The page itself was not read, so a Content-Security-Policy in a <meta " +
+			"http-equiv> tag was not seen; anything above is about the headers alone.")
 	}
 
 	return out

@@ -82,7 +82,7 @@ HTTPS hop.
 ### Limits
 
 - **Only the root was asked.** Only the root of the site was requested. Another page may send different headers and load different things.
-- **No browser ran here.** Nothing was executed. Where the page was read, what it loads was read from its markup, so anything a script fetches later was not seen. Whether a declared policy is enforced is visible only to a browser.
+- **No browser ran here.** Nothing was executed: what a page loads was read from its markup, so anything a script fetches later was not seen, and whether a declared policy is enforced only a browser can tell.
 - **One answer, from one machine, at one moment.** A name served by several machines can answer the next visitor differently. This is what one address said once.
 
 ## Mail
