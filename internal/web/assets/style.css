@@ -2332,8 +2332,10 @@ a.card:hover { border-color: var(--link); }
   How a release reaches you, as the record every release carries: each step,
   who took it, and the public file that shows it was taken. It is an object
   beside its text, as the team's card and the receipt are, and on the left,
-  so the three alternate down the page. The last line is the reader's, and
-  is left open.
+  so the objects alternate down the page. They mirror each other as well:
+  the two on the left lean one way and the two on the right the other, so
+  each pair reads as a reflection rather than as two cards tipped alike. The
+  last line is the reader's, and is left open.
 */
 .release {
   display: grid;
@@ -2353,7 +2355,7 @@ a.card:hover { border-color: var(--link); }
   border: 1px solid var(--rule);
   border-radius: 14px;
   box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
-  transform: rotate(-1.2deg);
+  transform: rotate(1.2deg);
   transition: transform 220ms ease-out;
 }
 
@@ -2545,7 +2547,7 @@ a.card:hover { border-color: var(--link); }
   border: 1px solid var(--rule);
   border-radius: 14px;
   box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
-  transform: rotate(1deg);
+  transform: rotate(-1deg);
   transition: transform 220ms ease-out;
 }
 

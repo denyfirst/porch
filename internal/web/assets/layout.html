@@ -99,7 +99,8 @@
   <div class="colophon-row">
     <div class="colophon-by">
       {{if and .Brand .Organisation}}<p class="colophon-mark"><span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span></p>
-      <p class="colophon-line">Cites everything. Records nothing.</p>{{else if .Brand}}<p class="colophon-line">by <a class="colophon-brand" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a> Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span> Cites everything. Records nothing.</p>{{end}}
+      <p class="colophon-line">Cites everything. Records nothing.</p>{{else if .Brand}}<p class="colophon-mark"><a class="colophon-brand" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a></p>
+      <p class="colophon-line">Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span> Cites everything. Records nothing.</p>{{end}}
     </div>
     {{if ne .Section "login"}}<p class="colophon-links">
       {{if and .Brand .Organisation}}<a href="{{.SiteBase}}/privacy">Privacy</a>
