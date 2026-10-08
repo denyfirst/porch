@@ -6,11 +6,27 @@
     <span class="lens-3">respect</span>
     <span class="lens-big lens-4">Look closer.</span>
   </div>
-  <p class="eyebrow eyebrow-dot">Independent security and privacy tools</p>
-  <h1>Security.<br><span class="hero-soft">On your terms.</span></h1>
-  <div class="hero-bottom">
-    <p>Tools that check your infrastructure and keep your data with you.</p>
-    <a class="button button-primary arrow-se" href="#products">Our products</a>
+  <div class="hero-main">
+    <div>
+      <p class="eyebrow eyebrow-dot">Independent security and privacy tools</p>
+      <h1>Security.<br><span class="hero-soft">On your terms.</span></h1>
+      <div class="hero-bottom">
+        <p>Tools that check your infrastructure and keep your data with you.</p>
+        <a class="button button-primary arrow-se" href="#products">Our products</a>
+      </div>
+    </div>
+    <figure class="policy">
+      <div class="policy-bar" aria-hidden="true"><span class="terminal-dots"></span><span>denyfirst.dev, this page</span></div>
+      <ol class="policy-rules" aria-label="The policy this page is served under">
+        <li><span class="policy-deny">deny</span> <span class="policy-what">cookies</span> <span class="policy-why"><span aria-hidden="true">#</span> no Set-Cookie, ever</span></li>
+        <li><span class="policy-deny">deny</span> <span class="policy-what">trackers</span> <span class="policy-why"><span aria-hidden="true">#</span> none in the page</span></li>
+        <li><span class="policy-deny">deny</span> <span class="policy-what">other servers</span> <span class="policy-why"><span aria-hidden="true">#</span> CSP default-src 'none'</span></li>
+        <li><span class="policy-deny">deny</span> <span class="policy-what">third-party code</span> <span class="policy-why"><span aria-hidden="true">#</span> go.mod requires nothing</span></li>
+        <li><span class="policy-deny">deny</span> <span class="policy-what">accounts, telemetry</span> <span class="policy-why"><span aria-hidden="true">#</span> nothing to sign up for</span></li>
+        <li><span class="policy-allow">allow</span> <span class="policy-what">what you can check</span></li>
+      </ol>
+      <figcaption>Deny first, then allow only what is needed.</figcaption>
+    </figure>
   </div>
   <p class="hero-rule"><span>Independent by design</span><span class="hero-facts"><span>No cookies</span><span>No trackers</span><span>Open source</span></span></p>
 </section>
@@ -94,10 +110,60 @@
   </ol>
 </section>
 
-<section class="band" id="about">
+<section class="band" id="releases">
+  <div class="band-head">
+    <div>
+      <p class="eyebrow">03 / Releases</p>
+      <h2 class="band-title">No one of us can ship alone.</h2>
+    </div>
+    <p class="band-note">Two parties make every release, and neither can do it without the other. Then a third checks both.</p>
+  </div>
+  <div class="journey">
+    <div class="journey-track" aria-hidden="true">
+      <span class="journey-fill"></span>
+      <span class="journey-parcel"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg><span class="journey-stamps"><i></i><i></i><i></i><i></i><i></i></span></span>
+    </div>
+    <ol class="journey-steps">
+      <li>
+        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span>
+        <span class="journey-who">Maintainer</span>
+        <h3>A signed tag</h3>
+        <p>Names the commit being released, and who released it.</p>
+      </li>
+      <li>
+        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg></span>
+        <span class="journey-who">Public workflow</span>
+        <h3>A public build</h3>
+        <p>Built from that commit, in a log anyone can read. It cannot sign.</p>
+      </li>
+      <li>
+        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <span class="journey-who">Maintainer</span>
+        <h3>Rebuilt, then signed</h3>
+        <p>Every file is rebuilt on our own machine. One byte of difference and nothing is signed.</p>
+      </li>
+      <li>
+        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
+        <span class="journey-who">A second workflow</span>
+        <h3>Rebuilt again</h3>
+        <p>After it is published, somebody else rebuilds it and compares.</p>
+      </li>
+      <li>
+        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span>
+        <span class="journey-who">You</span>
+        <h3>Checked by you</h3>
+        <p>You check the signature and the hashes before anything runs.</p>
+      </li>
+    </ol>
+  </div>
+  <p class="journey-foot"><span><strong>No one of these is enough alone.</strong> Together they say what you are running and who made it.</span>
+  <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">How to verify a release</a></p>
+</section>
+
+<section class="band band-tint" id="about">
   <div class="team">
     <div class="team-text">
-      <p class="eyebrow">03 / The team</p>
+      <p class="eyebrow">04 / The team</p>
       <h2 class="band-title">Small and independent.</h2>
       <p class="band-prose">denyfirst is an independent team that puts privacy
       first. You know us by our work, and by the key that signs every
@@ -121,10 +187,10 @@
   </div>
 </section>
 
-<section class="band band-tint" id="this-visit">
+<section class="band" id="this-visit">
   <div class="receipt">
     <div class="receipt-text">
-      <p class="eyebrow">04 / This visit</p>
+      <p class="eyebrow">05 / This visit</p>
       <h2 class="band-title">Your receipt.</h2>
       <p class="band-prose">Every site takes something when you open it. This is
       everything this one took.</p>

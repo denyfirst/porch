@@ -262,7 +262,7 @@ func TestEachDenyfirstPhraseIsSaidOnceWhereItBelongs(t *testing.T) {
 	home := get(t, "/").Body.String()
 	for _, want := range []string{
 		`<p class="eyebrow eyebrow-dot">Independent security and privacy tools</p>`,
-		`<p class="eyebrow">03 / The team</p>`,
+		`<p class="eyebrow">04 / The team</p>`,
 		`<p class="colophon-line">Cites everything. Records nothing.</p>`,
 	} {
 		if !strings.Contains(home, want) {

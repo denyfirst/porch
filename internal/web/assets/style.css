@@ -2157,6 +2157,467 @@ a.card:hover { border-color: var(--link); }
   color: var(--ink-faint);
 }
 
+/*
+  The front page's opening, beside the policy it is served under. The policy
+  is written as a firewall's rules are, deny first and then allow, and each
+  comment is a fact about this response that demo_page_test.go reads against
+  the server. The lines are typed in once; for a reader who asked for less
+  motion they are simply there.
+*/
+.hero-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 2.5rem 3.5rem;
+}
+
+.hero-main h1 { font-size: clamp(2.6rem, 5.4vw, 4.8rem); }
+
+.hero-main .hero-bottom {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.policy {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--term-ink);
+  background: var(--term-bg);
+  border: 1px solid var(--term-rule);
+  border-radius: 12px;
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.55);
+}
+
+.policy-bar {
+  display: flex;
+  align-items: center;
+  padding: 0.7rem 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--term-faint);
+  background: var(--term-bar);
+}
+
+/* The dots are one dot and two shadows, so the space after them is the
+   shadows' width plus a gap. */
+.policy-bar .terminal-dots { margin-right: 2.8rem; }
+
+.policy-rules {
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  line-height: 2;
+  counter-reset: policy;
+}
+
+.policy-rules li {
+  display: grid;
+  grid-template-columns: 1.4rem 3.6rem max-content minmax(0, 1fr);
+  align-items: baseline;
+  white-space: nowrap;
+  counter-increment: policy;
+  animation: policy-type 0.5s steps(22, end) both;
+}
+
+.policy-rules li::before { content: counter(policy); color: var(--term-faint); }
+.policy-rules li:nth-child(2) { animation-delay: 0.45s; }
+.policy-rules li:nth-child(3) { animation-delay: 0.9s; }
+.policy-rules li:nth-child(4) { animation-delay: 1.35s; }
+.policy-rules li:nth-child(5) { animation-delay: 1.8s; }
+.policy-rules li:nth-child(6) { animation-delay: 2.25s; }
+
+.policy-deny  { font-weight: 700; color: var(--term-prompt); }
+.policy-allow { font-weight: 700; color: var(--term-str); }
+
+.policy-why {
+  min-width: 0;
+  padding-left: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--term-faint);
+}
+
+/* The cursor after the one thing that is allowed. */
+.policy-rules li:last-child .policy-what::after {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  margin-left: 0.3rem;
+  vertical-align: -0.15em;
+  background: var(--term-str);
+  animation: policy-blink 1s steps(1) 3s infinite;
+}
+
+.policy figcaption {
+  padding: 0.6rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--term-faint);
+  border-top: 1px solid var(--term-rule);
+}
+
+@keyframes policy-type {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes policy-blink {
+  50% { background: transparent; }
+}
+
+@media (max-width: 52rem) {
+  .hero-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 40rem) {
+  .policy-rules li {
+    grid-template-columns: 1.2rem 3rem minmax(0, 1fr);
+    line-height: 1.6;
+    padding: 0.2rem 0;
+    white-space: normal;
+  }
+  .policy-rules { font-size: 0.8rem; }
+  .policy-why { grid-column: 3; padding-left: 0; }
+}
+
+/*
+  The three rules answer a pointer: the number fills in, a stroke of the
+  accent runs down the edge, and the proof steps forward. Only where there is
+  a pointer that hovers, and never for a reader who asked for less motion.
+*/
+.rule-no {
+  background: linear-gradient(var(--accent), var(--accent)) 0 100% / 100% 0 no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  transition: background-size 350ms ease-out;
+}
+
+.rule-proof { transition: transform 250ms ease-out, box-shadow 250ms ease-out; }
+
+@media (hover: hover) {
+  .rules > li { position: relative; transition: background-color 200ms ease-out; }
+
+  .rules > li::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 3px;
+    background: var(--accent);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 250ms ease-out;
+  }
+
+  .rules > li:hover { background-color: color-mix(in srgb, var(--accent) 4%, transparent); }
+  .rules > li:hover::before { transform: scaleY(1); }
+  .rules > li:hover .rule-no { background-size: 100% 100%; }
+
+  .rules > li:hover .rule-proof {
+    transform: translateX(-4px);
+    box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+}
+
+/*
+  How a release reaches you. One timeline drives everything that moves: the
+  release travels from step to step, each step lights as it arrives and
+  stamps it, and the line behind it fills. All of it shares one duration and
+  one set of stops, so nothing lags what it follows. Five equal columns with
+  no gap put the steps' centres at 10, 30, 50, 70 and 90 per cent, which is
+  where the stops are.
+*/
+.journey {
+  position: relative;
+  padding-top: 3.6rem;
+}
+
+.journey-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journey-steps li {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0 0.6rem;
+  text-align: center;
+}
+
+.journey-steps h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1.02rem;
+  letter-spacing: -0.015em;
+}
+
+.journey-steps p {
+  max-width: 15rem;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.journey-who {
+  padding: 0.1rem 0.5rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.journey-knot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  color: #ffffff;
+  background: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: 12s linear infinite;
+}
+
+.journey-knot svg,
+.journey-parcel svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.journey-steps li:nth-child(1) .journey-knot { animation-name: journey-at-1; }
+.journey-steps li:nth-child(2) .journey-knot { animation-name: journey-at-2; }
+.journey-steps li:nth-child(3) .journey-knot { animation-name: journey-at-3; }
+.journey-steps li:nth-child(4) .journey-knot { animation-name: journey-at-4; }
+.journey-steps li:nth-child(5) .journey-knot { animation-name: journey-at-5; }
+
+.journey-track {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 6.8rem;
+  pointer-events: none;
+}
+
+.journey-track::before,
+.journey-fill {
+  content: "";
+  position: absolute;
+  top: calc(5.2rem - 1px);
+  left: 10%;
+  width: 80%;
+  height: 2px;
+}
+
+.journey-track::before {
+  background: repeating-linear-gradient(90deg, var(--rule) 0 8px, transparent 8px 14px);
+}
+
+.journey-fill {
+  background: var(--accent);
+  transform-origin: left;
+  animation: journey-fill 12s linear infinite;
+}
+
+/* The release itself: a file that collects a stamp at every step. */
+.journey-parcel {
+  position: absolute;
+  top: 0.1rem;
+  left: calc(90% - 2.2rem);
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  width: 4.4rem;
+  padding: 0.4rem 0.4rem 0.4rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 18px -12px rgb(0 0 0 / 0.6);
+  animation: journey-ride 12s linear infinite, journey-done 12s linear infinite;
+}
+
+.journey-parcel::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: calc(50% - 5px);
+  border: 5px solid transparent;
+  border-top-color: inherit;
+}
+
+.journey-stamps { display: flex; gap: 3px; }
+
+.journey-stamps i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: 12s linear infinite;
+}
+
+.journey-stamps i:nth-child(1) { animation-name: journey-stamp-1; }
+.journey-stamps i:nth-child(2) { animation-name: journey-stamp-2; }
+.journey-stamps i:nth-child(3) { animation-name: journey-stamp-3; }
+.journey-stamps i:nth-child(4) { animation-name: journey-stamp-4; }
+.journey-stamps i:nth-child(5) { animation-name: journey-stamp-5; }
+
+/* The stops: arrive at 0, 20, 40, 60 and 80 per cent, wait, move on; at the
+   end everything goes back for the next release. */
+@keyframes journey-ride {
+  0%, 8%   { left: calc(10% - 2.2rem); }
+  20%, 28% { left: calc(30% - 2.2rem); }
+  40%, 48% { left: calc(50% - 2.2rem); }
+  60%, 68% { left: calc(70% - 2.2rem); }
+  80%, 96% { left: calc(90% - 2.2rem); opacity: 1; }
+  97%      { left: calc(90% - 2.2rem); opacity: 0; }
+  98%      { left: calc(10% - 2.2rem); opacity: 0; }
+  100%     { left: calc(10% - 2.2rem); opacity: 1; }
+}
+
+@keyframes journey-done {
+  0%, 79%  { border-color: var(--rule); }
+  80%, 96% { border-color: var(--accent); }
+  97%, 100% { border-color: var(--rule); }
+}
+
+@keyframes journey-fill {
+  0%, 8%    { transform: scaleX(0); }
+  20%, 28%  { transform: scaleX(0.25); }
+  40%, 48%  { transform: scaleX(0.5); }
+  60%, 68%  { transform: scaleX(0.75); }
+  80%, 96%  { transform: scaleX(1); }
+  97%, 100% { transform: scaleX(0); }
+}
+
+@keyframes journey-at-1 {
+  0%, 96%   { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
+  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+}
+
+@keyframes journey-at-2 {
+  0%, 19.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+  20%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
+  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+}
+
+@keyframes journey-at-3 {
+  0%, 39.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+  40%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
+  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+}
+
+@keyframes journey-at-4 {
+  0%, 59.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+  60%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
+  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+}
+
+@keyframes journey-at-5 {
+  0%, 79.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+  80%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
+  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
+}
+
+@keyframes journey-stamp-1 { 0%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
+@keyframes journey-stamp-2 { 0%, 19.5% { background: var(--rule); } 20%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
+@keyframes journey-stamp-3 { 0%, 39.5% { background: var(--rule); } 40%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
+@keyframes journey-stamp-4 { 0%, 59.5% { background: var(--rule); } 60%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
+@keyframes journey-stamp-5 { 0%, 79.5% { background: var(--rule); } 80%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
+
+.journey-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem 2rem;
+  margin: 2.2rem 0 0;
+  padding-top: 1.1rem;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--rule);
+}
+
+.journey-foot strong { color: var(--ink); }
+
+/* On a narrow screen the steps run down the page. The release does not
+   travel there, since the steps are not evenly spaced; each still lights in
+   turn, on the same timeline. */
+@media (max-width: 46rem) {
+  .journey { padding-top: 0; }
+  .journey-track { display: none; }
+
+  .journey-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.2rem;
+  }
+
+  /* From each step down to the next, so the line ends at the last one. */
+  .journey-steps li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 3.2rem;
+    bottom: -1.2rem;
+    left: calc(1.6rem - 1px);
+    width: 2px;
+    background: repeating-linear-gradient(180deg, var(--rule) 0 8px, transparent 8px 14px);
+  }
+
+  .journey-steps li {
+    position: relative;
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+    justify-items: start;
+    column-gap: 1rem;
+    row-gap: 0.15rem;
+    padding: 0;
+    text-align: left;
+  }
+
+  .journey-knot { grid-row: 1 / span 3; }
+  .journey-steps p { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .policy-rules li,
+  .policy-rules li:last-child .policy-what::after,
+  .journey-knot,
+  .journey-fill,
+  .journey-parcel,
+  .journey-stamps i { animation: none; }
+  .rule-no, .rule-proof, .rules > li, .rules > li::before { transition: none; }
+}
+
+@media print {
+  .policy {
+    --term-bg: #ffffff; --term-bar: #ffffff; --term-rule: #c9ccd4;
+    --term-ink: #16181d; --term-faint: #5c6270; --term-prompt: #16181d; --term-str: #16181d;
+    box-shadow: none;
+  }
+  .journey-track { display: none; }
+  .journey { padding-top: 0; }
+}
+
 .porch-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
@@ -3648,10 +4109,12 @@ main > .band:last-child { border-bottom: 0; }
   color: color-mix(in srgb, var(--ink-faint) 28%, transparent);
 }
 
-.lens-1 { top: 20%; left: 60%; }
-.lens-2 { top: 62%; left: 70%; }
-.lens-3 { top: 30%; left: 82%; }
-.lens-4 { top: 40%; left: 58%; }
+/* Around the policy beside the opening, which would hide them: above it,
+   below it, and in the gap between it and the text. */
+.lens-1 { top: 52%; left: 45%; }
+.lens-2 { top: 89%; left: 62%; }
+.lens-3 { top: 30%; left: 46%; }
+.lens-4 { top: 1%; left: 56%; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-lens { transition: none; }
