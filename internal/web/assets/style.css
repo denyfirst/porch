@@ -3421,7 +3421,12 @@ main > .band:last-child { border-bottom: 0; }
 
 .lane-scanner .lane-name { color: var(--ink-soft); font-weight: 600; }
 
+/* Every stop is one width, with its circle centred over its name, so the
+   line runs from the middle of the first circle to the middle of the last.
+   The first and last were pinned to the edges until 2026-10-08, and a name
+   narrower or wider than its circle then sat off to one side of it. */
 .stops {
+  --stop: 6.5rem;
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -3435,8 +3440,8 @@ main > .band:last-child { border-bottom: 0; }
 .stops::before {
   content: "";
   position: absolute;
-  left: 1.3rem;
-  right: 1.3rem;
+  left: calc(var(--stop) / 2);
+  right: calc(var(--stop) / 2);
   top: calc(1.3rem - 1px);
   height: 2px;
   background: var(--tool);
@@ -3450,7 +3455,7 @@ main > .band:last-child { border-bottom: 0; }
   content: "";
   position: absolute;
   top: calc(1.3rem - 5px);
-  left: 50%;
+  left: calc(50% - 5px);
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -3465,8 +3470,8 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 @keyframes lane-probe {
-  from { left: 50%; }
-  to   { left: calc(100% - 1.3rem - 5px); }
+  from { left: calc(50% - 5px); }
+  to   { left: calc(100% - var(--stop) / 2 - 5px); }
 }
 
 .stop {
@@ -3475,15 +3480,13 @@ main > .band:last-child { border-bottom: 0; }
   display: grid;
   justify-items: center;
   gap: 0.35rem;
-  width: 6.5rem;
+  width: var(--stop);
   font-size: 0.78rem;
   line-height: 1.25;
   color: var(--ink-soft);
   text-align: center;
 }
 
-.stop:first-child { justify-items: start; width: auto; text-align: left; }
-.stop:last-child  { justify-items: end; width: auto; text-align: right; }
 .stop b { color: var(--ink); font-weight: 650; }
 
 .node {
@@ -3549,15 +3552,15 @@ main > .band:last-child { border-bottom: 0; }
   padding: 1.2rem 1.4rem;
 }
 
-.tape-head svg { flex: none; width: 1.9rem; height: 1.9rem; }
-
 .tape-head-porch {
   justify-content: flex-end;
   background: color-mix(in srgb, var(--tool) 7%, var(--paper));
 }
 
 .tape-who { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-soft); }
-.tape-head-porch .tape-who { font-size: 1.4rem; font-weight: 750; letter-spacing: -0.03em; color: var(--ink); }
+/* Porch's side is headed with Porch's mark, the name and its violet stop, as
+   the product is shown everywhere else. */
+.tape-head-porch .tape-mark { font-size: 1.6rem; font-weight: 750; line-height: 1; letter-spacing: -0.04em; color: var(--ink); }
 
 .tape-tag {
   padding: 0.12rem 0.5rem;
@@ -3656,7 +3659,8 @@ main > .band:last-child { border-bottom: 0; }
 
 @media (max-width: 40rem) {
   .lane { padding: 1rem; }
-  .stop { width: 5.4rem; font-size: 0.74rem; }
+  .stops { --stop: 5.4rem; }
+  .stop { font-size: 0.74rem; }
 
   .tape-heads,
   .tape-rows > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -3664,8 +3668,7 @@ main > .band:last-child { border-bottom: 0; }
   .tape-head { flex-wrap: wrap; gap: 0.4rem; padding: 1rem 0.9rem; }
   .tape-head-porch { justify-content: flex-start; }
   .tape-head-scanner { padding-left: 1.8rem; }
-  .tape-head svg { width: 1.5rem; height: 1.5rem; }
-  .tape-head-porch .tape-who { font-size: 1.15rem; }
+  .tape-head-porch .tape-mark { font-size: 1.3rem; }
   .tape-who { font-size: 0.98rem; }
 
   .tape-vs {
@@ -3878,7 +3881,7 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stops::after { animation: none; left: calc(75% - 5px); }
+  .stops::after { animation: none; left: calc(75% - var(--stop) / 4 - 5px); }
   .answer, .answer:hover { transition: none; transform: none; }
 }
 
