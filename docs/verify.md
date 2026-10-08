@@ -25,7 +25,7 @@ record of what was released.
 
 ```sh
 # The release you are checking, as its tag. Every command below reads it.
-V=v0.26.13
+V=v0.26.14
 
 # The public key that signs releases, from this repository.
 curl -fsSLO https://raw.githubusercontent.com/denyfirst/porch/main/.allowed_signers
@@ -100,7 +100,7 @@ anonymously and fails unless every byte is the one the release signed.
 On Windows:
 
 ```powershell
-$V = "v0.26.13"
+$V = "v0.26.14"
 (Get-FileHash -Algorithm SHA256 ".\porch-scan_${V}_windows_amd64.exe").Hash.ToLower()
 ```
 

@@ -244,9 +244,13 @@ func TestEachRuleOnTheFrontPageSaysHowToCheckIt(t *testing.T) {
 	}
 }
 
-// The facts under the opening and the lines on the team's card are true of
-// this site and this repository, and each line that can link the file that
-// shows it does.
+// The index under the opening leads to every section, in order, and the lines
+// on the team's card are true of this site and this repository, each line
+// that can link the file that shows it doing so.
+//
+// The opening's foot said "No cookies, No trackers, Open source" until
+// 2026-10-08, beside a policy that says each of them; the policy test holds
+// those now, and the foot names the page's sections instead.
 //
 // "001 — denyfirst" stood there until 2026-10-06: a serial number that meant
 // nothing and that a reader asked about. What replaced it is checkable, so it
@@ -262,9 +266,30 @@ func TestTheFrontPagesFactsHold(t *testing.T) {
 		t.Error("the front page says it sets no cookies, and sets one")
 	}
 	page := res.Body.String()
-	for _, want := range []string{"<span>No cookies</span>", "<span>No trackers</span>", "<span>Open source</span>"} {
-		if !strings.Contains(page, want) {
-			t.Errorf("the opening does not say %s", want)
+	_, index, ok := strings.Cut(page, `<nav class="hero-index" aria-label="On this page">`)
+	if !ok {
+		t.Fatal("the opening has no index of the page")
+	}
+	index, _, _ = strings.Cut(index, "</nav>")
+	at := 0
+	for i, section := range []struct{ id, name string }{
+		{"products", "Products"}, {"principles", "How we work"}, {"releases", "Releases"},
+		{"about", "The team"}, {"this-visit", "This visit"},
+	} {
+		n := strconv.Itoa(i + 1)
+		link := `<a href="#` + section.id + `"><span>0` + n + `</span> ` + section.name + `</a>`
+		if !strings.Contains(index, link) {
+			t.Errorf("the index does not lead to %s", link)
+		}
+		head := `id="` + section.id + `"`
+		where := strings.Index(page, head)
+		if where < at {
+			t.Errorf("section %s is missing, or out of the index's order", section.id)
+			continue
+		}
+		at = where
+		if _, rest, _ := strings.Cut(page[where:], `<p class="eyebrow">`); !strings.HasPrefix(rest, "0"+n+" / "+section.name+"</p>") {
+			t.Errorf("section %s is not numbered %s / %s, as the index says", section.id, "0"+n, section.name)
 		}
 	}
 
@@ -537,14 +562,19 @@ func TestPorchsComparisonAndAnswersHold(t *testing.T) {
 }
 
 // The policy beside the front page's opening is the one the page is served
-// under, and the release steps under it are the ones docs/releasing.md
+// under, and the release record under it is the procedure docs/releasing.md
 // describes.
 //
 // Both are written to be read as evidence: each comment in the policy names
-// what a reader can see in this response, and each step names who does it.
-// So each is read here against the response and the repository. Nothing in
-// either is drawn from a file the page loads: the receipt below still counts
-// the same six files.
+// what a reader can see in this response, and each line of the record names
+// who took the step and the public file that shows it. So each is read here
+// against the response and the repository. Nothing in either is drawn from a
+// file the page loads: the receipt below still counts the same six files.
+//
+// The policy said "third-party code # go.mod requires nothing" until
+// 2026-10-08. True of this site, which is served by the same Go program as
+// Porch, but a statement about a language rather than about the page; the
+// page's own claim about what it reads replaced it.
 func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("the front page is the demonstration's")
@@ -558,19 +588,16 @@ func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 	}
 	policy, _, _ = strings.Cut(policy, "</ol>")
 	line := func(verb, what, why string) string {
-		l := `<li><span class="policy-` + verb + `">` + verb + `</span> <span class="policy-what">` + what + `</span>`
-		if why != "" {
-			l += ` <span class="policy-why"><span aria-hidden="true">#</span> ` + why + `</span>`
-		}
-		return l + "</li>"
+		return `<li><span class="policy-` + verb + `">` + verb + `</span> <span class="policy-what">` + what +
+			`</span> <span class="policy-why"><span aria-hidden="true">#</span> ` + why + `</span></li>`
 	}
 	want := []string{
 		line("deny", "cookies", "no Set-Cookie, ever"),
 		line("deny", "trackers", "none in the page"),
 		line("deny", "other servers", "CSP default-src 'none'"),
-		line("deny", "third-party code", "go.mod requires nothing"),
+		line("deny", "fingerprinting", "no canvas, no font probing"),
 		line("deny", "accounts, telemetry", "nothing to sign up for"),
-		line("allow", "what you can check", ""),
+		line("allow", "what you can check", "all our code is public"),
 	}
 	if got := strings.Count(policy, "<li>"); got != len(want) {
 		t.Errorf("the policy has %d lines, want %d", got, len(want))
@@ -582,6 +609,9 @@ func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 	}
 	if strings.Index(policy, `policy-allow`) < strings.LastIndex(policy, `policy-deny`) {
 		t.Error("the policy allows before it has finished denying")
+	}
+	if !strings.Contains(page, `<figcaption>Deny first, then allow only what is needed. <a href="#this-visit">What this visit took</a></figcaption>`) {
+		t.Error("the policy does not lead to the receipt that shows what the visit took")
 	}
 
 	if res.Header().Get("Set-Cookie") != "" {
@@ -595,11 +625,27 @@ func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 			t.Errorf("the policy says no trackers, and the page loads %s", external)
 		}
 	}
-	if mod, err := os.ReadFile("../../go.mod"); err != nil || strings.Contains(string(mod), "require") {
-		t.Error("the policy says go.mod requires nothing, and it requires a module")
-	}
 	if strings.Contains(page, "<form") || strings.Contains(page, `type="password"`) {
 		t.Error("the policy says there is nothing to sign up for, and the page asks for something")
+	}
+
+	// No script the page loads reads anything that tells one browser from
+	// another: no canvas, no fonts, no hardware, no plugins.
+	scripts := regexp.MustCompile(`<script src="(/[a-z]+\.js)"`).FindAllStringSubmatch(page, -1)
+	if len(scripts) == 0 {
+		t.Fatal("the front page loads no script, and this check would pass by reading nothing")
+	}
+	for _, m := range scripts {
+		body := get(t, m[1]).Body.String()
+		for _, probe := range []string{"canvas", "getContext", "toDataURL", "measureText", "document.fonts", "navigator.",
+			"screen.", "AudioContext", "OfflineAudioContext", "WebGL", "RTCPeerConnection", "getBattery", "deviceMemory", "hardwareConcurrency"} {
+			if strings.Contains(body, probe) {
+				t.Errorf("the policy says no fingerprinting, and %s uses %s", m[1], probe)
+			}
+		}
+	}
+	if licence, err := os.ReadFile("../../LICENSE"); err != nil || !strings.Contains(string(licence), "GNU AFFERO GENERAL PUBLIC LICENSE") {
+		t.Error("the policy says the code is public, and the licence that makes it so is gone")
 	}
 
 	releasing, err := os.ReadFile("../../docs/releasing.md")
@@ -607,34 +653,45 @@ func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 		t.Fatal(err)
 	}
 	guide := strings.Join(strings.Fields(string(releasing)), " ")
-	_, steps, ok := strings.Cut(page, `<ol class="journey-steps">`)
+	_, record, ok := strings.Cut(page, `<ol class="record-rows">`)
 	if !ok {
 		t.Fatal("the front page does not say how a release reaches a reader")
 	}
-	steps, _, _ = strings.Cut(steps, "</ol>")
-	for _, step := range []struct{ who, title, guide string }{
-		{"Maintainer", "A signed tag", "| Signed tag | Which commit is being released, and by whom |"},
-		{"Public workflow", "A public build", "in a public log, and cannot sign"},
-		{"Maintainer", "Rebuilt, then signed", "Any difference refuses the signature"},
-		{"A second workflow", "Rebuilt again", "Someone other than the maintainer can rebuild the same bytes"},
-		{"You", "Checked by you", "| The signature | The list of hashes came from the key in `.allowed_signers` |"},
+	record, _, _ = strings.Cut(record, "</ol>")
+	tick := `<span class="record-tick" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M3 8.5l3 3 7-7"/></svg></span>`
+	for _, step := range []struct{ title, who, proof, file, guide string }{
+		{"Tag signed", "Maintainer", "<code>git tag -s</code>", "", "| Signed tag | Which commit is being released, and by whom |"},
+		{"Built in public", "A workflow", "<code>build-release.yml</code>, which cannot sign", ".github/workflows/build-release.yml", "in a public log, and cannot sign"},
+		{"Rebuilt, every byte matched, signed", "Maintainer", "<code>release.ps1 -Compare</code>, <code>SHA256SUMS.sig</code>", "scripts/release.ps1", "Any difference refuses the signature"},
+		{"Rebuilt again, after publishing", "Another workflow", "<code>reproduce.yml</code>", ".github/workflows/reproduce.yml", "Someone other than the maintainer can rebuild the same bytes"},
 	} {
-		if !strings.Contains(steps, `<span class="journey-who">`+step.who+`</span>`+"\n        <h3>"+step.title+"</h3>") {
-			t.Errorf("the release steps do not say %s: %s", step.who, step.title)
+		row := "<li>" + tick + `<strong><span class="visually-hidden">Done: </span>` + step.title + `</strong><span class="record-proof"><span class="record-who">` +
+			step.who + "</span> " + step.proof + "</span></li>"
+		if !strings.Contains(record, row) {
+			t.Errorf("the release record does not carry %s", row)
 		}
 		if !strings.Contains(guide, step.guide) {
-			t.Errorf("docs/releasing.md no longer says %q, which the step %q stands on", step.guide, step.title)
+			t.Errorf("docs/releasing.md no longer says %q, which the line %q stands on", step.guide, step.title)
+		}
+		if step.file != "" {
+			if _, err := os.Stat("../../" + step.file); err != nil {
+				t.Errorf("the line %q names %s, which is not in the repository", step.title, step.file)
+			}
 		}
 	}
-	if strings.Count(steps, "<li>") != 5 {
-		t.Error("the release steps are not the five the band draws")
+	if !strings.Contains(record, `<li class="record-you"><span class="record-tick" aria-hidden="true"></span><strong><span class="visually-hidden">Yours to do: </span>Checked by you</strong>`+
+		`<span class="record-proof"><span class="record-who">You</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">Your turn: verify a release</a></span></li>`) {
+		t.Error("the release record's last line is not left open for the reader, with the guide that fills it")
 	}
-	for _, said := range []string{"Two parties make a release and neither can do it alone", "No one of these is enough alone."} {
-		if !strings.Contains(guide, said) {
-			t.Errorf("docs/releasing.md no longer says %q, which the front page repeats", said)
-		}
+	if strings.Count(record, "<li") != 5 {
+		t.Error("the release record does not have the five lines it draws")
 	}
-	if !strings.Contains(page, `<a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">How to verify a release</a>`) {
-		t.Error("the release steps do not lead to the guide that checks one")
+	if !strings.Contains(guide, "Two parties make a release and neither can do it alone") {
+		t.Error("docs/releasing.md no longer says two parties make a release, which the band repeats")
+	}
+	_, band, _ := strings.Cut(page, `<section class="band" id="releases">`)
+	band, _, _ = strings.Cut(band, "</section>")
+	if n := strings.Count(band, "docs/verify.md"); n != 1 {
+		t.Errorf("the releases band leads to the verification guide %d times; once, from the record's last line, is enough", n)
 	}
 }
