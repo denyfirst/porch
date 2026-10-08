@@ -705,6 +705,11 @@ func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 // that would read out an offer nobody makes, and the page holds no form,
 // field or button anywhere. The opening's button that led to the products,
 // which sit directly under it and which the index also reaches, is gone.
+//
+// Beside the drawing, ours: one mail link, in the text where a screen reader
+// reaches it, to the address for general mail. Not security@, whose reports
+// must not wait among letters, and with nothing added to it, no subject or
+// body a reader did not write.
 func TestTheFrontPageAsksForNothing(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("the front page is the demonstration's")
@@ -719,15 +724,22 @@ func TestTheFrontPageAsksForNothing(t *testing.T) {
 	if !strings.Contains(end, "We don&rsquo;t need your email, your name, or\n      anything else about you.") {
 		t.Error("the ending no longer says what it does not need")
 	}
-	_, drawing, ok := strings.Cut(end, `<div class="sign-up" aria-hidden="true">`)
+	text, drawing, ok := strings.Cut(end, `<div class="sign-up" aria-hidden="true">`)
 	if !ok {
 		t.Fatal("the drawn sign-up is missing, or read aloud")
+	}
+	const ours = `<a class="farewell-field" href="mailto:hello@denyfirst.dev">`
+	if n := strings.Count(end, "<a "); n != 1 {
+		t.Errorf("the ending carries %d links; it should carry one, the mail link beside the drawing", n)
+	}
+	if !strings.Contains(text, ours) {
+		t.Errorf("the text beside the drawing does not give our address as %s", ours)
 	}
 	if !strings.Contains(drawing, `<p class="sign-up-stamp">Denied</p>`) {
 		t.Error("the drawn sign-up is not stamped")
 	}
 	for _, control := range []string{"<form", "<input", "<textarea", "<select", "<button", "<a ", "contenteditable", "tabindex"} {
-		if strings.Contains(end, control) {
+		if strings.Contains(drawing, control) || control != "<a " && strings.Contains(end, control) {
 			t.Errorf("the ending carries %s, and asks for nothing", control)
 		}
 		if control != "<a " && control != "<button" && strings.Contains(page, control) {
@@ -736,5 +748,37 @@ func TestTheFrontPageAsksForNothing(t *testing.T) {
 	}
 	if n := strings.Count(page, `href="#products"`); n != 1 {
 		t.Errorf("the front page leads to its products %d times; the index under the opening is enough", n)
+	}
+}
+
+// The address the front page ends on is one the organisation's privacy page
+// accounts for: what a letter carries, what it is used for, and that it is
+// passed on to nobody. An address published without that would be the one
+// thing the site takes that its privacy page does not mention.
+func TestTheAddressTheFrontPageGivesIsOnThePrivacyPage(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	const address = "hello@denyfirst.dev"
+	if !strings.Contains(get(t, "/").Body.String(), `href="mailto:`+address+`"`) {
+		t.Fatalf("the front page does not give %s", address)
+	}
+	privacy := get(t, orgPrivacy).Body.String()
+	_, mail, ok := strings.Cut(privacy, `<h2 id="mail">Writing to us</h2>`)
+	if !ok {
+		t.Fatal("denyfirst's privacy page does not say what happens to a letter")
+	}
+	mail, _, _ = strings.Cut(mail, "<h2")
+	said := strings.Join(strings.Fields(mail), " ")
+	for _, want := range []string{
+		`<a href="mailto:` + address + `">` + address + `</a>`,
+		"with the address and headers it was sent with",
+		"We use it to answer you and for nothing else",
+		"it is not passed on",
+		`<a href="/.well-known/security.txt">security.txt</a>`,
+	} {
+		if !strings.Contains(said, want) {
+			t.Errorf("the privacy page's section on mail no longer says %q", want)
+		}
 	}
 }
