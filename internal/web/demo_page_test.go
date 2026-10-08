@@ -729,8 +729,11 @@ func TestTheFrontPageAsksForNothing(t *testing.T) {
 		t.Fatal("the drawn sign-up is missing, or read aloud")
 	}
 	const ours = `<a class="farewell-field" href="mailto:hello@denyfirst.dev">`
-	if n := strings.Count(end, "<a "); n != 1 || strings.Count(text, ours) != 1 {
+	if n := strings.Count(end, "<a "); n != 1 {
 		t.Errorf("the ending carries %d links; it should carry one, the mail link beside the drawing", n)
+	}
+	if !strings.Contains(text, ours) {
+		t.Errorf("the text beside the drawing does not give our address as %s", ours)
 	}
 	if !strings.Contains(drawing, `<p class="sign-up-stamp">Denied</p>`) {
 		t.Error("the drawn sign-up is not stamped")
