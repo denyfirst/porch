@@ -535,3 +535,106 @@ func TestPorchsComparisonAndAnswersHold(t *testing.T) {
 		t.Errorf("SECURITY.md does not publish %q, so the comparison the card asks for fails", grouped)
 	}
 }
+
+// The policy beside the front page's opening is the one the page is served
+// under, and the release steps under it are the ones docs/releasing.md
+// describes.
+//
+// Both are written to be read as evidence: each comment in the policy names
+// what a reader can see in this response, and each step names who does it.
+// So each is read here against the response and the repository. Nothing in
+// either is drawn from a file the page loads: the receipt below still counts
+// the same six files.
+func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	res := get(t, "/")
+	page := res.Body.String()
+
+	_, policy, ok := strings.Cut(page, `<ol class="policy-rules" aria-label="The policy this page is served under">`)
+	if !ok {
+		t.Fatal("the front page has no policy beside its opening")
+	}
+	policy, _, _ = strings.Cut(policy, "</ol>")
+	line := func(verb, what, why string) string {
+		l := `<li><span class="policy-` + verb + `">` + verb + `</span> <span class="policy-what">` + what + `</span>`
+		if why != "" {
+			l += ` <span class="policy-why"><span aria-hidden="true">#</span> ` + why + `</span>`
+		}
+		return l + "</li>"
+	}
+	want := []string{
+		line("deny", "cookies", "no Set-Cookie, ever"),
+		line("deny", "trackers", "none in the page"),
+		line("deny", "other servers", "CSP default-src 'none'"),
+		line("deny", "third-party code", "go.mod requires nothing"),
+		line("deny", "accounts, telemetry", "nothing to sign up for"),
+		line("allow", "what you can check", ""),
+	}
+	if got := strings.Count(policy, "<li>"); got != len(want) {
+		t.Errorf("the policy has %d lines, want %d", got, len(want))
+	}
+	for _, l := range want {
+		if !strings.Contains(policy, l) {
+			t.Errorf("the policy does not say %s", l)
+		}
+	}
+	if strings.Index(policy, `policy-allow`) < strings.LastIndex(policy, `policy-deny`) {
+		t.Error("the policy allows before it has finished denying")
+	}
+
+	if res.Header().Get("Set-Cookie") != "" {
+		t.Error("the policy says no cookie is set, and the front page sets one")
+	}
+	if csp := res.Header().Get("Content-Security-Policy"); !strings.HasPrefix(csp, "default-src 'none';") || strings.Contains(csp, "http") {
+		t.Errorf("the policy says other servers are denied, and the page's CSP is %q", csp)
+	}
+	for _, external := range []string{`src="http`, `<link rel="stylesheet" href="http`, `url(http`} {
+		if strings.Contains(page, external) {
+			t.Errorf("the policy says no trackers, and the page loads %s", external)
+		}
+	}
+	if mod, err := os.ReadFile("../../go.mod"); err != nil || strings.Contains(string(mod), "require") {
+		t.Error("the policy says go.mod requires nothing, and it requires a module")
+	}
+	if strings.Contains(page, "<form") || strings.Contains(page, `type="password"`) {
+		t.Error("the policy says there is nothing to sign up for, and the page asks for something")
+	}
+
+	releasing, err := os.ReadFile("../../docs/releasing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guide := strings.Join(strings.Fields(string(releasing)), " ")
+	_, steps, ok := strings.Cut(page, `<ol class="journey-steps">`)
+	if !ok {
+		t.Fatal("the front page does not say how a release reaches a reader")
+	}
+	steps, _, _ = strings.Cut(steps, "</ol>")
+	for _, step := range []struct{ who, title, guide string }{
+		{"Maintainer", "A signed tag", "| Signed tag | Which commit is being released, and by whom |"},
+		{"Public workflow", "A public build", "in a public log, and cannot sign"},
+		{"Maintainer", "Rebuilt, then signed", "Any difference refuses the signature"},
+		{"A second workflow", "Rebuilt again", "Someone other than the maintainer can rebuild the same bytes"},
+		{"You", "Checked by you", "| The signature | The list of hashes came from the key in `.allowed_signers` |"},
+	} {
+		if !strings.Contains(steps, `<span class="journey-who">`+step.who+`</span>`+"\n        <h3>"+step.title+"</h3>") {
+			t.Errorf("the release steps do not say %s: %s", step.who, step.title)
+		}
+		if !strings.Contains(guide, step.guide) {
+			t.Errorf("docs/releasing.md no longer says %q, which the step %q stands on", step.guide, step.title)
+		}
+	}
+	if strings.Count(steps, "<li>") != 5 {
+		t.Error("the release steps are not the five the band draws")
+	}
+	for _, said := range []string{"Two parties make a release and neither can do it alone", "No one of these is enough alone."} {
+		if !strings.Contains(guide, said) {
+			t.Errorf("docs/releasing.md no longer says %q, which the front page repeats", said)
+		}
+	}
+	if !strings.Contains(page, `<a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">How to verify a release</a>`) {
+		t.Error("the release steps do not lead to the guide that checks one")
+	}
+}
