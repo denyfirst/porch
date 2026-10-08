@@ -103,10 +103,10 @@
     </div>
     {{if ne .Section "login"}}<p class="colophon-links">
       {{if and .Brand .Organisation}}<a href="{{.SiteBase}}/privacy">Privacy</a>
-      <a href="{{.PorchBase}}/#security">Security</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
+      <a href="{{.SiteBase}}/.well-known/security.txt">Security</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
       <a href="{{.PorchBase}}/privacy">Privacy</a>
       <a href="{{.PorchBase}}/terms">Terms</a>{{if .Brand}}
-      <a href="{{.PorchBase}}/#security">Security</a>{{end}}{{end}}
+      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Security</a>{{end}}{{end}}
     </p>{{end}}
   </div>
 </footer>

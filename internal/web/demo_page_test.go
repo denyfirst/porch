@@ -183,43 +183,38 @@ func TestTheDemonstrationSaysHowOldAKeptReportIs(t *testing.T) {
 	}
 }
 
-// Porch's page tells a reporter where to write and which key to check, and
-// the fingerprint it shows is the one the key file has.
+// The footer's Security link leads to where a report is made, on the site
+// that answers for it.
 //
-// It was on the front page until 2026-10-07, under a five-stop timetable. A
-// fault is found in Porch, not in the organisation, so the way to report one
-// is on Porch's page, with the one promise a reporter needs before writing.
-// The footer's Security link on both names leads there.
-func TestPorchsPageSaysHowToReportAVulnerability(t *testing.T) {
+// Until 2026-10-07 both names led to a band on Porch's page, which sent the
+// organisation's visitors to a product's page for the organisation's
+// contacts. denyfirst.dev's leads to its own security.txt (RFC 9116), which
+// names the address, the key and the policy; Porch's pages lead to the policy
+// on GitHub, where its private reporting is.
+func TestTheSecurityLinkLeadsToTheContacts(t *testing.T) {
 	if !demo.Enabled {
-		t.Skip("Porch's page is the demonstration's")
+		t.Skip("the footers' Security links are the demonstration's")
 	}
-	page := getOn(t, http.MethodGet, porchHost, "/").Body.String()
-	for _, want := range []string{
-		`<section class="band band-tint security-band" id="security">`,
-		`href="mailto:security@denyfirst.dev"`,
-		"<code>" + groupedFingerprint(PGPFingerprint) + "</code>",
-		`href="https://github.com/denyfirst/porch/security/advisories/new"`,
-		`href="` + SiteURL + PGPKeyPath + `"`,
-		`href="https://github.com/denyfirst/porch/blob/main/SECURITY.md"`,
-		"We reply within 72 hours.",
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("Porch's security band does not carry %s", want)
+	footer := func(body string) string {
+		_, foot, _ := strings.Cut(body, `<footer class="colophon">`)
+		return foot
+	}
+	front := footer(getOn(t, http.MethodGet, organisationHost, "/").Body.String())
+	if !strings.Contains(front, `<a href="`+SiteURL+SecurityTxtPath+`">Security</a>`) {
+		t.Error("denyfirst.dev's footer does not lead to its security.txt")
+	}
+	txt := getOn(t, http.MethodGet, organisationHost, SecurityTxtPath)
+	for _, want := range []string{"Contact: mailto:security@denyfirst.dev", "Encryption: " + SiteURL + PGPKeyPath, "Policy: https://github.com/denyfirst/porch/blob/main/SECURITY.md"} {
+		if txt.Code != http.StatusOK || !strings.Contains(txt.Body.String(), want) {
+			t.Errorf("the security.txt the footer leads to does not say %s", want)
 		}
 	}
-	raw, err := os.ReadFile("../../SECURITY.md")
-	if err != nil {
-		t.Fatal(err)
+	porch := getOn(t, http.MethodGet, porchHost, "/").Body.String()
+	if !strings.Contains(footer(porch), `<a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Security</a>`) {
+		t.Error("Porch's footer does not lead to the security policy")
 	}
-	if !strings.Contains(strings.Join(strings.Fields(string(raw)), " "), "| Acknowledgement | 72 hours |") {
-		t.Error("SECURITY.md no longer promises a reply within 72 hours, and Porch's page does")
-	}
-	if strings.Contains(get(t, "/").Body.String(), "mailto:security@") {
-		t.Error("the front page still carries the vulnerability box Porch's page has")
-	}
-	if got := groupedFingerprint("75B7A18A89715E3775DBCA2EA8D994D1221AA045"); got != "75B7 A18A 8971 5E37 75DB  CA2E A8D9 94D1 221A A045" {
-		t.Errorf("the fingerprint is grouped as %q, not as gpg prints it", got)
+	if strings.Contains(porch, `id="security"`) {
+		t.Error("Porch's page still carries a security band the footer no longer leads to")
 	}
 }
 
@@ -330,15 +325,21 @@ func TestTheReceiptIsTrue(t *testing.T) {
 	w := getOn(t, http.MethodGet, organisationHost, "/")
 	page := w.Body.String()
 
+	_, slip, _ := strings.Cut(page, `<article class="slip"`)
+	slip, _, _ = strings.Cut(slip, "</article>")
 	rows := map[string]string{}
-	for _, m := range regexp.MustCompile(`<div><dt>([^<]+)</dt><dd>([^<]+)</dd></div>`).FindAllStringSubmatch(page, -1) {
+	for _, m := range regexp.MustCompile(`<div><dt>([^<]+)</dt><dd>([^<]+)</dd></div>`).FindAllStringSubmatch(slip, -1) {
 		rows[m[1]] = m[2]
 	}
-	for line, want := range map[string]string{
+	want := map[string]string{
 		"Cookies set": "0", "Trackers": "0", "Other servers asked": "0", "Files loaded": "6",
-		"Kept in your cache": "0", "Saved in your browser": "nothing", "Told to the next site": "nothing",
-		"Recorded about you": "nothing*", "Total collected": "0",
-	} {
+		"Kept in your cache": "0", "Told to the next site": "nothing",
+		"Recorded about you": "nothing", "Total collected": "0",
+	}
+	if len(rows) != len(want) {
+		t.Errorf("the receipt has %d lines, want %d: %v", len(rows), len(want), rows)
+	}
+	for line, want := range want {
 		if rows[line] != want {
 			t.Errorf("the receipt says %s %q, want %q", line, rows[line], want)
 		}
@@ -358,9 +359,6 @@ func TestTheReceiptIsTrue(t *testing.T) {
 	}
 	if got := strconv.Itoa(1 + len(loads) + 1); got != rows["Files loaded"] {
 		t.Errorf("the page loads %s files, and the receipt says %s: %v", got, rows["Files loaded"], loads)
-	}
-	if !strings.Contains(page, "All six from denyfirst.dev: this page, its stylesheet,\n      two small scripts, the typeface and the icon.") {
-		t.Error("the receipt no longer says which six files they are")
 	}
 
 	// Every one of them from this site, without a cookie, and not kept.
@@ -398,7 +396,9 @@ func TestTheReceiptIsTrue(t *testing.T) {
 		}
 	}
 
-	// Saved in your browser: nothing the scripts write but the one word.
+	// Cookies, and other servers: nothing the page's scripts do sets one or
+	// asks one. The scheme switch keeps its one word in local storage, which
+	// is why the receipt makes no claim about what the browser keeps.
 	for _, name := range []string{"assets/theme.js", "assets/hero.js"} {
 		raw, err := assets.ReadFile(name)
 		if err != nil {
@@ -410,9 +410,6 @@ func TestTheReceiptIsTrue(t *testing.T) {
 				t.Errorf("%s uses %s, which the receipt says nothing of", name, banned)
 			}
 		}
-		if n := strings.Count(script, "localStorage.setItem("); (name == "assets/theme.js" && n != 1) || (name != "assets/theme.js" && n != 0) {
-			t.Errorf("%s writes to local storage %d times; the receipt names one word, from the scheme switch", name, n)
-		}
 	}
 
 	// Told to the next site: nothing a link opens is told where it came from.
@@ -420,38 +417,121 @@ func TestTheReceiptIsTrue(t *testing.T) {
 		t.Errorf("Referrer-Policy is %q, so the next site is told where its visitor came from", got)
 	}
 
-	// Recorded about you: the one line taken on trust says where it is kept.
-	if !strings.Contains(page, `<a href="/privacy">privacy page</a>`) {
-		t.Error("the receipt's footnote does not lead to the privacy page")
+	// And nothing after the total but the line that says no copy was kept.
+	_, tail, _ := strings.Cut(page, `<dl class="slip-rows slip-total">`)
+	tail, _, _ = strings.Cut(tail, "</article>")
+	if strings.Count(tail, "<p") != 1 || !strings.Contains(tail, `<p class="slip-foot">No copy of this receipt was kept.</p>`) {
+		t.Errorf("the receipt carries more than its foot after the total:\n%s", tail)
 	}
 }
 
-// The receipt names the release answering and its program's hash only when
-// it was built as a release, and links the release the hash is listed in.
-func TestTheReceiptNamesTheReleaseItRuns(t *testing.T) {
+// The end of Porch's page compares it with an online scanner and answers six
+// questions, and each claim there is held to the document it names.
+//
+// An answer on a page that sells a tool is the easiest place to say a little
+// more than is true, so every card links its source and each source is read
+// here for the sentence the card stands on. The comparison says plainly what
+// Porch does tell third parties, because "only you" was first written about
+// the domains and is not true of them: a scan asks crt.sh about a proven
+// domain. The key a reporter encrypts to is the one SECURITY.md publishes,
+// and the card says to compare the two, since whoever took the domain could
+// serve a key of their own beside a page that says it is ours.
+func TestPorchsComparisonAndAnswersHold(t *testing.T) {
 	if !demo.Enabled {
-		t.Skip("the front page is the demonstration's")
+		t.Skip("Porch's page is the demonstration's")
 	}
-	before := rendered["/"]
-	defer func() { rendered["/"] = before; pages["/"].Data = homePage{} }()
+	page := getOn(t, http.MethodGet, porchHost, "/").Body.String()
 
-	if strings.Contains(string(before), "Served by porch") {
-		t.Error("the receipt names a release before it was told one")
-	}
-	Running("(unknown: not built by scripts/build.sh)", strings.Repeat("a", 64))
-	if strings.Contains(string(rendered["/"]), "Served by porch") {
-		t.Error("the receipt names a build that is not a release")
-	}
-	sum := "393d34e6d58e3226ba3d32ff68767d1a00c737df1ab528e4c44e92c7b9a8b7bb"
-	Running("v0.26.11", sum)
-	page := string(rendered["/"])
-	for _, want := range []string{
-		`Served by porch <a href="https://github.com/denyfirst/porch/releases/tag/v0.26.11">v0.26.11</a>`,
-		"sha256 " + sum,
-		"Find this line in the release&rsquo;s signed SHA256SUMS.",
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("the receipt does not say %s", want)
+	read := func(name string) string {
+		t.Helper()
+		body, err := os.ReadFile("../../" + name)
+		if err != nil {
+			t.Fatalf("Porch's page cites %s, which is not in the repository: %v", name, err)
 		}
+		return strings.Join(strings.Fields(string(body)), " ")
+	}
+	band := func(id string) string {
+		t.Helper()
+		_, rest, ok := strings.Cut(page, `id="`+id+`"`)
+		if !ok {
+			t.Fatalf("Porch's page has no %s band", id)
+		}
+		rest, _, _ = strings.Cut(rest, "</section>")
+		return rest
+	}
+
+	compare := band("compare")
+	rows := strings.Count(compare, "<dt>")
+	if rows != 6 || strings.Count(compare, `<dd class="tape-porch"><span class="visually-hidden">Porch: </span>`) != rows ||
+		strings.Count(compare, `<dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>`) != rows {
+		t.Error("a row of the comparison does not tell a screen reader which side each answer is on")
+	}
+	if !strings.Contains(compare, "<dt>Who sees the results</dt>") || strings.Contains(compare, "your domains</dt>") {
+		t.Error("the comparison says who sees the domains, and crt.sh is asked about each one")
+	}
+	checks := read("docs/checks.md")
+	for _, says := range []string{"crt.sh", "revocation list"} {
+		if !strings.Contains(compare, says) || !strings.Contains(checks, says) {
+			t.Errorf("the comparison and docs/checks.md do not both say what a scan asks of %s", says)
+		}
+	}
+
+	questions := band("questions")
+	const repo = `<a href="https://github.com/denyfirst/porch/blob/main/`
+	answers := strings.Split(questions, `<article class="answer">`)[1:]
+	if len(answers) != 6 {
+		t.Fatalf("Porch's page answers %d questions, and says six", len(answers))
+	}
+	for _, a := range answers {
+		_, src, ok := strings.Cut(a, `<p class="answer-source"><span>Source</span> `+repo)
+		name, _, _ := strings.Cut(src, `"`)
+		if !ok || !strings.Contains(a, `<p class="answer-short">`) {
+			t.Errorf("an answer gives no short answer or names no source: %.80q", a)
+			continue
+		}
+		read(name)
+	}
+
+	key := "SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y"
+	for _, claim := range []struct{ card, file, says string }{
+		{"No account with us, no telemetry.", "docs/self-host.md", "There is no account, no telemetry"},
+		{"the proof is read again on every scan", "docs/scope.md", "It is re-read every time."},
+		{"every web request names Porch", "docs/checks.md", "Every request carries the user agent"},
+		{"The command line also runs on macOS and Windows.", "README.md", "for Linux, macOS and Windows"},
+		{`<code class="answer-key">` + key + `</code>`, "docs/verify.md", "with ED25519 key " + key},
+		{"Open source under AGPL-3.0.", "LICENSE", "GNU AFFERO GENERAL PUBLIC LICENSE"},
+		{"Anonymous and pseudonymous reports are accepted without question.", "SECURITY.md", "Anonymous and pseudonymous reports are accepted without question."},
+		{"There is no bug bounty.", "SECURITY.md", "There is no bug bounty."},
+	} {
+		if !strings.Contains(questions, claim.card) {
+			t.Errorf("Porch's page no longer says %q", claim.card)
+		}
+		if !strings.Contains(read(claim.file), claim.says) {
+			t.Errorf("%s no longer says %q, which Porch's page stands on", claim.file, claim.says)
+		}
+	}
+	if !strings.Contains(page, `<code class="key-fingerprint">`+key+`</code>`) {
+		t.Error("the key in the answers is not the one step 1 checks the signature with")
+	}
+
+	_, disclosure, _ := strings.Cut(questions, `<div class="disclosure">`)
+	for _, want := range []string{
+		`href="https://github.com/denyfirst/porch/security/advisories/new"`,
+		`href="mailto:security@denyfirst.dev"`,
+		`<a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">SECURITY.md on GitHub</a>`,
+	} {
+		if !strings.Contains(disclosure, want) {
+			t.Errorf("the vulnerability card does not carry %s", want)
+		}
+	}
+	_, shown, _ := strings.Cut(disclosure, "<code>")
+	shown, _, _ = strings.Cut(shown, "</code>")
+	grouped := strings.ReplaceAll(shown, "&nbsp;", " ")
+	if strings.ReplaceAll(grouped, " ", "") != PGPFingerprint {
+		t.Errorf("the vulnerability card shows the key %q, and the key served is %s", grouped, PGPFingerprint)
+	}
+	read("SECURITY.md")
+	if policy, _ := os.ReadFile("../../SECURITY.md"); !strings.Contains(string(policy), grouped) {
+		t.Errorf("SECURITY.md does not publish %q, so the comparison the card asks for fails", grouped)
 	}
 }

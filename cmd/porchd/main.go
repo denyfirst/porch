@@ -664,13 +664,6 @@ func run() int {
 	// it is read for whoever runs the installation and for nobody else.
 	api.BehindPassword(gate != nil)
 
-	// The demonstration's front page ends with a receipt for the visit, and its
-	// last lines say which release is answering and the SHA-256 of this
-	// program, for a visitor to find in that release's signed list.
-	if demo.Enabled {
-		web.Running(version, programSum())
-	}
-
 	web.Configure(web.Installation{
 		Verified:          scope != nil,
 		Keeps:             *resultsDir != "" || gate != nil,

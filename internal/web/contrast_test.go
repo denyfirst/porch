@@ -160,6 +160,11 @@ func TestEveryColourTextIsSetInIsLegible(t *testing.T) {
 			if strings.HasPrefix(token, "slip-") {
 				on = []string{"slip-paper"}
 			}
+			// The panel that asks for a vulnerability report is dark in
+			// both schemes, as the terminal is, and so is checked the same way.
+			if strings.HasPrefix(token, "night-") {
+				on = []string{"night-bg"}
+			}
 			for _, surface := range on {
 				got := contrast(value, tokens[surface])
 				if got < readableContrast {

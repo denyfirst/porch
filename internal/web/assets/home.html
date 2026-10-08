@@ -54,7 +54,7 @@
       <p class="eyebrow">02 / How we work</p>
       <h2 class="band-title">Three rules.</h2>
     </div>
-    <p class="band-note">We hold ourselves to them, and you can check each one.</p>
+    <p class="band-note">Every tool we make keeps them, and you can check each one.</p>
   </div>
   <ol class="rules">
     <li>
@@ -62,11 +62,11 @@
         <span class="rule-no" aria-hidden="true">01</span>
         <div>
           <h3>Evidence first.</h3>
-          <p>Every result shows what was seen and the standard behind it.</p>
+          <p>A result shows what was seen and the standard behind it. Never a verdict without a source.</p>
         </div>
       </div>
       <p class="rule-proof"><span class="rule-proof-label">How you check it</span>
-      Each finding in a report links the RFC or guideline it rests on.</p>
+      Our code is public, and every rule in it names the standard it applies.</p>
     </li>
     <li>
       <div class="rule-main">
@@ -84,11 +84,12 @@
         <span class="rule-no" aria-hidden="true">03</span>
         <div>
           <h3>A clear scope.</h3>
-          <p>A check reads what a server already shows, and nothing more.</p>
+          <p>We read only what is already shown. No exploits, no guessing, no logins.</p>
         </div>
       </div>
       <p class="rule-proof"><span class="rule-proof-label">How you check it</span>
-      <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md">docs/checks.md</a> lists every connection a scan makes.</p>
+      Every tool we make publishes each connection it opens.
+      <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md">Porch&rsquo;s list</a>.</p>
     </li>
   </ol>
 </section>
@@ -138,30 +139,15 @@
         <div><dt>Trackers</dt><dd>0</dd></div>
         <div><dt>Other servers asked</dt><dd>0</dd></div>
         <div><dt>Files loaded</dt><dd>6</dd></div>
-      </dl>
-      <p class="slip-aside">All six from denyfirst.dev: this page, its stylesheet,
-      two small scripts, the typeface and the icon.</p>
-      <dl class="slip-rows">
         <div><dt>Kept in your cache</dt><dd>0</dd></div>
-        <div><dt>Saved in your browser</dt><dd>nothing</dd></div>
-      </dl>
-      <p class="slip-aside">Switch the colour scheme and it keeps one word,
-      light or dark, which never leaves your browser.</p>
-      <dl class="slip-rows">
         <div><dt>Told to the next site</dt><dd>nothing</dd></div>
       </dl>
       <dl class="slip-rows slip-ruled">
-        <div><dt>Recorded about you</dt><dd>nothing*</dd></div>
+        <div><dt>Recorded about you</dt><dd>nothing</dd></div>
       </dl>
       <dl class="slip-rows slip-total">
         <div><dt>Total collected</dt><dd>0</dd></div>
-      </dl>{{if .Release}}
-      <p class="slip-served">Served by porch <a href="https://github.com/denyfirst/porch/releases/tag/{{.Release}}">{{.Release}}</a></p>
-      <p class="slip-served slip-hash">sha256 {{.Sum}}</p>
-      <p class="slip-aside">Find this line in the release&rsquo;s signed SHA256SUMS.</p>{{end}}
-      <p class="slip-aside slip-ruled">* The one line you take on trust. The
-      <a href="/privacy">privacy page</a> says what is kept, and the
-      code that keeps it is public.</p>
+      </dl>
       <p class="slip-foot">No copy of this receipt was kept.</p>
     </article>
   </div>
