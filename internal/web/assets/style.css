@@ -2540,6 +2540,47 @@ a.card:hover { border-color: var(--link); }
 
 .farewell-text .band-prose { margin-bottom: 0; }
 
+/* The other half of the drawing: the form beside it asks for the reader's
+   address and is denied; this one, in the same shape with solid lines, gives
+   them ours. A link, not a field: nothing is typed and nothing is sent until
+   the reader's own mail program does it. */
+.farewell-ours { margin: 1.8rem 0 0.6rem; font-weight: 650; color: var(--ink); }
+
+a.farewell-field {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 27rem;
+  text-decoration: none;
+}
+
+.farewell-address {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.farewell-go {
+  padding: 0.7rem 0.95rem;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: #ffffff;
+  white-space: nowrap;
+  background: var(--accent);
+  border-radius: 8px;
+}
+
+a.farewell-field:hover .farewell-address { border-color: var(--ink-faint); }
+a.farewell-field:hover .farewell-go { background: var(--accent-hover); }
+
+.farewell-text .farewell-small { margin: 0.6rem 0 0; font-size: 0.8rem; color: var(--ink-faint); }
+
 .sign-up {
   position: relative;
   padding: 1.6rem 1.5rem 1.5rem;
@@ -2630,6 +2671,10 @@ a.card:hover { border-color: var(--link); }
 
 @media (max-width: 40rem) {
   .sign-up .sign-up-stamp { font-size: 1.35rem; }
+}
+
+@media (max-width: 22rem) {
+  a.farewell-field { flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {
