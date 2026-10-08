@@ -424,3 +424,114 @@ func TestTheReceiptIsTrue(t *testing.T) {
 		t.Errorf("the receipt carries more than its foot after the total:\n%s", tail)
 	}
 }
+
+// The end of Porch's page compares it with an online scanner and answers six
+// questions, and each claim there is held to the document it names.
+//
+// An answer on a page that sells a tool is the easiest place to say a little
+// more than is true, so every card links its source and each source is read
+// here for the sentence the card stands on. The comparison says plainly what
+// Porch does tell third parties, because "only you" was first written about
+// the domains and is not true of them: a scan asks crt.sh about a proven
+// domain. The key a reporter encrypts to is the one SECURITY.md publishes,
+// and the card says to compare the two, since whoever took the domain could
+// serve a key of their own beside a page that says it is ours.
+func TestPorchsComparisonAndAnswersHold(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("Porch's page is the demonstration's")
+	}
+	page := getOn(t, http.MethodGet, porchHost, "/").Body.String()
+
+	read := func(name string) string {
+		t.Helper()
+		body, err := os.ReadFile("../../" + name)
+		if err != nil {
+			t.Fatalf("Porch's page cites %s, which is not in the repository: %v", name, err)
+		}
+		return strings.Join(strings.Fields(string(body)), " ")
+	}
+	band := func(id string) string {
+		t.Helper()
+		_, rest, ok := strings.Cut(page, `id="`+id+`"`)
+		if !ok {
+			t.Fatalf("Porch's page has no %s band", id)
+		}
+		rest, _, _ = strings.Cut(rest, "</section>")
+		return rest
+	}
+
+	compare := band("compare")
+	rows := strings.Count(compare, "<dt>")
+	if rows != 6 || strings.Count(compare, `<dd class="tape-porch"><span class="visually-hidden">Porch: </span>`) != rows ||
+		strings.Count(compare, `<dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>`) != rows {
+		t.Error("a row of the comparison does not tell a screen reader which side each answer is on")
+	}
+	if !strings.Contains(compare, "<dt>Who sees the results</dt>") || strings.Contains(compare, "your domains</dt>") {
+		t.Error("the comparison says who sees the domains, and crt.sh is asked about each one")
+	}
+	checks := read("docs/checks.md")
+	for _, says := range []string{"crt.sh", "revocation list"} {
+		if !strings.Contains(compare, says) || !strings.Contains(checks, says) {
+			t.Errorf("the comparison and docs/checks.md do not both say what a scan asks of %s", says)
+		}
+	}
+
+	questions := band("questions")
+	const repo = `<a href="https://github.com/denyfirst/porch/blob/main/`
+	answers := strings.Split(questions, `<article class="answer">`)[1:]
+	if len(answers) != 6 {
+		t.Fatalf("Porch's page answers %d questions, and says six", len(answers))
+	}
+	for _, a := range answers {
+		_, src, ok := strings.Cut(a, `<p class="answer-source"><span>Source</span> `+repo)
+		name, _, _ := strings.Cut(src, `"`)
+		if !ok || !strings.Contains(a, `<p class="answer-short">`) {
+			t.Errorf("an answer gives no short answer or names no source: %.80q", a)
+			continue
+		}
+		read(name)
+	}
+
+	key := "SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y"
+	for _, claim := range []struct{ card, file, says string }{
+		{"No account with us, no telemetry.", "docs/self-host.md", "There is no account, no telemetry"},
+		{"the proof is read again on every scan", "docs/scope.md", "It is re-read every time."},
+		{"every web request names Porch", "docs/checks.md", "Every request carries the user agent"},
+		{"The command line also runs on macOS and Windows.", "README.md", "for Linux, macOS and Windows"},
+		{`<code class="answer-key">` + key + `</code>`, "docs/verify.md", "with ED25519 key " + key},
+		{"Open source under AGPL-3.0.", "LICENSE", "GNU AFFERO GENERAL PUBLIC LICENSE"},
+		{"Anonymous and pseudonymous reports are accepted without question.", "SECURITY.md", "Anonymous and pseudonymous reports are accepted without question."},
+		{"There is no bug bounty.", "SECURITY.md", "There is no bug bounty."},
+	} {
+		if !strings.Contains(questions, claim.card) {
+			t.Errorf("Porch's page no longer says %q", claim.card)
+		}
+		if !strings.Contains(read(claim.file), claim.says) {
+			t.Errorf("%s no longer says %q, which Porch's page stands on", claim.file, claim.says)
+		}
+	}
+	if !strings.Contains(page, `<code class="key-fingerprint">`+key+`</code>`) {
+		t.Error("the key in the answers is not the one step 1 checks the signature with")
+	}
+
+	_, disclosure, _ := strings.Cut(questions, `<div class="disclosure">`)
+	for _, want := range []string{
+		`href="https://github.com/denyfirst/porch/security/advisories/new"`,
+		`href="mailto:security@denyfirst.dev"`,
+		`<a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">SECURITY.md on GitHub</a>`,
+	} {
+		if !strings.Contains(disclosure, want) {
+			t.Errorf("the vulnerability card does not carry %s", want)
+		}
+	}
+	_, shown, _ := strings.Cut(disclosure, "<code>")
+	shown, _, _ = strings.Cut(shown, "</code>")
+	grouped := strings.ReplaceAll(shown, "&nbsp;", " ")
+	if strings.ReplaceAll(grouped, " ", "") != PGPFingerprint {
+		t.Errorf("the vulnerability card shows the key %q, and the key served is %s", grouped, PGPFingerprint)
+	}
+	read("SECURITY.md")
+	if policy, _ := os.ReadFile("../../SECURITY.md"); !strings.Contains(string(policy), grouped) {
+		t.Errorf("SECURITY.md does not publish %q, so the comparison the card asks for fails", grouped)
+	}
+}

@@ -184,3 +184,118 @@
   DNS record. Full guide:
   <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting</a></p>
 </section>
+
+<section class="band band-tint" id="compare">
+  <div class="band-head">
+    <div>
+      <p class="eyebrow">Why self-hosted</p>
+      <h2 class="band-title">Porch, or an online scanner?</h2>
+    </div>
+    <p class="band-note">The same kind of checks. The difference is where the result ends up.</p>
+  </div>
+  <div class="route">
+    <div class="lane lane-porch">
+      <p class="lane-name">Porch</p>
+      <ol class="stops">
+        <li class="stop"><span class="node"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span>You</li>
+        <li class="stop stop-key"><span class="node"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Your server</b></li>
+        <li class="stop"><span class="node"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"/></svg></span>Your domain</li>
+      </ol>
+      <p class="lane-note"><strong>The result stays on your server</strong>, encrypted under your password.</p>
+    </div>
+    <div class="lane lane-scanner">
+      <p class="lane-name">An online scanner</p>
+      <ol class="stops">
+        <li class="stop"><span class="node"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span>You</li>
+        <li class="stop stop-key"><span class="node"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><b>Their server</b></li>
+        <li class="stop"><span class="node"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"/></svg></span>Your domain</li>
+      </ol>
+      <p class="lane-note"><strong>Their server sees the domain</strong> and keeps the result.</p>
+    </div>
+  </div>
+  <div class="tape">
+    <div class="tape-heads" aria-hidden="true">
+      <p class="tape-head tape-head-porch"><svg viewBox="0 0 32 32" focusable="false"><rect width="32" height="32" rx="7" fill="#16181d"/><path fill="#f0f0f2" d="M5.5 25.32V7.02H9.64V9.67L9.61 9.48Q10.36 8.01 11.48 7.34Q12.59 6.68 14.05 6.68Q15.77 6.68 17 7.52Q18.24 8.35 18.9 9.94Q19.56 11.52 19.56 13.77Q19.56 16.01 18.89 17.58Q18.22 19.15 16.97 19.98Q15.72 20.8 13.96 20.8Q12.4 20.8 11.3 20.1Q10.19 19.39 9.44 17.84L9.85 17.84V25.32ZM12.34 17.56Q13.57 17.56 14.27 16.52Q14.97 15.49 14.97 13.68Q14.97 11.9 14.29 10.91Q13.6 9.91 12.36 9.91Q11.58 9.91 10.96 10.34Q10.35 10.76 9.99 11.61Q9.64 12.46 9.64 13.72Q9.64 15.61 10.42 16.59Q11.19 17.56 12.34 17.56Z"/><path fill="#9b7bf0" d="M23.67 20.8Q22.38 20.8 21.61 20.03Q20.84 19.26 20.84 17.97Q20.84 16.68 21.61 15.91Q22.38 15.14 23.67 15.14Q24.95 15.14 25.73 15.91Q26.5 16.68 26.5 17.97Q26.5 19.26 25.73 20.03Q24.95 20.8 23.67 20.8Z"/></svg><span class="tape-who">Porch</span><span class="tape-tag">Yours</span></p>
+      <p class="tape-vs"><span>VS</span></p>
+      <p class="tape-head tape-head-scanner"><span class="tape-who">An online scanner</span><span class="tape-tag">Theirs</span></p>
+    </div>
+    <dl class="tape-rows">
+      <div><dt>Who sees the results</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>Only you</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>Its owner, sometimes everyone</dd></div>
+      <div><dt>Where they are kept</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>On your server, encrypted</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>On their site</dd></div>
+      <div><dt>Which domains it checks</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>Only ones you prove are yours</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>Anyone&rsquo;s</dd></div>
+      <div><dt>TLS, web, mail and DNS</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>One tool, one report each</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>Often separate sites</dd></div>
+      <div><dt>Every finding</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>Links the standard it rests on</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>Varies</dd></div>
+      <div><dt>Price</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>Free and open source</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>Free, or paid for more</dd></div>
+    </dl>
+  </div>
+  <p class="band-footnote">Porch is not invisible either. For a domain you
+  proved, it asks crt.sh which certificates are logged, and the certificate
+  authority for its revocation list.
+  <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md">Every connection is listed</a>.</p>
+</section>
+
+<section class="band" id="questions">
+  <div class="band-head">
+    <div>
+      <p class="eyebrow">Questions</p>
+      <h2 class="band-title">Before you ask.</h2>
+    </div>
+    <p class="band-note">Six short answers. Each card names the document that says it at length.</p>
+  </div>
+  <div class="answers">
+    <article class="answer">
+      <h3>Does Porch send my results anywhere?</h3>
+      <p class="answer-short">No.</p>
+      <p>Results are kept only where you say, on your own machine. No account with us, no telemetry.</p>
+      <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-host.md</a></p>
+    </article>
+    <article class="answer">
+      <h3>Can it check any domain?</h3>
+      <p class="answer-short">Only yours.</p>
+      <p>You prove a domain with a TXT record or a file on the site, and the proof is read again on every scan.</p>
+      <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/scope.md">scope.md</a></p>
+    </article>
+    <article class="answer">
+      <h3>What will the checked server see?</h3>
+      <p class="answer-short">A polite visit.</p>
+      <p>Handshakes and ordinary requests. No guessed paths, no exploits, no logins, and every web request names Porch.</p>
+      <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md">checks.md</a></p>
+    </article>
+    <article class="answer">
+      <h3>What do I need to run it?</h3>
+      <p class="answer-short">Docker.</p>
+      <p>A Linux server with Docker. No Go, no source, no build. The command line also runs on macOS and Windows.</p>
+      <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/README.md">README.md</a></p>
+    </article>
+    <article class="answer">
+      <h3>How do I know the download is yours?</h3>
+      <p class="answer-short">Signed.</p>
+      <p>Every release is signed and rebuilds byte for byte. Step 1 above checks the signature with this key:</p>
+      <code class="answer-key">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code>
+      <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">verify.md</a></p>
+    </article>
+    <article class="answer">
+      <h3>Is it free?</h3>
+      <p class="answer-short">Yes.</p>
+      <p>Open source under AGPL-3.0. No paid tier, no investors, nothing to sign up for.</p>
+      <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/LICENSE">LICENSE</a></p>
+    </article>
+  </div>
+  <div class="disclosure">
+    <div class="disclosure-text">
+      <span class="disclosure-mark" aria-hidden="true">!</span>
+      <h3>Found a vulnerability?</h3>
+      <p>Tell us privately first, so a fix can ship before anyone else knows.</p>
+      <p class="disclosure-actions"><a class="button button-primary arrow-e" href="https://github.com/denyfirst/porch/security/advisories/new">Report on GitHub</a>
+      <a class="button disclosure-mail" href="mailto:security@denyfirst.dev">security@denyfirst.dev</a></p>
+      <p class="disclosure-anon">Anonymous and pseudonymous reports are accepted without question. There is no bug bounty.</p>
+    </div>
+    <div class="disclosure-key">
+      <p class="disclosure-key-label">PGP key</p>
+      <code>75B7 A18A 8971 5E37 75DB&nbsp; CA2E A8D9 94D1 221A A045</code>
+      <p>Encrypt to it if you can. Compare it with
+      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">SECURITY.md on GitHub</a>
+      first: whoever took this domain could show a key of their own here.</p>
+    </div>
+  </div>
+</section>

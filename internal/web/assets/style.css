@@ -99,6 +99,16 @@
   --slip-faint:  #55565e;
   --slip-red:    #b3202e;
 
+  /* The panel on Porch's page that asks for a vulnerability report. Dark in
+     both schemes, as the terminal is, and each text colour is checked against
+     it rather than the paper. */
+  --night-bg:    #17132a;
+  --night-rule:  #3b3357;
+  --night-ink:   #f1eefa;
+  --night-soft:  #c8c1dc;
+  --night-faint: #a39cba;
+  --night-link:  #cdb9ff;
+
   --sans: "Schibsted Grotesk", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
           -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo,
@@ -140,6 +150,8 @@
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
     --edge:       rgba(240, 240, 242, 0.18);
+    --night-bg:   #1d1830;
+    --night-rule: #4a3f6c;
     color-scheme: dark;
   }
 }
@@ -168,6 +180,8 @@
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
     --edge:       rgba(240, 240, 242, 0.18);
+    --night-bg:   #1d1830;
+    --night-rule: #4a3f6c;
     color-scheme: dark;
   }
 }
@@ -2986,6 +3000,517 @@ main > .band:last-child { border-bottom: 0; }
 @media print {
   .compose-view .compose-terminal pre { max-height: none; overflow: visible; -webkit-mask-image: none; mask-image: none; }
   .compose-more { display: none; }
+}
+
+/*
+  Porch, or an online scanner. The difference is drawn before it is listed:
+  the route a check takes, once through your own server and once through
+  somebody else's, then the two side by side with the question between them.
+
+  Neither side is drawn in a verdict's colour. Porch's side is its violet and
+  the other is the faint ink: the comparison is about where a result goes,
+  and green against red would say it was a grade.
+*/
+.route {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 15rem);
+  align-items: center;
+  gap: 0.8rem 2rem;
+  padding: 1.1rem 1.4rem;
+  border-radius: 14px;
+}
+
+.lane-porch {
+  background: color-mix(in srgb, var(--tool) 8%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--tool) 40%, var(--rule));
+}
+
+.lane-scanner {
+  background: var(--paper);
+  border: 1px dashed var(--ink-faint);
+}
+
+.lane-name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lane-scanner .lane-name { color: var(--ink-soft); font-weight: 600; }
+
+.stops {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The line between the stops, and the check travelling between the server
+   that asks and the domain that answers. */
+.stops::before {
+  content: "";
+  position: absolute;
+  left: 1.3rem;
+  right: 1.3rem;
+  top: calc(1.3rem - 1px);
+  height: 2px;
+  background: var(--tool);
+}
+
+.lane-scanner .stops::before {
+  background: repeating-linear-gradient(90deg, var(--ink-faint) 0 6px, transparent 6px 11px);
+}
+
+.stops::after {
+  content: "";
+  position: absolute;
+  top: calc(1.3rem - 5px);
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tool);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tool) 22%, transparent);
+  animation: lane-probe 2.8s ease-in-out infinite alternate;
+}
+
+.lane-scanner .stops::after {
+  background: var(--ink-faint);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink-faint) 20%, transparent);
+}
+
+@keyframes lane-probe {
+  from { left: 50%; }
+  to   { left: calc(100% - 1.3rem - 5px); }
+}
+
+.stop {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  width: 6.5rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.stop:first-child { justify-items: start; width: auto; text-align: left; }
+.stop:last-child  { justify-items: end; width: auto; text-align: right; }
+.stop b { color: var(--ink); font-weight: 650; }
+
+.node {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  color: var(--tool);
+  background: var(--paper);
+  border: 2px solid var(--tool);
+}
+
+.lane-scanner .node { color: var(--ink-faint); border-color: var(--ink-faint); }
+.lane-porch .stop-key .node { color: #ffffff; background: var(--accent); border-color: var(--accent); }
+.lane-scanner .stop-key .node { color: var(--ink); border-color: var(--ink-soft); }
+
+.node svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lane-note {
+  margin: 0;
+  font-size: 0.93rem;
+  color: var(--ink-soft);
+}
+
+.lane-note strong { color: var(--ink); font-weight: 650; }
+
+/* The two sides, each answer on its own side of the question it answers. The
+   heads and the rows share one set of columns, so the middle one is a fixed
+   width rather than whatever its widest label asks for. */
+.tape {
+  position: relative;
+  margin-top: 1.2rem;
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+}
+
+.tape-heads,
+.tape-rows > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 11rem minmax(0, 1fr);
+}
+
+.tape-rows { margin: 0; }
+.tape-rows > div { border-top: 1px solid var(--rule); }
+
+.tape-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1.2rem 1.4rem;
+}
+
+.tape-head svg { flex: none; width: 1.9rem; height: 1.9rem; }
+
+.tape-head-porch {
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--tool) 7%, var(--paper));
+}
+
+.tape-who { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-soft); }
+.tape-head-porch .tape-who { font-size: 1.4rem; font-weight: 750; letter-spacing: -0.03em; color: var(--ink); }
+
+.tape-tag {
+  padding: 0.12rem 0.5rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.tape-head-porch .tape-tag { color: var(--tool); border-color: var(--tool); }
+
+.tape-vs {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  background: var(--paper-sunk);
+}
+
+.tape-vs span {
+  display: grid;
+  place-items: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.tape-rows dt,
+.tape-rows dd {
+  min-width: 0;
+  margin: 0;
+  padding: 0.95rem 1.4rem;
+}
+
+.tape-rows dt {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: var(--paper-sunk);
+}
+
+.tape-porch {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  text-align: right;
+  font-weight: 650;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--tool) 7%, var(--paper));
+}
+
+.tape-porch::after,
+.tape-scanner::before {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.tape-porch::after { background: var(--tool); }
+
+.tape-scanner {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.tape-scanner::before { border: 2px solid var(--ink-faint); }
+
+@media (max-width: 52rem) {
+  .lane { grid-template-columns: minmax(0, 1fr); gap: 0.9rem; }
+}
+
+@media (max-width: 40rem) {
+  .lane { padding: 1rem; }
+  .stop { width: 5.4rem; font-size: 0.74rem; }
+
+  .tape-heads,
+  .tape-rows > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+  .tape-head { flex-wrap: wrap; gap: 0.4rem; padding: 1rem 0.9rem; }
+  .tape-head-porch { justify-content: flex-start; }
+  .tape-head-scanner { padding-left: 1.8rem; }
+  .tape-head svg { width: 1.5rem; height: 1.5rem; }
+  .tape-head-porch .tape-who { font-size: 1.15rem; }
+  .tape-who { font-size: 0.98rem; }
+
+  .tape-vs {
+    position: absolute;
+    top: 0.85rem;
+    left: 50%;
+    z-index: 1;
+    transform: translateX(-50%);
+    background: none;
+  }
+
+  .tape-vs span { width: 2.4rem; height: 2.4rem; font-size: 0.72rem; }
+
+  .tape-rows dt { grid-column: 1 / -1; padding: 0.55rem 1rem; }
+  .tape-rows dd { grid-row: 2; padding: 0.75rem 0.9rem; font-size: 0.92rem; }
+  .tape-porch { flex-direction: row-reverse; justify-content: flex-end; text-align: left; }
+  .tape-scanner { grid-column: 2; }
+}
+
+/*
+  Before you ask. Each card answers in a word or two first, large enough for a
+  reader who reads nothing else, then says it properly, then names the
+  document that says it at length: an answer here is a claim, and the claims
+  on this site carry their source (demo_page_test.go holds each one).
+*/
+.answers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 1.35rem 1.35rem 1.1rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  transition: border-color 160ms ease-out, transform 160ms ease-out;
+}
+
+.answer:hover {
+  border-color: color-mix(in srgb, var(--tool) 55%, var(--rule));
+  transform: translateY(-2px);
+}
+
+.answer h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+.answer p { margin: 0; font-size: 0.95rem; color: var(--ink-soft); }
+
+.answer .answer-short {
+  margin: 0.1rem 0 0.15rem;
+  font-size: 2.1rem;
+  font-weight: 750;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  color: var(--tool);
+}
+
+.answer-key {
+  display: block;
+  margin-top: 0.3rem;
+  padding: 0.35rem 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink);
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+
+.answer .answer-source {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-size: 0.8rem;
+  border-top: 1px dashed var(--rule);
+}
+
+.answer-source span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.answer-source a { font-family: var(--mono); font-size: 0.78rem; }
+
+/* The way to report a vulnerability, and the key to encrypt it to. */
+.disclosure {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.6rem 3rem;
+  margin-top: 1rem;
+  padding: 2rem;
+  overflow: hidden;
+  color: var(--night-ink);
+  background: var(--night-bg);
+  border: 1px solid var(--night-rule);
+  border-radius: 18px;
+}
+
+.disclosure::before {
+  content: "";
+  position: absolute;
+  top: -45%;
+  right: -12%;
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 40%, transparent), transparent);
+  pointer-events: none;
+}
+
+.disclosure > * { position: relative; }
+
+.disclosure-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  font-weight: 800;
+  color: #ffffff;
+  background: var(--accent);
+  border-radius: 10px;
+}
+
+.disclosure h3 {
+  margin: 0.9rem 0 0.5rem;
+  font-size: 1.65rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.disclosure p { margin: 0; color: var(--night-soft); }
+.disclosure a:not(.button) { color: var(--night-link); }
+
+.disclosure .disclosure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+}
+
+.disclosure-mail {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--night-ink);
+  border-color: var(--night-rule);
+}
+
+.disclosure-mail:hover { border-color: var(--night-faint); }
+
+.disclosure .disclosure-anon { margin-top: 1rem; font-size: 0.9rem; }
+
+.disclosure-key {
+  padding: 1.3rem 1.4rem;
+  background: color-mix(in srgb, var(--night-ink) 5%, transparent);
+  border: 1px solid var(--night-rule);
+  border-radius: 12px;
+}
+
+.disclosure .disclosure-key-label {
+  margin-bottom: 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--night-faint);
+}
+
+/* Two lines of five groups, as SECURITY.md prints it, where there is room. */
+.disclosure-key code {
+  display: block;
+  max-width: 27ch;
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: var(--night-ink);
+}
+
+.disclosure .disclosure-key p { margin-top: 0.8rem; font-size: 0.88rem; color: var(--night-faint); }
+
+@media (max-width: 52rem) {
+  .answers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .disclosure { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 40rem) {
+  .answers { grid-template-columns: minmax(0, 1fr); }
+  .disclosure { padding: 1.4rem; }
+  .disclosure-key { padding: 1.1rem; }
+  .disclosure-key code { font-size: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stops::after { animation: none; left: calc(75% - 5px); }
+  .answer, .answer:hover { transition: none; transform: none; }
+}
+
+@media print {
+  .disclosure {
+    --night-bg: #ffffff; --night-rule: #c9ccd4; --night-ink: #16181d;
+    --night-soft: #3a3f4a; --night-faint: #5c6270; --night-link: #16181d;
+  }
+  .disclosure::before, .stops::after { display: none; }
 }
 
 /* A domain the page shows rather than offers: the field's box, no control. */
