@@ -1889,14 +1889,21 @@ code.flag { white-space: nowrap; }
 /*
   The front page's receipt for the visit. Every line is a fact a reader can
   see in their own browser, and demo_page_test.go holds each to the response
-  that makes it true. It tilts the other way from the team's card.
+  that makes it true. It sits and tilts the other way from the team's card.
 */
 .receipt {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 23rem);
+  grid-template-columns: minmax(0, 23rem) minmax(0, 1fr);
+  grid-template-areas: "slip text";
   gap: 2.5rem 4rem;
   align-items: center;
 }
+
+/* The team's card above is on the right, so the receipt is on the left: the
+   two do not stack down one side. The text still comes first in the page,
+   and first on a phone. */
+.receipt-text { grid-area: text; }
+.slip { grid-area: slip; }
 
 .receipt-text .band-prose + .band-prose { margin-top: -0.6rem; }
 
@@ -1968,16 +1975,6 @@ code.flag { white-space: nowrap; }
   white-space: nowrap;
 }
 
-.slip-aside {
-  margin: 0.3rem 0 0;
-  padding-left: 1.2em;
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--slip-faint);
-}
-
-.slip-aside a, .slip-served a { color: var(--slip-ink); }
-
 .slip-ruled {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -1996,21 +1993,6 @@ code.flag { white-space: nowrap; }
 
 .slip-total dd { color: var(--slip-red); }
 
-.slip-served {
-  margin: 0.75rem 0 0;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--slip-faint);
-  font-size: 0.74rem;
-}
-
-.slip-served + .slip-served {
-  margin-top: 0.1rem;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.slip-hash { overflow-wrap: anywhere; }
-
 .slip-foot {
   margin: 1rem 0 0;
   font-size: 0.72rem;
@@ -2019,7 +2001,7 @@ code.flag { white-space: nowrap; }
 }
 
 @media (max-width: 52rem) {
-  .receipt { grid-template-columns: 1fr; }
+  .receipt { grid-template-columns: 1fr; grid-template-areas: "text" "slip"; }
   .slip { transform: none; }
 }
 
@@ -2591,52 +2573,6 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 
 .product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 .product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
-
-/* How to report a vulnerability, on Porch's page. The footer's Security link
-   lands here; when the box is already on screen, it flashes, so the click is
-   seen to have done something. */
-.security-box {
-  max-width: 44rem;
-  margin-top: 1.4rem;
-  padding: 1.6rem 1.8rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: calc(var(--radius) + 2px);
-}
-
-.security-box p { margin: 0 0 1rem; color: var(--ink-soft); }
-
-.fingerprint {
-  margin: 0.3rem 0 1.2rem;
-  padding: 0.8rem 1rem;
-  font-family: var(--mono);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-}
-
-.security-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.4rem;
-  font-size: 0.92rem;
-}
-
-.security-band:target .security-box { animation: arrived 1.4s ease-out; }
-
-@keyframes arrived {
-  from { box-shadow: 0 0 0 4px var(--accent); }
-  to   { box-shadow: 0 0 0 4px transparent; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .security-band:target .security-box { animation: none; outline: 2px solid var(--accent); outline-offset: 4px; }
-}
 
 @media (max-width: 52rem) {
   .product-feature { grid-template-columns: 1fr; padding: 1.5rem; }

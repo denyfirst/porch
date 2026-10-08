@@ -23,7 +23,6 @@ import (
 	"encoding/xml"
 	"html/template"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -273,60 +272,6 @@ var pages = map[string]*page{
 		Script:      true,
 		Data:        scanPage{Demo: demo.Enabled, Hosts: demo.Hosts()},
 	},
-}
-
-// homePage is what assets/home.html reads.
-type homePage struct {
-	// Release and Sum are the release answering and the SHA-256 of the
-	// program file, for the receipt's last lines. Empty until Running is
-	// told, and the lines are left out then.
-	Release string
-	Sum     string
-}
-
-// releaseTag is a tag build.sh stamps; anything else is a build of
-// somebody's own, which has no signed list to find its hash in.
-var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
-
-// sha256Hex is a SHA-256 as SHA256SUMS writes it.
-var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
-
-// Running tells the front page which release is answering and the SHA-256 of
-// the file it was started from, so the receipt can say both and a visitor can
-// find that line in the release's signed SHA256SUMS. It is the server's own
-// word: a machine somebody else controls could print anything here, and the
-// signature on the list is what a visitor checks it against. Only a tagged
-// release with a well-formed sum is shown. Called once, before anything is
-// served; an installation has no front page and ignores it.
-func Running(release, sum string) {
-	if !demo.Enabled || !releaseTag.MatchString(release) || !sha256Hex.MatchString(sum) {
-		return
-	}
-	p := pages["/"]
-	data, _ := p.Data.(homePage)
-	data.Release, data.Sum = release, sum
-	p.Data = data
-	body, err := render(p)
-	if err != nil {
-		panic("web: rendering /: " + err.Error())
-	}
-	rendered["/"] = body
-}
-
-// groupedFingerprint writes a fingerprint as gpg prints it: groups of four,
-// with a wider gap at the middle.
-func groupedFingerprint(fp string) string {
-	var b strings.Builder
-	for i := 0; i < len(fp); i += 4 {
-		if i > 0 {
-			b.WriteString(" ")
-			if i == len(fp)/2 {
-				b.WriteString(" ")
-			}
-		}
-		b.WriteString(fp[i:min(i+4, len(fp))])
-	}
-	return b.String()
 }
 
 // scanPage is what assets/index.html branches on.
@@ -589,7 +534,6 @@ func init() {
 			Organisation: true,
 			Description:  "denyfirst builds security and privacy tools that keep your data with you. Porch checks TLS, websites, mail and DNS.",
 			Fragment:     "assets/home.html",
-			Data:         homePage{},
 		}
 		// denyfirst.dev/privacy: the organisation's promises, and this
 		// site's own facts. An installation is Porch alone and links here.
@@ -625,7 +569,7 @@ func init() {
 			Description: "Porch checks what your servers show the outside world: TLS, website, mail and DNS. Self-hosted. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
 			Script:      true,
-			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest(), Fingerprint: groupedFingerprint(PGPFingerprint)},
+			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest()},
 		}
 	}
 
@@ -1144,10 +1088,6 @@ type porchPage struct {
 
 	// ImageDigest is the release's image, as its compose file pins it.
 	ImageDigest string
-
-	// Fingerprint is the key a vulnerability report is encrypted to, as gpg
-	// prints it, for the security band at the foot of the page.
-	Fingerprint string
 }
 
 // imageDigest is set by scripts/build.sh on the demonstration build, from the
