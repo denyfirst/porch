@@ -1706,6 +1706,7 @@ code.flag { white-space: nowrap; }
 .band-head .eyebrow::before,
 .band-split > .eyebrow::before,
 .team-text > .eyebrow::before,
+.release-text > .eyebrow::before,
 .receipt-text > .eyebrow::before {
   content: "";
   display: inline-block;
@@ -2242,7 +2243,7 @@ a.card:hover { border-color: var(--link); }
 }
 
 /* The cursor after the one thing that is allowed. */
-.policy-rules li:last-child .policy-what::after {
+.policy-rules li:last-child .policy-why::after {
   content: "";
   display: inline-block;
   width: 0.55em;
@@ -2260,6 +2261,8 @@ a.card:hover { border-color: var(--link); }
   color: var(--term-faint);
   border-top: 1px solid var(--term-rule);
 }
+
+.policy figcaption a { color: var(--term-ink); }
 
 @keyframes policy-type {
   from { clip-path: inset(0 100% 0 0); }
@@ -2326,285 +2329,187 @@ a.card:hover { border-color: var(--link); }
 }
 
 /*
-  How a release reaches you. One timeline drives everything that moves: the
-  release travels from step to step, each step lights as it arrives and
-  stamps it, and the line behind it fills. All of it shares one duration and
-  one set of stops, so nothing lags what it follows. Five equal columns with
-  no gap put the steps' centres at 10, 30, 50, 70 and 90 per cent, which is
-  where the stops are.
+  How a release reaches you, as the record every release carries: each step,
+  who took it, and the public file that shows it was taken. It is an object
+  beside its text, as the team's card and the receipt are, and on the left,
+  so the three alternate down the page. The last line is the reader's, and
+  is left open.
 */
-.journey {
+.release {
+  display: grid;
+  grid-template-columns: minmax(0, 25rem) minmax(0, 1fr);
+  grid-template-areas: "record text";
+  gap: 2.5rem 4rem;
+  align-items: center;
+}
+
+.release-text { grid-area: text; }
+.record { grid-area: record; }
+
+.record {
   position: relative;
-  padding-top: 3.6rem;
-}
-
-.journey-steps {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.journey-steps li {
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 0.5rem;
-  min-width: 0;
-  padding: 0 0.6rem;
-  text-align: center;
-}
-
-.journey-steps h3 {
-  margin: 0.2rem 0 0;
-  font-size: 1.02rem;
-  letter-spacing: -0.015em;
-}
-
-.journey-steps p {
-  max-width: 15rem;
-  margin: 0;
-  font-size: 0.88rem;
-  color: var(--ink-soft);
-}
-
-.journey-who {
-  padding: 0.1rem 0.5rem;
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  padding: 1.6rem 1.5rem 0.6rem;
+  background: var(--paper);
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: 14px;
+  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
+  transform: rotate(-1.2deg);
+  transition: transform 220ms ease-out;
 }
 
-.journey-knot {
-  position: relative;
-  z-index: 1;
+.record:hover { transform: rotate(0deg); }
+
+/* A perforated edge along the top, in the accent. */
+.record::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  border-radius: 14px 14px 0 0;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 14px, transparent 14px 20px);
+}
+
+.record-title {
+  margin: 0;
+  padding-bottom: 0.9rem;
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  border-bottom: 1px solid var(--rule);
+}
+
+.record-rows { margin: 0; padding: 0; list-style: none; }
+
+.record-rows li {
   display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  gap: 0.1rem 0.7rem;
+  align-items: baseline;
+  padding: 0.7rem 0;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.record-rows li:last-child { border-bottom: 0; }
+
+.record-rows strong { font-size: 0.98rem; font-weight: 650; }
+
+.record-tick {
+  display: grid;
+  grid-row: 1 / span 2;
   place-items: center;
-  width: 3.2rem;
-  height: 3.2rem;
+  align-self: center;
+  width: 1.3rem;
+  height: 1.3rem;
   color: #ffffff;
   background: var(--accent);
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  animation: 12s linear infinite;
+  border-radius: 4px;
 }
 
-.journey-knot svg,
-.journey-parcel svg {
-  width: 1.35rem;
-  height: 1.35rem;
+.record-tick svg {
+  width: 0.85rem;
+  height: 0.85rem;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.journey-steps li:nth-child(1) .journey-knot { animation-name: journey-at-1; }
-.journey-steps li:nth-child(2) .journey-knot { animation-name: journey-at-2; }
-.journey-steps li:nth-child(3) .journey-knot { animation-name: journey-at-3; }
-.journey-steps li:nth-child(4) .journey-knot { animation-name: journey-at-4; }
-.journey-steps li:nth-child(5) .journey-knot { animation-name: journey-at-5; }
+.record-proof {
+  grid-column: 2;
+  max-width: 16rem;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
 
-.journey-track {
+.record-proof code { font-family: var(--mono); font-size: 0.74rem; }
+
+.record-who {
+  margin-right: 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.record-you strong { color: var(--link); }
+.record-you .record-proof a { font-size: 0.82rem; font-weight: 600; }
+
+.record-you .record-tick {
+  background: transparent;
+  border: 2px dashed var(--accent);
+  animation: record-waits 1.6s ease-in-out infinite;
+}
+
+@keyframes record-waits {
+  50% { border-color: transparent; }
+}
+
+/* The ticks land one after another as the card comes into view, and all
+   four have landed by the time the whole card is on the screen. Only where
+   the browser can tie an animation to scrolling, and only for a reader who
+   did not ask for less motion; everywhere else they are simply there. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .record-rows li:not(.record-you) .record-tick {
+      animation: record-stamp linear both;
+      animation-timeline: view();
+      animation-range: entry 20% entry 55%;
+    }
+    .record-rows li:nth-child(2) .record-tick { animation-range: entry 35% entry 70%; }
+    .record-rows li:nth-child(3) .record-tick { animation-range: entry 50% entry 85%; }
+    .record-rows li:nth-child(4) .record-tick { animation-range: entry 65% entry 100%; }
+
+    @keyframes record-stamp {
+      0%, 40% { transform: scale(0.4); background: var(--rule); }
+      75% { transform: scale(1.18); }
+      100% { transform: scale(1); background: var(--accent); }
+    }
+  }
+}
+
+/* The stamp on the corner: what the second workflow found. */
+.record-seal {
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 6.8rem;
+  top: -1.6rem;
+  right: -1.3rem;
+  display: grid;
+  place-items: center;
+  width: 6.2rem;
+  height: 6.2rem;
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--link);
+  background: var(--paper);
+  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: rotate(-14deg);
   pointer-events: none;
 }
 
-.journey-track::before,
-.journey-fill {
-  content: "";
-  position: absolute;
-  top: calc(5.2rem - 1px);
-  left: 10%;
-  width: 80%;
-  height: 2px;
+.record-seal b { display: block; font-size: 0.9rem; letter-spacing: 0.06em; }
+
+@media (max-width: 52rem) {
+  .release { grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "record"; }
+  .record { transform: none; }
 }
 
-.journey-track::before {
-  background: repeating-linear-gradient(90deg, var(--rule) 0 8px, transparent 8px 14px);
-}
-
-.journey-fill {
-  background: var(--accent);
-  transform-origin: left;
-  animation: journey-fill 12s linear infinite;
-}
-
-/* The release itself: a file that collects a stamp at every step. */
-.journey-parcel {
-  position: absolute;
-  top: 0.1rem;
-  left: calc(90% - 2.2rem);
-  display: grid;
-  justify-items: center;
-  gap: 0.3rem;
-  width: 4.4rem;
-  padding: 0.4rem 0.4rem 0.4rem;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  box-shadow: 0 8px 18px -12px rgb(0 0 0 / 0.6);
-  animation: journey-ride 12s linear infinite, journey-done 12s linear infinite;
-}
-
-.journey-parcel::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: calc(50% - 5px);
-  border: 5px solid transparent;
-  border-top-color: inherit;
-}
-
-.journey-stamps { display: flex; gap: 3px; }
-
-.journey-stamps i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: 12s linear infinite;
-}
-
-.journey-stamps i:nth-child(1) { animation-name: journey-stamp-1; }
-.journey-stamps i:nth-child(2) { animation-name: journey-stamp-2; }
-.journey-stamps i:nth-child(3) { animation-name: journey-stamp-3; }
-.journey-stamps i:nth-child(4) { animation-name: journey-stamp-4; }
-.journey-stamps i:nth-child(5) { animation-name: journey-stamp-5; }
-
-/* The stops: arrive at 0, 20, 40, 60 and 80 per cent, wait, move on; at the
-   end everything goes back for the next release. */
-@keyframes journey-ride {
-  0%, 8%   { left: calc(10% - 2.2rem); }
-  20%, 28% { left: calc(30% - 2.2rem); }
-  40%, 48% { left: calc(50% - 2.2rem); }
-  60%, 68% { left: calc(70% - 2.2rem); }
-  80%, 96% { left: calc(90% - 2.2rem); opacity: 1; }
-  97%      { left: calc(90% - 2.2rem); opacity: 0; }
-  98%      { left: calc(10% - 2.2rem); opacity: 0; }
-  100%     { left: calc(10% - 2.2rem); opacity: 1; }
-}
-
-@keyframes journey-done {
-  0%, 79%  { border-color: var(--rule); }
-  80%, 96% { border-color: var(--accent); }
-  97%, 100% { border-color: var(--rule); }
-}
-
-@keyframes journey-fill {
-  0%, 8%    { transform: scaleX(0); }
-  20%, 28%  { transform: scaleX(0.25); }
-  40%, 48%  { transform: scaleX(0.5); }
-  60%, 68%  { transform: scaleX(0.75); }
-  80%, 96%  { transform: scaleX(1); }
-  97%, 100% { transform: scaleX(0); }
-}
-
-@keyframes journey-at-1 {
-  0%, 96%   { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
-  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-}
-
-@keyframes journey-at-2 {
-  0%, 19.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-  20%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
-  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-}
-
-@keyframes journey-at-3 {
-  0%, 39.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-  40%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
-  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-}
-
-@keyframes journey-at-4 {
-  0%, 59.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-  60%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
-  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-}
-
-@keyframes journey-at-5 {
-  0%, 79.5% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-  80%, 96%  { color: #ffffff; background-color: var(--accent); border-color: var(--accent); }
-  97%, 100% { color: var(--ink-faint); background-color: var(--paper); border-color: var(--rule); }
-}
-
-@keyframes journey-stamp-1 { 0%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
-@keyframes journey-stamp-2 { 0%, 19.5% { background: var(--rule); } 20%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
-@keyframes journey-stamp-3 { 0%, 39.5% { background: var(--rule); } 40%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
-@keyframes journey-stamp-4 { 0%, 59.5% { background: var(--rule); } 60%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
-@keyframes journey-stamp-5 { 0%, 79.5% { background: var(--rule); } 80%, 96% { background: var(--accent); } 97%, 100% { background: var(--rule); } }
-
-.journey-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.8rem 2rem;
-  margin: 2.2rem 0 0;
-  padding-top: 1.1rem;
-  font-size: 0.95rem;
-  color: var(--ink-soft);
-  border-top: 1px solid var(--rule);
-}
-
-.journey-foot strong { color: var(--ink); }
-
-/* On a narrow screen the steps run down the page. The release does not
-   travel there, since the steps are not evenly spaced; each still lights in
-   turn, on the same timeline. */
-@media (max-width: 46rem) {
-  .journey { padding-top: 0; }
-  .journey-track { display: none; }
-
-  .journey-steps {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.2rem;
-  }
-
-  /* From each step down to the next, so the line ends at the last one. */
-  .journey-steps li:not(:last-child)::after {
-    content: "";
-    position: absolute;
-    top: 3.2rem;
-    bottom: -1.2rem;
-    left: calc(1.6rem - 1px);
-    width: 2px;
-    background: repeating-linear-gradient(180deg, var(--rule) 0 8px, transparent 8px 14px);
-  }
-
-  .journey-steps li {
-    position: relative;
-    grid-template-columns: 3.2rem minmax(0, 1fr);
-    justify-items: start;
-    column-gap: 1rem;
-    row-gap: 0.15rem;
-    padding: 0;
-    text-align: left;
-  }
-
-  .journey-knot { grid-row: 1 / span 3; }
-  .journey-steps p { max-width: none; }
+@media (max-width: 40rem) {
+  .record-seal { top: -1.4rem; right: 0.3rem; width: 4.8rem; height: 4.8rem; font-size: 0.5rem; letter-spacing: 0.1em; }
+  .record-seal b { font-size: 0.68rem; letter-spacing: 0.02em; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .policy-rules li,
-  .policy-rules li:last-child .policy-what::after,
-  .journey-knot,
-  .journey-fill,
-  .journey-parcel,
-  .journey-stamps i { animation: none; }
+  .policy-rules li:last-child .policy-why::after,
+  .record-rows .record-tick { animation: none; }
+  .record, .record:hover { transition: none; transform: none; }
   .rule-no, .rule-proof, .rules > li, .rules > li::before { transition: none; }
 }
 
@@ -2614,8 +2519,7 @@ a.card:hover { border-color: var(--link); }
     --term-ink: #16181d; --term-faint: #5c6270; --term-prompt: #16181d; --term-str: #16181d;
     box-shadow: none;
   }
-  .journey-track { display: none; }
-  .journey { padding-top: 0; }
+  .record { transform: none; box-shadow: none; }
 }
 
 .porch-hero {
@@ -2894,46 +2798,23 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
   background: var(--tool);
 }
 
-.hero-rule {
+/*
+  The opening's foot: the page's own sections, by number. It said "No
+  cookies, No trackers, Open source" until 2026-10-08, beside a policy that
+  says each of them, so it now says something the page does not say twice.
+*/
+.hero-index {
   position: relative;
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.8rem;
   margin: 3rem 0 0;
   padding-top: 1rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--ink-faint);
 }
 
-/* The facts the opening rests on, each one a reader can check here. */
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.4rem 1.2rem;
-}
-
-.hero-facts span::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 0.45rem;
-  vertical-align: 0.1em;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-@media (max-width: 40rem) {
-  .hero-rule { flex-direction: column; }
-  .hero-facts { justify-content: flex-start; }
-}
-
-.hero-rule::before {
+.hero-index::before {
   content: "";
   position: absolute;
   top: -1px;
@@ -2941,6 +2822,41 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
   width: 4rem;
   height: 2px;
   background: var(--tool);
+}
+
+.hero-index-label {
+  margin-right: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.hero-index a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.15rem 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 150ms ease-out, border-color 150ms ease-out;
+}
+
+.hero-index a span {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--link);
+}
+
+.hero-index a:hover { color: var(--ink); border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .hero-index-label { flex-basis: 100%; }
 }
 
 .card-top {
@@ -3505,7 +3421,12 @@ main > .band:last-child { border-bottom: 0; }
 
 .lane-scanner .lane-name { color: var(--ink-soft); font-weight: 600; }
 
+/* Every stop is one width, with its circle centred over its name, so the
+   line runs from the middle of the first circle to the middle of the last.
+   The first and last were pinned to the edges until 2026-10-08, and a name
+   narrower or wider than its circle then sat off to one side of it. */
 .stops {
+  --stop: 6.5rem;
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -3519,8 +3440,8 @@ main > .band:last-child { border-bottom: 0; }
 .stops::before {
   content: "";
   position: absolute;
-  left: 1.3rem;
-  right: 1.3rem;
+  left: calc(var(--stop) / 2);
+  right: calc(var(--stop) / 2);
   top: calc(1.3rem - 1px);
   height: 2px;
   background: var(--tool);
@@ -3534,7 +3455,7 @@ main > .band:last-child { border-bottom: 0; }
   content: "";
   position: absolute;
   top: calc(1.3rem - 5px);
-  left: 50%;
+  left: calc(50% - 5px);
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -3549,8 +3470,8 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 @keyframes lane-probe {
-  from { left: 50%; }
-  to   { left: calc(100% - 1.3rem - 5px); }
+  from { left: calc(50% - 5px); }
+  to   { left: calc(100% - var(--stop) / 2 - 5px); }
 }
 
 .stop {
@@ -3559,15 +3480,13 @@ main > .band:last-child { border-bottom: 0; }
   display: grid;
   justify-items: center;
   gap: 0.35rem;
-  width: 6.5rem;
+  width: var(--stop);
   font-size: 0.78rem;
   line-height: 1.25;
   color: var(--ink-soft);
   text-align: center;
 }
 
-.stop:first-child { justify-items: start; width: auto; text-align: left; }
-.stop:last-child  { justify-items: end; width: auto; text-align: right; }
 .stop b { color: var(--ink); font-weight: 650; }
 
 .node {
@@ -3633,15 +3552,15 @@ main > .band:last-child { border-bottom: 0; }
   padding: 1.2rem 1.4rem;
 }
 
-.tape-head svg { flex: none; width: 1.9rem; height: 1.9rem; }
-
 .tape-head-porch {
   justify-content: flex-end;
   background: color-mix(in srgb, var(--tool) 7%, var(--paper));
 }
 
 .tape-who { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-soft); }
-.tape-head-porch .tape-who { font-size: 1.4rem; font-weight: 750; letter-spacing: -0.03em; color: var(--ink); }
+/* Porch's side is headed with Porch's mark, the name and its violet stop, as
+   the product is shown everywhere else. */
+.tape-head-porch .tape-mark { font-size: 1.6rem; font-weight: 750; line-height: 1; letter-spacing: -0.04em; color: var(--ink); }
 
 .tape-tag {
   padding: 0.12rem 0.5rem;
@@ -3740,7 +3659,8 @@ main > .band:last-child { border-bottom: 0; }
 
 @media (max-width: 40rem) {
   .lane { padding: 1rem; }
-  .stop { width: 5.4rem; font-size: 0.74rem; }
+  .stops { --stop: 5.4rem; }
+  .stop { font-size: 0.74rem; }
 
   .tape-heads,
   .tape-rows > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -3748,8 +3668,7 @@ main > .band:last-child { border-bottom: 0; }
   .tape-head { flex-wrap: wrap; gap: 0.4rem; padding: 1rem 0.9rem; }
   .tape-head-porch { justify-content: flex-start; }
   .tape-head-scanner { padding-left: 1.8rem; }
-  .tape-head svg { width: 1.5rem; height: 1.5rem; }
-  .tape-head-porch .tape-who { font-size: 1.15rem; }
+  .tape-head-porch .tape-mark { font-size: 1.3rem; }
   .tape-who { font-size: 0.98rem; }
 
   .tape-vs {
@@ -3962,7 +3881,7 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stops::after { animation: none; left: calc(75% - 5px); }
+  .stops::after { animation: none; left: calc(75% - var(--stop) / 4 - 5px); }
   .answer, .answer:hover { transition: none; transform: none; }
 }
 

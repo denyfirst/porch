@@ -21,14 +21,21 @@
         <li><span class="policy-deny">deny</span> <span class="policy-what">cookies</span> <span class="policy-why"><span aria-hidden="true">#</span> no Set-Cookie, ever</span></li>
         <li><span class="policy-deny">deny</span> <span class="policy-what">trackers</span> <span class="policy-why"><span aria-hidden="true">#</span> none in the page</span></li>
         <li><span class="policy-deny">deny</span> <span class="policy-what">other servers</span> <span class="policy-why"><span aria-hidden="true">#</span> CSP default-src 'none'</span></li>
-        <li><span class="policy-deny">deny</span> <span class="policy-what">third-party code</span> <span class="policy-why"><span aria-hidden="true">#</span> go.mod requires nothing</span></li>
+        <li><span class="policy-deny">deny</span> <span class="policy-what">fingerprinting</span> <span class="policy-why"><span aria-hidden="true">#</span> no canvas, no font probing</span></li>
         <li><span class="policy-deny">deny</span> <span class="policy-what">accounts, telemetry</span> <span class="policy-why"><span aria-hidden="true">#</span> nothing to sign up for</span></li>
-        <li><span class="policy-allow">allow</span> <span class="policy-what">what you can check</span></li>
+        <li><span class="policy-allow">allow</span> <span class="policy-what">what you can check</span> <span class="policy-why"><span aria-hidden="true">#</span> all our code is public</span></li>
       </ol>
-      <figcaption>Deny first, then allow only what is needed.</figcaption>
+      <figcaption>Deny first, then allow only what is needed. <a href="#this-visit">What this visit took</a></figcaption>
     </figure>
   </div>
-  <p class="hero-rule"><span>Independent by design</span><span class="hero-facts"><span>No cookies</span><span>No trackers</span><span>Open source</span></span></p>
+  <nav class="hero-index" aria-label="On this page">
+    <span class="hero-index-label">On this page</span>
+    <a href="#products"><span>01</span> Products</a>
+    <a href="#principles"><span>02</span> How we work</a>
+    <a href="#releases"><span>03</span> Releases</a>
+    <a href="#about"><span>04</span> The team</a>
+    <a href="#this-visit"><span>05</span> This visit</a>
+  </nav>
 </section>
 
 <section class="band" id="products">
@@ -111,53 +118,25 @@
 </section>
 
 <section class="band" id="releases">
-  <div class="band-head">
-    <div>
+  <div class="release">
+    <div class="release-text">
       <p class="eyebrow">03 / Releases</p>
       <h2 class="band-title">No one of us can ship alone.</h2>
+      <p class="band-prose">Two parties make every release, and neither can do it without the
+      other. Then a third checks both. The last line is yours.</p>
     </div>
-    <p class="band-note">Two parties make every release, and neither can do it without the other. Then a third checks both.</p>
+    <article class="record" aria-labelledby="record-title">
+      <p class="record-title" id="record-title">Every release</p>
+      <ol class="record-rows">
+        <li><span class="record-tick" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M3 8.5l3 3 7-7"/></svg></span><strong><span class="visually-hidden">Done: </span>Tag signed</strong><span class="record-proof"><span class="record-who">Maintainer</span> <code>git tag -s</code></span></li>
+        <li><span class="record-tick" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M3 8.5l3 3 7-7"/></svg></span><strong><span class="visually-hidden">Done: </span>Built in public</strong><span class="record-proof"><span class="record-who">A workflow</span> <code>build-release.yml</code>, which cannot sign</span></li>
+        <li><span class="record-tick" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M3 8.5l3 3 7-7"/></svg></span><strong><span class="visually-hidden">Done: </span>Rebuilt, every byte matched, signed</strong><span class="record-proof"><span class="record-who">Maintainer</span> <code>release.ps1 -Compare</code>, <code>SHA256SUMS.sig</code></span></li>
+        <li><span class="record-tick" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M3 8.5l3 3 7-7"/></svg></span><strong><span class="visually-hidden">Done: </span>Rebuilt again, after publishing</strong><span class="record-proof"><span class="record-who">Another workflow</span> <code>reproduce.yml</code></span></li>
+        <li class="record-you"><span class="record-tick" aria-hidden="true"></span><strong><span class="visually-hidden">Yours to do: </span>Checked by you</strong><span class="record-proof"><span class="record-who">You</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">Your turn: verify a release</a></span></li>
+      </ol>
+      <p class="record-seal" aria-hidden="true"><span><b>Reproduced</b>byte for<br>byte</span></p>
+    </article>
   </div>
-  <div class="journey">
-    <div class="journey-track" aria-hidden="true">
-      <span class="journey-fill"></span>
-      <span class="journey-parcel"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg><span class="journey-stamps"><i></i><i></i><i></i><i></i><i></i></span></span>
-    </div>
-    <ol class="journey-steps">
-      <li>
-        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span>
-        <span class="journey-who">Maintainer</span>
-        <h3>A signed tag</h3>
-        <p>Names the commit being released, and who released it.</p>
-      </li>
-      <li>
-        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg></span>
-        <span class="journey-who">Public workflow</span>
-        <h3>A public build</h3>
-        <p>Built from that commit, in a log anyone can read. It cannot sign.</p>
-      </li>
-      <li>
-        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-        <span class="journey-who">Maintainer</span>
-        <h3>Rebuilt, then signed</h3>
-        <p>Every file is rebuilt on our own machine. One byte of difference and nothing is signed.</p>
-      </li>
-      <li>
-        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
-        <span class="journey-who">A second workflow</span>
-        <h3>Rebuilt again</h3>
-        <p>After it is published, somebody else rebuilds it and compares.</p>
-      </li>
-      <li>
-        <span class="journey-knot"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span>
-        <span class="journey-who">You</span>
-        <h3>Checked by you</h3>
-        <p>You check the signature and the hashes before anything runs.</p>
-      </li>
-    </ol>
-  </div>
-  <p class="journey-foot"><span><strong>No one of these is enough alone.</strong> Together they say what you are running and who made it.</span>
-  <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">How to verify a release</a></p>
 </section>
 
 <section class="band band-tint" id="about">
