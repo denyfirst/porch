@@ -2522,6 +2522,118 @@ a.card:hover { border-color: var(--link); }
   .record { transform: none; box-shadow: none; }
 }
 
+/*
+  The front page's last word: the sign-up form nearly every site ends on,
+  drawn and stamped. It is a picture, not a form: no field, no button, nothing
+  a reader can fill in or send, and hidden from assistive technology, which
+  would otherwise read out an offer nobody is making. The text beside it says
+  the same thing in words.
+*/
+.farewell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+  gap: 2.5rem 4rem;
+  align-items: center;
+}
+
+.farewell-text .band-prose { margin-bottom: 0; }
+
+.sign-up {
+  position: relative;
+  padding: 1.6rem 1.5rem 1.5rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
+  transform: rotate(1deg);
+  transition: transform 220ms ease-out;
+}
+
+.sign-up:hover { transform: rotate(0deg); }
+
+.sign-up p { margin: 0; color: var(--ink-faint); }
+
+.sign-up-title { font-size: 1.15rem; font-weight: 750; letter-spacing: -0.02em; }
+.sign-up .sign-up-sub { margin: 0.2rem 0 1rem; font-size: 0.86rem; }
+
+.sign-up-field { display: flex; gap: 0.5rem; }
+
+.sign-up-address,
+.sign-up-go {
+  padding: 0.7rem 0.85rem;
+  font-size: 0.86rem;
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+}
+
+.sign-up-address {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  text-decoration: line-through;
+  text-decoration-color: var(--accent);
+  background: var(--paper-sunk);
+}
+
+.sign-up-go { font-weight: 650; }
+
+.sign-up .sign-up-small {
+  margin-top: 0.8rem;
+  font-size: 0.72rem;
+  text-decoration: line-through;
+  text-decoration-color: var(--accent);
+}
+
+/* The stamp, the same kind the release record carries, saying the other
+   thing. It lands as the card comes into view, where the browser can tie
+   that to scrolling and the reader did not ask for less motion. */
+.sign-up .sign-up-stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  padding: 0.45rem 1.1rem;
+  font-size: 1.7rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--link);
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
+  border: 3px solid currentColor;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 5px currentColor;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .sign-up .sign-up-stamp {
+      animation: sign-up-stamped linear both;
+      animation-timeline: view();
+      animation-range: entry 50% cover 40%;
+    }
+
+    @keyframes sign-up-stamped {
+      0%, 55% { transform: translate(-50%, -50%) rotate(-12deg) scale(1.8); color: transparent; background: transparent; box-shadow: none; }
+      85% { transform: translate(-50%, -50%) rotate(-12deg) scale(0.94); }
+      100% { transform: translate(-50%, -50%) rotate(-12deg) scale(1); }
+    }
+  }
+}
+
+@media (max-width: 52rem) {
+  .farewell { grid-template-columns: minmax(0, 1fr); }
+  .sign-up { transform: none; }
+}
+
+@media (max-width: 40rem) {
+  .sign-up .sign-up-stamp { font-size: 1.35rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sign-up, .sign-up:hover { transition: none; transform: none; }
+}
+
 .porch-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
@@ -3527,7 +3639,7 @@ main > .band:last-child { border-bottom: 0; }
    width rather than whatever its widest label asks for. */
 .tape {
   position: relative;
-  margin-top: 1.2rem;
+  margin-top: 2.2rem;
   overflow: hidden;
   background: var(--paper);
   border: 1px solid var(--rule);

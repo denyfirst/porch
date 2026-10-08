@@ -695,3 +695,46 @@ func TestTheFrontPagesPolicyAndReleaseStepsHold(t *testing.T) {
 		t.Errorf("the releases band leads to the verification guide %d times; once, from the record's last line, is enough", n)
 	}
 }
+
+// The front page ends on the sign-up form most sites end on, drawn and
+// stamped, and asks the reader for nothing.
+//
+// It is a picture of a form, and has to stay one: a field that took an
+// address, even one that sent it nowhere, would make the sentence beside it
+// false. So the drawing holds no control, is hidden from assistive technology
+// that would read out an offer nobody makes, and the page holds no form,
+// field or button anywhere. The opening's button that led to the products,
+// which sit directly under it and which the index also reaches, is gone.
+func TestTheFrontPageAsksForNothing(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the front page is the demonstration's")
+	}
+	page := get(t, "/").Body.String()
+
+	_, end, ok := strings.Cut(page, `<section class="band band-tint" id="no-sign-up">`)
+	if !ok {
+		t.Fatal("the front page does not end on the sign-up it declines")
+	}
+	end, _, _ = strings.Cut(end, "</section>")
+	if !strings.Contains(end, "We don&rsquo;t need your email, your name, or\n      anything else about you.") {
+		t.Error("the ending no longer says what it does not need")
+	}
+	_, drawing, ok := strings.Cut(end, `<div class="sign-up" aria-hidden="true">`)
+	if !ok {
+		t.Fatal("the drawn sign-up is missing, or read aloud")
+	}
+	if !strings.Contains(drawing, `<p class="sign-up-stamp">Denied</p>`) {
+		t.Error("the drawn sign-up is not stamped")
+	}
+	for _, control := range []string{"<form", "<input", "<textarea", "<select", "<button", "<a ", "contenteditable", "tabindex"} {
+		if strings.Contains(end, control) {
+			t.Errorf("the ending carries %s, and asks for nothing", control)
+		}
+		if control != "<a " && control != "<button" && strings.Contains(page, control) {
+			t.Errorf("the front page carries %s, and says it needs nothing about the reader", control)
+		}
+	}
+	if n := strings.Count(page, `href="#products"`); n != 1 {
+		t.Errorf("the front page leads to its products %d times; the index under the opening is enough", n)
+	}
+}
