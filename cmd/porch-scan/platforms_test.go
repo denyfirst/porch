@@ -202,8 +202,15 @@ func TestTheToolchainIsWatchedWeekly(t *testing.T) {
 // back empty, go install fell back to 1.26.8, and "Known vulnerabilities"
 // blamed every package rather than the timeout. Alone, the read stops a
 // workflow step on its own error, and `:?` stops a shell that would go on.
+//
+// staticcheck is built with go get and go build in a module of its own since
+// the move to 1.27.2, so that it can be built against a newer x/tools than the
+// one it names (see ci.yml). There the toolchain is exported rather than put in
+// front of the command, and the rule is the same: the version is read on a line
+// of its own, and the export between that read and the build says `:?`.
 func TestEveryAnalysisToolIsBuiltByTheModulesToolchain(t *testing.T) {
-	install := regexp.MustCompile(`(?m)^(.*)go install ((?:golang\.org/x/vuln/cmd/govulncheck|honnef\.co/go/tools/cmd/staticcheck|github\.com/securego/gosec/v2/cmd/gosec)@\S+)`)
+	install := regexp.MustCompile(`(?m)^(.*)go (install|get) ((?:golang\.org/x/vuln/cmd/govulncheck|honnef\.co/go/tools/cmd/staticcheck|github\.com/securego/gosec/v2/cmd/gosec)@\S+)`)
+	const read = `toolchain="$(go env GOVERSION)"`
 	tools := map[string]bool{}
 	for _, path := range []string{
 		"../../.github/workflows/ci.yml",
@@ -216,15 +223,23 @@ func TestEveryAnalysisToolIsBuiltByTheModulesToolchain(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, m := range install.FindAllStringSubmatchIndex(string(body), -1) {
-			prefix, tool := string(body[m[2]:m[3]]), string(body[m[4]:m[5]])
+			prefix, verb, tool := string(body[m[2]:m[3]]), string(body[m[4]:m[5]]), string(body[m[6]:m[7]])
 			tools[strings.SplitN(tool, "@", 2)[0]] = true
+			if verb == "get" {
+				before := string(body[:m[0]])
+				at := strings.LastIndex(before, read)
+				if at < 0 || !strings.Contains(before[at:], `export GOTOOLCHAIN="${toolchain:?`) {
+					t.Errorf("%s builds %s without exporting the toolchain go.mod names, read on its own line, first", path, tool)
+				}
+				continue
+			}
 			if !strings.HasPrefix(strings.TrimSpace(prefix), `GOTOOLCHAIN="${toolchain:?`) {
 				t.Errorf("%s builds %s with whatever toolchain go install picks, not the one go.mod names", path, tool)
 				continue
 			}
-			if read := lineBefore(string(body[:m[0]])); read != `toolchain="$(go env GOVERSION)"` {
+			if got := lineBefore(string(body[:m[0]])); got != read {
 				t.Errorf("%s builds %s after %q rather than reading the version on its own line, "+
-					"so a failure to fetch the toolchain is ignored", path, tool, read)
+					"so a failure to fetch the toolchain is ignored", path, tool, got)
 			}
 		}
 	}

@@ -85,10 +85,18 @@ go test ./...
 # every platform the release ships, not only this one
 for os in linux darwin windows; do GOOS="$os" go vet ./... || break; done
 
-# what CI's "Static analysis" job runs, at the version it pins
+# what CI's "Static analysis" job runs, at the versions it pins: staticcheck
+# v0.8.1 built against golang.org/x/tools v0.51.0, which reads Go 1.27.2's
+# export data (see the job in ci.yml for why)
 toolchain="$(go env GOVERSION)"
-GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
-"$(go env GOPATH)/bin/staticcheck" ./...
+bin="$(go env GOPATH)/bin"
+(
+  export GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}"
+  cd "$(mktemp -d)" && go mod init staticcheck-build >/dev/null 2>&1 &&
+    go get honnef.co/go/tools/cmd/staticcheck@v0.8.1 golang.org/x/tools@v0.51.0 &&
+    go build -o "${bin}/staticcheck" honnef.co/go/tools/cmd/staticcheck
+)
+"${bin}/staticcheck" ./...
 
 # what CI's "Security linter" job runs, at the version it pins, once per platform
 toolchain="$(go env GOVERSION)"
