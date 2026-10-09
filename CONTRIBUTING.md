@@ -98,11 +98,19 @@ bin="$(go env GOPATH)/bin"
 )
 "${bin}/staticcheck" ./...
 
-# what CI's "Security linter" job runs, at the version it pins, once per platform
+# what CI's "Security linter" job runs, at the versions it pins, once per
+# platform: gosec v2.28.0 built against golang.org/x/tools v0.51.0, for the
+# same reason
 toolchain="$(go env GOVERSION)"
-GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}" go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+bin="$(go env GOPATH)/bin"
+(
+  export GOTOOLCHAIN="${toolchain:?the toolchain go.mod names could not be fetched}"
+  cd "$(mktemp -d)" && go mod init gosec-build >/dev/null 2>&1 &&
+    go get github.com/securego/gosec/v2/cmd/gosec@v2.28.0 golang.org/x/tools@v0.51.0 &&
+    go build -o "${bin}/gosec" github.com/securego/gosec/v2/cmd/gosec
+)
 for os in linux darwin windows; do
-  GOOS="$os" "$(go env GOPATH)/bin/gosec" -severity medium -confidence medium ./... || break
+  GOOS="$os" "${bin}/gosec" -severity medium -confidence medium ./... || break
 done
 ```
 
