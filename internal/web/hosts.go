@@ -23,6 +23,9 @@ import (
 // that belongs to the other name answers with a permanent redirect to the same
 // path there. An installation somebody runs is one name, its operator's, and
 // none of this applies to it.
+//
+// A third name, mta-sts.denyfirst.dev, answers one file and nothing else: the
+// policy for mail to denyfirst.dev. See mailpolicy.go.
 
 // organisationPaths are what denyfirst.dev serves itself. Everything else on
 // it is Porch's, and redirected.
@@ -67,6 +70,7 @@ const (
 	either site = iota
 	organisationSite
 	porchSite
+	mailPolicySite
 )
 
 // siteOf reads the Host header the way a browser writes it: any case, an
@@ -84,6 +88,8 @@ func siteOf(host string) site {
 		return organisationSite
 	case strings.TrimPrefix(PorchURL, "https://"):
 		return porchSite
+	case "mta-sts." + strings.TrimPrefix(SiteURL, "https://"):
+		return mailPolicySite
 	}
 	return either
 }
@@ -121,6 +127,12 @@ func Hosts(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch siteOf(r.Host) {
+		case mailPolicySite:
+			// Answered here and never passed on: the API and the pages are
+			// not served at this name, so a sender fetching the policy gets
+			// the policy and anybody else gets nothing.
+			serveMailPolicy(w, r)
+			return
 		case organisationSite:
 			if path == orgPrivacy {
 				elsewhere(w, r, SiteURL, "/privacy")

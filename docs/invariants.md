@@ -1668,6 +1668,21 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestEveryAddressThisProjectSendsOutResolves`,
 `TestTheGateIsInFrontOfEverything`
 
+### W8b — Mail to the organisation is covered by a policy our own check accepts
+
+The demonstration's third name, mta-sts.denyfirst.dev, answers the MTA-STS
+policy for mail to denyfirst.dev and nothing else: no page, no API, no
+redirect. The policy names the domain's exchangers and is one Porch's own mail
+check reads as valid, fetched over TLS the way a sender fetches it. An
+installation serves no policy.
+
+*Enforced in:* `internal/web/mailpolicy.go`, `internal/web/hosts.go`
+
+*Guarded by:* `TestOurMailPolicyIsOneOurOwnCheckAccepts`,
+`TestThePolicyNameAnswersThePolicyAndNothingElse`,
+`TestThePolicyIsServedOnlyAtItsOwnName`,
+`TestThePolicyIsWrittenAsTheRFCWritesIt`
+
 ### W9 — A report fits the screen it is read on
 
 *Enforced in:* `internal/web/assets/style.css`
