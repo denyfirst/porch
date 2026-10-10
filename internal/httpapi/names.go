@@ -364,13 +364,37 @@ func (s *Server) inventory(ctx context.Context, domain string, walk []netip.Pref
 	// what it is doing like any other name, so the newest half of the
 	// inventory is not the half with nothing beside it (R4).
 	if s.presented != nil {
-		sources.Presented = s.presented.Under(ctx, domain, liveness.Answering(live))
+		sources.Presented = s.presented.Under(ctx, domain, withDomain(live, domain))
 
 		found = inventory.Merge(domain, sources)
 		live = append(live, s.live.Check(ctx, found.Unasked(live))...)
 	}
 
 	return found.WithLiveness(live)
+}
+
+// withDomain is the hosts whose certificates are read: the ones that answered,
+// and the domain itself where nothing has asked it yet.
+//
+// The domain is the one name known to belong to the estate before any source
+// has spoken, and its certificate is where its other names most often are.
+// Reading only the hosts other sources had named made this source silent
+// exactly when it was the only one left: on 2026-10-09 the monitor did not
+// answer, the records named only a mail provider's hosts, and the
+// demonstration's inventory of denyfirst.dev came back empty — while the
+// certificate denyfirst.dev presents names porch.denyfirst.dev and
+// mta-sts.denyfirst.dev.
+//
+// Where the domain was named and probed already, the probe's answer stands: it
+// is read if it answered and not knocked on again if it did not.
+func withDomain(live []liveness.Name, domain string) []string {
+	hosts := liveness.Answering(live)
+	for _, n := range live {
+		if n.Name == domain {
+			return hosts
+		}
+	}
+	return append([]string{domain}, hosts...)
 }
 
 // parseNamesTarget takes a bare domain.

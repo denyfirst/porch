@@ -532,10 +532,12 @@ func TestTheDemonstrationIsWiredToListItsOwnEstate(t *testing.T) {
 
 	for _, want := range []string{
 		"if demo.Enabled {",
-		"api.SearchNames(&ctsearch.CRTSh{Timeout: *requestTimeout})",
+		"api.SearchNames(demoMonitor(*requestTimeout))",
 		"api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})",
-		"api.KeepInventoryFor(demoKeep)",
+		"api.KeepInventoryFor(demoFresh)",
+		"const demoFresh = time.Minute",
 		"const demoKeep = 15 * time.Minute",
+		"const demoAsk = 30 * time.Minute",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("main.go does not wire the demonstration with %q", want)

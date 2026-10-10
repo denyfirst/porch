@@ -395,7 +395,8 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		// required is what holds now.
 		"no certificate authority is asked about one certificate",
 		"scans only the hosts this project owns",
-		"each check runs at most once every fifteen minutes",
+		"at most once a minute for each host",
+		"the certificate transparency monitor is asked",
 		"without warranty",
 	}
 

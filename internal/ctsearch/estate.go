@@ -80,6 +80,11 @@ type Estate struct {
 
 	// Reason says why nothing was established. Empty on success.
 	Reason string `json:"reason,omitempty"`
+
+	// Monitor and Checked are Result's: whose answer this is, and when it was
+	// given where that was not just now.
+	Monitor string    `json:"monitor,omitempty"`
+	Checked time.Time `json:"checked,omitzero"`
 }
 
 // Name is one name found, and the window the logs show it in.
@@ -127,6 +132,12 @@ const (
 // a shared certificate is — and reporting the others here would be this program
 // drawing an estate boundary the certificate does not draw.
 func (c *CRTSh) SearchEstate(ctx context.Context, domain string) Estate {
+	e := c.searchEstate(ctx, domain)
+	e.Monitor = crtshName
+	return e
+}
+
+func (c *CRTSh) searchEstate(ctx context.Context, domain string) Estate {
 	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
 	out := Estate{Asked: true, Domain: domain}
 	if domain == "" {

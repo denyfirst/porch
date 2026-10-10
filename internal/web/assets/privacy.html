@@ -44,8 +44,11 @@
       <li><strong>Refusals.</strong> How many requests were turned away and for
         which reason. The reasons name causes, never people.</li>
       <li><strong>The latest report</strong> of each check for each of our
-        hosts, in memory, for fifteen minutes. It is never written to disk and
-        does not say who asked.</li>
+        hosts, in memory: for a minute, or fifteen for the mail and DNS
+        checks, which ask other people&rsquo;s servers. And the certificate
+        transparency monitor&rsquo;s last answer about our domain, for half an
+        hour, or for up to a day while the monitor is not answering. None of it
+        is written to disk or says who asked.</li>
       <li><strong>Your address</strong>, in memory, for the rate limit. It is
         dropped about three minutes after your last request. For IPv6 the limit
         applies to your network block.</li>
@@ -90,8 +93,11 @@
 
     <p>
       <strong>This deployment scans only the hosts this project owns.</strong>
-      The list is built into the program. Each check runs at most once every
-      fifteen minutes for each host; everyone in between gets the kept report.
+      The list is built into the program. The transport and web checks run at
+      most once a minute for each host, the mail and DNS checks at most once
+      every fifteen minutes, and the certificate transparency monitor is asked
+      at most once every half hour. Everyone in between gets the kept report,
+      which says when it was made.
     </p>
 
     <ul class="plain">
@@ -115,7 +121,8 @@
     <p>
       Others are asked only about us: our certificate authority for its
       revocation list (no certificate authority is asked about one
-      certificate), crt.sh for our certificates, our mail provider on port 25,
+      certificate), Cert Spotter for our certificates (crt.sh when Cert
+      Spotter does not answer), our mail provider on port 25,
       and the <code>.dev</code> registry for our name servers.
     </p>
 

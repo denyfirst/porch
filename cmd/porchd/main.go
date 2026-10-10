@@ -92,15 +92,61 @@ const (
 	statsInterval = time.Minute
 )
 
-// demoKeep is how long the demonstration keeps the report of each check of its
-// own hosts, and its inventory, and hands them to everybody who asks.
+// demoFresh is how long the demonstration hands one report of its own hosts to
+// everybody who asks, before it measures them again.
+//
+// A minute since 2026-10-09; fifteen minutes before that, for every check
+// alike. Fifteen minutes showed a visitor a quarter of an hour's history and
+// called it the report, and on the day the transparency monitor was a day
+// behind the logs it showed a stale answer for all of it. The reason for
+// keeping anything was never our own hosts: it was the third parties a scan
+// asks, and those now have intervals of their own: demoKeep, and demoAsk for
+// the transparency monitor.
+const demoFresh = time.Minute
+
+// demoKeep is how long the demonstration keeps the reports of the checks that
+// knock on other people's servers.
 //
 // Fifteen minutes since 2026-10-05; an hour before. An hour was a long time to
-// show a report spoiled by a third party's bad minute — the inventory crt.sh
-// did not answer stayed empty for the rest of it — and the load it saves is
-// small either way: one host and one domain, so at most eight questions an
-// hour to the transparency monitor, and fewer to every other party.
+// show a report spoiled by a third party's bad minute, and the load it saves
+// is small either way: one host and one domain.
 const demoKeep = 15 * time.Minute
+
+// demoAsk is how long the demonstration keeps a transparency monitor's answer.
+//
+// Two questions — the certificates for the name, and the names under the
+// domain — each a page and the empty page after it, so at most eight requests
+// an hour. Cert Spotter answers anonymous callers about ten an hour, and a
+// question it refuses is answered from the last one it took, with its time.
+// The monitor itself is minutes to an hour behind the logs, so a half-hour
+// answer loses nothing a fresher one would have had.
+const demoAsk = 30 * time.Minute
+
+// demoMonitor is the transparency monitor the demonstration asks about its own
+// domain: Cert Spotter, and crt.sh only when Cert Spotter does not answer, each
+// answer kept for demoAsk.
+//
+// crt.sh alone until 2026-10-09. That day it answered nothing for the
+// inventory and, for the transport check, listed one of the domain's four valid
+// certificates — the one issued in August — so the report told a visitor that
+// a certificate this server was not presenting existed for its name and left
+// out the three it had issued since. Cert Spotter listed all four within the
+// hour. A report that is wrong about its own domain is worse than one that
+// says it could not ask, so the monitor that keeps up is asked first, and the
+// answer says which monitor gave it and when.
+//
+// Only here. An installation someone runs for their own domains asks the
+// monitor its operator chose, and nothing in this build names their domains to
+// a company they did not pick.
+func demoMonitor(timeout time.Duration) *ctsearch.Cached {
+	return &ctsearch.Cached{
+		Monitor: &ctsearch.Fallback{
+			First: &ctsearch.CertSpotter{Timeout: timeout},
+			Then:  &ctsearch.CRTSh{Timeout: timeout},
+		},
+		For: demoAsk,
+	}
+}
 
 func main() {
 	os.Exit(run())
@@ -557,28 +603,30 @@ func run() int {
 	// A monitor, because the page promises what this build does and a unit
 	// file is not the build: a flag left out of it would leave the
 	// demonstration showing half an inventory while the privacy page described
-	// a whole one. And a kept copy, because every visitor asks the same
-	// question — producing it per visitor would spend crt.sh on an answer that
-	// has not changed, and a page anybody can refresh would be a way to make
-	// this installation hammer a third party.
+	// a whole one. See demoMonitor for which one, and how often it is asked.
 	//
-	// For demoKeep: long enough that a monitor sees a handful of questions an
-	// hour, short enough that what each name is doing is still worth reading.
+	// And a kept copy, for demoFresh: every visitor asks the same question, and
+	// a page anybody can refresh must not be a way to make this installation
+	// knock on its own hosts as fast as somebody can press a key. A minute is
+	// short enough that what the report shows is what the hosts are doing now.
 	// The answer carries the time it was made, so nobody has to take that on
 	// trust.
 	if demo.Enabled {
-		api.SearchNames(&ctsearch.CRTSh{Timeout: *requestTimeout})
+		api.SearchNames(demoMonitor(*requestTimeout))
 		api.ReadHostCertificates(&certnames.Reader{Timeout: *requestTimeout})
-		api.KeepInventoryFor(demoKeep)
+		api.KeepInventoryFor(demoFresh)
 
-		// And a kept copy of every check's report, for the same reason and one
-		// more. The demonstration shows the whole report of its own estate, so
-		// a scan there asks a transparency monitor, the authority's revocation
-		// list, the mail exchangers on port 25 and the servers of the zone
-		// above as well as the host; a page anybody can refresh would make it
-		// press on every one of them. Kept, each check runs at most once every
-		// fifteen minutes for each host, and the answer says when it was made.
-		api.KeepReportsFor(demoKeep)
+		// And a kept copy of every check's report, for the same reason. The
+		// transport and web checks ask this project's own hosts, and an
+		// authority's revocation list served from a CDN for exactly this, so
+		// they are made again after a minute. The mail and DNS checks knock on
+		// doors that are not ours — our mail provider's exchangers on port 25,
+		// our DNS host's name servers and the registry's, a zone transfer
+		// included — and those are not asked again every time a stranger
+		// refreshes a page: they keep their reports for demoKeep.
+		api.KeepReportsFor(demoFresh)
+		api.KeepCheckFor("mail", demoKeep)
+		api.KeepCheckFor("dns", demoKeep)
 	}
 
 	// The register, the same way: named or not asked. It is wired even where
@@ -1141,11 +1189,12 @@ func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, 
 	}
 
 	// And the demonstration searches the logs too, with no scope: its hosts are
-	// compiled in, so the name it asks about is only ever this project's own.
+	// compiled in, so the name it asks about is only ever this project's own,
+	// and it asks the monitor demoMonitor names.
 	// The responder stays out, because it is asked only where an operator said
 	// so and nobody says so to the demonstration.
 	if demo.Enabled {
-		scanner.Logs = &ctsearch.CRTSh{Timeout: timeout}
+		scanner.Logs = demoMonitor(timeout)
 	}
 
 	// Always, and never nil. An empty Server already means this machine's own
