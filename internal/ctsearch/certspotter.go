@@ -3,11 +3,14 @@ package ctsearch
 import (
 	"context"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -89,6 +92,30 @@ type certSpotterEntry struct {
 	DNSNames  []string `json:"dns_names"`
 	NotBefore string   `json:"not_before"`
 	NotAfter  string   `json:"not_after"`
+
+	// Asked for only by Search, which compares each certificate with the one
+	// a server presented and so needs its serial. The monitor does not give a
+	// serial; the certificate it returns does.
+	Issuer  *certSpotterIssuer `json:"issuer,omitempty"`
+	CertDER string             `json:"cert_der,omitempty"`
+}
+
+// certSpotterIssuer is the authority as the monitor names it.
+type certSpotterIssuer struct {
+	Name string `json:"name"`
+}
+
+// spotterQuery is what one search asks for, on every page of it.
+type spotterQuery struct {
+	domain string
+
+	// subdomains asks for every name under the domain; without it, the
+	// domain itself only, which is what crt.sh's Identity search gives.
+	subdomains bool
+
+	// certificates asks for each certificate and its issuer as well as its
+	// names, which is the difference between an inventory and a comparison.
+	certificates bool
 }
 
 // SearchEstate asks which names under a domain appear in logged certificates.
@@ -105,48 +132,160 @@ func (c *CertSpotter) SearchEstate(ctx context.Context, domain string) Estate {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout())
 	defer cancel()
 
-	var all []entry
-	after := ""
+	raw, cut, reason := c.issuances(ctx, spotterQuery{domain: domain, subdomains: true})
+	if reason != "" {
+		return Estate{Asked: true, Domain: domain, Reason: reason, Monitor: certSpotterName}
+	}
 
+	all := make([]entry, 0, len(raw))
+	for _, e := range raw {
+		all = append(all, entry{
+			// The hash, as the identity a certificate is deduplicated on. This
+			// monitor returns the precertificate and the certificate as one
+			// issuance, but a page boundary can still repeat one.
+			SerialNumber: e.SHA256,
+			NameValue:    strings.Join(e.DNSNames, "\n"),
+			NotBefore:    e.NotBefore,
+			NotAfter:     e.NotAfter,
+		})
+	}
+	out := collect(all, domain)
+	out.Monitor = certSpotterName
+	if cut {
+		// Stopped rather than followed forever, and said so. An inventory
+		// that is quietly short is the failure this mode cannot survive (R4).
+		out.Truncated = true
+	}
+	return out
+}
+
+// certSpotterName is how a report names this monitor.
+const certSpotterName = "Cert Spotter"
+
+// Search asks what the logs hold for exactly one name, as the other monitor's
+// Identity search does.
+//
+// Each certificate comes with the certificate itself, and its serial is read
+// from that. The comparison a report makes — which of these is not the one the
+// server just presented — is by serial, and this monitor gives none of its
+// own; a hash would not do, because a precertificate and its certificate hash
+// differently and would read as two certificates, one of them a stranger's.
+//
+// An answer that carries a certificate this cannot read is no answer. Every
+// entry it could not compare would otherwise count as a certificate the server
+// did not present, which on an operator's own domain is an alarm about
+// nothing.
+func (c *CertSpotter) Search(ctx context.Context, name string) Result {
+	name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
+	if name == "" {
+		return Result{Reason: "no name was given to search for", Monitor: certSpotterName}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout())
+	defer cancel()
+
+	raw, cut, reason := c.issuances(ctx, spotterQuery{domain: name, certificates: true})
+	if reason != "" {
+		return Result{Reason: reason, Monitor: certSpotterName}
+	}
+
+	out := Result{Monitor: certSpotterName, Truncated: cut}
+	seen := map[string]bool{}
+	var entries []Entry
+	for _, e := range raw {
+		der, err := base64.StdEncoding.DecodeString(e.CertDER)
+		if err != nil {
+			return Result{Reason: "the monitor's answer was not in the form this reads", Monitor: certSpotterName}
+		}
+		// A precertificate carries a critical extension a certificate never
+		// does, and parsing accepts it: the serial, issuer and dates are the
+		// ones the certificate was issued with.
+		cert, err := x509.ParseCertificate(der)
+		if err != nil || cert.SerialNumber == nil {
+			return Result{Reason: "the monitor's answer was not in the form this reads", Monitor: certSpotterName}
+		}
+
+		serial := cert.SerialNumber.Text(16)
+		if seen[serial] {
+			continue
+		}
+		seen[serial] = true
+
+		issuer := cert.Issuer.String()
+		if e.Issuer != nil && e.Issuer.Name != "" {
+			issuer = e.Issuer.Name
+		}
+		var names []string
+		for _, n := range e.DNSNames {
+			if len(names) >= maxNames {
+				break
+			}
+			if n = clean(n); n != "" {
+				names = append(names, n)
+			}
+		}
+		entries = append(entries, Entry{
+			Serial:    clean(serial),
+			Issuer:    clean(issuer),
+			Names:     names,
+			NotBefore: cert.NotBefore.UTC(),
+			NotAfter:  cert.NotAfter.UTC(),
+		})
+	}
+
+	// Newest first, as the other monitor answers; this one answers in the
+	// order it found them.
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].NotBefore.After(entries[j].NotBefore) })
+	out.Distinct = len(entries)
+	if len(entries) > maxEntries {
+		entries = entries[:maxEntries]
+		out.Truncated = true
+	}
+	out.Entries = entries
+	return out
+}
+
+// issuances reads every page of one search, up to the bound.
+//
+// cut is true when the bound was reached with pages still coming.
+func (c *CertSpotter) issuances(ctx context.Context, q spotterQuery) (all []certSpotterEntry, cut bool, reason string) {
+	after := ""
 	for page := 0; ; page++ {
 		if page >= maxPages {
-			// Stopped rather than followed forever, and said so below. An
-			// inventory that is quietly short is the failure this mode cannot
-			// survive (R4).
-			out := collect(all, domain)
-			out.Truncated = true
-			return out
+			return all, true, ""
 		}
 
-		got, next, reason := c.page(ctx, domain, after)
+		got, next, reason := c.page(ctx, q, after)
 		if reason != "" {
-			return Estate{Asked: true, Domain: domain, Reason: reason}
+			return nil, false, reason
 		}
 		if len(got) == 0 {
-			break
+			return all, false, ""
 		}
 		all = append(all, got...)
 		if next == "" {
-			break
+			return all, false, ""
 		}
 		after = next
 	}
-
-	return collect(all, domain)
 }
 
 // page fetches one page and says where the next one starts.
-func (c *CertSpotter) page(ctx context.Context, domain, after string) (got []entry, next, reason string) {
+func (c *CertSpotter) page(ctx context.Context, q spotterQuery, after string) (got []certSpotterEntry, next, reason string) {
 	address, err := url.Parse(c.endpoint())
 	if err != nil {
 		return nil, "", "the monitor's address could not be read"
 	}
 	query := url.Values{}
-	query.Set("domain", domain)
-	query.Set("include_subdomains", "true")
+	query.Set("domain", q.domain)
+	query.Set("include_subdomains", strconv.FormatBool(q.subdomains))
 	query.Add("expand", "dns_names")
 	query.Add("expand", "not_before")
 	query.Add("expand", "not_after")
+	if q.certificates {
+		query.Add("expand", "issuer")
+		query.Add("expand", "cert_der")
+	}
 	if after != "" {
 		query.Set("after", after)
 	}
@@ -186,22 +325,11 @@ func (c *CertSpotter) page(ctx context.Context, domain, after string) (got []ent
 		return nil, "", "the monitor's answer is larger than this reads, so the inventory would be short"
 	}
 
-	var raw []certSpotterEntry
-	if err := json.Unmarshal(body, &raw); err != nil {
+	if err := json.Unmarshal(body, &got); err != nil {
 		return nil, "", "the monitor's answer was not in the form this reads"
 	}
-
-	for _, e := range raw {
-		got = append(got, entry{
-			// The hash, as the identity a certificate is deduplicated on. This
-			// monitor returns the precertificate and the certificate as one
-			// issuance, but a page boundary can still repeat one.
-			SerialNumber: e.SHA256,
-			NameValue:    strings.Join(e.DNSNames, "\n"),
-			NotBefore:    e.NotBefore,
-			NotAfter:     e.NotAfter,
-		})
-		next = e.ID
+	if len(got) > 0 {
+		next = got[len(got)-1].ID
 	}
 	return got, next, ""
 }

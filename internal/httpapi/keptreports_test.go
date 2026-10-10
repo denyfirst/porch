@@ -140,3 +140,63 @@ func TestWithoutAnIntervalEveryCallerIsScanned(t *testing.T) {
 		t.Error("an installation keeping nothing answered a second caller from a copy")
 	}
 }
+
+// A check kept for longer is kept for longer, and the rest are made again
+// after the shorter interval.
+//
+// The demonstration shows its own hosts as they are now and does not ask
+// somebody else's servers again every time a page is refreshed: the mail and
+// DNS checks knock on a provider's mail exchangers and on name servers that
+// are not ours, and they keep their reports for longer than the rest.
+func TestACheckKeptForLongerIsKeptForLonger(t *testing.T) {
+	var dialled atomic.Int32
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	s := New(countingScanner(&dialled), Limits{Burst: 1000, Refill: time.Nanosecond},
+		func() time.Time { return now })
+	s.KeepReportsFor(time.Minute)
+
+	postFrom(t, s, `{"target":"fresh.test"}`, "203.0.113.150:5000")
+	scanned := dialled.Load()
+	now = now.Add(2 * time.Minute)
+	postFrom(t, s, `{"target":"fresh.test"}`, "203.0.113.151:5000")
+	if dialled.Load() == scanned {
+		t.Error("a report past a minute was handed out instead of measured again")
+	}
+
+	s.KeepCheckFor(checkTLS, time.Hour)
+	postFrom(t, s, `{"target":"longer.test"}`, "203.0.113.152:5000")
+	scanned = dialled.Load()
+	now = now.Add(20 * time.Minute)
+	postFrom(t, s, `{"target":"longer.test"}`, "203.0.113.153:5000")
+	if got := dialled.Load(); got != scanned {
+		t.Errorf("a check kept for an hour was scanned again after twenty minutes (%d connections)", got-scanned)
+	}
+}
+
+// Asked to keep one check for longer with nothing kept at all, the service
+// keeps nothing, rather than starting to keep one check on its own.
+func TestKeepingOneCheckLongerKeepsNothingOnItsOwn(t *testing.T) {
+	var dialled atomic.Int32
+	s := New(countingScanner(&dialled), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
+	s.KeepCheckFor(checkTLS, time.Hour)
+
+	postFrom(t, s, `{"target":"own.test"}`, "203.0.113.160:5000")
+	scanned := dialled.Load()
+	postFrom(t, s, `{"target":"own.test"}`, "203.0.113.161:5000")
+	if dialled.Load() == scanned {
+		t.Error("an installation that keeps nothing kept a report")
+	}
+}
+
+// A check that does not exist stops the program that names it, rather than
+// becoming a rule that never applies.
+func TestKeepingACheckThatDoesNotExistStops(t *testing.T) {
+	s := New(offlineScanner(), Limits{}, nil)
+	s.KeepReportsFor(time.Minute)
+	defer func() {
+		if recover() == nil {
+			t.Error("a misspelt check was accepted")
+		}
+	}()
+	s.KeepCheckFor("mial", time.Hour)
+}

@@ -3,7 +3,9 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 )
@@ -37,6 +39,10 @@ type keptReports struct {
 	interval time.Duration
 	now      func() time.Time
 
+	// longer holds the checks kept for longer than interval, by name. See
+	// KeepCheckFor.
+	longer map[string]time.Duration
+
 	mu      sync.Mutex
 	entries map[string]*keptCopy
 }
@@ -57,6 +63,14 @@ func keepReports(interval time.Duration, now func() time.Time) *keptReports {
 	return &keptReports{interval: interval, now: now, entries: map[string]*keptCopy{}}
 }
 
+// intervalFor is how long one check's report is kept.
+func (k *keptReports) intervalFor(check string) time.Duration {
+	if d, ok := k.longer[check]; ok {
+		return d
+	}
+	return k.interval
+}
+
 func (k *keptReports) enabled() bool {
 	return k != nil && k.interval > 0
 }
@@ -69,6 +83,32 @@ func (k *keptReports) enabled() bool {
 // operator running their own copy gets — their scans are their own questions.
 func (s *Server) KeepReportsFor(interval time.Duration) {
 	s.keptReports = keepReports(interval, s.clock)
+}
+
+// KeepCheckFor keeps one check's reports for longer than the rest.
+//
+// For the checks that knock on somebody else's door to answer: the mail check
+// connects to the domain's mail exchangers on port 25, which on the
+// demonstration are a provider's, and the DNS check asks the zone's name
+// servers and the registry directly, a transfer included. Their own hosts'
+// answers a report can show as they are now; somebody else's servers are not
+// asked again every time a stranger refreshes a page.
+//
+// Called after KeepReportsFor, which it refines; on its own it keeps nothing.
+// A check that does not exist is a mistake in the program that calls this,
+// and it stops here rather than becoming a rule that silently never applies.
+func (s *Server) KeepCheckFor(check string, interval time.Duration) {
+	if !slices.Contains(checkNames, check) {
+		panic(fmt.Sprintf("httpapi: KeepCheckFor names no check: %q", check))
+	}
+	k := s.keptReports
+	if k == nil {
+		return
+	}
+	if k.longer == nil {
+		k.longer = map[string]time.Duration{}
+	}
+	k.longer[check] = interval
 }
 
 // serveKept answers from the copy where it is fresh, and otherwise runs the
@@ -88,7 +128,7 @@ func (s *Server) serveKept(ctx context.Context, w http.ResponseWriter, c check, 
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
-	if !entry.at.IsZero() && k.now().Sub(entry.at) < k.interval {
+	if !entry.at.IsZero() && k.now().Sub(entry.at) < k.intervalFor(c.name) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(withProducedAt(entry.body, entry.at))

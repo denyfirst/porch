@@ -117,6 +117,17 @@ type Result struct {
 	// decoder: those name resolvers, addresses and internal types, and this
 	// string reaches a report a stranger reads (I6).
 	Reason string `json:"reason,omitempty"`
+
+	// Monitor names the monitor that answered, or that failed to.
+	//
+	// Two monitors can answer the same question differently — one of them a
+	// day behind the logs — so an answer that does not say whose it is cannot
+	// be weighed.
+	Monitor string `json:"monitor,omitempty"`
+
+	// Checked is when the monitor gave this answer, where that was not just
+	// now: an answer kept for a while and handed out again says how old it is.
+	Checked time.Time `json:"checked,omitzero"`
 }
 
 // Searcher answers which certificates a log has recorded for a name.
@@ -177,6 +188,12 @@ type entry struct {
 // answer for any domain of size, which is a decision to make deliberately
 // rather than as a default.
 func (c *CRTSh) Search(ctx context.Context, name string) Result {
+	r := c.search(ctx, name)
+	r.Monitor = crtshName
+	return r
+}
+
+func (c *CRTSh) search(ctx context.Context, name string) Result {
 	name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
 	if name == "" {
 		return Result{Reason: "no name was given to search for"}
@@ -222,6 +239,9 @@ func (c *CRTSh) Search(ctx context.Context, name string) Result {
 
 	return summarise(raw)
 }
+
+// crtshName is how a report names this monitor.
+const crtshName = "crt.sh"
 
 // UserAgent identifies this client to the monitor, as everything else here
 // identifies itself. A search that hides is one nobody can ask about.

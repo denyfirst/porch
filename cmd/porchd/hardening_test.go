@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/policy"
 )
@@ -100,19 +101,22 @@ func TestAMonitorOrRegisterIsAskedOnlyOverHTTPS(t *testing.T) {
 	}
 }
 
-// The demonstration searches the logs for its own name and keeps each check's
-// report for an hour.
+// The demonstration searches the logs for its own name, measures its own hosts
+// again after a minute, and keeps for longer what it had to ask somebody else.
 //
-// Both are wired here rather than decided in a package, because they are what
-// this binary is when it is the demonstration. The first is what lets its TLS
-// report say what a proven copy's says about its own domain; the second is what
-// stops a page anybody can refresh from pressing the parties that report now
-// asks. Read from the source, because run() binds a port.
+// All of it is wired here rather than decided in a package, because it is what
+// this binary is when it is the demonstration. The search is what lets its TLS
+// report say what a proven copy's says about its own domain; the intervals are
+// what stop a page anybody can refresh from pressing the parties a report
+// asks, without showing a visitor a quarter of an hour's history as the state
+// of our own hosts. Read from the source, because run() binds a port.
 func TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports(t *testing.T) {
 	source := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
-		"if demo.Enabled {\n\t\tscanner.Logs = &ctsearch.CRTSh{Timeout: timeout}\n\t}",
-		"api.KeepReportsFor(demoKeep)",
+		"if demo.Enabled {\n\t\tscanner.Logs = demoMonitor(timeout)\n\t}",
+		"api.KeepReportsFor(demoFresh)",
+		`api.KeepCheckFor("mail", demoKeep)`,
+		`api.KeepCheckFor("dns", demoKeep)`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Errorf("the demonstration is not wired with %q", want)
@@ -126,3 +130,30 @@ func TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports(t *testing.T) {
 
 // demoBuild is whether this test binary is the demonstration build.
 func demoBuild() bool { return demo.Enabled }
+
+// The demonstration asks the monitor that keeps up first, and the other only
+// when it does not answer, keeping each answer for demoAsk.
+//
+// On 2026-10-09 crt.sh listed one of the domain's four valid certificates and
+// Cert Spotter all four, and the report built on crt.sh's answer told a
+// visitor about a certificate the server was not presenting while leaving out
+// the three it had issued since.
+func TestTheDemonstrationAsksTheMonitorThatKeepsUpFirst(t *testing.T) {
+	m := demoMonitor(time.Second)
+	if m.For != demoAsk {
+		t.Errorf("a monitor's answer is kept for %v, want %v", m.For, demoAsk)
+	}
+	f, ok := m.Monitor.(*ctsearch.Fallback)
+	if !ok {
+		t.Fatalf("the demonstration's monitor is a %T, with nothing to fall back on", m.Monitor)
+	}
+	if _, ok := f.First.(*ctsearch.CertSpotter); !ok {
+		t.Errorf("the first monitor asked is a %T, want Cert Spotter", f.First)
+	}
+	if _, ok := f.Then.(*ctsearch.CRTSh); !ok {
+		t.Errorf("the monitor asked when the first fails is a %T, want crt.sh", f.Then)
+	}
+	if demoAsk > time.Hour || demoFresh > 5*time.Minute {
+		t.Errorf("the demonstration shows answers up to %v and reports up to %v old", demoAsk, demoFresh)
+	}
+}

@@ -652,9 +652,10 @@ func TestTheServiceReadsTheCertificatesTheHostsPresent(t *testing.T) {
 		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
 	}
 
-	// Only the host that answers is knocked on again. Asking one that does not
+	// Only the host that answers is knocked on again, and the domain itself,
+	// which no source named and nothing has asked. Asking one that does not
 	// resolve spends a timeout to learn what the report already says.
-	if certificates.was() != "www.proven.example" {
+	if certificates.was() != "proven.example www.proven.example" {
 		t.Errorf("the certificates were asked of %q", certificates.was())
 	}
 
@@ -673,6 +674,70 @@ func TestTheServiceReadsTheCertificatesTheHostsPresent(t *testing.T) {
 	// rather than being the one line in the report with nothing beside it.
 	if !strings.Contains(probe.was(), "internal.proven.example") {
 		t.Errorf("the name a certificate produced was never asked about: %q", probe.was())
+	}
+}
+
+// The domain's own certificate is read when nothing else named a host.
+//
+// On 2026-10-09 the monitor did not answer, the records named only a mail
+// provider, and the demonstration's inventory came back empty while the
+// certificate its own domain presents named two more hosts. A source that
+// reads certificates only of hosts other sources found is silent exactly when
+// it is the last one left.
+func TestTheDomainsOwnCertificateIsReadWhenNothingElseNamedAHost(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Reason: "the certificate transparency monitor could not be reached",
+	}})
+	s.live = &stubLiveness{}
+	certificates := &stubCertificates{found: certnames.Found{
+		Asked: true, Hosts: 1, Answered: 1,
+		Names: []string{"proven.example", "www.proven.example", "mail.proven.example"},
+	}}
+	s.ReadHostCertificates(certificates)
+
+	w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.95:5000")
+	if w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+	if certificates.was() != "proven.example" {
+		t.Errorf("with nothing else named, the certificates were asked of %q", certificates.was())
+	}
+
+	var got inventory.Inventory
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("the inventory did not decode: %v", err)
+	}
+	if got.Distinct != 3 {
+		t.Errorf("with the monitor down, the inventory holds %d names: %+v", got.Distinct, got.Names)
+	}
+}
+
+// And a domain that was probed and did not answer is not knocked on again.
+func TestADomainThatDidNotAnswerIsNotAskedForItsCertificate(t *testing.T) {
+	scope, _ := scopeProving("proven.example")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{
+		Asked: true, Certificates: 1,
+		Names: []ctsearch.Name{{Name: "proven.example"}, {Name: "www.proven.example"}},
+	}})
+	s.live = &stubLiveness{answer: []liveness.Name{
+		{Name: "proven.example", Status: liveness.Gone},
+		{Name: "www.proven.example", Status: liveness.Live, Answered: []string{"443"}},
+	}}
+	certificates := &stubCertificates{found: certnames.Found{Asked: true}}
+	s.ReadHostCertificates(certificates)
+
+	if w := postTo(t, s, "/api/v1/names/scan", `{"target":"proven.example"}`, "203.0.113.96:5000"); w.Code != 200 {
+		t.Fatalf("a proven domain answered %d: %s", w.Code, w.Body.String())
+	}
+	if certificates.was() != "www.proven.example" {
+		t.Errorf("the certificates were asked of %q; the domain did not answer", certificates.was())
 	}
 }
 

@@ -23,7 +23,8 @@ each closed when the handshake ends. No HTTP request.
 
 **Also asks:** the certificate authority for its revocation list (it names no
 certificate), and crt.sh for the certificates logged for the name (only for a
-domain proven to the copy asking).
+domain proven to the copy asking). The demonstration asks Cert Spotter instead,
+and crt.sh only when Cert Spotter does not answer.
 
 **Grades:** protocol versions, cipher suites, the certificate and its chain,
 revocation, and certificate transparency.
