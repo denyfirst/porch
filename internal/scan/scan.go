@@ -298,35 +298,16 @@ type Scanner struct {
 	ShowRevocationURLs bool
 
 	// Logs searches the public certificate logs for other certificates issued
-	// for the name being scanned.
+	// for the name being scanned, and Responder asks the certificate's own
+	// OCSP responder whether it has been revoked.
 	//
-	// Nil means no search. Unlike Revocation this is off unless a caller sets
-	// it, and the difference is what the question discloses. Reading a
-	// revocation list names no certificate — one list covers thousands. Asking
-	// which certificates exist for example.com contains example.com, which is
-	// the shape of the OCSP query this project refuses.
-	//
-	// What makes it acceptable where OCSP was not is that certificate
-	// transparency is public by design: the certificates for a name are already
-	// published to anyone who looks, so nothing new about the domain is
-	// disclosed and only the looking is. A deployment that required proof of
-	// control is asking about a name its operator owns; the command line may be
-	// asking about somebody else's, which is why it is a switch there and not
-	// here (N12).
-	Logs ctsearch.Searcher
-
-	// Responder asks the certificate's own OCSP responder whether it has been
-	// revoked. Nil means it is not asked, and nil is what everything but the
-	// command line leaves it.
-	//
-	// Stricter than Logs, and the difference is what the question names. A log
-	// search names a domain whose certificates are public anyway; this names
-	// one certificate to the authority that issued it, from this address, at
-	// this moment — the query R3a says is not made. The command line makes it
-	// behind a flag, for an operator examining their own certificate who
-	// decides that is no disclosure. A service is never given one, even with
-	// proof of control, because the operator did not choose it scan by scan,
-	// and the demonstration build compiles the call out.
+	// Nil means not asked. Every deployment sets both, because every name it
+	// may scan is one its operator proved, or the demonstration's own: the
+	// monitor and the authority hold those answers and nobody else does, and
+	// they are asked directly from the machine running the scan (N12, R3a).
+	// Until 2026-10-10 the command line asked each behind a flag and a
+	// service never asked the responder.
+	Logs      ctsearch.Searcher
 	Responder *ocspquery.Fetcher
 
 	// Now supplies the current time, so certificate arithmetic is
@@ -533,10 +514,9 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 			facts.ListReason = list.Reason
 		}
 
-		// The responder, asked directly — only where a caller set one, which
-		// only the command line does, behind a flag (R3a). Compiled out of the
-		// demonstration build with the list fetch above.
-		if !demo.Enabled && s.Responder != nil && len(tlsReport.Certificates) > 0 {
+		// The responder, asked directly, where a caller set one — which every
+		// deployment does, for the names it may scan (R3a).
+		if s.Responder != nil && len(tlsReport.Certificates) > 0 {
 			leaf := tlsReport.Certificates[0]
 			answer := s.Responder.Check(ctx, leaf, issuerOf(leaf, tlsReport.Certificates), s.now())
 
@@ -579,11 +559,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		// are the only place it is visible, and that is the whole reason this
 		// check exists (N12).
 		//
-		// Where a caller configured a searcher: a service with proof of
-		// control, the command line behind -check-logs, and the demonstration,
-		// whose hosts are compiled in and whose question can therefore only
-		// ever name this project's own domain — the argument the inventory
-		// made there on 2026-09-27, and the same answer.
+		// Where a caller configured a searcher, which every deployment does.
 		if s.Logs != nil && len(tlsReport.Certificates) > 0 {
 			out.LoggedLine, out.Logged, out.LoggedUnaccounted = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
 		}

@@ -242,8 +242,8 @@ func TestListClaimIsNotMadeWithoutAList(t *testing.T) {
 	}
 }
 
-// Every outcome says that no authority was asked, and none of them says
-// revocation was not checked.
+// Every outcome carries the one standing sentence about revocation, and none
+// of them says revocation was not checked.
 //
 // Both halves of that sentence matter and they used to be one sentence in the
 // wrong package. internal/certinfo appended "Revocation was not checked" to
@@ -281,13 +281,13 @@ func TestNoAuthorityIsAskedOnAnyStapleOutcome(t *testing.T) {
 			}
 		}
 		if standing != 1 {
-			t.Errorf("%s: %d standing notes, want exactly one saying no authority is asked",
+			t.Errorf("%s: %d standing notes, want exactly one saying what revocation reads",
 				name, standing)
 		}
 
 		joined := strings.ToLower(strings.Join(Texts(notes), " "))
-		if !strings.Contains(joined, "no certificate authority is asked") {
-			t.Errorf("%s: nothing says that no authority is asked:\n  %s", name, joined)
+		if !strings.Contains(joined, strings.ToLower(LimitRevocationPublished.Text)) {
+			t.Errorf("%s: nothing says what revocation is read from:\n  %s", name, joined)
 		}
 		if strings.Contains(joined, "revocation was not checked") {
 			t.Errorf("%s: the sentence that contradicted a verified response is back:\n  %s", name, joined)
@@ -303,36 +303,25 @@ func TestNoAuthorityIsAskedOnAnyStapleOutcome(t *testing.T) {
 }
 
 // Where the certificate's own responder was asked, the report says so, and
-// does not also carry the standing sentence that says no scan asks it.
+// never that no authority was asked.
 //
-// -ask-responder puts exactly the question that sentence refuses, and the
-// report said "no build asks it" beside the finding that quoted the answer.
-func TestAReportThatAskedTheResponderDoesNotSayNobodyDid(t *testing.T) {
+// The report said "no build asks it" beside the finding that quoted the
+// responder's answer, for as long as asking was a flag.
+func TestAReportThatAskedTheResponderSaysSo(t *testing.T) {
 	asked := GradeStapling(StapleFacts{HasResponder: true, QueryStatus: "good"})
 	failed := GradeStapling(StapleFacts{HasResponder: true, QueryReason: "the responder did not answer"})
 	quiet := GradeStapling(StapleFacts{HasResponder: true})
 
 	for name, r := range map[string]StapleFinding{"asked": asked, "asked and unanswered": failed} {
-		var said []string
-		for _, n := range r.Notes {
-			said = append(said, n.Text)
-		}
-		all := strings.Join(said, " | ")
-		if strings.Contains(all, LimitNoAuthorityAsked.Text) {
-			t.Errorf("%s: the report says no scan asks the responder:\n%s", name, all)
+		all := strings.ToLower(strings.Join(Texts(r.Notes), " | "))
+		if strings.Contains(all, "no certificate authority is asked") || strings.Contains(all, "no authority is asked") {
+			t.Errorf("%s: the report says no authority is asked:\n%s", name, all)
 		}
 		if !strings.Contains(all, "own responder was asked") {
 			t.Errorf("%s: the report does not say the responder was asked:\n%s", name, all)
 		}
 	}
-
-	found := false
-	for _, n := range quiet.Notes {
-		if n.Text == LimitNoAuthorityAsked.Text {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("a report that asked nobody no longer carries the standing sentence")
+	if all := strings.Join(Texts(quiet.Notes), " "); strings.Contains(all, "own responder was asked") {
+		t.Errorf("a report that asked nobody says the responder was asked:\n%s", all)
 	}
 }

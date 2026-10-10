@@ -457,8 +457,8 @@ func TestTheReceiptIsTrue(t *testing.T) {
 // more than is true, so every card links its source and each source is read
 // here for the sentence the card stands on. The comparison says plainly what
 // Porch does tell third parties, because "only you" was first written about
-// the domains and is not true of them: a scan asks crt.sh about a proven
-// domain. The key a reporter encrypts to is the one SECURITY.md publishes,
+// the domains and is not true of them: a scan asks Cert Spotter and the
+// certificate's authority about a proven domain. The key a reporter encrypts to is the one SECURITY.md publishes,
 // and the card says to compare the two, since whoever took the domain could
 // serve a key of their own beside a page that says it is ours.
 func TestPorchsComparisonAndAnswersHold(t *testing.T) {
@@ -492,10 +492,10 @@ func TestPorchsComparisonAndAnswersHold(t *testing.T) {
 		t.Error("a row of the comparison does not tell a screen reader which side each answer is on")
 	}
 	if !strings.Contains(compare, "<dt>Who sees the results</dt>") || strings.Contains(compare, "your domains</dt>") {
-		t.Error("the comparison says who sees the domains, and crt.sh is asked about each one")
+		t.Error("the comparison says who sees the domains, and Cert Spotter is asked about each one")
 	}
 	checks := read("docs/checks.md")
-	for _, says := range []string{"crt.sh", "revocation list"} {
+	for _, says := range []string{"Cert Spotter", "revocation list"} {
 		if !strings.Contains(compare, says) || !strings.Contains(checks, says) {
 			t.Errorf("the comparison and docs/checks.md do not both say what a scan asks of %s", says)
 		}

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/denyfirst/porch/internal/ctsearch"
 )
 
 // What each switch reaches.
@@ -14,7 +17,7 @@ import (
 
 // The command line lifts two restrictions the service keeps, by default.
 func TestTheCommandLineLiftsWhatOnlyAServiceNeeds(t *testing.T) {
-	s := tlsScanner(time.Second, false, "", false, false)
+	s := tlsScanner(time.Second, false, "")
 
 	if !s.AllowAnyPort {
 		t.Error("the port allow list is enforced on the command line; a local operator " +
@@ -28,7 +31,7 @@ func TestTheCommandLineLiftsWhatOnlyAServiceNeeds(t *testing.T) {
 
 // A named resolver reaches the scanner.
 func TestTheResolverFlagReachesTheScanner(t *testing.T) {
-	s := tlsScanner(time.Second, false, "192.0.2.9:53", false, false)
+	s := tlsScanner(time.Second, false, "192.0.2.9:53")
 
 	if s.Resolver == nil {
 		t.Fatal("-resolver was given and the scanner has none, so the CAA lookup will read " +
@@ -45,7 +48,7 @@ func TestTheResolverFlagReachesTheScanner(t *testing.T) {
 // quietly pointed every scan at some fixed resolver would move who learns what
 // is being scanned, which is not a decision to make on an operator's behalf.
 func TestNoResolverFlagLeavesTheMachinesOwnConfiguration(t *testing.T) {
-	s := tlsScanner(time.Second, false, "", false, false)
+	s := tlsScanner(time.Second, false, "")
 
 	if s.Resolver != nil {
 		t.Errorf("no -resolver was given and the scanner was built with %+v; the machine's "+
@@ -55,52 +58,47 @@ func TestNoResolverFlagLeavesTheMachinesOwnConfiguration(t *testing.T) {
 
 // The private-address guard is off until it is asked for, and then it is off.
 func TestPrivateAddressesAreReachedOnlyWhenAsked(t *testing.T) {
-	if s := tlsScanner(time.Second, false, "", false, false); s.Prober.Dial != nil {
+	if s := tlsScanner(time.Second, false, ""); s.Prober.Dial != nil {
 		t.Error("the prober was given a dialler without -allow-private; the default has to be " +
 			"safedial, or a mistyped name can be aimed at an internal host")
 	}
-	if s := tlsScanner(time.Second, true, "", false, false); s.Prober.Dial == nil {
+	if s := tlsScanner(time.Second, true, ""); s.Prober.Dial == nil {
 		t.Error("-allow-private was given and the prober still dials through safedial, so the " +
 			"switch does nothing and an operator scanning their own network cannot")
 	}
 }
 
-// The log search is off unless it is asked for.
+// Every scan asks the sources that hold the answer: the transparency monitor
+// which certificates exist for the name, and the certificate's own authority
+// whether it has been revoked.
 //
-// The only check here that is. Everything else this command does reaches a
-// server the operator named or reads something already in hand; this sends the
-// name to a monitor this project does not run, and the question contains the
-// name. On a service that required proof of control the name belongs to whoever
-// asked, so it runs there with no switch — here the name may be somebody
-// else's, and telling a third party which domain you are looking at is a
-// disclosure to make rather than one to inherit (N12).
-func TestTheLogSearchIsOffUntilItIsAskedFor(t *testing.T) {
-	if s := tlsScanner(time.Second, false, "", false, false); s.Logs != nil {
-		t.Error("a scan would query a public monitor without -check-logs, so the name of " +
-			"whatever somebody scans is sent to a third party they did not choose")
+// Each waited for a flag until 2026-10-10. Every name this command checks is
+// one its operator proved, and those answers are held by those sources and
+// nowhere else, so a report without them was a report with a hole in it.
+func TestEveryScanAsksTheMonitorAndTheAuthority(t *testing.T) {
+	t.Setenv("CERTSPOTTER_TOKEN", "a key")
+	s := tlsScanner(time.Second, false, "")
+	if c, ok := s.Logs.(*ctsearch.CertSpotter); !ok {
+		t.Errorf("the scan asks %T, want Cert Spotter", s.Logs)
+	} else if c.Token != "a key" {
+		t.Error("the key in CERTSPOTTER_TOKEN does not reach the monitor")
 	}
-	if s := tlsScanner(time.Second, false, "", true, false); s.Logs == nil {
-		t.Error("-check-logs was given and no searcher was configured, so the flag is " +
-			"documented in the usage text and does nothing")
+	if s.Responder == nil {
+		t.Error("the scan does not ask the certificate's authority whether it was revoked")
 	}
 }
 
-// The responder is asked only when asked for.
-//
-// Stricter than the log search: the question names one certificate to the
-// authority that issued it, which R3a says this project does not do unless an
-// operator decides it for their own certificate.
-func TestTheResponderIsAskedOnlyWhenAskedFor(t *testing.T) {
-	if s := tlsScanner(time.Second, false, "", false, false); s.Responder != nil {
-		t.Error("a scan would ask the certificate's responder without -ask-responder, telling " +
-			"its authority which certificate somebody is examining")
+// A flag that was removed is refused with the reason it went, rather than
+// with the flag package's "not defined".
+func TestARemovedFlagIsRefusedWithItsReason(t *testing.T) {
+	for _, flag := range []string{"-check-logs", "--ask-responder", "-monitor=crtsh", "-monitor-url=https://x/"} {
+		err := removedFlags([]string{"-check", "tls", flag, "example.com"})
+		if err == nil || !strings.Contains(err.Error(), "was removed") {
+			t.Errorf("%s: %v", flag, err)
+		}
 	}
-	if s := tlsScanner(time.Second, false, "", false, true); s.Responder == nil {
-		t.Error("-ask-responder was given and no responder fetcher was configured, so the flag " +
-			"is documented in the usage text and does nothing")
-	}
-	if s := tlsScanner(time.Second, false, "", true, false); s.Responder != nil {
-		t.Error("-check-logs switched on the responder too; the two disclosures are separate choices")
+	if err := removedFlags([]string{"-json", "--", "-check-logs"}); err != nil {
+		t.Errorf("an argument after -- was read as a flag: %v", err)
 	}
 }
 
@@ -117,7 +115,7 @@ func TestTheResponderIsAskedOnlyWhenAskedFor(t *testing.T) {
 // Asserted because a field that is set, documented and handed to nothing has
 // happened twice in this repository.
 func TestTheCommandLineNamesTheRevocationAddresses(t *testing.T) {
-	s := tlsScanner(5*time.Second, false, "", false, false)
+	s := tlsScanner(5*time.Second, false, "")
 
 	if !s.ShowRevocationURLs {
 		t.Error("the command line withholds the revocation addresses from the operator running " +

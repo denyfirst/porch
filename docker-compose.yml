@@ -75,8 +75,13 @@ services:
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ./porch-data:/data
 
+    # CERTSPOTTER_TOKEN, if set where compose runs (or in a .env file beside
+    # this one), is an SSLMate API key: Cert Spotter is asked which
+    # certificates are logged for your names, and without a key it answers
+    # about ten requests an hour from one address. Empty asks anonymously.
     environment:
       SSL_CERT_DIR: /etc/ssl/certs
+      CERTSPOTTER_TOKEN: ${CERTSPOTTER_TOKEN:-}
 
     # Nothing in the image is written to. The data directory above is the
     # only writable path.
@@ -116,6 +121,7 @@ services:
       - ./porch-data:/data:ro
     environment:
       SSL_CERT_DIR: /etc/ssl/certs
+      CERTSPOTTER_TOKEN: ${CERTSPOTTER_TOKEN:-}
     read_only: true
     security_opt:
       - no-new-privileges:true

@@ -1078,22 +1078,19 @@ func TestTheReportSaysWhatTheProofsListed(t *testing.T) {
 	}
 }
 
-// A monitor or register the operator points elsewhere is asked over HTTPS, or
-// not at all: the question names a domain and may carry the operator's key,
-// and the dialler allows port 80.
-func TestAMonitorOrRegisterIsAskedOnlyOverHTTPS(t *testing.T) {
+// A register the operator points elsewhere is asked over HTTPS, or not at all:
+// the question names a domain and carries the operator's key, and the dialler
+// allows port 80.
+func TestARegisterIsAskedOnlyOverHTTPS(t *testing.T) {
 	t.Setenv("SECURITYTRAILS_TOKEN", "a key")
-	for _, bad := range []string{"http://crt.example/?q=%s", "crt.example/%s", "https://user:key@crt.example/?q=%s"} {
-		if _, err := monitorNamed(monitorCRTSh, bad, time.Second); err == nil {
-			t.Errorf("-monitor-url %q was accepted", bad)
-		}
+	for _, bad := range []string{"http://register.example/", "register.example/", "https://user:key@register.example/"} {
 		if _, err := registerNamed(registerSecurityTrails, bad, time.Second); err == nil {
 			t.Errorf("-passive-url %q was accepted", bad)
 		}
 	}
-	for _, good := range []string{"https://crt.example/?q=%s", "https://crt.example/search/%s"} {
-		if _, err := monitorNamed(monitorCRTSh, good, time.Second); err != nil {
-			t.Errorf("the https monitor address %q was refused: %v", good, err)
+	for _, good := range []string{"", "https://register.example/v1/"} {
+		if _, err := registerNamed(registerSecurityTrails, good, time.Second); err != nil {
+			t.Errorf("the https register address %q was refused: %v", good, err)
 		}
 	}
 }

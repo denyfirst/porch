@@ -127,7 +127,7 @@ func TestTheSerialComesFromTheCertificateAndAPrecertificateIsTheSame(t *testing.
 	if got.Distinct != 2 || len(got.Entries) != 2 {
 		t.Fatalf("%d certificates (%d listed), want 2: a precertificate counted on its own", got.Distinct, len(got.Entries))
 	}
-	// Newest first, as the other monitor answers.
+	// Newest first.
 	if got.Entries[0].Serial != "5d7e415" || got.Entries[1].Serial != "6fe4d40" {
 		t.Errorf("serials %q, %q", got.Entries[0].Serial, got.Entries[1].Serial)
 	}

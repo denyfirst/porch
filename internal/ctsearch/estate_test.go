@@ -3,9 +3,9 @@ package ctsearch
 import (
 	"context"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -173,44 +173,37 @@ func byName(t *testing.T, e Estate, want string) Name {
 
 // The whole path, from the request this makes to the inventory it returns.
 //
-// Against a local stand-in rather than the monitor. The monitor answered 502 to
-// every request on the day this was written — which is the ordinary state of a
-// free service indexing billions of certificates, and exactly why the search is
-// an interface with a configurable address. A test that depended on it would
-// pass on the days the feature was least needed.
+// Against a local stand-in rather than the monitor, so the test does not pass
+// only on the days the monitor answers.
 func TestTheSearchAsksForEverythingUnderTheDomainAndKeepsOnlyThat(t *testing.T) {
-	var asked string
+	var asked url.Values
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asked = r.URL.Query().Get("Identity")
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("after") != "" {
+			_, _ = io.WriteString(w, `[]`)
+			return
+		}
+		asked = r.URL.Query()
 		_, _ = io.WriteString(w, `[
-		  {"serial_number":"01","issuer_name":"CA","name_value":"api.example.com\nexample.com",
-		   "not_before":"2024-01-01T00:00:00","not_after":"2024-04-01T00:00:00"},
-		  {"serial_number":"01","issuer_name":"CA","name_value":"api.example.com\nexample.com",
-		   "not_before":"2024-01-01T00:00:00","not_after":"2024-04-01T00:00:00"},
-		  {"serial_number":"02","issuer_name":"CA","name_value":"*.example.com\nnotexample.com",
-		   "not_before":"2025-01-01T00:00:00","not_after":"2025-04-01T00:00:00"}
+		  {"id":"1","cert_sha256":"01","dns_names":["api.example.com","example.com"],
+		   "not_before":"2024-01-01T00:00:00Z","not_after":"2024-04-01T00:00:00Z"},
+		  {"id":"2","cert_sha256":"01","dns_names":["api.example.com","example.com"],
+		   "not_before":"2024-01-01T00:00:00Z","not_after":"2024-04-01T00:00:00Z"},
+		  {"id":"3","cert_sha256":"02","dns_names":["*.example.com","notexample.com"],
+		   "not_before":"2025-01-01T00:00:00Z","not_after":"2025-04-01T00:00:00Z"}
 		]`)
 	}))
 	t.Cleanup(srv.Close)
 
-	c := &CRTSh{
-		Endpoint: srv.URL + "/?Identity=%s&output=json",
-		Timeout:  5 * time.Second,
-		// safedial refuses loopback, as it should everywhere but here.
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, srv.Listener.Addr().String())
-		},
-	}
-	got := c.SearchEstate(context.Background(), "Example.COM.")
+	got := spotter(t, srv).SearchEstate(context.Background(), "Example.COM.")
 
 	// The question is for everything under the domain, not for the domain
 	// alone: a certificate issued only for api.example.com is not returned by
 	// a search for example.com, and missing it would make the inventory quietly
 	// short.
-	if asked != "%.example.com" {
-		t.Errorf("the monitor was asked for %q, want %%.example.com", asked)
+	if asked.Get("domain") != "example.com" || asked.Get("include_subdomains") != "true" {
+		t.Errorf("the monitor was asked %v, want everything under example.com", asked)
 	}
 
 	if got.Domain != "example.com" {
@@ -234,22 +227,14 @@ func TestTheSearchAsksForEverythingUnderTheDomainAndKeepsOnlyThat(t *testing.T) 
 //
 // The reassuring half of this search is "none found", so a failure that read as
 // an empty inventory would tell an operator their estate publishes nothing —
-// the most comfortable wrong answer available (R4). The monitor really was
-// answering 502 the day this was written.
+// the most comfortable wrong answer available (R4).
 func TestAMonitorThatWillNotAnswerIsNotAnEmptyEstate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 	}))
 	t.Cleanup(srv.Close)
 
-	c := &CRTSh{
-		Endpoint: srv.URL + "/?Identity=%s&output=json",
-		Timeout:  5 * time.Second,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, srv.Listener.Addr().String())
-		},
-	}
-	got := c.SearchEstate(context.Background(), "example.com")
+	got := spotter(t, srv).SearchEstate(context.Background(), "example.com")
 
 	if got.Reason == "" {
 		t.Error("a monitor that refused the search gave no reason, so the inventory reads as empty")
@@ -265,43 +250,25 @@ func TestAMonitorThatWillNotAnswerIsNotAnEmptyEstate(t *testing.T) {
 // An answer too large to read is refused, not cut.
 //
 // A cut answer here is an inventory with names missing from it, and it would
-// look exactly like a complete one: sorted, dated, plausible, short. Every
-// other failure in this package announces itself; this is the one that would
-// not, which is why the body is refused whole rather than truncated and parsed.
+// look exactly like a complete one: sorted, dated, plausible, short. The body
+// is refused whole, and the reason is the size rather than the shape: "larger
+// than this reads" sends an operator to a narrower search, and "not in the form
+// this reads" would send them to report a monitor that is working correctly.
 func TestAnOversizedAnswerLeavesNoShortInventory(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `[{"serial_number":"01","name_value":"a.example.com","not_before":"2024-01-01T00:00:00","not_after":"2024-04-01T00:00:00"},`)
-		// Past the bound, in one certificate repeated, so that a reader cutting
-		// the body would still find valid records at the front.
+		_, _ = io.WriteString(w, `[{"id":"1","cert_sha256":"01","dns_names":["a.example.com"],"not_before":"2024-01-01T00:00:00Z","not_after":"2024-04-01T00:00:00Z"},`)
 		filler := strings.Repeat(
-			`{"serial_number":"02","name_value":"b.example.com","not_before":"2024-01-01T00:00:00","not_after":"2024-04-01T00:00:00"},`, 40000)
+			`{"id":"2","cert_sha256":"02","dns_names":["b.example.com"],"not_before":"2024-01-01T00:00:00Z","not_after":"2024-04-01T00:00:00Z"},`, 40000)
 		_, _ = io.WriteString(w, filler)
-		_, _ = io.WriteString(w, `{"serial_number":"03","name_value":"c.example.com","not_before":"2024-01-01T00:00:00","not_after":"2024-04-01T00:00:00"}]`)
+		_, _ = io.WriteString(w, `{"id":"3","cert_sha256":"03","dns_names":["c.example.com"],"not_before":"2024-01-01T00:00:00Z","not_after":"2024-04-01T00:00:00Z"}]`)
 	}))
 	t.Cleanup(srv.Close)
 
-	c := &CRTSh{
-		Endpoint: srv.URL + "/?Identity=%s&output=json",
-		Timeout:  20 * time.Second,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, srv.Listener.Addr().String())
-		},
-	}
-	got := c.SearchEstate(context.Background(), "example.com")
+	got := spotter(t, srv).SearchEstate(context.Background(), "example.com")
 
-	if got.Reason == "" {
-		t.Error("an answer past the bound gave no reason, so a short inventory reads as a complete one")
-	}
-
-	// And the reason is the size rather than the shape. Cutting the body and
-	// parsing what is left also refuses — a truncated array is not valid JSON —
-	// so the bound is not what stops a short inventory being produced. What it
-	// buys is the sentence: "larger than this reads" sends an operator to a
-	// narrower search, and "not in the form this reads" sends them to report a
-	// broken monitor that is working correctly.
 	if !strings.Contains(got.Reason, "larger than this reads") {
-		t.Errorf("an answer past the bound reads as %q, which describes the wrong fault", got.Reason)
+		t.Errorf("an answer past the bound reads as %q", got.Reason)
 	}
 	if got.Distinct != 0 || len(got.Names) != 0 {
 		t.Errorf("an answer past the bound produced %d names: %+v", got.Distinct, got.Names)
