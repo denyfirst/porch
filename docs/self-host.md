@@ -179,11 +179,12 @@ scans only domains it has been shown control of
 - **What it does not prove** is who owns the addresses a name points at.
   Private and reserved addresses are refused, and each host has a budget.
 
-Two checks run only for proven domains, because both tell somebody else what
-is being looked at: the certificate transparency search, which finds
-certificates for your names that your server did not present, and
-`-ask-responder`, off by default, which asks each certificate's authority
-whether it was revoked.
+Two questions go to the source that holds the answer, directly from your
+server, and only about proven domains: Cert Spotter, for certificates logged
+for your names that your server did not present, and each certificate's own
+authority, for whether it was revoked. Cert Spotter answers about ten
+requests an hour per address without a key; set `CERTSPOTTER_TOKEN` to an
+SSLMate API key for more.
 
 ---
 

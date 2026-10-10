@@ -113,9 +113,11 @@
       <div><dt>Price</dt><dd class="tape-porch"><span class="visually-hidden">Porch: </span>Free and open source</dd><dd class="tape-scanner"><span class="visually-hidden">An online scanner: </span>Free, or paid for more</dd></div>
     </dl>
   </div>
-  <p class="band-footnote">Porch is not invisible either. For a domain you
-  proved, it asks crt.sh which certificates are logged, and the certificate
-  authority for its revocation list.
+  <p class="band-footnote">Porch asks only the sources that hold an answer,
+  straight from your server: Cert Spotter which certificates are logged for a
+  domain you proved, and the certificate authority for its revocation list and
+  whether your certificate was revoked. No service in between learns what you
+  check.
   <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md">Every connection is listed</a>.</p>
 </section>
 
@@ -202,6 +204,7 @@
       <span class="t-o">-</span> <span class="t-v">./porch-data:/data</span>
     <span class="t-key">environment</span>:
       <span class="t-key">SSL_CERT_DIR</span>: <span class="t-v">/etc/ssl/certs</span>
+      <span class="t-key">CERTSPOTTER_TOKEN</span>: <span class="t-v">${CERTSPOTTER_TOKEN:-}</span>
     <span class="t-key">read_only</span>: <span class="t-v">true</span>
     <span class="t-key">security_opt</span>:
       <span class="t-o">-</span> <span class="t-v">no-new-privileges:true</span>
@@ -217,6 +220,7 @@
       <span class="t-o">-</span> <span class="t-v">./porch-data:/data:ro</span>
     <span class="t-key">environment</span>:
       <span class="t-key">SSL_CERT_DIR</span>: <span class="t-v">/etc/ssl/certs</span>
+      <span class="t-key">CERTSPOTTER_TOKEN</span>: <span class="t-v">${CERTSPOTTER_TOKEN:-}</span>
     <span class="t-key">read_only</span>: <span class="t-v">true</span>
     <span class="t-key">security_opt</span>:
       <span class="t-o">-</span> <span class="t-v">no-new-privileges:true</span>

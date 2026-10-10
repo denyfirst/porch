@@ -8,44 +8,38 @@
 // is a warning nothing in a handshake can give, because the certificate you are
 // looking for is on somebody else's server.
 //
-// # This asks a third party a question that names you
+// # Where the answer comes from
 //
 // A log is an append-only structure of billions of entries with no index by
 // name, so "which certificates exist for example.com" cannot be asked of a log
-// directly. It is asked of a monitor, and the question contains the domain.
+// directly. It is asked of a monitor that reads every log as it grows and
+// indexes what it reads, and the question contains the domain.
 //
-// That is a larger disclosure than reading a revocation list, where one list
-// covers thousands and the question names nothing, and it is the same shape as
-// the OCSP query this project refuses. What makes it acceptable is not the
-// monitor's reputation — a certificate authority is not automatically a safe
-// recipient of query data, and several of them sell monitoring — but that
-// certificate transparency is public by design. The certificates for a name are
-// already published to anyone who looks. Nothing new about the domain is
-// disclosed; what is disclosed is that somebody is looking.
+// That is asking the source, not telling an intermediary. The certificates for
+// a name are published to anyone who looks, and the monitor holds them whether
+// or not anybody asks; what it learns is that somebody looked at a name this
+// installation was shown control of. What this project refuses is the other
+// thing — a service in the middle that collects what everybody checks — and
+// running Porch on your own machine is how that is refused.
 //
-// So: never on the demonstration, which promises it queries no log. On a
-// deployment that required proof of control, the name belongs to whoever asked
-// and there is nothing to hide from themselves. On the command line it is the
-// operator's explicit choice, because there the name may be somebody else's.
+// So the search runs on every deployment, for every name a scan may reach: a
+// proven domain on an installation, this project's own on the demonstration.
 //
-// # The monitor is replaceable
+// # One monitor
 //
-// Searcher is an interface and the shipped implementation is one field. A
-// monitor that goes away, changes its interface, or that an operator would
-// rather not use is a substitution rather than a rewrite — which is the honest
-// answer to depending on a service this project does not run.
+// Cert Spotter, run by SSLMate. Until 2026-10-10 crt.sh was asked as well, and
+// it is not any more: on 2026-10-09 it listed one of this project's four valid
+// certificates while Cert Spotter listed all four, and a monitor that answers
+// late answers wrongly without saying so. A search that fails says it failed;
+// a search that is behind says nothing at all.
 package ctsearch
 
 import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -77,7 +71,7 @@ const (
 
 // Entry is one certificate a log recorded.
 type Entry struct {
-	// Serial is the certificate's serial number as the monitor reported it,
+	// Serial is the certificate's serial number, read from the certificate,
 	// lowercase hexadecimal.
 	//
 	// It is what deduplication is done on, and that is not a detail. Every
@@ -88,7 +82,7 @@ type Entry struct {
 	// domain was the first thing the real answer showed.
 	Serial string `json:"serial"`
 
-	// Issuer is the authority that signed it, as the monitor reported it,
+	// Issuer is the authority that signed it, as the monitor names it,
 	// truncated and stripped of anything unprintable.
 	Issuer string `json:"issuer"`
 
@@ -118,11 +112,8 @@ type Result struct {
 	// string reaches a report a stranger reads (I6).
 	Reason string `json:"reason,omitempty"`
 
-	// Monitor names the monitor that answered, or that failed to.
-	//
-	// Two monitors can answer the same question differently — one of them a
-	// day behind the logs — so an answer that does not say whose it is cannot
-	// be weighed.
+	// Monitor names the monitor that answered, or that failed to. A monitor
+	// can be behind the logs, so an answer says whose it is.
 	Monitor string `json:"monitor,omitempty"`
 
 	// Checked is when the monitor gave this answer, where that was not just
@@ -138,169 +129,9 @@ type Searcher interface {
 	Search(ctx context.Context, name string) Result
 }
 
-// CRTSh searches crt.sh, which indexes the public logs.
-type CRTSh struct {
-	// Endpoint is the address to query, with %s for the name. Empty means the
-	// default. A monitor with a compatible answer can be substituted here.
-	Endpoint string
-
-	// Dial opens the connection. Nil selects safedial, which refuses private,
-	// loopback, link-local and reserved destinations.
-	Dial func(ctx context.Context, network, address string) (net.Conn, error)
-
-	// Roots is the trust store the monitor's certificate is judged against.
-	// Nil means the system store, loaded explicitly (R7).
-	Roots *x509.CertPool
-
-	// Timeout bounds one search. Zero means fifteen seconds.
-	//
-	// A monitor that is slow is a monitor that spends a scan's budget. This
-	// check is worth having and is not worth waiting on: a search that does
-	// not finish is reported as not established, which is the same answer a
-	// deployment that does not search gives.
-	Timeout time.Duration
-}
-
-// defaultEndpoint is the address queried when none is configured.
-//
-// Identity rather than q, and output=json rather than a parsed page. Written
-// from what the service actually answers rather than from memory: q with
-// output=json is a 404, and /json is a 502. A check built on a remembered
-// address would have shipped asking for a page that does not exist and
-// reporting every name as having no certificates — which is the failure shape
-// that matters here, since "none found" is the reassuring answer.
-const defaultEndpoint = "https://crt.sh/?Identity=%s&output=json"
-
-// entry is one record as the monitor writes it.
-type entry struct {
-	IssuerName   string `json:"issuer_name"`
-	NameValue    string `json:"name_value"`
-	SerialNumber string `json:"serial_number"`
-	NotBefore    string `json:"not_before"`
-	NotAfter     string `json:"not_after"`
-}
-
-// Search asks the monitor what it has for one name.
-//
-// Exact name only. A certificate obtained for a subdomain is a real risk and is
-// not covered here, so a report has to say so rather than leave a reader taking
-// a clean answer for a clean estate (R4). Widening the query multiplies the
-// answer for any domain of size, which is a decision to make deliberately
-// rather than as a default.
-func (c *CRTSh) Search(ctx context.Context, name string) Result {
-	r := c.search(ctx, name)
-	r.Monitor = crtshName
-	return r
-}
-
-func (c *CRTSh) search(ctx context.Context, name string) Result {
-	name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
-	if name == "" {
-		return Result{Reason: "no name was given to search for"}
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, c.timeout())
-	defer cancel()
-
-	address := fmt.Sprintf(c.endpoint(), url.QueryEscape(name))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-	if err != nil {
-		return Result{Reason: "the monitor's address could not be requested"}
-	}
-	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.client().Do(req)
-	if err != nil {
-		return Result{Reason: "the certificate transparency monitor could not be reached"}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return Result{Reason: "the certificate transparency monitor did not answer the search"}
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
-	if err != nil {
-		return Result{Reason: "the monitor's answer could not be read"}
-	}
-	if len(body) > maxBody {
-		// Not truncated and then parsed. A cut answer is an answer with
-		// certificates missing from it, and "none found" is the reassuring
-		// half of this check (R4).
-		return Result{Reason: "the monitor's answer is larger than this reads"}
-	}
-
-	var raw []entry
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return Result{Reason: "the monitor's answer was not in the form this reads"}
-	}
-
-	return summarise(raw)
-}
-
-// crtshName is how a report names this monitor.
-const crtshName = "crt.sh"
-
 // UserAgent identifies this client to the monitor, as everything else here
 // identifies itself. A search that hides is one nobody can ask about.
 const UserAgent = "porch/1 (+https://porch.denyfirst.dev/privacy#stopping)"
-
-// summarise turns what the monitor said into what a report may show.
-//
-// Deduplicated by serial, because every certificate is logged twice: once as a
-// precertificate, once as itself. The first real answer this was run against —
-// this project's own domain, one certificate — came back as two entries sharing
-// one serial.
-func summarise(raw []entry) Result {
-	var out Result
-	seen := map[string]bool{}
-
-	for _, e := range raw {
-		serial := strings.ToLower(strings.TrimSpace(e.SerialNumber))
-		if serial == "" || seen[serial] {
-			continue
-		}
-		seen[serial] = true
-		out.Distinct++
-
-		if len(out.Entries) >= maxEntries {
-			out.Truncated = true
-			continue
-		}
-
-		out.Entries = append(out.Entries, Entry{
-			Serial:    clean(serial),
-			Issuer:    clean(e.IssuerName),
-			Names:     names(e.NameValue),
-			NotBefore: stamp(e.NotBefore),
-			NotAfter:  stamp(e.NotAfter),
-		})
-	}
-	return out
-}
-
-// names splits the name list one entry carries.
-//
-// A multi-name certificate arrives with its names separated by newlines, which
-// is also the reason they are split rather than shown: a newline reaching a
-// report unbroken is a line a reader cannot attribute to the field it came
-// from.
-func names(value string) []string {
-	var out []string
-	for _, n := range strings.FieldsFunc(value, func(r rune) bool {
-		return r == '\n' || r == '\r'
-	}) {
-		if len(out) >= maxNames {
-			break
-		}
-		if n = clean(n); n != "" {
-			out = append(out, n)
-		}
-	}
-	return out
-}
 
 // clean bounds one string from the monitor and strips what should not travel.
 //
@@ -334,7 +165,7 @@ func clean(s string) string {
 	return display.Mark(b.String())
 }
 
-// stamp reads the monitor's timestamps, which carry no zone and are UTC.
+// stamp reads the monitor's timestamps.
 func stamp(s string) time.Time {
 	for _, layout := range []string{"2006-01-02T15:04:05", time.RFC3339} {
 		if t, err := time.Parse(layout, strings.TrimSpace(s)); err == nil {
@@ -344,31 +175,11 @@ func stamp(s string) time.Time {
 	return time.Time{}
 }
 
-func (c *CRTSh) timeout() time.Duration {
-	if c.Timeout <= 0 {
-		return defaultTimeout
-	}
-	return c.Timeout
-}
-
-func (c *CRTSh) endpoint() string {
-	if c.Endpoint == "" {
-		return defaultEndpoint
-	}
-	return c.Endpoint
-}
-
-func (c *CRTSh) client() *http.Client {
-	return monitorClient(c.Dial, c.Roots)
-}
-
-var _ Searcher = (*CRTSh)(nil)
-
-// monitorClient builds the client both monitors use.
+// monitorClient builds the client the monitor is asked through.
 //
-// One copy, because what it decides is which destinations may be reached and
-// which store judges a certificate — and a second copy is a second place
-// somebody has to remember when either changes (N6, R7).
+// What it decides is which destinations may be reached and which store judges
+// a certificate, and those are the same decisions every other connection here
+// makes (N6, R7).
 func monitorClient(dial func(ctx context.Context, network, address string) (net.Conn, error), roots *x509.CertPool) *http.Client {
 	if dial == nil {
 		d := &safedial.Dialer{Timeout: defaultTimeout, AllowedPorts: []string{"443", "80"}}

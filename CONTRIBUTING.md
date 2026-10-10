@@ -194,7 +194,7 @@ comm -23 /tmp/cited /tmp/defined     # must be empty
 | `internal/rootstores` | Mozilla's, Chrome's, Microsoft's and Apple's root stores, carried and named beside the verdict (R7) |
 | `internal/crl` | reads the revocation list a certificate names (N11) |
 | `internal/ocsp` | reads a stapled status response and says whether it means anything |
-| `internal/ocspquery` | asks a certificate's own responder, only behind `porch-scan -ask-responder` (R3a) |
+| `internal/ocspquery` | asks a certificate's own responder, for a name the scan may reach (R3a) |
 | `internal/ctsearch` | finds certificates a public log holds for a name (N12) |
 | `internal/ctlogs` | Google's signed CT log list, carried; checks each transparency receipt against it (R3c) |
 | `internal/dnsclient` | the resolver; CAA, TXT, and the walk up the tree (N5) |

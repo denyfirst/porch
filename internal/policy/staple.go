@@ -347,29 +347,18 @@ func GradeStapling(f StapleFacts) StapleFinding {
 
 	// ── Notes ────────────────────────────────────────────────────────
 
-	// Said on every branch, because it is true on every branch: nothing here
-	// asks a certificate authority anything. That question would tell the
-	// authority which certificate somebody is looking at, which is the one
-	// thing this service undertakes not to let happen. What can be read is a
-	// response the server itself stapled, and the sentences below say what
-	// that response did or did not establish.
+	// Said on every branch, because it is true on every branch: what this
+	// check reads about revocation is what the authority publishes. The
+	// sentences below say what was read and what it established.
 	//
 	// This half used to live in internal/certinfo, joined to a claim that
 	// revocation had not been checked — a claim that contradicted the
 	// verified case sitting directly beneath it. The standing policy is true
 	// always; the outcome is known only here.
-	//
-	// Except where it was asked. -ask-responder puts exactly that question,
-	// and the standing sentence said "no build asks it" on the reports that
-	// asked it, beside the finding that quoted the answer. Where a responder
-	// was asked, the report says that instead.
 	if f.QueryStatus != "" || f.QueryReason != "" {
-		out.observe("This certificate's own responder was asked about it because whoever ran this " +
-			"scan asked for that. The question tells the authority this certificate's " +
-			"serial, from the scan's address.")
-	} else {
-		out.standing(LimitNoAuthorityAsked)
+		out.observe("This certificate's own responder was asked whether it has been revoked.")
 	}
+	out.standing(LimitRevocationPublished)
 	switch {
 	case f.Stapled && f.IssuerMissing:
 		out.unsettled(

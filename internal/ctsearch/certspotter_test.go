@@ -151,8 +151,8 @@ func TestTheKeyIsSentAsACredentialAndNotWrittenDown(t *testing.T) {
 	}
 }
 
-// And this monitor's names go through the same estate boundary as the other's.
-func TestTheSecondMonitorKeepsOnlyThisEstate(t *testing.T) {
+// The monitor's names go through the estate boundary.
+func TestTheMonitorKeepsOnlyThisEstate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]certSpotterEntry{{

@@ -1,20 +1,18 @@
 // Package ocspquery asks a certificate's own responder whether it has been
 // revoked, and believes the answer only once it verifies.
 //
-// # Why this is separate, and switched off
+// # Why this is separate
 //
 // internal/ocsp reads a response the server stapled, and nothing there fetches
-// anything: a stapled response is the authority's statement handed over by the
-// server, so the authority never learns who is looking. Asking the responder
-// directly is the opposite. The question carries the certificate's serial and
-// its issuer, so the authority learns which certificate somebody is examining,
-// from which address, and when.
+// anything. Asking the responder directly carries the certificate's serial and
+// its issuer, so the authority that issued it learns that somebody — from this
+// address, at this moment — looked at it.
 //
-// That is why R3a says no responder is ever asked, and why this package exists
-// anyway: on the command line an operator examining their own certificate may
-// decide the authority learning that is no disclosure at all. So it runs only
-// where a caller sets it, the command line sets it only behind a flag, the
-// service never does, and the demonstration build cannot. See R3a.
+// That is asking the source: the authority holds the answer and nobody else
+// does. Every deployment asks it, and only about a certificate for a name the
+// scan may reach — a proven domain, or the demonstration's own. Until
+// 2026-10-10 it waited for a flag on the command line, and a revoked
+// certificate on a service was reported as unknown. See R3a.
 //
 // # What is guarded
 //
