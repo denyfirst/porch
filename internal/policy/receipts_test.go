@@ -124,15 +124,18 @@ func TestCoverageSaysVerifiedOnlyWhenEveryReceiptWas(t *testing.T) {
 	}
 }
 
-// The standing limit names the list and claims no browser's policy.
-func TestTheReceiptsLimitNamesTheListAndNoPolicy(t *testing.T) {
+// The standing limit names the list, and says whose policy the receipts are
+// counted by.
+func TestTheReceiptsLimitNamesTheListAndWhosePolicy(t *testing.T) {
 	text := LimitTransparencyReceipts.Text
-	for _, want := range []string{"Chrome's log list", "date", "nothing here decides"} {
+	for _, want := range []string{"Chrome's log list", "date", "Chrome's policy", "other browsers"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the limit does not say %q: %s", want, text)
 		}
 	}
-	if strings.Contains(text, "carries no copy") {
-		t.Errorf("the limit still says no list is carried: %s", text)
+	for _, stale := range []string{"carries no copy", "nothing here decides"} {
+		if strings.Contains(text, stale) {
+			t.Errorf("the limit still says %q: %s", stale, text)
+		}
 	}
 }

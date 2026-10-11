@@ -1,28 +1,23 @@
 package policy
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Certificate transparency, described rather than graded.
 //
 // A publicly trusted certificate has to be recorded in append-only logs, and
 // each log answers with a signed receipt. Browsers refuse a certificate that
-// arrives without enough of them. That sounds like something to grade, and it
-// is not, for two reasons.
+// arrives without enough of them.
 //
-// The receipts reach a client three ways: embedded in the certificate, sent as
-// a handshake extension, or carried inside a stapled status response. Nothing
-// here reads a status response, so a certificate showing none of the first two
-// may still be presenting them by the third. Grading on two channels out of
-// three would fail a working configuration, which is the mistake the version
-// rules and the stapling rules both exist to avoid.
-//
-// And the requirement itself is not ours to enforce. How many receipts, from
-// how many logs, and which logs count are decided by each browser and revised
-// on their schedule. A rule here would either copy a policy that moves without
-// us or invent one nobody follows.
-//
-// So the numbers are reported, what they exclude is stated, and the reader is
-// left to compare them against whichever client they care about.
+// How many, from how many logs, and which logs count are decided by each
+// browser, so a grade here would be one browser's rule dressed as a standard.
+// What the report does instead is count the receipts the way Chrome's
+// published policy counts them, against the log list this build carries, and
+// say whether Chrome would accept them; see ctpolicy.go. Since Chrome 148 a
+// receipt inside a stapled status response no longer counts, so the two
+// channels read here are the two that do.
 
 // TransparencyFacts is what the certificate and the handshake each carried.
 type TransparencyFacts struct {
@@ -70,6 +65,21 @@ type TransparencyFacts struct {
 	BadSignature int
 	UnknownLog   int
 	Unreadable   int
+
+	// Receipts are the receipts one by one, as Chrome's policy reads them,
+	// and Lifetime the certificate's validity period, which decides how many
+	// it needs.
+	Receipts []CTReceipt
+	Lifetime time.Duration
+}
+
+// Chrome is the comparison with Chrome's policy, for a publicly trusted
+// certificate whose receipts were checked.
+func (f TransparencyFacts) Chrome() ChromeCT {
+	if !f.Trusted || !f.Checked {
+		return ChromeCT{}
+	}
+	return JudgeChromeCT(f.Receipts, f.Lifetime, f.ListDate)
 }
 
 // DescribeTransparency returns the sentences a report should carry.
@@ -95,6 +105,7 @@ func DescribeTransparency(f TransparencyFacts) []Note {
 		// so it is the standing limit rather than part of either.
 		out := []Note{Observed(note)}
 		out = append(out, describeReceipts(f, total)...)
+		out = append(out, DescribeChromeCT(f.Chrome())...)
 		return append(out, LimitTransparencyReceipts.Note())
 	}
 

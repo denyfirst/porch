@@ -56,7 +56,7 @@ SSL 3.0 is asked the same way and shown in the version table.
 - **TLS 1.3 suites are asked from the registry.** Each TLS 1.3 suite in the IANA registry is asked with a hand-written hello, because Go cannot choose among them; suites outside the registry are not asked. Where that hello is answered differently, only the negotiated suite is listed and the report says so.
 - **The verdict rests on one root store.** Trust is checked against one root store, and the verdict rests on that store: on Linux and other unix systems, the store of the machine that ran this scan; on Windows and macOS, the copy of Microsoft's or Apple's store this build carries. Mozilla, Chrome, Microsoft and Apple are compared from dated copies of their stores: which roots they include and Mozilla's distrust dates are applied, and other conditions are named, not applied.
 - **Revocation is what the authority publishes.** A stapled response is read, the authority's revocation list is fetched, and its responder is asked where the certificate names one. A certificate that names neither a list nor a responder cannot be checked for revocation by anyone.
-- **Transparency receipts are checked against one browser's log list.** Receipts are checked against Chrome's log list as of the date in the report. A receipt from a log the list does not name cannot be checked, and nothing here decides how many receipts a browser requires.
+- **Transparency receipts are checked against one browser's log list.** Receipts are checked against Chrome's log list as of the date in the report, and counted as Chrome's policy counts them. A receipt from a log the list does not name cannot be checked, and other browsers count by rules of their own.
 
 ## Web
 

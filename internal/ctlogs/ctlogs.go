@@ -108,6 +108,10 @@ type Log struct {
 
 	// Tiled is true for a log in the static-ct family.
 	Tiled bool
+
+	// Since is when the log entered State, as the list dates it. Zero when
+	// the list gives no date.
+	Since time.Time
 }
 
 // List is a verified log list.
@@ -264,7 +268,7 @@ func read(list []byte) (*List, error) {
 
 		out.logs[[32]byte(id)] = Log{
 			ID: [32]byte(id), Key: pub, Description: r.Description,
-			Operator: operator, State: r.state(), Tiled: tiled,
+			Operator: operator, State: r.state(), Tiled: tiled, Since: r.since(),
 		}
 		return nil
 	}
@@ -297,4 +301,20 @@ func (r rawLog) state() string {
 		return name
 	}
 	return "unknown"
+}
+
+// since is the timestamp the state object carries, or zero.
+func (r rawLog) since() time.Time {
+	for _, raw := range r.State {
+		var s struct {
+			Timestamp string `json:"timestamp"`
+		}
+		if json.Unmarshal(raw, &s) != nil {
+			return time.Time{}
+		}
+		if t, err := time.Parse(time.RFC3339, s.Timestamp); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
 }

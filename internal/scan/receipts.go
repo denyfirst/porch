@@ -1,6 +1,8 @@
 package scan
 
 import (
+	"slices"
+
 	"github.com/denyfirst/porch/internal/certinfo"
 	"github.com/denyfirst/porch/internal/ctlogs"
 	"github.com/denyfirst/porch/internal/policy"
@@ -31,14 +33,27 @@ func checkReceipts(f *policy.TransparencyFacts, report *tlsprobe.Report) {
 	}
 
 	leaf := report.Certificates[0]
-	receipts := ctlogs.CheckEmbedded(list, leaf, issuerOf(leaf, report.Certificates))
-	receipts = append(receipts, ctlogs.CheckHandshake(list, report.SCTs, leaf)...)
+	embedded := ctlogs.CheckEmbedded(list, leaf, issuerOf(leaf, report.Certificates))
+	handshake := ctlogs.CheckHandshake(list, report.SCTs, leaf)
 
 	f.Checked = true
 	f.ListVersion = list.Version
 	f.ListDate = list.Timestamp.UTC().Format("2006-01-02")
+	f.Lifetime = leaf.NotAfter.Sub(leaf.NotBefore)
 
-	for _, r := range receipts {
+	receipts := slices.Concat(embedded, handshake)
+	for i, r := range receipts {
+		f.Receipts = append(f.Receipts, policy.CTReceipt{
+			Verified:    r.Status == ctlogs.Verified,
+			UnknownLog:  r.Status == ctlogs.UnknownLog,
+			InHandshake: i >= len(embedded),
+			LogID:       r.LogID,
+			Operator:    r.Operator,
+			State:       r.State,
+			Since:       r.Since,
+			Issued:      r.Issued,
+			Tiled:       r.Tiled,
+		})
 		switch r.Status {
 		case ctlogs.Verified:
 			f.Verified++

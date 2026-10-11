@@ -117,9 +117,9 @@ var (
 	LimitTransparencyReceipts = StandingLimit{
 		ID:    "transparency-receipts",
 		Title: "Transparency receipts are checked against one browser's log list",
-		Text: "Receipts are checked against Chrome's log list as of the date in the report. A " +
-			"receipt from a log the list does not name cannot be checked, and nothing here " +
-			"decides how many receipts a browser requires.",
+		Text: "Receipts are checked against Chrome's log list as of the date in the report, and " +
+			"counted as Chrome's policy counts them. A receipt from a log the list does not name " +
+			"cannot be checked, and other browsers count by rules of their own.",
 	}
 )
 
