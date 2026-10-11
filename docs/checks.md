@@ -75,6 +75,9 @@ Every request carries the user agent `porch/1 (+https://porch.denyfirst.dev/priv
 
 Ports 80 and 443 only. No other path or name is tried.
 
+**Also asks:** hstspreload.org whether the host is on the HSTS preload list
+that Chrome keeps and other browsers build from. Reported, not graded.
+
 **Reads the page** only of a domain proven to the copy asking (or for its own
 operator), once, up to one megabyte. From it, only whether a content policy is
 declared and the host names of anything loaded over HTTP or from another site

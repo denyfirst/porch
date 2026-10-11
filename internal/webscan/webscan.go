@@ -19,11 +19,13 @@ import (
 	"crypto/x509"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/exclusion"
+	"github.com/denyfirst/porch/internal/hstspreload"
 	"github.com/denyfirst/porch/internal/markup"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/verify"
@@ -84,9 +86,20 @@ type Scanner struct {
 	// the asker is the operator, and nowhere else.
 	ShowContacts bool
 
+	// Preload asks whether the host is on the HSTS preload list, which is
+	// the one fact about HSTS no response can show. Nil asks nobody. Set
+	// wherever a scan may reach the host: a proven domain, or the
+	// demonstration's own.
+	Preload Preloader
+
 	// Now supplies the current time, so a duration is reproducible in tests.
 	// Nil means time.Now.
 	Now func() time.Time
+}
+
+// Preloader is what asks the HSTS preload list.
+type Preloader interface {
+	Status(ctx context.Context, host string) hstspreload.Status
 }
 
 // Result is one host, measured and graded.
@@ -242,8 +255,27 @@ func (s *Scanner) Scan(ctx context.Context, host string) (*Result, error) {
 
 	out := GradeAt(observed, s.now())
 	out.Host = host
+	if s.Preload != nil {
+		out.Declared = withPreload(out.Declared, host, s.Preload.Status(ctx, host))
+	}
 	out.Duration = s.now().Sub(started)
 	return out, nil
+}
+
+// withPreload puts the preload list's answer beside the header it is about,
+// as a declared row both faces already draw (R16).
+func withPreload(declared []policy.Declaration, host string, st hstspreload.Status) []policy.Declaration {
+	line := policy.PreloadLine(st.Asked, st.State, st.PreloadedDomain, host, st.Reason)
+	if line == "" {
+		return declared
+	}
+	row := policy.Declaration{Label: policy.PreloadLabel, Says: line}
+	for i, d := range declared {
+		if d.Label == "Strict-Transport-Security" {
+			return slices.Insert(declared, i+1, row)
+		}
+	}
+	return append([]policy.Declaration{row}, declared...)
 }
 
 // reachable answers whether a redirect may be followed to a host, and why not

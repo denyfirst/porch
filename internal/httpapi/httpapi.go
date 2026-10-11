@@ -1191,6 +1191,12 @@ func (s *Server) ReadRegistrations(r dnsscan.Registry) {
 	s.dns.Registry = r
 }
 
+// CheckPreload gives the web check the HSTS preload list to ask. Nil, the
+// default, asks nobody; porchd sets it wherever a scan may reach a host.
+func (s *Server) CheckPreload(p webscan.Preloader) {
+	s.web.Preload = p
+}
+
 // KeepInventoryFor tells this service to produce an inventory for a domain at
 // most once in the interval given, and to hand the copy to everybody else.
 //

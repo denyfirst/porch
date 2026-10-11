@@ -218,6 +218,11 @@ func TestTheCommandLineReadsThePage(t *testing.T) {
 	if !webScanner(5*time.Second, true).ReadMarkup {
 		t.Error("-allow-private turned off reading the page")
 	}
+
+	// And asks the preload list about the host it checks.
+	if s.Preload == nil {
+		t.Error("the command line does not ask the HSTS preload list")
+	}
 }
 
 // -allow-private reaches the dialler, and nothing else does.

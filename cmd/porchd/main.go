@@ -42,6 +42,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
+	"github.com/denyfirst/porch/internal/hstspreload"
 	"github.com/denyfirst/porch/internal/httpapi"
 	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/ocspquery"
@@ -556,6 +557,7 @@ func run() int {
 	}
 	if scope != nil || demo.Enabled {
 		api.ReadRegistrations(&rdap.Client{Timeout: *requestTimeout})
+		api.CheckPreload(&hstspreload.Client{Timeout: *requestTimeout})
 	}
 
 	// The demonstration lists this project's own estate, and both halves of
