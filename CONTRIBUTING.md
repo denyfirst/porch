@@ -197,6 +197,7 @@ comm -23 /tmp/cited /tmp/defined     # must be empty
 | `internal/ocspquery` | asks a certificate's own responder, for a name the scan may reach (R3a) |
 | `internal/ctsearch` | finds certificates a public log holds for a name (N12) |
 | `internal/exposure` | asks a fixed list of ports of services that should not face the internet, sending nothing (N3) |
+| `internal/leaks` | asks a site for a fixed list of files that should never be served, and keeps only which were, never what they held (N7) |
 | `internal/rdap` | reads a domain's registration from its registry (N12) |
 | `internal/hstspreload` | asks whether a host is on the HSTS preload list (N12) |
 | `internal/rpki` | asks RIPEstat whether the routes to addresses are signed (N12) |
