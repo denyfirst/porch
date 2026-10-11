@@ -117,8 +117,9 @@ gh release delete v0.2.0-rc1 --yes
 git checkout main
 git pull
 
-# Nothing may be waiting. Any output here is a stop: a release has twice been
-# cut one merge early.
+# Nothing may be waiting. Any output here is a stop: a release has three times
+# been cut one merge early. The build workflow refuses such a tag as well, but
+# by then the tag exists for ever and the cure is the next number.
 gh pr list --state open
 
 git log --oneline -1              # the commit this will release
