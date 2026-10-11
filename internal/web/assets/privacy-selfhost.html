@@ -112,6 +112,9 @@
         one connection to each of sixteen ports of services that should not
         face the internet, such as Remote Desktop and databases, closed as
         soon as it opens, with nothing sent.{{end}}</li>
+      <li><strong>Files</strong>: {{if .Verified}}eleven paths of files that
+        should never be served, such as <code>/.git/HEAD</code> and
+        <code>/.env</code>, one GET each. What they hold is never kept.{{else}}none.{{end}}</li>
       <li><strong>Reach</strong>: <code>GET /</code> over HTTPS and HTTP,
         following a few redirects; <code>/.well-known/security.txt</code>
         (RFC 9116); <code>GET /</code> of the <code>www.</code> form of the
@@ -141,7 +144,8 @@
     </ul>
 
     <p>
-      No logins, no guessed paths, no exploits, no malformed packets. Each
+      No logins, no paths beyond the fixed list above, no exploits, no
+      malformed packets. Each
       host has its own scan budget, whoever asks.
     </p>
 

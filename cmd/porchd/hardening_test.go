@@ -162,7 +162,8 @@ func TestTheRegistryIsAskedWhereAScanMayReach(t *testing.T) {
 	source := repoFile(t, "cmd/porchd/main.go")
 	want := "if scope != nil || demo.Enabled {\n\t\tapi.ReadRegistrations(&rdap.Client{Timeout: *requestTimeout})\n" +
 		"\t\tapi.CheckPreload(&hstspreload.Client{Timeout: *requestTimeout})\n" +
-		"\t\tapi.CheckRoutes(&rpki.Client{Timeout: *requestTimeout})\n\t}"
+		"\t\tapi.CheckRoutes(&rpki.Client{Timeout: *requestTimeout})\n" +
+		"\t\tapi.CheckLeaks(&leaks.Prober{Timeout: *requestTimeout})\n\t}"
 	if !strings.Contains(source, want) {
 		t.Error("porchd does not ask the registry and the preload list for proven domains and the demonstration's own")
 	}

@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v7`, `porch-web-v3`, `porch-mail-v3` and `porch-dns-v2`. Reports
+`porch-tls-v7`, `porch-web-v4`, `porch-mail-v3` and `porch-dns-v2`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,28 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-web-v3` → `porch-web-v4`
+
+Unreleased.
+
+- **Added `web.exposed-source`, insecure.** A Git or Subversion repository is
+  served from the web root, which hands over the site's code and history
+  (CWE-527).
+- **Added `web.exposed-secrets`, insecure.** A file of passwords or keys is
+  served: an environment file, cloud credentials, a backup of WordPress's
+  settings, a password file, or a Spring Boot application's settings
+  (CWE-538).
+- **Added `web.exposed-diagnostics`, weak.** Apache's status page or PHP's
+  configuration page is served (CWE-497).
+- **Added `web.exposed-listing`, weak.** A macOS folder index naming the files
+  beside it is served (CWE-548).
+- Each is asked for by one GET of a fixed path, and counts only if what comes
+  back is what that file looks like; a site that answers every path with its
+  own page has nothing exposed. What a file held is never kept.
+- **Reported, not graded:** whether the host is on the HSTS preload list.
 
 ---
 

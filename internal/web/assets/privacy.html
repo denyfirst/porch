@@ -105,6 +105,10 @@
         handshake ends.</li>
       <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, and
         <code>/.well-known/security.txt</code>.</li>
+      <li><strong>Exposure:</strong> eleven paths of files that should never
+        be served, such as <code>/.git/HEAD</code>, one GET each, and one
+        connection to each of sixteen ports of services that should not face
+        the internet, closed as it opens. Only our own hosts.</li>
       <li><strong>Mail:</strong> DNS lookups, the MTA-STS policy file, and a
         STARTTLS check on port 25. No mail is sent.</li>
       <li><strong>DNS:</strong> lookups, and questions to our name servers.

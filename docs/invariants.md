@@ -135,13 +135,22 @@ One `GET` of `/` over HTTPS and over plaintext; after that, only the addresses
 a `Location` header names. The only other paths ever asked for are files that
 exist to be read by strangers: `/.well-known/security.txt`,
 `/.well-known/mta-sts.txt` where a zone announces a policy, and
-`/.well-known/porch-challenge` for proof of control.
+`/.well-known/porch-challenge` for proof of control — and the fixed list in
+`internal/leaks.Files` of files that must never be served, each asked for by
+name, never derived from anything the site said, and nothing they hold kept.
 
 *Enforced in:* `internal/webprobe`, `internal/markup`,
 `internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
-`internal/httpapi.Server.operatorView`
+`internal/httpapi.Server.operatorView`, `internal/leaks.Files`,
+`internal/leaks.Prober.Probe`, `internal/webscan.withLeaks`
 
 *Guarded by:* `TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestASiteThatAnswersEverythingHasNothingExposed`,
+`TestEachFileIsRecognisedByWhatItIs`, `TestALookAlikeIsNotTheFile`,
+`TestASiteNotReachedIsNotASiteWithNothingExposed`,
+`TestTheListIsFixedAndEveryEntryRecognisesSomething`,
+`TestServedSecretsAreGradedByWhatTheyGiveAway`,
+`TestTheLeaksLineSaysWhatWasChecked`, `TestAServedSecretIsGradedAndShown`,
 `TestTheCommandLinePrintsTheSecurityContacts`,
 `TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof`,
 `TestTheContactsKeptAreBoundedAndTheCountIsNot`,

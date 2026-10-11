@@ -1197,6 +1197,12 @@ func (s *Server) CheckRoutes(r dnsscan.RouteChecker) {
 	s.dns.Routes = r
 }
 
+// CheckLeaks gives the web check a way to ask for files a site should never
+// serve. Nil, the default, asks nothing.
+func (s *Server) CheckLeaks(l webscan.LeakProber) {
+	s.web.Leaks = l
+}
+
 // CheckPreload gives the web check the HSTS preload list to ask. Nil, the
 // default, asks nobody; porchd sets it wherever a scan may reach a host.
 func (s *Server) CheckPreload(p webscan.Preloader) {

@@ -84,6 +84,15 @@ Every request carries the user agent `porch/1 (+https://porch.denyfirst.dev/priv
 
 Ports 80 and 443 only. No other path or name is tried.
 
+**Also asks for** eleven files that should never be served, each one GET over
+HTTPS with no redirect followed and at most 4 KB read: `/.git/HEAD`,
+`/.git/config`, `/.svn/wc.db`, `/.env`, `/.aws/credentials`,
+`/wp-config.php.bak`, `/.htpasswd`, `/server-status`, `/phpinfo.php`,
+`/actuator/env` and `/.DS_Store`. A file counts as served only if what comes
+back is what that file looks like, so a site that answers every path with a
+page of its own has nothing exposed. What a file held is never kept: the
+report names the path and what it is.
+
 **Also asks:** hstspreload.org whether the host is on the HSTS preload list
 that Chrome keeps and other browsers build from. Reported, not graded.
 
@@ -94,7 +103,7 @@ are kept. Only graded headers are kept. Cookies are kept by name and
 attributes, never by value.
 
 **Grades:** how the site is reached over HTTPS, redirects, HSTS, cookies, mixed
-content and a few headers. The HSTS policy graded is the one from the last
+content, a few headers, and any of the files above that is served. The HSTS policy graded is the one from the last
 HTTPS hop.
 
 ### Limits

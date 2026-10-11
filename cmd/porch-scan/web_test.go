@@ -223,6 +223,9 @@ func TestTheCommandLineReadsThePage(t *testing.T) {
 	if s.Preload == nil {
 		t.Error("the command line does not ask the HSTS preload list")
 	}
+	if s.Leaks == nil {
+		t.Error("the command line does not ask for files a site should never serve")
+	}
 }
 
 // -allow-private reaches the dialler, and nothing else does.

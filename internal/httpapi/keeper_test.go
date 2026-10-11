@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/policy"
 )
 
 type keptReport struct {
@@ -38,7 +40,7 @@ func TestEveryReportAnsweredIsKeptWhole(t *testing.T) {
 		t.Fatalf("%d reports kept for one answered", len(k.kept))
 	}
 	got := k.kept[0]
-	if got.check != "web" || got.target != "kept.test" || got.policy != "porch-web-v3" {
+	if got.check != "web" || got.target != "kept.test" || got.policy != policy.WebVersion {
 		t.Errorf("the report was kept under %s %s %q %s", got.check, got.target, got.verdict, got.policy)
 	}
 	if !bytes.Equal(bytes.TrimSpace(got.report), bytes.TrimSpace(w.Body.Bytes())) {

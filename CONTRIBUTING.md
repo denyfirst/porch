@@ -11,7 +11,7 @@ it guards.
 
 A scanner that measures how a host is reached and grades what it finds, with
 four checks: TLS and certificates (`porch-tls-v7`), how a website is reached
-(`porch-web-v3`), what a domain's DNS says about its mail (`porch-mail-v3`),
+(`porch-web-v4`), what a domain's DNS says about its mail (`porch-mail-v3`),
 and how the domain itself is served (`porch-dns-v2`). Each rule set has its
 own version, and a report names the one that graded it.
 

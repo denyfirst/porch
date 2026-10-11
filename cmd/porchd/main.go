@@ -45,6 +45,7 @@ import (
 	"github.com/denyfirst/porch/internal/exposure"
 	"github.com/denyfirst/porch/internal/hstspreload"
 	"github.com/denyfirst/porch/internal/httpapi"
+	"github.com/denyfirst/porch/internal/leaks"
 	"github.com/denyfirst/porch/internal/nsecnames"
 	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/passivedns"
@@ -561,6 +562,7 @@ func run() int {
 		api.ReadRegistrations(&rdap.Client{Timeout: *requestTimeout})
 		api.CheckPreload(&hstspreload.Client{Timeout: *requestTimeout})
 		api.CheckRoutes(&rpki.Client{Timeout: *requestTimeout})
+		api.CheckLeaks(&leaks.Prober{Timeout: *requestTimeout})
 	}
 
 	// The demonstration lists this project's own estate, and both halves of

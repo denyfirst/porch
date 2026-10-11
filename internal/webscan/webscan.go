@@ -26,6 +26,7 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/hstspreload"
+	"github.com/denyfirst/porch/internal/leaks"
 	"github.com/denyfirst/porch/internal/markup"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/verify"
@@ -92,6 +93,12 @@ type Scanner struct {
 	// demonstration's own.
 	Preload Preloader
 
+	// Leaks asks the site for a fixed list of files that should never be
+	// served — a Git repository, an environment file — and grades any that
+	// are (internal/leaks). Nil asks nothing. Set wherever a scan may reach
+	// the host.
+	Leaks LeakProber
+
 	// Now supplies the current time, so a duration is reproducible in tests.
 	// Nil means time.Now.
 	Now func() time.Time
@@ -100,6 +107,11 @@ type Scanner struct {
 // Preloader is what asks the HSTS preload list.
 type Preloader interface {
 	Status(ctx context.Context, host string) hstspreload.Status
+}
+
+// LeakProber is what asks a site for files that should never be served.
+type LeakProber interface {
+	Probe(ctx context.Context, host string) leaks.Result
 }
 
 // Result is one host, measured and graded.
@@ -258,8 +270,26 @@ func (s *Scanner) Scan(ctx context.Context, host string) (*Result, error) {
 	if s.Preload != nil {
 		out.Declared = withPreload(out.Declared, host, s.Preload.Status(ctx, host))
 	}
+	if s.Leaks != nil {
+		withLeaks(out, s.Leaks.Probe(ctx, host))
+	}
 	out.Duration = s.now().Sub(started)
 	return out, nil
+}
+
+// withLeaks grades the files the site served that it should not have, and
+// says what was asked in a declared row both faces draw (R16).
+func withLeaks(out *Result, r leaks.Result) {
+	var served []policy.ServedFile
+	for _, e := range r.Exposed {
+		served = append(served, policy.ServedFile{Path: e.Path, What: e.What, Kind: string(e.Kind)})
+	}
+	graded := policy.GradeLeaks(served)
+	out.Findings = append(out.Findings, graded.Findings...)
+	out.Verdict = policy.Worst(out.Verdict, graded.Verdict)
+	if line := policy.LeaksLine(r.Asked, r.Paths, r.Unanswered, served, r.Reason); line != "" {
+		out.Declared = append(out.Declared, policy.Declaration{Label: policy.LeaksLabel, Says: line})
+	}
 }
 
 // withPreload puts the preload list's answer beside the header it is about,
