@@ -189,6 +189,10 @@ type DNSFacts struct {
 	// AddressReason says why they could not be read.
 	AddressReason string `json:"addressReason,omitempty"`
 
+	// IPv6Line says whether the name and its name servers have IPv6
+	// addresses (DNSIPv6Line). Reported, never graded.
+	IPv6Line string `json:"ipv6Line,omitempty"`
+
 	// NameServers are the servers the zone names, with what each resolves to.
 	NameServers []NameServer `json:"nameServers,omitempty"`
 

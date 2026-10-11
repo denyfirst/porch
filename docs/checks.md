@@ -119,7 +119,8 @@ MTA-STS, TLS-RPT, DANE for each mail server, and DKIM keys. A DKIM key lives at
 `<selector>._domainkey`, and DNS cannot list what is under a name, so only the
 selectors you name and those common providers document are read. Your selector
 is the `s=` tag in the `DKIM-Signature` header of any mail you sent. Up to
-sixteen.
+sixteen. And whether each mail server (up to eight) has an IPv6 address, which
+is reported and not graded.
 
 **Connects to:** the MTA-STS policy file, if announced, and each mail server
 (up to eight) on port 25, asked only whether it offers STARTTLS. Only for a
@@ -139,7 +140,9 @@ and pass it with `-helo`. A blocked outbound port 25 is reported as such.
 ## DNS
 
 **Reads, through the resolver:** `A`, `AAAA`, `CNAME`, `NS` and their
-addresses, `SOA`, `TXT`, `DS` and `DNSKEY`.
+addresses, `SOA`, `TXT`, `DS` and `DNSKEY`. Whether the name and its name
+servers have IPv6 addresses is said in one line, and not graded: RFC 3901 asks
+only that a zone stay reachable over IPv4.
 
 **Grades** only what stops a resolver: fewer than two name servers or all on
 one network, a name server that resolves to nothing, a parent that hands out

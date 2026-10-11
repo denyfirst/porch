@@ -264,6 +264,9 @@ func printMailPath(w io.Writer, f *policy.MailFacts) {
 		fmt.Fprintf(w, "    MX alias   %s: a name RFC 2181 says carries an address\n",
 			strings.Join(f.MXAliases, ", "))
 	}
+	if f.MXIPv6Line != "" {
+		fmt.Fprintf(w, "    MX IPv6    %s\n", f.MXIPv6Line)
+	}
 
 	fmt.Fprintf(w, "    MTA-STS    %s\n", stsLine(f))
 

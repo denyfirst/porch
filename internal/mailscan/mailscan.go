@@ -679,6 +679,34 @@ func (s *Scanner) readExchangers(ctx context.Context, r Resolver, domain string,
 			facts.MXAliases = append(facts.MXAliases, host)
 		}
 	}
+
+	// And whether each has an IPv6 address: one more question per
+	// exchanger, to the same resolver, bounded the same way. Reported and
+	// never graded (policy.MailIPv6Line says why).
+	if lookup, ok := r.(AddressResolver); ok {
+		for _, host := range hosts {
+			facts.MXIPv6Asked++
+			answer, err := lookup.LookupAddresses(ctx, host, dnsclient.TypeAAAA)
+			if err != nil {
+				continue
+			}
+			facts.MXIPv6Read++
+			for _, a := range answer.Addresses {
+				if a.Is6() && !a.Is4In6() {
+					facts.MXIPv6 = append(facts.MXIPv6, host)
+					break
+				}
+			}
+		}
+		facts.MXIPv6Line = policy.MailIPv6Line(*facts)
+	}
+}
+
+// AddressResolver is a Resolver that can also look up a name's addresses.
+// internal/dnsclient's is one. Separate, so a resolver without it still
+// reads everything else.
+type AddressResolver interface {
+	LookupAddresses(ctx context.Context, name string, qtype uint16) (dnsclient.ZoneAnswer, error)
 }
 
 // readTransportSecurity reads what the domain publishes about encrypting the

@@ -207,6 +207,14 @@ type MailFacts struct {
 	// given, and what it does with an alias differs between implementations.
 	MXAliases []string `json:"mxAliases,omitempty"`
 
+	// MXIPv6 are the exchangers that have an IPv6 address, of MXIPv6Asked
+	// asked and MXIPv6Read answered, and MXIPv6Line says it in one line
+	// (MailIPv6Line). Reported, never graded.
+	MXIPv6      []string `json:"mxIPv6,omitempty"`
+	MXIPv6Asked int      `json:"mxIPv6Asked,omitempty"`
+	MXIPv6Read  int      `json:"mxIPv6Read,omitempty"`
+	MXIPv6Line  string   `json:"mxIPv6Line,omitempty"`
+
 	// NullMX is true when the domain publishes RFC 7505's single "." record,
 	// which states that it accepts no mail at all. A statement rather than an
 	// absence, and it makes several questions below inapplicable rather than

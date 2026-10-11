@@ -324,6 +324,9 @@ func TestAZoneThatIsServedAndSignedReadsStrong(t *testing.T) {
 	if len(got.Observed.Keys) != 2 || got.Observed.Keys[0].Name != "Ed25519" || !got.Observed.Keys[0].KeySigning {
 		t.Errorf("the keys read %+v, and an algorithm travels by the name an operator reads", got.Observed.Keys)
 	}
+	if want := "the name has an IPv6 address; 0 of 2 name servers have one"; got.Observed.IPv6Line != want {
+		t.Errorf("the IPv6 line reads %q, want %q", got.Observed.IPv6Line, want)
+	}
 	if !got.Observed.SignaturesVerified || got.Observed.SignatureFault != "" || got.Observed.SignatureCheckReason != "" {
 		t.Errorf("the signatures read verified %v, fault %q, reason %q", got.Observed.SignaturesVerified,
 			got.Observed.SignatureFault, got.Observed.SignatureCheckReason)

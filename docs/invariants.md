@@ -1535,7 +1535,11 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestAHostThatAnsweredNothingIsNotDescribedAsSendingNoHeaders`,
 `TestASiteThatSendsEverythingIsToldNothing`, `TestTheReportedListIsStable`,
 `TestTheHeaderRulesReachAGradedReport`,
-`TestTheHeadersReadAreTheOnesOnTheResponseAVisitorLandsOn`
+`TestTheHeadersReadAreTheOnesOnTheResponseAVisitorLandsOn`,
+`TestTheIPv6LineSaysWhatWasRead`,
+`TestTheExchangersIPv6LineCountsWhatWasRead`,
+`TestWhetherTheExchangersHaveIPv6IsReadAndSaid`,
+`TestTheIPv6LineReachesBothFaces`
 
 ### R22 — One rule set grades one check, and every verdict names its own
 

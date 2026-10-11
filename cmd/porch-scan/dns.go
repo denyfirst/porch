@@ -114,6 +114,9 @@ func printDNS(w io.Writer, r dnsResult) {
 			field(w, "IPv4 (A)", listOrNone(f.IPv4))
 			field(w, "IPv6 (AAAA)", listOrNone(f.IPv6))
 		}
+		if f.IPv6Line != "" {
+			field(w, "IPv6", f.IPv6Line)
+		}
 
 		switch {
 		case f.AliasReason != "":

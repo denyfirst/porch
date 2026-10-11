@@ -1357,6 +1357,8 @@ function published(facts) {
     row("IPv4 (A)", listOrNone(facts.ipv4));
     row("IPv6 (AAAA)", listOrNone(facts.ipv6));
   }
+  // The name and its name servers on IPv6, built by the server (R16).
+  if (facts.ipv6Line) row("IPv6", facts.ipv6Line);
 
   if (facts.aliasReason) {
     row("Alias (CNAME)", "not read: " + facts.aliasReason);
@@ -1767,6 +1769,8 @@ function zone(facts) {
     row("MX", hosts.length ? hosts.join(", ") : "none published");
     const aliased = facts.mxAliases || [];
     if (aliased.length) row("MX alias", aliased.join(", ") + ": a name RFC 2181 says carries an address", "weak");
+    // Built by the server, so both faces read the same line (R16).
+    if (facts.mxIPv6Line) row("MX IPv6", facts.mxIPv6Line);
   }
 
   row("MTA-STS", stsSays(facts));

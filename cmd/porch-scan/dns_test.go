@@ -638,3 +638,39 @@ func TestTheSignatureCheckReachesBothFaces(t *testing.T) {
 		t.Error("the page does not mark a signature that fails as insecure")
 	}
 }
+
+// Whether the names have IPv6 addresses is one line built by the policy
+// package, and both faces print that line under the same label (R16).
+func TestTheIPv6LineReachesBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`if (facts.ipv6Line) row("IPv6", facts.ipv6Line);`,
+		`if (facts.mxIPv6Line) row("MX IPv6", facts.mxIPv6Line);`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s", want)
+		}
+	}
+
+	var dns bytes.Buffer
+	printDNS(&dns, dnsResult{Domain: "example.com", Result: &dnsscan.Result{Domain: "example.com", Observed: &policy.DNSFacts{
+		Apex: true, IPv6Line: "the name has an IPv6 address; 2 of 2 name servers have one",
+	}}})
+	if !strings.Contains(dns.String(), "the name has an IPv6 address; 2 of 2 name servers have one") {
+		t.Errorf("the terminal does not print the line:\n%s", dns.String())
+	}
+
+	r := mailSample()
+	r.Observed.MXRead = true
+	r.Observed.MXHosts = []string{"mx.example.com"}
+	r.Observed.MXIPv6Line = "1 of 1 exchanger has an IPv6 address"
+	var mail bytes.Buffer
+	printMail(&mail, r)
+	if !strings.Contains(mail.String(), "MX IPv6    1 of 1 exchanger has an IPv6 address") {
+		t.Errorf("the terminal does not print the exchangers' line:\n%s", mail.String())
+	}
+}
