@@ -20,7 +20,7 @@ Newest first.
 
 ## `porch-mail-v3` → `porch-mail-v4`
 
-Unreleased.
+Released in v0.27.0, 2026-10.
 
 - **Added `mail.exchanger-only-legacy-tls`, insecure.** An exchanger offered
   nothing newer than TLS 1.1 to a client offering TLS 1.3 (RFC 8996).
@@ -39,7 +39,7 @@ Unreleased.
 
 ## `porch-dns-v2` → `porch-dns-v3`
 
-Unreleased.
+Released in v0.27.0, 2026-10.
 
 - **Added `dns.dnssec-signature-invalid`, insecure.** The parent's digest
   matches a key, but the signatures at the top of the zone do not hold when
@@ -61,7 +61,7 @@ Unreleased.
 
 ## `porch-web-v3` → `porch-web-v4`
 
-Unreleased.
+Released in v0.27.0, 2026-10.
 
 - **Added `web.exposed-source`, insecure.** A Git or Subversion repository is
   served from the web root, which hands over the site's code and history
