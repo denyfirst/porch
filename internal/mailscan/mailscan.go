@@ -991,6 +991,7 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 			Trusted:           r.Trusted,
 			NameMatches:       r.NameMatches,
 			CertificateReason: r.CertificateReason,
+			Expires:           leafExpiry(r),
 			Reason:            r.Reason,
 			ConnectTimedOut:   r.ConnectTimedOut,
 			RelayAsked:        r.RelayAsked,
@@ -1028,6 +1029,15 @@ func daneBinding(host string, answer dnsclient.TLSAAnswer, r smtptls.Result, now
 		b.Outcome, b.Reason = string(got.Outcome), got.Reason
 	}
 	return b
+}
+
+// leafExpiry is when the certificate an exchanger presented runs out, or zero
+// where none was presented.
+func leafExpiry(r smtptls.Result) time.Time {
+	if len(r.Chain) == 0 || r.Chain[0] == nil {
+		return time.Time{}
+	}
+	return r.Chain[0].NotAfter.UTC()
 }
 
 // exchangerProber is the one this scan asks with.

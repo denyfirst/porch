@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/denyfirst/porch/internal/dmarcreports"
 )
@@ -369,6 +370,11 @@ type ExchangerTLS struct {
 	Trusted           bool   `json:"trusted"`
 	NameMatches       bool   `json:"nameMatches"`
 	CertificateReason string `json:"certificateReason,omitempty"`
+
+	// Expires is when the certificate the exchanger presented runs out.
+	// A mail server's certificate is renewed by whoever runs it, and one
+	// that lapses leaves senders that insist on TLS unable to deliver.
+	Expires time.Time `json:"expires,omitzero"`
 
 	Reason          string `json:"reason,omitempty"`
 	ConnectTimedOut bool   `json:"connectTimedOut,omitempty"`

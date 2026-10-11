@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"fmt"
 	"io"
 
@@ -89,8 +91,16 @@ func exchangerLine(x policy.ExchangerTLS) string {
 	case !x.NameMatches:
 		return x.Version + " " + x.Suite + ", certificate does not name this exchanger"
 	default:
-		return x.Version + " " + x.Suite + ", certificate verifies"
+		return x.Version + " " + x.Suite + ", certificate verifies" + runsOut(x.Expires)
 	}
+}
+
+// runsOut is when the exchanger's certificate runs out, as the page writes it.
+func runsOut(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return ", runs out " + t.UTC().Format("2006-01-02")
 }
 
 // relayLine says what the relay question found, in the words the page uses

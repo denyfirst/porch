@@ -1802,7 +1802,8 @@ function exchangerSays(x) {
   if (!x.upgraded) return "offered, not negotiated: " + x.reason;
   if (!x.trusted) return x.version + " " + x.suite + ", certificate does not verify: " + x.certificateReason;
   if (!x.nameMatches) return x.version + " " + x.suite + ", certificate does not name this exchanger";
-  return x.version + " " + x.suite + ", certificate verifies";
+  return x.version + " " + x.suite + ", certificate verifies" +
+    (x.expires ? ", runs out " + String(x.expires).slice(0, 10) : "");
 }
 
 // What the relay question found, in the words the terminal uses (R16).

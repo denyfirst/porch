@@ -27,6 +27,8 @@ func TestEachExchangerIsARowInThePagesWords(t *testing.T) {
 		"not negotiated": {func(x *policy.ExchangerTLS) { x.Upgraded, x.Reason = false, "a reason" }, "offered, not negotiated: a reason"},
 		"untrusted":      {func(x *policy.ExchangerTLS) { x.Trusted, x.CertificateReason = false, "it expired" }, "certificate does not verify: it expired"},
 		"another's name": {func(x *policy.ExchangerTLS) { x.NameMatches = false }, "certificate does not name this exchanger"},
+		"with its expiry": {func(x *policy.ExchangerTLS) { x.Expires = time.Date(2027, 1, 7, 12, 0, 0, 0, time.UTC) },
+			"certificate verifies, runs out 2027-01-07"},
 	} {
 		x := good
 		tc.change(&x)
