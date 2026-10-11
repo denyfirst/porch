@@ -77,3 +77,29 @@ func TestARedirectIsNotFollowed(t *testing.T) {
 		t.Errorf("a redirect read %+v", got)
 	}
 }
+
+// An answer is reused for an hour, and a failure is not kept.
+func TestAnAnswerIsKeptForAnHour(t *testing.T) {
+	c, asked := listing(t, http.StatusOK, `{"status":"unknown"}`)
+	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	c.Now = func() time.Time { return now }
+
+	c.Status(context.Background(), "example.test")
+	now = now.Add(59 * time.Minute)
+	c.Status(context.Background(), "example.test")
+	if len(*asked) != 1 {
+		t.Errorf("asked %d times within the hour", len(*asked))
+	}
+	now = now.Add(2 * time.Minute)
+	c.Status(context.Background(), "example.test")
+	if len(*asked) != 2 {
+		t.Errorf("asked %d times, and the answer was over an hour old", len(*asked))
+	}
+
+	failing, failed := listing(t, http.StatusBadGateway, "")
+	failing.Status(context.Background(), "example.test")
+	failing.Status(context.Background(), "example.test")
+	if len(*failed) != 2 {
+		t.Errorf("a failure was kept: asked %d times", len(*failed))
+	}
+}

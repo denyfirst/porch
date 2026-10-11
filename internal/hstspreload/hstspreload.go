@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/denyfirst/porch/internal/safedial"
@@ -66,15 +67,64 @@ type Client struct {
 	Roots *x509.CertPool
 
 	Timeout time.Duration
+
+	// Now is the clock. Nil means the real one.
+	Now func() time.Time
+
+	mu   sync.Mutex
+	kept map[string]keptStatus
 }
 
-// Status asks the list about one host.
+// keep is how long an answer is reused. A host joins or leaves the list over
+// weeks, and a page anybody can refresh must not become a way to press on the
+// service that keeps it.
+const keep = time.Hour
+
+// maxKept bounds how many hosts are remembered.
+const maxKept = 256
+
+type keptStatus struct {
+	at     time.Time
+	status Status
+}
+
+// Status asks the list about one host, or hands back an answer under an hour
+// old.
 func (c *Client) Status(ctx context.Context, host string) Status {
 	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
 	if host == "" || !strings.Contains(host, ".") {
 		return Status{Asked: true, Reason: "the name is not one the list could hold"}
 	}
 
+	now := c.now()
+	c.mu.Lock()
+	if k, ok := c.kept[host]; ok && now.Sub(k.at) < keep {
+		c.mu.Unlock()
+		return k.status
+	}
+	c.mu.Unlock()
+
+	got := c.ask(ctx, host)
+	if got.Reason == "" {
+		c.mu.Lock()
+		if c.kept == nil || len(c.kept) >= maxKept {
+			c.kept = map[string]keptStatus{}
+		}
+		c.kept[host] = keptStatus{at: now, status: got}
+		c.mu.Unlock()
+	}
+	return got
+}
+
+func (c *Client) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+// ask puts the question to the service.
+func (c *Client) ask(ctx context.Context, host string) Status {
 	timeout := c.Timeout
 	if timeout <= 0 {
 		timeout = defaultTimeout
