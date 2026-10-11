@@ -42,6 +42,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
+	"github.com/denyfirst/porch/internal/exposure"
 	"github.com/denyfirst/porch/internal/hstspreload"
 	"github.com/denyfirst/porch/internal/httpapi"
 	"github.com/denyfirst/porch/internal/nsecnames"
@@ -1129,10 +1130,12 @@ func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, 
 	if scope != nil {
 		scanner.Logs = certSpotter(timeout)
 		scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
+		scanner.Exposure = &exposure.Prober{}
 	}
 	if demo.Enabled {
 		scanner.Logs = demoMonitor(timeout)
 		scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
+		scanner.Exposure = &exposure.Prober{}
 	}
 
 	// Always, and never nil. An empty Server already means this machine's own

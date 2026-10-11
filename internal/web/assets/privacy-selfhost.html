@@ -108,7 +108,10 @@
 
     <ul class="plain">
       <li><strong>Transport</strong>: TLS handshakes at each version, each
-        closed when it ends. No application data is sent.</li>
+        closed when it ends. No application data is sent.{{if .Verified}} Then
+        one connection to each of sixteen ports of services that should not
+        face the internet, such as Remote Desktop and databases, closed as
+        soon as it opens, with nothing sent.{{end}}</li>
       <li><strong>Reach</strong>: <code>GET /</code> over HTTPS and HTTP,
         following a few redirects; <code>/.well-known/security.txt</code>
         (RFC 9116); <code>GET /</code> of the <code>www.</code> form of the

@@ -86,7 +86,8 @@ func TestEveryInstallationHasAResolver(t *testing.T) {
 func TestWhatAServiceAsksBeyondTheHandshake(t *testing.T) {
 	scope := testScope(t)
 
-	if s := serviceScanner(nil, nil, "", time.Second); (s.Logs != nil) != demoBuild() || (s.Responder != nil) != demoBuild() {
+	if s := serviceScanner(nil, nil, "", time.Second); (s.Logs != nil) != demoBuild() || (s.Responder != nil) != demoBuild() ||
+		(s.Exposure != nil) != demoBuild() {
 		t.Errorf("a service with no proof of control holds %+v / %+v", s.Logs, s.Responder)
 	}
 
@@ -96,6 +97,9 @@ func TestWhatAServiceAsksBeyondTheHandshake(t *testing.T) {
 	}
 	if s.Responder == nil {
 		t.Error("a service with proof of control does not ask the certificate's authority")
+	}
+	if s.Exposure == nil || s.Exposure.Dial != nil {
+		t.Error("a service with proof of control does not ask, through safedial, which risky services answer")
 	}
 }
 

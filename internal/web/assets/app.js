@@ -853,6 +853,11 @@ function ciphers(tls, report) {
   if (report && report.keyExchangeLine) {
     fact("Key exchange", report.keyExchangeLine);
   }
+  // Services on the host that should not face the internet. Built by the
+  // server, so both faces read the same line (R16).
+  if (report && report.exposureLine) {
+    fact("Exposed services", report.exposureLine);
+  }
   if (said) frag.appendChild(facts);
 
   return frag;

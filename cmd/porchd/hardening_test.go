@@ -106,7 +106,7 @@ func TestARegisterIsAskedOnlyOverHTTPS(t *testing.T) {
 func TestTheDemonstrationSearchesItsOwnNameAndKeepsItsReports(t *testing.T) {
 	source := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
-		"if demo.Enabled {\n\t\tscanner.Logs = demoMonitor(timeout)\n\t\tscanner.Responder = &ocspquery.Fetcher{Timeout: timeout}\n\t}",
+		"if demo.Enabled {\n\t\tscanner.Logs = demoMonitor(timeout)\n\t\tscanner.Responder = &ocspquery.Fetcher{Timeout: timeout}\n\t\tscanner.Exposure = &exposure.Prober{}\n\t}",
 		"api.KeepReportsFor(demoFresh)",
 		`api.KeepCheckFor("mail", demoKeep)`,
 		`api.KeepCheckFor("dns", demoKeep)`,

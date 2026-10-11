@@ -26,6 +26,15 @@ authority for revocation. No service in between learns what is checked.
 **Sends:** TLS handshakes at each version and for each accepted cipher suite,
 each closed when the handshake ends. No HTTP request.
 
+**Connects to:** sixteen ports of services that should never face the
+internet — FTP, Telnet, NetBIOS, SMB, Microsoft SQL Server, Oracle, the Docker
+API, MySQL, Remote Desktop, PostgreSQL, VNC, WinRM, Redis, Elasticsearch,
+Memcached and MongoDB — at the first IPv4 and first IPv6 address the
+handshakes reached. One connection each, closed as soon as it opens; nothing is
+sent. A port that refuses or stays silent is not reported, since a firewall
+that drops is doing its job. A host's own intrusion detection may notice
+sixteen connections in two seconds.
+
 **Also asks:** the certificate authority for its revocation list, and its
 responder whether this certificate was revoked where the certificate names
 one; and Cert Spotter which certificates are logged for the name. Set

@@ -37,10 +37,12 @@ is nil
 
 *Guarded by:* `TestPrivateTargetsAreRefused`
 
-### N3 — Only implicit-TLS ports are dialled
+### N3 — Only implicit-TLS ports are dialled, and a fixed list of services that should not face the internet
 
 *Enforced in:* `internal/scan`, in `Scanner.Scan`, unless `AllowAnyPort`;
-`internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`
+`internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`;
+`internal/exposure.Services` and `internal/exposure.Prober.Probe`, which dial
+only those ports, through safedial, at two addresses at most, and send nothing
 
 *Lifted by:* the command line only
 
@@ -57,7 +59,12 @@ is nil
 `TestAnExchangerBehindAnAliasIsNotAskedAboutRelay`,
 `TestAnOpenRelayIsGradedAndSilenceIsNot`,
 `TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne`,
-`TestTheRelayAnswerReachesBothFacesOfTheReport`
+`TestTheRelayAnswerReachesBothFacesOfTheReport`,
+`TestAnOpenServiceIsReportedAndSentNothing`,
+`TestOneAddressOfEachFamilyIsAsked`, `TestThePrivateNetworkIsNeverAsked`,
+`TestNoAddressIsNotAnAnswer`, `TestTheListIsFixedAndEachEntrySaysWhy`,
+`TestAScanSaysWhichRiskyServicesAnswer`,
+`TestTheExposureLineNamesWhatAnswered`
 
 ### N4 — Every network operation is bounded
 

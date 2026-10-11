@@ -27,6 +27,7 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/exclusion"
+	"github.com/denyfirst/porch/internal/exposure"
 	"github.com/denyfirst/porch/internal/ocsp"
 	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/policy"
@@ -164,6 +165,12 @@ type Result struct {
 	// KeyExchangeLine is what the extra post-quantum handshake established,
 	// in the sentence both faces show.
 	KeyExchangeLine string `json:"keyExchangeLine,omitempty"`
+
+	// Exposure is which services that should not face the internet answered
+	// at the host's addresses, and ExposureLine says it in the sentence both
+	// faces show (internal/exposure).
+	Exposure     *exposure.Result `json:"exposure,omitempty"`
+	ExposureLine string           `json:"exposureLine,omitempty"`
 
 	// Stapling grades the status response against what the certificate asked
 	// for. It is neither a transport property nor a certificate property: the
@@ -309,6 +316,11 @@ type Scanner struct {
 	// service never asked the responder.
 	Logs      ctsearch.Searcher
 	Responder *ocspquery.Fetcher
+
+	// Exposure asks whether the host answers on the ports of services that
+	// should never face the internet (internal/exposure). Nil asks nothing.
+	// Set wherever a scan may reach the host.
+	Exposure *exposure.Prober
 
 	// Now supplies the current time, so certificate arithmetic is
 	// reproducible in tests. Nil means time.Now.
@@ -577,6 +589,19 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		}
 		out.KeyExchangeLine = policy.PostQuantumLine(pq)
 		tlsReport.Notes = append(tlsReport.Notes, policy.DescribePostQuantum(pq)...)
+	}
+
+	// The services on the host that should not face the internet, at the
+	// addresses the handshakes reached, where a caller set a prober.
+	if s.Exposure != nil && tlsReport != nil && len(tlsReport.AddressesReached) > 0 {
+		found := s.Exposure.Probe(ctx, tlsReport.AddressesReached)
+		var open []policy.ExposedService
+		for _, o := range found.Open {
+			open = append(open, policy.ExposedService{Address: o.Address, Port: o.Port, Name: o.Name, Why: exposure.WhyOpen(o.Port)})
+		}
+		out.Exposure = &found
+		out.ExposureLine = policy.ExposureLine(found.Asked, found.Ports, open, found.Reason)
+		tlsReport.Notes = append(tlsReport.Notes, policy.DescribeExposure(open)...)
 	}
 
 	// Asked last, and bounded by whatever is left of the caller's deadline.

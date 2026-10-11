@@ -46,6 +46,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
+	"github.com/denyfirst/porch/internal/exposure"
 	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
@@ -129,6 +130,12 @@ func tlsScanner(timeout time.Duration, allowPrivate bool, resolver string) *scan
 	// every time; until 2026-10-10 each waited for a flag (N12, R3a).
 	scanner.Logs = certSpotter(timeout)
 	scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
+
+	// And whether the host answers on the ports of services that should
+	// never face the internet: a fixed list, one connection each, nothing
+	// sent (internal/exposure). Through safedial even with -allow-private:
+	// the list is about what the internet can reach.
+	scanner.Exposure = &exposure.Prober{}
 
 	if allowPrivate {
 		// Deliberate opt-out of the SSRF guard. Reasonable for a local
@@ -709,6 +716,9 @@ func printReport(w io.Writer, r result) {
 	// in this report that costs the scanned server an extra handshake.
 	if r.KeyExchangeLine != "" {
 		fmt.Fprintf(w, "\n  Key exchange  %s\n", wrap(r.KeyExchangeLine, 60, "                "))
+	}
+	if r.ExposureLine != "" {
+		fmt.Fprintf(w, "\n  Exposed       %s\n", wrap(r.ExposureLine, 60, "                "))
 	}
 
 	printCertificate(w, r)

@@ -86,6 +86,13 @@ func TestEveryScanAsksTheMonitorAndTheAuthority(t *testing.T) {
 	if s.Responder == nil {
 		t.Error("the scan does not ask the certificate's authority whether it was revoked")
 	}
+	// And which risky services answer, through safedial whatever
+	// -allow-private says: the list is about what the internet can reach.
+	for _, private := range []bool{false, true} {
+		if e := tlsScanner(time.Second, private, "").Exposure; e == nil || e.Dial != nil {
+			t.Errorf("with -allow-private %v the exposure prober is %+v", private, e)
+		}
+	}
 }
 
 // A flag that was removed is refused with the reason it went, rather than
