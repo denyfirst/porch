@@ -75,9 +75,12 @@ jobs:
     # the compose file that names its digest, and that file reaches nobody
     # until the maintainer has rebuilt the image, compared the digest and
     # signed the list that covers it.
+    #
+    # Pull requests, read, to see whether one is still waiting on main.
     permissions:
       contents: write
       packages: write
+      pull-requests: read
 
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
@@ -91,6 +94,39 @@ jobs:
           git fetch -q --depth 1 origin "refs/tags/${TAG}"
           git checkout -q FETCH_HEAD
           echo "commit $(git rev-parse HEAD)"
+
+      # A release cut one merge early.
+      #
+      # docs/releasing.md makes any pull request open against main a stop,
+      # because releases had twice been cut before the change they were for
+      # was merged. On 2026-10-11 it happened a third time: v0.27.0 was tagged
+      # on the commit v0.26.18 came from, three minutes before the pull
+      # request it was meant to release was merged, and it shipped signed and
+      # reproduced, holding none of that change. Every check after this one
+      # passed, because the tagged source was good; it was only not the
+      # source anybody meant. A sentence in a procedure is read in a hurry and
+      # a step here is not, so a tag pushed while a pull request waits on main
+      # is built by nobody. Tags cannot be moved or deleted here, so the cure
+      # is the next number.
+      #
+      # Only for a pushed tag. A dispatched rebuild is of a tag that already
+      # passed this, and a pull request opened since is not a reason to leave
+      # it unbuilt.
+      - name: Refuse to build while a pull request waits on main
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open="$(gh pr list --repo "${GITHUB_REPOSITORY}" --state open --base main \
+            --json number,title --jq '.[] | "#\(.number) \(.title)"')"
+          if [ -n "${open}" ]; then
+            echo "::error::A pull request is open against main. Nothing is built for ${TAG}." >&2
+            echo "${open}" >&2
+            echo "Merge or close it, then cut the next number." >&2
+            exit 1
+          fi
+          echo "no pull request waits on main"
 
       - name: Settle which build script is used
         run: |
