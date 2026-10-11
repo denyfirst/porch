@@ -179,6 +179,12 @@ func dnssecLine(f policy.DNSFacts) string {
 		return "not signed"
 	case f.ChainReason != "":
 		return "not checked: " + f.ChainReason
+	case f.ChainMatched && f.SignatureFault != "":
+		return "signed, and the parent's digest matches a key here, but " + f.SignatureFault
+	case f.ChainMatched && f.SignaturesVerified:
+		return "signed; the parent's digest matches a key here, and the signatures verify"
+	case f.ChainMatched && f.SignatureCheckReason != "":
+		return "signed, and the parent's digest matches a key here; signatures not checked: " + f.SignatureCheckReason
 	case f.ChainMatched:
 		return "signed, and the parent's digest matches a key here"
 	case len(f.Keys) == 0:

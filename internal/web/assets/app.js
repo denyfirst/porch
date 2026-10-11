@@ -1465,6 +1465,15 @@ function dnssecLine(facts) {
   if (!facts.apex) return "not read: the chain belongs to the zone above this name";
   if (!facts.signed) return "not signed";
   if (facts.chainReason) return "not checked: " + facts.chainReason;
+  if (facts.chainMatched && facts.signatureFault) {
+    return "signed, and the parent's digest matches a key here, but " + facts.signatureFault;
+  }
+  if (facts.chainMatched && facts.signaturesVerified) {
+    return "signed; the parent's digest matches a key here, and the signatures verify";
+  }
+  if (facts.chainMatched && facts.signatureCheckReason) {
+    return "signed, and the parent's digest matches a key here; signatures not checked: " + facts.signatureCheckReason;
+  }
   if (facts.chainMatched) return "signed, and the parent's digest matches a key here";
   if ((facts.keys || []).length === 0) return "anchored at the parent, and no key is published here";
   return "anchored at the parent, and no key here matches its digest";
@@ -1472,6 +1481,7 @@ function dnssecLine(facts) {
 
 function dnssecMark(facts) {
   if (!facts.signed || facts.chainReason) return null;
+  if (facts.chainMatched && facts.signatureFault) return "insecure";
   return facts.chainMatched ? "strong" : "insecure";
 }
 

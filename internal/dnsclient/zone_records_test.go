@@ -88,8 +88,10 @@ func TestWhatAZonePublishesAboutItselfIsRead(t *testing.T) {
 		Primary: "ns.icann.org", Mailbox: "noc.dns.icann.org",
 		Serial: 2026091801, Refresh: 7200, Retry: 3600, Expire: 1209600, Minimum: 3600,
 	}
-	if got.SOA[0] != want {
-		t.Errorf("the record reads %+v, want %+v", got.SOA[0], want)
+	if read := got.SOA[0]; read.Primary != want.Primary || read.Mailbox != want.Mailbox ||
+		read.Serial != want.Serial || read.Refresh != want.Refresh || read.Retry != want.Retry ||
+		read.Expire != want.Expire || read.Minimum != want.Minimum {
+		t.Errorf("the record reads %+v, want %+v", read, want)
 	}
 
 	ds := answering(t, TypeDS, "example.com",

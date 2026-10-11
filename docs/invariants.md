@@ -1614,6 +1614,45 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestThePublishedRecordsAreBounded`, `TestNoStringLiteralInAScriptIsLeftOpen`,
 `TestEveryRuleSetNamesTheToolAndTheCheck`
 
+### R24a — A DNSSEC signature is checked with the zone's own keys, and a limit of the check is not a fault of the zone
+
+The digest at the parent matching a key is half of the link. The key it names
+has to sign the zone's key set, and a key in that set has to sign the record
+at the top of the zone; both are checked here, by RFC 4034 §3.1.8.1 and RFC
+4035 §5.3, with nothing asked that was not asked already. A signature is found
+wanting only where its key was read, its algorithm is one this verifies, and
+the arithmetic says no. An algorithm not implemented here, a key that cannot
+be read, an RSA key outside 1024 to 4096 bits, a signer's name compressed
+against RFC 4034 §3.1.7, more than eight checks for one record set (KeyTrap,
+CVE-2023-50387): each is said as a check not made (R4), never graded.
+A resolver that set the AD bit on an answer this check finds wanting is said
+as a disagreement, not graded over.
+
+Where the resolver fails the top of the zone, its digest or its keys, those
+three are asked once more of the same resolver with the CD bit (RFC 4035
+§3.2.2), because a validating resolver answers a zone whose signatures fail
+with SERVFAIL and nothing else. What comes back is marked, never believed for
+being there, and graded only by what verifying it finds. The end of the top's
+signature's validity is dns.signature-expired's and is not counted twice.
+
+*Enforced in:* `internal/dnsscan.checkSignatures`, `internal/dnsscan.checkSet`,
+`internal/dnsscan.verifySignature`, `internal/dnsscan.unlessRejected`,
+`internal/dnsclient.parseRRSIG`, `internal/dnsclient.Client.LookupUnchecked`,
+`internal/policy.GradeDNS`
+
+*Guarded by:* `TestTheRFCExamplesVerify`, `TestAnRSASignatureVerifies`,
+`TestWhatThisCannotCheckIsNotAFailure`,
+`TestTheSignaturesAreCheckedWithTheZonesOwnKeys`,
+`TestSignaturesNotCheckedAreNotGraded`,
+`TestAZoneTheResolverRejectsIsReadUnchecked`,
+`TestASignatureKeepsWhatCheckingItNeeds`,
+`TestACompressedSignerGivesTheDateAndNoSignature`,
+`TestALiteralNameStaysInsideItsRecord`,
+`TestTheTopOfTheZoneIsKeptAsItWasSigned`,
+`TestAnUncheckedQuestionSetsCDAndBelievesNoAD`,
+`TestTheSignatureCheckReachesBothFaces`, `FuzzParseRRSIG`,
+`FuzzVerifySignature`
+
 ### R23 — The policy read is the one a browser would hold
 
 *Enforced in:* `internal/webscan` (`securePolicy`, `plaintextPolicy`, `hops`,

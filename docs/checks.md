@@ -143,8 +143,9 @@ addresses, `SOA`, `TXT`, `DS` and `DNSKEY`.
 
 **Grades** only what stops a resolver: fewer than two name servers or all on
 one network, a name server that resolves to nothing, a parent that hands out
-different servers or stale glue, a broken DNSSEC chain or an expired
-signature, and an alias at the top of a zone. Serial, timers, the signing
+different servers or stale glue, a broken DNSSEC chain, a signature at the
+top of the zone that does not verify with the zone's own keys or has expired,
+and an alias at the top of a zone. Serial, timers, the signing
 algorithm and an open zone transfer are reported, not graded.
 
 If the name is an alias whose target no longer exists, whoever claims the
@@ -163,7 +164,7 @@ route is the hosting provider's to sign.
 
 ### Limits
 
-- **Everything here came from one resolver.** Most answers came from this installation's resolver. Four questions go directly to name servers over TCP port 53: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers a parent server hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing key digests with the parent's; whether every signature verifies is the resolver's word.
+- **Everything here came from one resolver.** Most answers came from this installation's resolver. Four questions go directly to name servers over TCP port 53: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers a parent server hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing key digests with the parent's, and the signatures over the zone's keys and over the record at the top of the zone are verified here with those keys; signatures on other records are the resolver's word. Where the resolver fails those three questions, they are asked once more with checking disabled, so what is wrong can be said.
 
 ## Names
 

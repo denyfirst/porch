@@ -599,3 +599,42 @@ func TestTheGlueTheZoneAboveHandsOutIsDrawnInBothFaces(t *testing.T) {
 		t.Errorf("a server with no glue was given a line:\n%s", text)
 	}
 }
+
+// What checking the signatures found reaches both faces of the report, in
+// the same words (R16): verified, the fault, or why they were not checked.
+func TestTheSignatureCheckReachesBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+
+	matched := policy.DNSFacts{Apex: true, Signed: true, ChainMatched: true}
+	for _, c := range []struct {
+		facts func(f *policy.DNSFacts)
+		says  string
+		page  string
+	}{
+		{func(f *policy.DNSFacts) { f.SignaturesVerified = true },
+			"signed; the parent's digest matches a key here, and the signatures verify",
+			`"signed; the parent's digest matches a key here, and the signatures verify"`},
+		{func(f *policy.DNSFacts) { f.SignatureFault = "the key set's signature by key 1 does not verify" },
+			"signed, and the parent's digest matches a key here, but the key set's signature by key 1 does not verify",
+			`"signed, and the parent's digest matches a key here, but " + facts.signatureFault`},
+		{func(f *policy.DNSFacts) { f.SignatureCheckReason = "no signature came with the key set" },
+			"signed, and the parent's digest matches a key here; signatures not checked: no signature came with the key set",
+			`"signed, and the parent's digest matches a key here; signatures not checked: " + facts.signatureCheckReason`},
+	} {
+		f := matched
+		c.facts(&f)
+		if got := dnssecLine(f); got != c.says {
+			t.Errorf("the terminal says %q, want %q", got, c.says)
+		}
+		if !strings.Contains(script, c.page) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", c.page)
+		}
+	}
+	if !strings.Contains(script, `if (facts.chainMatched && facts.signatureFault) return "insecure";`) {
+		t.Error("the page does not mark a signature that fails as insecure")
+	}
+}

@@ -25,7 +25,7 @@ import (
 
 // DNSVersion identifies this rule set, which moves independently of the
 // others.
-const DNSVersion = "porch-dns-v2"
+const DNSVersion = "porch-dns-v3"
 
 var (
 	rfc1034 = Reference{
@@ -285,6 +285,26 @@ type DNSFacts struct {
 	// it checked the signatures, and not this program's work.
 	ResolverValidated bool `json:"resolverValidated"`
 
+	// ResolverRejected is true where the resolver failed the zone's own
+	// records and returned them when asked again not to check: what a
+	// validating resolver does with a zone whose signatures do not hold. The
+	// records above were then read that way, and what they are worth is what
+	// checking the signatures below found.
+	ResolverRejected bool `json:"resolverRejected,omitempty"`
+
+	// What checking the signatures at the top of the zone with its own keys
+	// found: the one over the key set, made by a key the parent's digest
+	// names, and the one over the record at the top, made by a key in that set
+	// (RFC 4035 §5.3). This program's work, unlike the AD bit.
+	//
+	// SignaturesVerified is both holding. SignatureFault says which does not,
+	// where one was checked and failed; SignatureCheckReason says why they
+	// were not checked, where they were not (R4). At most one is set, and
+	// none of them where the chain itself did not match.
+	SignaturesVerified   bool   `json:"signaturesVerified"`
+	SignatureFault       string `json:"signatureFault,omitempty"`
+	SignatureCheckReason string `json:"signatureCheckReason,omitempty"`
+
 	// Policy names the rule set, carried beside the facts for the reason every
 	// other check carries it.
 	Policy string `json:"policy"`
@@ -519,6 +539,39 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 				"is what a key rotation that never reached the registrar looks like. Validating "+
 				"resolvers treat the whole zone as bogus and return nothing.",
 			rfc4035)
+	}
+
+	// The signatures the matched link exists for, checked here with the
+	// zone's own keys. A key the parent names that does not sign the key set,
+	// or a key set whose keys do not sign the zone, is a zone every validating
+	// resolver refuses, exactly as a digest that matches nothing is.
+	if f.Signed && f.ChainReason == "" && f.ChainMatched {
+		switch {
+		case f.SignatureFault != "":
+			rationale := "Checked with the zone's own keys, " + f.SignatureFault + ". Validating " +
+				"resolvers treat the zone as bogus and return nothing; usually a key rollover " +
+				"stopped halfway or the signer stopped re-signing."
+			if f.ResolverRejected {
+				rationale += " The resolver this scan used did exactly that, and answered only " +
+					"when told not to check."
+			}
+			add("dns.dnssec-signature-invalid", Insecure,
+				"A signature at the top of this zone does not hold", rationale, rfc4035)
+		case f.SignatureCheckReason != "":
+			unsettled("The signatures were not checked: " + f.SignatureCheckReason + ".")
+		}
+	}
+	if f.ResolverRejected && f.SignatureFault == "" {
+		switch {
+		case f.SignaturesVerified:
+			unsettled("The resolver failed this zone's records and returned them only when told " +
+				"not to check, which is what a validating resolver does when signatures fail. This " +
+				"check's own reading of the keys and the top of the zone found them sound, so what " +
+				"it rejected was not established.")
+		default:
+			note("The resolver failed this zone's records and returned them only when told not " +
+				"to check, which is what a validating resolver does when signatures fail.")
+		}
 	}
 
 	for _, ds := range f.Signers {
@@ -759,8 +812,11 @@ var LimitDNSAsksTheResolver = StandingLimit{
 		"each allows a zone transfer, whether a server inside the domain (never a " +
 		"provider's) answers for other domains, and which servers a parent server hands " +
 		"out. The transfer is closed before any record is read. The DNSSEC chain is " +
-		"checked by comparing key digests with the parent's; whether every signature " +
-		"verifies is the resolver's word.",
+		"checked by comparing key digests with the parent's, and the signatures over the " +
+		"zone's keys and over the record at the top of the zone are verified here with " +
+		"those keys; signatures on other records are the resolver's word. Where the " +
+		"resolver fails those three questions, they are asked once more with checking " +
+		"disabled, so what is wrong can be said.",
 }
 
 // DNSStandingLimits are true of every DNS check this program runs.

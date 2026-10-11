@@ -14,7 +14,9 @@
 // # What this does not do
 //
 // It does not validate DNSSEC. It reads the AD bit the resolver set and
-// reports it, which is a claim about what somebody else did. On a path an
+// reports it, which is a claim about what somebody else did, and it keeps the
+// signatures and keys that came with an answer so internal/dnsscan can check
+// the ones at the top of a zone itself. On a path an
 // attacker controls the bit can be flipped like anything else in the message;
 // what makes it worth reading at all is that the alternative — running a
 // validating resolver here — puts this machine's address in front of every
@@ -243,6 +245,12 @@ type SOA struct {
 	Retry   uint32 `json:"retry"`
 	Expire  uint32 `json:"expire"`
 	Minimum uint32 `json:"minimum"`
+
+	// RDATA is the record in the form a signature over it is taken: both names
+	// expanded and lowercased, then the five numbers (RFC 4034 §6.2). Kept as
+	// bytes because the names above are cleaned for display, and a signature
+	// is over what was published rather than over what is safe to print.
+	RDATA []byte `json:"-"`
 }
 
 // DS is what a parent zone holds about its child's key: enough to recognise
@@ -300,13 +308,16 @@ type NSEC3PARAM struct {
 	SaltLength int `json:"saltLength"`
 }
 
-// RRSIG is the header of a signature over a record set (RFC 4034 §3.1).
+// RRSIG is a signature over a record set (RFC 4034 §3.1).
 //
-// The signature itself is not kept. What a report needs from this record is
-// when it stops being accepted: a validating resolver refuses a signature
-// outside its validity period, and a zone whose signatures have expired is off
-// the internet for everybody behind one — the same failure a broken chain
-// causes, arriving on a date nobody was watching.
+// Two things a report needs from it. When it stops being accepted: a
+// validating resolver refuses a signature outside its validity period, and a
+// zone whose signatures have expired is off the internet for everybody behind
+// one — the same failure a broken chain causes, arriving on a date nobody was
+// watching. And whether it holds at all, which internal/dnsscan checks with
+// the zone's own keys rather than taking a resolver's word for it; this
+// package reads the record and keeps what that check needs, and judging it is
+// the other package's job.
 type RRSIG struct {
 	// Covered is the record type this signature is over, so a caller can tell
 	// the signature on the zone's own record from one that came with it.
@@ -323,6 +334,24 @@ type RRSIG struct {
 	// reads plainly and will have to read modularly before 2106.
 	Inception  time.Time `json:"inception"`
 	Expiration time.Time `json:"expiration"`
+
+	// Labels is how many labels the owner name had when it was signed, which
+	// is how a validator tells a record expanded from a wildcard from one
+	// published at its name; OriginalTTL is the TTL it was signed with, which
+	// a resolver's cache counts down and the signature does not.
+	Labels      uint8  `json:"labels"`
+	OriginalTTL uint32 `json:"originalTTL"`
+
+	// SignerWire is the signer's name as the record carries it, folded to
+	// lowercase, and Signature the signature's own bytes. Both are what
+	// checking it needs, and neither is shown.
+	//
+	// Nil where the signer's name was compressed: RFC 4034 §3.1.7 forbids
+	// that, the record's own bytes then do not say where the signature
+	// starts, and a signature that cannot be located is not checked rather
+	// than checked against the wrong bytes.
+	SignerWire []byte `json:"-"`
+	Signature  []byte `json:"-"`
 }
 
 // TLSA is one DANE record.
@@ -491,6 +520,9 @@ func resolverList(addrs []string) []string {
 type resolverSet struct {
 	servers []string
 	chosen  int
+
+	// unchecked sets the checking-disabled bit on every query to this set.
+	unchecked bool
 }
 
 // ask sends one query, moving to the next resolver until one answers.
@@ -512,7 +544,7 @@ func (c *Client) ask(ctx context.Context, set *resolverSet, name string, qtype u
 	for i := range set.servers {
 		at := (set.chosen + i) % len(set.servers)
 
-		r, err := c.exchange(ctx, set.servers[at], name, qtype)
+		r, err := c.exchange(ctx, set.servers[at], name, qtype, set.unchecked)
 		if err == nil {
 			set.chosen = at
 			return r, nil
@@ -633,7 +665,7 @@ type reply struct {
 	recursionOffered bool
 }
 
-func (c *Client) exchange(ctx context.Context, server, name string, qtype uint16) (reply, error) {
+func (c *Client) exchange(ctx context.Context, server, name string, qtype uint16, unchecked bool) (reply, error) {
 	id, err := randomUint16()
 	if err != nil {
 		return reply{}, fmt.Errorf("dnsclient: generating a query id: %w", err)
@@ -648,12 +680,28 @@ func (c *Client) exchange(ctx context.Context, server, name string, qtype uint16
 	}
 
 	query := buildQuery(id, question, qtype)
+	if unchecked {
+		withCheckingDisabled(query)
+	}
 
 	raw, err := c.roundTrip(ctx, server, query)
 	if err != nil {
 		return reply{}, err
 	}
-	return parseReply(raw, id, question, qtype)
+	r, err := parseReply(raw, id, question, qtype)
+	if unchecked {
+		// Asked not to check, a resolver's AD bit says nothing a caller can
+		// lean on, so it is not passed on as though it did.
+		r.validated = false
+	}
+	return r, err
+}
+
+// withCheckingDisabled sets the CD bit in a query's header (RFC 4035 §3.2.2).
+func withCheckingDisabled(query []byte) {
+	const checkingDisabled = 0x0010
+	flags := binary.BigEndian.Uint16(query[2:4])
+	binary.BigEndian.PutUint16(query[2:4], flags|checkingDisabled)
 }
 
 func (c *Client) roundTrip(ctx context.Context, server string, query []byte) ([]byte, error) {
@@ -1145,14 +1193,35 @@ func (c *Client) LookupDNSKEY(ctx context.Context, name string) (ZoneAnswer, err
 	return c.zone(ctx, name, TypeDNSKEY)
 }
 
+// LookupUnchecked asks one question with the checking-disabled bit set, so a
+// validating resolver hands over what the zone publishes even where the
+// signatures over it fail (RFC 4035 §3.2.2).
+//
+// That is the only way to say what failed. A validating resolver answers a
+// zone whose DNSSEC does not hold with SERVFAIL and nothing else, which is
+// the same answer it gives for a server that is down; asked again with this
+// bit, it returns the records and their signatures, and internal/dnsscan
+// checks them itself. Nothing is believed because it came back: Validated is
+// always false here, and what the answer is worth is the caller's own check.
+//
+// The same resolver, the same question, one bit different. Nobody is asked
+// who was not asked already.
+func (c *Client) LookupUnchecked(ctx context.Context, name string, qtype uint16) (ZoneAnswer, error) {
+	return c.zoneWith(ctx, name, qtype, true)
+}
+
 // zone asks one question about one name and sorts the answer into ZoneAnswer.
 func (c *Client) zone(ctx context.Context, name string, qtype uint16) (ZoneAnswer, error) {
+	return c.zoneWith(ctx, name, qtype, false)
+}
+
+func (c *Client) zoneWith(ctx context.Context, name string, qtype uint16, unchecked bool) (ZoneAnswer, error) {
 	servers, err := c.servers()
 	if err != nil {
 		return ZoneAnswer{}, err
 	}
 
-	reply, err := c.ask(ctx, &resolverSet{servers: servers}, name, qtype)
+	reply, err := c.ask(ctx, &resolverSet{servers: servers, unchecked: unchecked}, name, qtype)
 	out := ZoneAnswer{Existed: reply.existed, Validated: reply.validated}
 	if err != nil {
 		return out, err

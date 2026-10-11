@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v7`, `porch-web-v4`, `porch-mail-v3` and `porch-dns-v2`. Reports
+`porch-tls-v7`, `porch-web-v4`, `porch-mail-v3` and `porch-dns-v3`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,28 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-dns-v2` → `porch-dns-v3`
+
+Unreleased.
+
+- **Added `dns.dnssec-signature-invalid`, insecure.** The parent's digest
+  matches a key, but the signatures at the top of the zone do not hold when
+  checked with the zone's own keys: the key the digest names does not sign the
+  key set, or no key in the set signs the record at the top of the zone, or the
+  signature is outside its validity period (RFC 4035 §5.3). Until now this was
+  the resolver's word. A signature is found wanting only where its key was
+  read and its algorithm is one Porch verifies; anything else is reported as
+  not checked.
+- Where the resolver fails the zone's own records, which is what a validating
+  resolver does with a zone whose signatures do not hold, the top of the zone,
+  the digest and the keys are asked for once more with checking disabled
+  (RFC 4035 §3.2.2). Such a zone used to be reported as a name inside another
+  zone, with nothing graded.
+- **Reported, not graded:** whether the resolver rejected the zone, and why the
+  signatures were not checked where they were not.
 
 ---
 
