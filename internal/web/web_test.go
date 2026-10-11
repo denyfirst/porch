@@ -335,7 +335,8 @@ func TestEmptyFindingsDistinguishesCleanFromAbsent(t *testing.T) {
 	source := string(script)
 
 	for _, required := range []string{
-		"Nothing here fell short of the rules.",
+		"No check found a rule broken.",
+		"A check that did not run or graded nothing is not a pass.",
 		"Nothing was measured, so nothing could be graded.",
 		`verdict === "ungraded"`,
 	} {
@@ -348,7 +349,7 @@ func TestEmptyFindingsDistinguishesCleanFromAbsent(t *testing.T) {
 	// straight through hands them undefined exactly when the distinction
 	// matters, because the field is omitted rather than set to "ungraded".
 	if strings.Contains(source, "notes(data.notes, data.verdict)") ||
-		strings.Contains(source, "findings(data.findings, data.verdict)") {
+		strings.Contains(source, "reportShow(frame, entry, data.verdict)") {
 		t.Error("a section is given data.verdict, which is absent for an ungraded scan; give it the resolved value")
 	}
 }

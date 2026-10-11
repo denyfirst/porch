@@ -40,6 +40,12 @@ func TestLimitsOpenOnlyWhenTheyAreTheWholeReport(t *testing.T) {
 	body := source
 	if i := strings.Index(body, "function notes(list, verdict, methodPage)"); i >= 0 {
 		body = body[i:]
+		// To the end of the renderer and no further: the report's tally,
+		// later in the file, counts insecure findings, and that is not this
+		// block opening for them.
+		if end := strings.Index(body, "\n}\n"); end >= 0 {
+			body = body[:end]
+		}
 	} else {
 		t.Fatal("the script has no notes renderer")
 	}
@@ -74,7 +80,11 @@ func TestLimitsOpenOnlyWhenTheyAreTheWholeReport(t *testing.T) {
 	// voice, and it is six phrases rather than five paragraphs.
 	//
 	// The counts stay in the summaries either way, so folding is not hiding.
-	opens := map[string]bool{"observed": false, "unsettled": false}
+	//
+	// What could not be established opens, since 2026-10-11. It is the half
+	// of a report that says what the rest is worth (R4), and it is short; a
+	// reader asked to see it without opening anything.
+	opens := map[string]bool{"observed": false, "unsettled": true}
 	for kind, want := range opens {
 		i := strings.Index(source, `kind: "`+kind+`"`)
 		if i < 0 {

@@ -340,7 +340,7 @@ func TestTheSelectorFieldGoesOnlyToTheMailCheck(t *testing.T) {
 		t.Error("the selectors are read without asking which check is running, so they are sent " +
 			"to checks that refuse them")
 	}
-	if !strings.Contains(src, "check(target, spec, selectorsAsked(name))") {
+	if !strings.Contains(src, "check(target, entry.spec, selectorsAsked(entry.name))") {
 		t.Error("nothing carries the selectors into the request")
 	}
 }

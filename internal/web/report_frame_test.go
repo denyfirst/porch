@@ -1,0 +1,133 @@
+package web
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/denyfirst/porch/internal/demo"
+)
+
+// Every report is drawn in one frame, and each check in it has a state of its
+// own.
+//
+// Read from the source, as the other script tests are: nothing here runs it.
+// What matters is that a check's verdict is written to that check's tile only,
+// that a failure is written as "not run" rather than left as "running", that
+// the checks run one at a time, and that every page that draws a report draws
+// it through the frame.
+func TestEachCheckHasATileAndAStateOfItsOwn(t *testing.T) {
+	src := script(t)
+	for _, want := range []string{
+		`entry.state.className = "report-tile-state " + verdictClass("stamp", verdict);`,
+		`entry.state.textContent = "not run";`,
+		`entry.body.appendChild(entry.spec.build(data));`,
+		`tiles.setAttribute("aria-label", "Checks in this report");`,
+		`tile.href = "#report-" + name;`,
+		// The console, the demonstration, a check's own page and History.
+		`const frame = reportFrame(consoleResults, target, CHECK_ORDER, chosen);`,
+		`const frame = reportFrame(porchResults, target, CHECK_ORDER, chosen);`,
+		`const frame = reportFrame(result, domainOnly(target), [CHECK_NAME], [CHECK_NAME]);`,
+		`frame = reportFrame(historyReport, entry.target, [record.check], [record.check], { when: record.date });`,
+		`await reportRun(frame, entry, () => check(target, entry.spec));`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the report frame no longer contains %q", want)
+		}
+	}
+	// One at a time: each check spends from the host's budget.
+	if strings.Contains(src, "Promise.all(") {
+		t.Error("a page runs its checks at once, which the per-host budget exists to discourage")
+	}
+	// The builders draw evidence; the frame draws the verdict and the list of
+	// what needs doing, so neither is drawn twice.
+	for _, builder := range []string{"buildTLS", "buildWeb", "buildDNS", "buildMail"} {
+		if body := functionBody(t, src, builder); strings.Contains(body, "summary(data)") {
+			t.Errorf("%s draws the summary the frame draws", builder)
+		}
+	}
+}
+
+// Every check keeps its tile when fewer are chosen.
+//
+// One chosen check drew a single tab across the whole row once. The others are
+// drawn switched off, saying so, with no section behind them.
+func TestAnUnchosenCheckKeepsATileItCannotOpen(t *testing.T) {
+	body := functionBody(t, script(t), "reportFrame")
+	for _, want := range []string{
+		"for (const name of names) {",
+		`const on = chosen.includes(name);`,
+		`on ? "report-tile" : "report-tile report-tile-off"`,
+		`on ? "running" : "not selected"`,
+		"continue;",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the frame no longer contains %q", want)
+		}
+	}
+	// The switch-off comes before the section is made, so an unchosen check
+	// has none.
+	if strings.Index(body, "continue;") > strings.Index(body, `el("section", "report-check")`) {
+		t.Error("an unchosen check is given a section before it is skipped")
+	}
+	if !strings.Contains(stylesheet(t), ".report-tile-off {") {
+		t.Error("a switched-off tile is not styled")
+	}
+}
+
+// The help under the form says one thing and leads to the steps on the page.
+func TestThePorchHelpLeadsToTheSteps(t *testing.T) {
+	if !demo.Enabled {
+		t.Skip("the Porch page is the demonstration's")
+	}
+	page := get(t, "/porch").Body.String()
+	_, help, _ := strings.Cut(page, `id="porch-help"`)
+	help, _, _ = strings.Cut(help, "</p>")
+	if !strings.Contains(help, `<a href="#start">run Porch yourself</a>`) || !strings.Contains(page, `id="start"`) {
+		t.Errorf("the help does not lead to the steps on this page:%s", help)
+	}
+	if strings.Contains(help, "/privacy") || strings.Contains(help, "/terms") {
+		t.Errorf("the help repeats what /docs lists:%s", help)
+	}
+}
+
+// The inventory is drawn in the same frame, with a tile for every source it
+// reads and nothing above the list but a name somebody else could take.
+func TestTheNamesAreDrawnInTheFrame(t *testing.T) {
+	src := script(t)
+
+	// One tile per source, and the same sources the inventory reads: a source
+	// added to one and not the other is a tile missing, or a tile for nothing.
+	readings := functionBody(t, src, "readings")
+	start := strings.Index(src, "const NAME_SOURCES = [")
+	if start < 0 {
+		t.Fatal("the names frame names no sources")
+	}
+	sources := src[start:]
+	sources = sources[:strings.Index(sources, "];")]
+	for _, field := range []string{"zone", "nsec", "logs", "records", "passive", "presented", "reverse", "known"} {
+		if !strings.Contains(readings, "data."+field) || !strings.Contains(sources, `"`+field+`"]`) {
+			t.Errorf("the source %q is not both read and tiled", field)
+		}
+	}
+
+	frame := functionBody(t, src, "namesFrame")
+	for _, want := range []string{
+		`if (reading.reason) state = "not established";`,
+		`else if (!reading.asked) state = "not asked";`,
+		`status(n) === "dangling"`,
+		"Whoever claims that name next",
+		"body.appendChild(buildNames(data));",
+	} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("the names frame no longer contains %q", want)
+		}
+	}
+	for _, want := range []string{
+		`if (CHECK_NAME === "names") namesFrame(result, domainOnly(target), data);`,
+		`namesFrame(historyReport, entry.target, record.report, { when: record.date });`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("an inventory is drawn outside the frame: %q is missing", want)
+		}
+	}
+}

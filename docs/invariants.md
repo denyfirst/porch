@@ -1406,10 +1406,19 @@ in `internal/scan.checkReceipts`
 
 ### R16 — One result, two renderers, one set of facts
 
-*Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
-`internal/scan.Result.Notes`
+Every page that draws a report draws it in one frame (`reportFrame` in
+`internal/web/assets/app.js`): the console, the demonstration, a check's own
+page and History, through the same builders, and the names inventory in the
+same cover (`namesFrame`). The builders draw evidence; the frame draws the
+verdict and the one list of rules found broken, so neither is drawn twice.
 
-*Guarded by:* `TestBothFacesOfTheReportShowTheSameFacts`,
+*Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
+`internal/scan.Result.Notes`, `internal/web/assets/app.js` (`reportFrame`,
+`reportShow`, `namesFrame`)
+
+*Guarded by:* `TestEachCheckHasATileAndAStateOfItsOwn`,
+`TestAnUnchosenCheckKeepsATileItCannotOpen`, `TestTheNamesAreDrawnInTheFrame`,
+`TestBothFacesOfTheReportShowTheSameFacts`,
 `TestAReportSaysWhatWasMeasured`, `TestThePageReadsTheLegacyFieldsTheAPISends`,
 `TestSSL3IsAVersionRowInTheSameWords`,
 `TestTheHandWrittenHellosArePrintedWithWhatTheyFound`,
