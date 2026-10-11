@@ -354,3 +354,47 @@ func TestAnAuthorityIsBoundOnlyIfEveryPropertyBindsIt(t *testing.T) {
 		t.Errorf("a record permitting nobody reads as %+v", none)
 	}
 }
+
+// An authority is written once, with how far it is held, and the accounts are
+// named in the note rather than on the line.
+//
+// This project's own record set came out on 2026-10-11 as
+//
+//	issuance limited to letsencrypt.org (accounturi=https://acme-staging-v02…,
+//	validationmethods=dns-01) and letsencrypt.org (accounturi=https://acme-v02…,
+//	validationmethods=dns-01); wildcards refused (from denyfirst.dev)
+//
+// which is one authority, two accounts and one method, and read as noise.
+func TestAnAuthorityIsWrittenOnceWithWhatItIsHeldTo(t *testing.T) {
+	const prod = "https://acme-v02.api.letsencrypt.org/acme/acct/3624113041"
+	const staging = "https://acme-staging-v02.api.letsencrypt.org/acme/acct/324153244"
+	got := DescribeIssuance(IssuanceFacts{Checked: true, Exists: true, SearchComplete: true,
+		FoundAt: "denyfirst.dev", Wildcards: []string{";"}, Authorities: []string{
+			"letsencrypt.org; accounturi=" + staging + "; validationmethods=dns-01",
+			"letsencrypt.org; accounturi=" + prod + "; validationmethods=dns-01",
+		}})
+	const want = "issuance limited to letsencrypt.org (2 accounts, dns-01 only); wildcards refused (from denyfirst.dev)"
+	if got.Line != want {
+		t.Errorf("line = %q, want %q", got.Line, want)
+	}
+	notes := strings.Join(Texts(got.Notes), " ")
+	for _, account := range []string{prod, staging} {
+		if !strings.Contains(notes, account) {
+			t.Errorf("the notes do not name %s: %s", account, notes)
+		}
+	}
+
+	// Held only where every value holds it: one value without the parameters
+	// leaves the authority open, and the line does not count accounts for it.
+	// A parameter RFC 8657 does not define is kept as written.
+	for values, want := range map[string]string{
+		"letsencrypt.org; accounturi=" + prod + "|letsencrypt.org":    "letsencrypt.org",
+		"letsencrypt.org; validationmethods=dns-01,http-01":           "letsencrypt.org (dns-01 or http-01 only)",
+		"pki.goog; accounturi=" + prod + "; cansignhttpexchanges=yes": "pki.goog (1 account, cansignhttpexchanges=yes)",
+		"LetsEncrypt.org|letsencrypt.org":                             "LetsEncrypt.org",
+	} {
+		if got := readable(strings.Split(values, "|")); len(got) != 1 || got[0] != want {
+			t.Errorf("readable(%q) = %q, want %q", values, got, want)
+		}
+	}
+}

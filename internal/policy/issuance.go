@@ -244,12 +244,30 @@ func describeBindings(bs []Binding) []Note {
 		return nil
 	case len(unbound) == 0:
 		return []Note{Observed("Only the accounts the record names may ask " + list(bound) +
-			" for a certificate for this name (RFC 8657 accounturi).")}
+			" for a certificate for this name (RFC 8657 accounturi)." + namedAccounts(bs))}
 	default:
 		return []Note{Observed("Any account at " + list(unbound) + " may ask for a certificate for " +
 			"this name. An accounturi parameter (RFC 8657) limits that to your own account, and " +
 			"validationmethods to the way you prove control.")}
 	}
+}
+
+// namedAccounts lists the accounts each bound authority is held to, for the
+// note that says it is held: the summary line counts them, and a reader
+// checking that the accounts are their own needs to see which they are.
+func namedAccounts(bs []Binding) string {
+	var parts []string
+	for _, b := range bs {
+		if !b.Bound() {
+			continue
+		}
+		name := b.Authority
+		if b.Wildcard {
+			name += " for wildcards"
+		}
+		parts = append(parts, " At "+name+": "+list(b.Accounts)+".")
+	}
+	return strings.Join(parts, "")
 }
 
 // DescribeIssuance turns a resolver's answer into what a reader should see.
@@ -414,34 +432,97 @@ func describeAuthorities(f IssuanceFacts) string {
 // authorises that authority to sign Signed HTTP Exchanges, which is a wider
 // power than issuing an ordinary certificate, and a reader deciding whether a
 // zone's restrictions are tight enough needs to see it.
+//
+// Each authority is written once, however many values name it, and RFC 8657's
+// two parameters are summed up rather than printed: how many accounts it is
+// held to, and by which ways of proving control. Printed, this project's own
+// record set — one authority, two accounts, DNS only — came out on 2026-10-11
+// as the authority twice, each followed by an account URL and a method, and
+// read as noise on the line that matters. The URLs are in the note that says
+// the authority is held to them, and in the report's bindings. As bindings
+// does, an authority is held to accounts or methods only if every value naming
+// it says so.
 func readable(values []string) []string {
-	out := make([]string, 0, len(values))
+	type entry struct {
+		domain                    string
+		accounts, methods, others []string
+		unbound, anyMethod        bool
+	}
+	var order []*entry
+	by := map[string]*entry{}
 	for _, value := range values {
-		domain, params, found := strings.Cut(value, ";")
+		domain, params, _ := strings.Cut(value, ";")
 		domain = strings.TrimSpace(domain)
 
 		if domain == "" {
 			// An empty value permits nobody, which is meaningful on its own
 			// and must not silently vanish from a list.
-			out = append(out, "an empty value, which names no authority")
-			continue
-		}
-		if !found {
-			out = append(out, domain)
+			order = append(order, &entry{})
 			continue
 		}
 
-		var settings []string
+		key := strings.ToLower(domain)
+		e, ok := by[key]
+		if !ok {
+			e = &entry{domain: domain}
+			by[key] = e
+			order = append(order, e)
+		}
+		var accounts, methods []string
 		for _, p := range strings.Split(params, ";") {
-			if p = strings.TrimSpace(p); p != "" {
-				settings = append(settings, p)
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			name, val, _ := strings.Cut(p, "=")
+			switch strings.ToLower(strings.TrimSpace(name)) {
+			case "accounturi":
+				if v := strings.TrimSpace(val); v != "" {
+					accounts = append(accounts, v)
+				}
+			case "validationmethods":
+				for _, m := range strings.Split(val, ",") {
+					if m = strings.TrimSpace(m); m != "" {
+						methods = append(methods, m)
+					}
+				}
+			default:
+				e.others = append(e.others, p)
 			}
 		}
-		if len(settings) == 0 {
-			out = append(out, domain)
+		if len(accounts) == 0 {
+			e.unbound = true
+		}
+		if len(methods) == 0 {
+			e.anyMethod = true
+		}
+		e.accounts = append(e.accounts, accounts...)
+		e.methods = append(e.methods, methods...)
+	}
+
+	out := make([]string, 0, len(order))
+	for _, e := range order {
+		if e.domain == "" {
+			out = append(out, "an empty value, which names no authority")
 			continue
 		}
-		out = append(out, domain+" ("+strings.Join(settings, ", ")+")")
+		var settings []string
+		if !e.unbound {
+			if n := len(unique(e.accounts)); n == 1 {
+				settings = append(settings, "1 account")
+			} else {
+				settings = append(settings, fmt.Sprintf("%d accounts", n))
+			}
+		}
+		if !e.anyMethod {
+			settings = append(settings, strings.Join(unique(e.methods), " or ")+" only")
+		}
+		settings = append(settings, unique(e.others)...)
+		if len(settings) == 0 {
+			out = append(out, e.domain)
+			continue
+		}
+		out = append(out, e.domain+" ("+strings.Join(settings, ", ")+")")
 	}
 	return out
 }
