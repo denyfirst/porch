@@ -105,8 +105,13 @@
         handshake ends.</li>
       <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, and
         <code>/.well-known/security.txt</code>.</li>
+      <li><strong>Exposure:</strong> eleven paths of files that should never
+        be served, such as <code>/.git/HEAD</code>, one GET each, and one
+        connection to each of sixteen ports of services that should not face
+        the internet, closed as it opens. Only our own hosts.</li>
       <li><strong>Mail:</strong> DNS lookups, the MTA-STS policy file, and a
-        STARTTLS check on port 25. No mail is sent.</li>
+        STARTTLS check on port 25, with a second short one asking whether TLS
+        1.1 or older is still accepted. No mail is sent.</li>
       <li><strong>DNS:</strong> lookups, and questions to our name servers.
         A zone transfer is asked for and not read.</li>
     </ul>
@@ -119,11 +124,15 @@
     </p>
 
     <p>
-      Others are asked only about us: our certificate authority for its
-      revocation list (no certificate authority is asked about one
-      certificate), Cert Spotter for our certificates (crt.sh when Cert
-      Spotter does not answer), our mail provider on port 25,
-      and the <code>.dev</code> registry for our name servers.
+      Others are asked only about us, and only the sources that hold the
+      answer: our certificate authority for its revocation list, and its
+      responder whether our certificate was revoked where the certificate
+      names one; Cert Spotter for our certificates and the names they carry;
+      hstspreload.org whether our hosts are on the HSTS preload list; RIPEstat
+      whether the routes to our addresses are signed;
+      our mail provider on port 25; and the <code>.dev</code> registry for our
+      name servers and our registration, with IANA's list of registries, read
+      whole.
     </p>
 
     <h2 id="stopping">Stopping a scan</h2>

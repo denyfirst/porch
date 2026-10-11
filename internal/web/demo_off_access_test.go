@@ -158,7 +158,7 @@ func TestHistoryBehindAPasswordListsOpensAndDeletes(t *testing.T) {
 		`historyRequest("GET", "/api/v1/history/" + entry.id)`,
 		`historyRequest("DELETE", "/api/v1/history/" + entry.id)`,
 		"if (!window.confirm(",
-		"view.build(record.report)",
+		"reportShow(frame, frame.entries[0], record.report);",
 		`window.location.assign("/login")`,
 	} {
 		if !strings.Contains(history, want) {

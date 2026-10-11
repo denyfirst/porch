@@ -14,6 +14,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/denyfirst/porch/internal/policy"
 )
 
 // fixture is denyfirst.dev's certificate and the authority that issued it, as
@@ -138,6 +141,36 @@ func TestTheReceiptsInARealCertificateVerify(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Errorf("the receipts name %q, and not %s", joined, want)
 		}
+	}
+
+	// What Chrome's policy reads from each: who runs the log, which kind it
+	// is, and when the receipt was signed — around the certificate's start,
+	// since a receipt is issued for a precertificate moments before it.
+	operators := map[string]bool{}
+	tiled := 0
+	var counted []policy.CTReceipt
+	for _, r := range receipts {
+		if r.Operator == "" {
+			t.Errorf("the receipt from %s names no operator", r.Log)
+		}
+		operators[r.Operator] = true
+		if r.Tiled {
+			tiled++
+		}
+		if r.Issued.Before(leaf.NotBefore.Add(-24*time.Hour)) || r.Issued.After(leaf.NotBefore.Add(24*time.Hour)) {
+			t.Errorf("the receipt from %s was issued %v, and the certificate starts %v", r.Log, r.Issued, leaf.NotBefore)
+		}
+		counted = append(counted, policy.CTReceipt{Verified: r.Status == Verified, LogID: r.LogID,
+			Operator: r.Operator, State: r.State, Since: r.Since, Issued: r.Issued, Tiled: r.Tiled})
+	}
+	if len(operators) != 2 || tiled != 1 {
+		t.Errorf("%d operators and %d tiled logs, want two operators and one tiled log", len(operators), tiled)
+	}
+
+	// And the certificate Chrome accepts every day is one Chrome's policy, as
+	// applied here, accepts.
+	if got := policy.JudgeChromeCT(counted, leaf.NotAfter.Sub(leaf.NotBefore), ""); !got.Met {
+		t.Errorf("a certificate Chrome accepts does not meet Chrome's policy here: %+v", got)
 	}
 }
 

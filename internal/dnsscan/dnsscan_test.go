@@ -1,10 +1,13 @@
 package dnsscan
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	// #nosec G505 -- a test that reads a SHA-1 digest computes one
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"net/netip"
 	"strings"
@@ -33,8 +36,15 @@ type zone struct {
 	validated bool
 
 	// signatures are the RRSIG records the SOA answer carries, which is where
-	// the date a signed zone stops being accepted comes from.
-	signatures []dnsclient.RRSIG
+	// the date a signed zone stops being accepted comes from, and
+	// keySignatures the ones the key set's answer carries.
+	signatures    []dnsclient.RRSIG
+	keySignatures []dnsclient.RRSIG
+
+	// unchecked records the types asked again with checking disabled. Asked
+	// that way, the table answers whatever fail says for the plain question,
+	// as a validating resolver hands over a zone it failed.
+	unchecked []uint16
 
 	// fail names the lookups that answer with an error rather than with
 	// records, which is a different thing everywhere in this project.
@@ -72,11 +82,15 @@ func (z *zone) LookupSOA(_ context.Context, _ string) (dnsclient.ZoneAnswer, err
 	if err := z.fail["soa"]; err != nil {
 		return dnsclient.ZoneAnswer{}, err
 	}
+	return z.soaAnswer(), nil
+}
+
+func (z *zone) soaAnswer() dnsclient.ZoneAnswer {
 	out := dnsclient.ZoneAnswer{Existed: true, Validated: z.validated, Signatures: z.signatures}
 	if z.soa != nil {
 		out.SOA = []dnsclient.SOA{*z.soa}
 	}
-	return out, nil
+	return out
 }
 
 func (z *zone) LookupDS(_ context.Context, _ string) (dnsclient.ZoneAnswer, error) {
@@ -90,7 +104,29 @@ func (z *zone) LookupDNSKEY(_ context.Context, _ string) (dnsclient.ZoneAnswer, 
 	if err := z.fail["dnskey"]; err != nil {
 		return dnsclient.ZoneAnswer{}, err
 	}
-	return dnsclient.ZoneAnswer{Keys: z.keys, Existed: true, Validated: z.validated}, nil
+	return z.keyAnswer(), nil
+}
+
+func (z *zone) keyAnswer() dnsclient.ZoneAnswer {
+	return dnsclient.ZoneAnswer{Keys: z.keys, Signatures: z.keySignatures, Existed: true, Validated: z.validated}
+}
+
+func (z *zone) LookupUnchecked(_ context.Context, _ string, qtype uint16) (dnsclient.ZoneAnswer, error) {
+	z.unchecked = append(z.unchecked, qtype)
+	if err := z.fail["unchecked"]; err != nil {
+		return dnsclient.ZoneAnswer{}, err
+	}
+	var out dnsclient.ZoneAnswer
+	switch qtype {
+	case dnsclient.TypeSOA:
+		out = z.soaAnswer()
+	case dnsclient.TypeDS:
+		out = dnsclient.ZoneAnswer{DS: z.ds, Existed: true}
+	case dnsclient.TypeDNSKEY:
+		out = z.keyAnswer()
+	}
+	out.Validated = false
+	return out, nil
 }
 
 func (z *zone) LookupCNAME(_ context.Context, name string) (dnsclient.ZoneAnswer, error) {
@@ -117,25 +153,98 @@ func (z *zone) LookupTXT(_ context.Context, _ string) (dnsclient.TXTAnswer, erro
 
 // served is a zone that is delegated properly and signed properly, which every
 // test below then breaks in one way.
+//
+// Signed for real: a key signing key the parent's digest names signs the key
+// set, and a zone signing key in it signs the record at the top, both Ed25519
+// from fixed seeds. The signatures are valid from 2000 to 2100, so a test with
+// a clock of its own does not find them outside their period by accident.
 func served(t *testing.T) *zone {
 	t.Helper()
 
-	key := dnsclient.DNSKEY{Flags: 257, Protocol: 3, Algorithm: 13, Key: []byte("a key, in the test's imagination")}
+	ksk, zsk := testKey(kskSeed, 257), testKey(zskSeed, 256)
+	soa := &dnsclient.SOA{Primary: "ns1.example.net", Mailbox: "noc.example.com", Serial: 7, Refresh: 7200, Retry: 3600, Expire: 1209600, Minimum: 3600}
+	soa.RDATA = soaRDATA(t, *soa)
+	keys := []dnsclient.DNSKEY{ksk, zsk}
 	return &zone{
 		addresses: map[string][]string{
 			"example.com":     {"192.0.2.10", "2001:db8:1::10"},
 			"ns1.example.net": {"192.0.2.53"},
 			"ns2.example.org": {"198.51.100.53"},
 		},
-		ns:      []string{"ns1.example.net", "ns2.example.org"},
-		soa:     &dnsclient.SOA{Primary: "ns1.example.net", Mailbox: "noc.example.com", Serial: 7, Refresh: 7200, Retry: 3600, Expire: 1209600, Minimum: 3600},
-		keys:    []dnsclient.DNSKEY{key},
-		ds:      []dnsclient.DS{signerFor(t, "example.com", key)},
-		text:    []string{"v=spf1 -all"},
-		alias:   map[string][]string{},
-		missing: map[string]bool{},
-		fail:    map[string]error{},
+		ns:            []string{"ns1.example.net", "ns2.example.org"},
+		soa:           soa,
+		keys:          keys,
+		keySignatures: []dnsclient.RRSIG{sign(t, kskSeed, ksk, dnsclient.TypeDNSKEY, keySet(keys), signedFrom, signedUntil)},
+		signatures:    []dnsclient.RRSIG{sign(t, zskSeed, zsk, dnsclient.TypeSOA, [][]byte{soa.RDATA}, signedFrom, signedUntil)},
+		ds:            []dnsclient.DS{signerFor(t, "example.com", ksk)},
+		text:          []string{"v=spf1 -all"},
+		alias:         map[string][]string{},
+		missing:       map[string]bool{},
+		fail:          map[string]error{},
 	}
+}
+
+var (
+	kskSeed = bytes.Repeat([]byte{1}, ed25519.SeedSize)
+	zskSeed = bytes.Repeat([]byte{2}, ed25519.SeedSize)
+
+	signedFrom  = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	signedUntil = time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+)
+
+// testKey is the published half of an Ed25519 key made from a seed.
+func testKey(seed []byte, flags uint16) dnsclient.DNSKEY {
+	public := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
+	return dnsclient.DNSKEY{Flags: flags, Protocol: 3, Algorithm: 15, Key: public}
+}
+
+// keySet is the key set as a signature covers it.
+func keySet(keys []dnsclient.DNSKEY) [][]byte {
+	var out [][]byte
+	for _, k := range keys {
+		out = append(out, keyRDATA(k))
+	}
+	return out
+}
+
+// soaRDATA writes the record the way dnsclient keeps it: both names in wire
+// form, then the five numbers.
+func soaRDATA(t *testing.T, soa dnsclient.SOA) []byte {
+	t.Helper()
+	primary, err := wireName(soa.Primary)
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+	mailbox, err := wireName(soa.Mailbox)
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+	out := append(primary, mailbox...)
+	for _, n := range []uint32{soa.Serial, soa.Refresh, soa.Retry, soa.Expire, soa.Minimum} {
+		out = binary.BigEndian.AppendUint32(out, n)
+	}
+	return out
+}
+
+// sign is what the zone's signer does: the record set in canonical form,
+// signed with the key made from seed. signedData is the check's own, and
+// TestTheRFCExamplesVerify is what holds it to the RFCs rather than to itself.
+func sign(t *testing.T, seed []byte, key dnsclient.DNSKEY, covered uint16, rdatas [][]byte, inception, expiration time.Time) dnsclient.RRSIG {
+	t.Helper()
+	owner, err := wireName("example.com")
+	if err != nil {
+		t.Fatalf("test data is wrong: %v", err)
+	}
+	sig := dnsclient.RRSIG{
+		Covered: covered, Algorithm: key.Algorithm, Labels: 2, OriginalTTL: 3600, KeyTag: keyTag(key),
+		Signer: "example.com", SignerWire: owner, Inception: inception, Expiration: expiration,
+	}
+	data, ok := signedData(sig, owner, covered, rdatas)
+	if !ok {
+		t.Fatal("the signed data could not be put together")
+	}
+	sig.Signature = ed25519.Sign(ed25519.NewKeyFromSeed(seed), data)
+	return sig
 }
 
 // signerFor is the digest a parent publishes for a key, computed the way the
@@ -212,8 +321,15 @@ func TestAZoneThatIsServedAndSignedReadsStrong(t *testing.T) {
 	if len(got.Observed.Text) != 1 || got.Observed.Text[0] != "v=spf1 -all" {
 		t.Errorf("the text records read %v", got.Observed.Text)
 	}
-	if len(got.Observed.Keys) != 1 || got.Observed.Keys[0].Name != "ECDSAP256SHA256" {
-		t.Errorf("the key reads %+v, and an algorithm travels by the name an operator reads", got.Observed.Keys)
+	if len(got.Observed.Keys) != 2 || got.Observed.Keys[0].Name != "Ed25519" || !got.Observed.Keys[0].KeySigning {
+		t.Errorf("the keys read %+v, and an algorithm travels by the name an operator reads", got.Observed.Keys)
+	}
+	if want := "the name has an IPv6 address; 0 of 2 name servers have one"; got.Observed.IPv6Line != want {
+		t.Errorf("the IPv6 line reads %q, want %q", got.Observed.IPv6Line, want)
+	}
+	if !got.Observed.SignaturesVerified || got.Observed.SignatureFault != "" || got.Observed.SignatureCheckReason != "" {
+		t.Errorf("the signatures read verified %v, fault %q, reason %q", got.Observed.SignaturesVerified,
+			got.Observed.SignatureFault, got.Observed.SignatureCheckReason)
 	}
 }
 
@@ -295,9 +411,11 @@ func TestABrokenChainIsTheFindingThisExistsFor(t *testing.T) {
 		t.Errorf("an unsupported digest reads %+v", got.Observed.Signers)
 	}
 
-	// A lookup that failed is not a chain that does not check out.
+	// A lookup that failed is not a chain that does not check out, when asking
+	// again without checking fails too.
 	unread := served(t)
 	unread.fail["dnskey"] = dnsclient.ErrServerFail
+	unread.fail["unchecked"] = dnsclient.ErrServerFail
 	got = read(t, unread)
 	if len(got.Findings) != 0 || !noteSaying(got, "could not be checked") {
 		t.Errorf("a failed key lookup: %v", ruleIDs(got))
@@ -523,9 +641,13 @@ func TestAnAliasAtTheTopOfAZoneIsGraded(t *testing.T) {
 // recommended. The difference is a zone validators are dropping and one they
 // still accept while the advice moves.
 func TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem(t *testing.T) {
+	// The keys below are made up, so nothing signs with them; the signatures
+	// are TestTheSignaturesAreCheckedWithTheZonesOwnKeys's question, not this
+	// one's.
 	retired := served(t)
 	retired.keys = []dnsclient.DNSKEY{{Flags: 257, Protocol: 3, Algorithm: 3, Key: []byte("an old key")}}
 	retired.ds = []dnsclient.DS{signerFor(t, "example.com", retired.keys[0])}
+	retired.keySignatures = nil
 	got := read(t, retired)
 	if !has(got, "dns.dnssec-retired-algorithm") || got.Verdict != policy.Insecure {
 		t.Errorf("DSA: %q %v", got.Verdict, ruleIDs(got))
@@ -539,6 +661,7 @@ func TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem(t *testing.T) {
 	old := served(t)
 	old.keys = []dnsclient.DNSKEY{{Flags: 257, Protocol: 3, Algorithm: 5, Key: []byte("an rsa key")}}
 	old.ds = []dnsclient.DS{signerFor(t, "example.com", old.keys[0])}
+	old.keySignatures = nil
 	got = read(t, old)
 	if !has(got, "dns.dnssec-weak-algorithm") || got.Verdict != policy.Weak {
 		t.Errorf("RSASHA1: %q %v", got.Verdict, ruleIDs(got))
@@ -552,6 +675,7 @@ func TestTheSigningAlgorithmsAreGradedAsRFC8624SortsThem(t *testing.T) {
 		fine := served(t)
 		fine.keys = []dnsclient.DNSKEY{{Flags: 257, Protocol: 3, Algorithm: algorithm, Key: []byte("a key")}}
 		fine.ds = []dnsclient.DS{signerFor(t, "example.com", fine.keys[0])}
+		fine.keySignatures = nil
 		if got := read(t, fine); len(got.Findings) != 0 {
 			t.Errorf("algorithm %d: %v", algorithm, ruleIDs(got))
 		}
@@ -1298,6 +1422,7 @@ func TestWhenTheSignaturesRunOutIsReadAndOnlyExpiryIsGraded(t *testing.T) {
 	// An answer that carried no signature says nothing about a date, and is
 	// not a zone whose signatures ran out (R4).
 	quiet := served(t)
+	quiet.signatures = nil
 	got = at(quiet)
 	if got.Observed.SignatureRead || has(got, "dns.signature-expired") || noteSaying(got, "runs out on") {
 		t.Errorf("a zone whose signature was not read reads %+v %v", got.Observed.SignatureExpires, ruleIDs(got))

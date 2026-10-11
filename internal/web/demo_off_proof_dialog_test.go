@@ -40,7 +40,7 @@ func TestTheConsoleAsksForProofBeforeItRuns(t *testing.T) {
 		t.Error("the script does not ask /api/v1/verify")
 	}
 	proof := strings.Index(src, "if (!(await proven(target))) return;")
-	run := strings.Index(src, "await runCheck(name, target);")
+	run := strings.Index(src, "await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name)));")
 	if proof < 0 || run < 0 || proof > run {
 		t.Error("the checks can run before proof is asked for")
 	}
@@ -153,18 +153,17 @@ func TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten(t *testing.T) {
 		t.Errorf("the published records are not written as text:\n%s", block)
 	}
 
-	// And one result is said once: the heading carries the states a report
-	// cannot show, not a copy of its verdict.
-	run := src[strings.Index(src, "async function runCheck(name, target) {"):]
-	run = run[:strings.Index(run, "\n}\n")]
-	if strings.Contains(run, `state.textContent = data.verdict ? verdict : "not graded"`) {
-		t.Error("the console heading still repeats the verdict the report carries")
+	// And one result is said once in its section: the column beside the
+	// evidence carries the report's own stamp, and nothing else in the section
+	// repeats it. The tile on the cover is the index to it, and says the
+	// states a report cannot show — running, and a check that did not run.
+	show := functionBody(t, src, "reportShow")
+	if strings.Count(show, "summary(data)") != 1 {
+		t.Error("a check's section does not carry its verdict exactly once")
 	}
-	if !strings.Contains(run, `state.textContent = "";`) {
-		t.Error("the console heading is not cleared once the report is drawn")
-	}
-	if !strings.Contains(asset(t, "assets/style.css"), ".run-state:empty { display: none; }") {
-		t.Error("an empty heading state is not hidden, so it leaves a gap")
+	run := functionBody(t, src, "reportRun")
+	if !strings.Contains(run, `entry.state.textContent = "not run";`) {
+		t.Error("a check that did not run is not said to have not run")
 	}
 }
 

@@ -779,7 +779,11 @@ func parseSOA(raw, rdata []byte, rdataAt int) (SOA, error) {
 	}
 	numbers := raw[next : next+20]
 
+	canonical := make([]byte, 0, len(primary)+len(mailbox)+20)
+	canonical = append(append(append(canonical, primary...), mailbox...), numbers...)
+
 	return SOA{
+		RDATA:   canonical,
 		Primary: nameText(primary),
 		Mailbox: nameText(mailbox),
 		Serial:  binary.BigEndian.Uint32(numbers[0:4]),
@@ -838,18 +842,16 @@ func parseNSEC3PARAM(rdata []byte) (NSEC3PARAM, error) {
 	}, nil
 }
 
-// parseRRSIG reads the header of a signature and discards the signature.
+// parseRRSIG reads a signature: eighteen fixed bytes, then the signer's name,
+// then the signature itself (RFC 4034 §3.1).
 //
-// Eighteen fixed bytes, then the signer's name, then the signature itself
-// (RFC 4034 §3.1). What a report needs is in the fixed part and the name: when
-// the signature stops being accepted, which key made it, and over what. The
-// signature bytes are not returned, because nothing here verifies one — that
-// is a validating resolver's work, and keeping the bytes would invite somebody
-// to write the half of the job that looks easy.
-//
-// The signer's name is read from the whole message rather than from the record
-// alone: RFC 4034 §3.1.7 forbids compressing it, and a parser that trusted
-// that would be trusting whoever wrote the message.
+// The signer's name is read from the whole message, so the date in a record
+// that compressed it is still read: that date is what the report has always
+// carried, and a server breaking §3.1.7 does not make it wrong. The signature
+// is located from the record's own bytes, and only where the name in them is
+// written out in full, because a compressed name does not say where it ends
+// within the record — and a parser that trusted the message to have followed
+// the rule would be trusting whoever wrote it.
 func parseRRSIG(raw, rdata []byte, rdataAt int) (RRSIG, error) {
 	const fixed = 18
 	if len(rdata) < fixed {
@@ -857,13 +859,13 @@ func parseRRSIG(raw, rdata []byte, rdataAt int) (RRSIG, error) {
 	}
 
 	out := RRSIG{
-		Covered:   binary.BigEndian.Uint16(rdata[0:2]),
-		Algorithm: rdata[2],
-		// rdata[3] is the label count, and rdata[4:8] the original TTL. Both
-		// are for verifying the signature, which is not done here.
-		Expiration: time.Unix(int64(binary.BigEndian.Uint32(rdata[8:12])), 0).UTC(),
-		Inception:  time.Unix(int64(binary.BigEndian.Uint32(rdata[12:16])), 0).UTC(),
-		KeyTag:     binary.BigEndian.Uint16(rdata[16:18]),
+		Covered:     binary.BigEndian.Uint16(rdata[0:2]),
+		Algorithm:   rdata[2],
+		Labels:      rdata[3],
+		OriginalTTL: binary.BigEndian.Uint32(rdata[4:8]),
+		Expiration:  time.Unix(int64(binary.BigEndian.Uint32(rdata[8:12])), 0).UTC(),
+		Inception:   time.Unix(int64(binary.BigEndian.Uint32(rdata[12:16])), 0).UTC(),
+		KeyTag:      binary.BigEndian.Uint16(rdata[16:18]),
 	}
 
 	signer, err := parseName(raw, rdataAt+fixed)
@@ -871,7 +873,36 @@ func parseRRSIG(raw, rdata []byte, rdataAt int) (RRSIG, error) {
 		return RRSIG{}, err
 	}
 	out.Signer = signer
+
+	if wire, next, ok := literalName(rdata, fixed); ok && next < len(rdata) {
+		out.SignerWire = wire
+		out.Signature = bytes.Clone(rdata[next:])
+	}
 	return out, nil
+}
+
+// literalName reads a name written out in full inside a record's own bytes,
+// folded to lowercase, and says where it ends. A compression pointer, a label
+// that runs past the record, or a name longer than a name may be is not one.
+func literalName(rdata []byte, at int) (name []byte, next int, ok bool) {
+	length := 0
+	for at < len(rdata) {
+		size := int(rdata[at])
+		switch {
+		case size == 0:
+			return append(name, 0), at + 1, true
+		case size > maxLabel:
+			return nil, 0, false
+		}
+		length += size + 1
+		if length > maxName || at+1+size > len(rdata) {
+			return nil, 0, false
+		}
+		name = append(name, byte(size))
+		name = appendFolded(name, rdata[at+1:at+1+size])
+		at += 1 + size
+	}
+	return nil, 0, false
 }
 
 // parseGlue reads the addresses a referral carries for the servers it names.

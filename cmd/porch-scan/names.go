@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/denyfirst/porch/internal/certnames"
-	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/dnsnames"
@@ -68,9 +67,6 @@ type namesOptions struct {
 
 	// Timeout bounds each question this mode asks.
 	Timeout time.Duration
-
-	// Monitor and MonitorURL choose the certificate transparency monitor.
-	Monitor, MonitorURL string
 
 	// Resolver is the resolver every lookup goes to. Which one answers
 	// decides what the whole report means.
@@ -129,11 +125,7 @@ func runNames(ctx context.Context, domains []string, opt namesOptions) int {
 
 	timeout := opt.Timeout
 
-	searcher, err := monitorNamed(opt.Monitor, opt.MonitorURL, timeout)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 2
-	}
+	searcher := certSpotter(timeout)
 
 	// The third source, and the only one that sees behind a wildcard. Off
 	// unless an operator names one: it wants their own key, the question names
@@ -709,55 +701,10 @@ func namesTargets(targets []string) error {
 	return nil
 }
 
-// The monitors this can be pointed at, spelled once.
-const (
-	monitorCRTSh       = "crtsh"
-	monitorCertSpotter = "certspotter"
-)
-
-// monitorNamed builds the monitor to ask.
+// httpsEndpoint refuses a register address that is not HTTPS.
 //
-// Two of them, with different owners and different infrastructure, because a
-// dependency described as replaceable and never replaced is a claim nobody has
-// checked. crt.sh answered 502 to every request for a day while this was being
-// written, which is an ordinary state for a free service indexing billions of
-// certificates — and on that day the argument stopped being theoretical.
-//
-// The address is separate from the choice. An operator running their own index
-// of one of these, or a paid one, overrides where it is asked without having to
-// say which answer format it speaks.
-func monitorNamed(name, address string, timeout time.Duration) (ctsearch.EstateSearcher, error) {
-	if err := httpsEndpoint(address); err != nil {
-		return nil, fmt.Errorf("-monitor-url: %w", err)
-	}
-	switch name {
-	case "", monitorCRTSh:
-		if address != "" && !strings.Contains(address, "%s") {
-			// Without it the same address is fetched for every domain, and the
-			// answer would be an inventory of whatever that address holds,
-			// reported under the name that was asked about.
-			return nil, fmt.Errorf("-monitor-url for %s needs %%s where the name goes", monitorCRTSh)
-		}
-		return &ctsearch.CRTSh{Timeout: timeout, Endpoint: address}, nil
-
-	case monitorCertSpotter:
-		// The token is read from the environment rather than a flag: it
-		// identifies whoever is running this to the monitor, and a credential
-		// on a command line is a credential in a shell history and in every
-		// process listing on the machine.
-		return &ctsearch.CertSpotter{
-			Timeout:  timeout,
-			Endpoint: address,
-			Token:    os.Getenv("CERTSPOTTER_TOKEN"),
-		}, nil
-	}
-	return nil, fmt.Errorf("unknown monitor %q: it is %s or %s", name, monitorCRTSh, monitorCertSpotter)
-}
-
-// httpsEndpoint refuses a monitor or register address that is not HTTPS.
-//
-// Either is asked about a domain, and a register or CertSpotter is sent the
-// operator's key with the question. The dialler allows port 80 for both, so an
+// A register is asked about a domain and sent the operator's key with the
+// question. The dialler allows port 80, so an
 // http:// address given here sent the key and the domain in the clear to
 // whoever is on the path (N12). Empty is the provider's own address, which is
 // HTTPS. No userinfo either: a key belongs in the environment, where the
@@ -768,9 +715,7 @@ func httpsEndpoint(address string) error {
 	if address == "" {
 		return nil
 	}
-	// The monitor's address carries %s where the name goes, which is not a
-	// valid escape; it is read as the name it will become.
-	u, err := url.Parse(strings.ReplaceAll(address, "%s", "name"))
+	u, err := url.Parse(address)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 		return errors.New("the address must be an https:// URL with a host and no credentials in it, " +
 			"because the question names a domain and may carry a key")

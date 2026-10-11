@@ -233,6 +233,12 @@ func TransparencyLine(f TransparencyFacts) string {
 	default:
 		line += fmt.Sprintf(", %d of the %d signatures verified", f.Verified, total)
 	}
+
+	// Whether Chrome would accept them, which is the question a count of
+	// receipts was only ever standing in for.
+	if chrome := ChromeCTLine(f.Chrome()); chrome != "" {
+		line += "; " + chrome
+	}
 	return line
 }
 

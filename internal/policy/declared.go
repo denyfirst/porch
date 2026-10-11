@@ -464,3 +464,33 @@ func counterpartLine(f CounterpartFacts) string {
 		return f.Name + " answers with its own site, and nothing sends visitors from one form to the other"
 	}
 }
+
+// PreloadLabel is the row the HSTS preload list's answer is shown under,
+// beside the header it is about.
+const PreloadLabel = "HSTS preload list"
+
+// PreloadLine says what the HSTS preload list holds for a host.
+//
+// Reported, not graded: being preloaded is a choice a site makes and cannot
+// easily undo, and a site that has not made it is not misconfigured (R21).
+func PreloadLine(asked bool, state, coveredBy, host, reason string) string {
+	switch {
+	case !asked:
+		return ""
+	case reason != "":
+		return "not established: " + reason
+	}
+	switch state {
+	case "preloaded":
+		if coveredBy != "" && coveredBy != host {
+			return "on the list browsers build in, through " + coveredBy
+		}
+		return "on the list browsers build in"
+	case "pending":
+		return "submitted, and waiting to be added"
+	case "rejected":
+		return "submitted, and rejected"
+	default:
+		return "not on the list browsers build in"
+	}
+}

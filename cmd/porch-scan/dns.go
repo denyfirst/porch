@@ -13,7 +13,9 @@ import (
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/rdap"
 	"github.com/denyfirst/porch/internal/results"
+	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -40,7 +42,8 @@ func runDNS(ctx context.Context, scope *verify.Scope, domains []string, timeout 
 	// operator's own machine, from their own address, under their
 	// responsibility — the argument -allow-private rests on for the other
 	// checks.
-	scanner := &dnsscan.Scanner{AskServers: true, Verify: scope}
+	scanner := &dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout},
+		Routes: &rpki.Client{Timeout: timeout}}
 	if resolver != "" {
 		scanner.Resolver = &dnsclient.Client{Server: resolver, Timeout: timeout}
 	}
@@ -111,6 +114,9 @@ func printDNS(w io.Writer, r dnsResult) {
 			field(w, "IPv4 (A)", listOrNone(f.IPv4))
 			field(w, "IPv6 (AAAA)", listOrNone(f.IPv6))
 		}
+		if f.IPv6Line != "" {
+			field(w, "IPv6", f.IPv6Line)
+		}
 
 		switch {
 		case f.AliasReason != "":
@@ -131,6 +137,12 @@ func printDNS(w io.Writer, r dnsResult) {
 
 		printText(w, f.Text)
 		field(w, "DNSSEC (DS)", dnssecLine(*f))
+		if f.RegistrationLine != "" {
+			field(w, "Registration", f.RegistrationLine)
+		}
+		if f.RoutesLine != "" {
+			field(w, "Routes (RPKI)", f.RoutesLine)
+		}
 
 		// The algorithm by the name an operator's own interface uses, and how
 		// absent names are proved: both facts about a signed zone, neither a
@@ -170,6 +182,12 @@ func dnssecLine(f policy.DNSFacts) string {
 		return "not signed"
 	case f.ChainReason != "":
 		return "not checked: " + f.ChainReason
+	case f.ChainMatched && f.SignatureFault != "":
+		return "signed, and the parent's digest matches a key here, but " + f.SignatureFault
+	case f.ChainMatched && f.SignaturesVerified:
+		return "signed; the parent's digest matches a key here, and the signatures verify"
+	case f.ChainMatched && f.SignatureCheckReason != "":
+		return "signed, and the parent's digest matches a key here; signatures not checked: " + f.SignatureCheckReason
 	case f.ChainMatched:
 		return "signed, and the parent's digest matches a key here"
 	case len(f.Keys) == 0:

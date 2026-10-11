@@ -281,8 +281,8 @@ func TestTheCommandLineAsksTheZonesOwnServers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "dnsscan.Scanner{AskServers: true, Verify: scope}") {
-		t.Error("the command line no longer asks the servers the zone names")
+	if !strings.Contains(string(body), "dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout},\n\t\tRoutes: &rpki.Client{Timeout: timeout}}") {
+		t.Error("the command line no longer asks the servers the zone names and the registry that holds it")
 	}
 }
 
@@ -597,5 +597,80 @@ func TestTheGlueTheZoneAboveHandsOutIsDrawnInBothFaces(t *testing.T) {
 	// in general rather than about this zone.
 	if strings.Contains(text, "ns2.provider.net             the zone above hands out") {
 		t.Errorf("a server with no glue was given a line:\n%s", text)
+	}
+}
+
+// What checking the signatures found reaches both faces of the report, in
+// the same words (R16): verified, the fault, or why they were not checked.
+func TestTheSignatureCheckReachesBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+
+	matched := policy.DNSFacts{Apex: true, Signed: true, ChainMatched: true}
+	for _, c := range []struct {
+		facts func(f *policy.DNSFacts)
+		says  string
+		page  string
+	}{
+		{func(f *policy.DNSFacts) { f.SignaturesVerified = true },
+			"signed; the parent's digest matches a key here, and the signatures verify",
+			`"signed; the parent's digest matches a key here, and the signatures verify"`},
+		{func(f *policy.DNSFacts) { f.SignatureFault = "the key set's signature by key 1 does not verify" },
+			"signed, and the parent's digest matches a key here, but the key set's signature by key 1 does not verify",
+			`"signed, and the parent's digest matches a key here, but " + facts.signatureFault`},
+		{func(f *policy.DNSFacts) { f.SignatureCheckReason = "no signature came with the key set" },
+			"signed, and the parent's digest matches a key here; signatures not checked: no signature came with the key set",
+			`"signed, and the parent's digest matches a key here; signatures not checked: " + facts.signatureCheckReason`},
+	} {
+		f := matched
+		c.facts(&f)
+		if got := dnssecLine(f); got != c.says {
+			t.Errorf("the terminal says %q, want %q", got, c.says)
+		}
+		if !strings.Contains(script, c.page) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", c.page)
+		}
+	}
+	if !strings.Contains(script, `if (facts.chainMatched && facts.signatureFault) return "insecure";`) {
+		t.Error("the page does not mark a signature that fails as insecure")
+	}
+}
+
+// Whether the names have IPv6 addresses is one line built by the policy
+// package, and both faces print that line under the same label (R16).
+func TestTheIPv6LineReachesBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`if (facts.ipv6Line) row("IPv6", facts.ipv6Line);`,
+		`if (facts.mxIPv6Line) row("MX IPv6", facts.mxIPv6Line);`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s", want)
+		}
+	}
+
+	var dns bytes.Buffer
+	printDNS(&dns, dnsResult{Domain: "example.com", Result: &dnsscan.Result{Domain: "example.com", Observed: &policy.DNSFacts{
+		Apex: true, IPv6Line: "the name has an IPv6 address; 2 of 2 name servers have one",
+	}}})
+	if !strings.Contains(dns.String(), "the name has an IPv6 address; 2 of 2 name servers have one") {
+		t.Errorf("the terminal does not print the line:\n%s", dns.String())
+	}
+
+	r := mailSample()
+	r.Observed.MXRead = true
+	r.Observed.MXHosts = []string{"mx.example.com"}
+	r.Observed.MXIPv6Line = "1 of 1 exchanger has an IPv6 address"
+	var mail bytes.Buffer
+	printMail(&mail, r)
+	if !strings.Contains(mail.String(), "MX IPv6    1 of 1 exchanger has an IPv6 address") {
+		t.Errorf("the terminal does not print the exchangers' line:\n%s", mail.String())
 	}
 }

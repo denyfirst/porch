@@ -306,3 +306,51 @@ func TestAuthoritiesWithoutParametersAreUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// Each authority is read with its RFC 8657 limits, and an authority is bound
+// to accounts only if every property naming it names one.
+//
+// The record set is this project's own, as published on 2026-10-09: two
+// properties for Let's Encrypt, one per account — production and the staging
+// account a dry run uses.
+func TestAnAuthorityIsBoundOnlyIfEveryPropertyBindsIt(t *testing.T) {
+	const prod = "https://acme-v02.api.letsencrypt.org/acme/acct/3624113041"
+	const staging = "https://acme-staging-v02.api.letsencrypt.org/acme/acct/324153244"
+	ours := []string{
+		"letsencrypt.org; accounturi=" + prod + "; validationmethods=dns-01",
+		"letsencrypt.org; accounturi=" + staging + "; validationmethods=dns-01",
+	}
+	got := DescribeIssuance(IssuanceFacts{Checked: true, Exists: true, SearchComplete: true,
+		FoundAt: "denyfirst.dev", Authorities: ours, Wildcards: []string{";"}})
+	if len(got.Bindings) != 1 {
+		t.Fatalf("bindings %+v", got.Bindings)
+	}
+	b := got.Bindings[0]
+	if b.Authority != "letsencrypt.org" || !b.Bound() || len(b.Accounts) != 2 ||
+		len(b.Methods) != 1 || b.Methods[0] != "dns-01" {
+		t.Errorf("our record reads as %+v", b)
+	}
+	notes := strings.Join(Texts(got.Notes), " ")
+	if !strings.Contains(notes, "Only the accounts the record names may ask letsencrypt.org") {
+		t.Errorf("the notes do not say issuance is held to our accounts: %s", notes)
+	}
+
+	// One more property without the parameter opens the authority to every
+	// account it has, whatever the others say.
+	opened := append(ours, "letsencrypt.org")
+	got = DescribeIssuance(IssuanceFacts{Checked: true, Exists: true, SearchComplete: true,
+		FoundAt: "example.com", Authorities: opened})
+	if got.Bindings[0].Bound() || got.Bindings[0].Methods != nil {
+		t.Errorf("a property without accounturi left the authority bound: %+v", got.Bindings[0])
+	}
+	if notes := strings.Join(Texts(got.Notes), " "); !strings.Contains(notes, "Any account at letsencrypt.org may ask") {
+		t.Errorf("the notes do not say any account may ask: %s", notes)
+	}
+
+	// Nobody permitted is nothing to bind, and says nothing about accounts.
+	none := DescribeIssuance(IssuanceFacts{Checked: true, Exists: true, SearchComplete: true,
+		FoundAt: "example.com", Authorities: []string{";"}})
+	if len(none.Bindings) != 0 || strings.Contains(strings.Join(Texts(none.Notes), " "), "account") {
+		t.Errorf("a record permitting nobody reads as %+v", none)
+	}
+}

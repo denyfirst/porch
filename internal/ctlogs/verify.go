@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"time"
 )
 
 // Status is what checking one receipt established.
@@ -43,6 +44,16 @@ type Receipt struct {
 	Log    string // the list's description of the log, when it names one
 	State  string // the list's state for the log, when it names one
 	Status Status
+
+	// Operator, Tiled and Since are the list's: who runs the log, whether it
+	// is a static-ct log rather than an RFC 6962 one, and when it entered
+	// its state. Issued is when the log signed the receipt. Chrome's policy
+	// counts receipts by operator and kind, and a receipt from a retired log
+	// only if it was issued before the log retired.
+	Operator string
+	Tiled    bool
+	Since    time.Time
+	Issued   time.Time
 }
 
 // sctListOID is the extension carrying embedded receipts (RFC 6962 §3.3).
@@ -61,6 +72,9 @@ const (
 	sigECDSA   = 3
 
 	logIDLen = 32
+
+	// maxTimestamp is 9999-12-31 in milliseconds: no log signs past it.
+	maxTimestamp = 253402300799999
 
 	// minSCT is version, log id, timestamp, extension length, hash and
 	// signature algorithm, and signature length.
@@ -135,12 +149,19 @@ func check(list *List, sct []byte, entry func(signed []byte) ([]byte, bool)) Rec
 	}
 
 	r := Receipt{LogID: hex.EncodeToString(p.logID[:])}
+	// Milliseconds since the epoch (RFC 6962 §3.2), read whole and refused
+	// past any date a log could have signed, so a hostile value cannot
+	// overflow what it is compared with.
+	if ms := binary.BigEndian.Uint64(p.timestamp[:]); ms <= maxTimestamp {
+		r.Issued = time.UnixMilli(int64(ms)).UTC() // #nosec G115 -- bounded by maxTimestamp
+	}
 	log, known := list.Log(p.logID)
 	if !known {
 		r.Status = UnknownLog
 		return r
 	}
 	r.Log, r.State = log.Description, log.State
+	r.Operator, r.Tiled, r.Since = log.Operator, log.Tiled, log.Since
 
 	if p.hashAlg != hashSHA256 {
 		r.Status = Unsupported

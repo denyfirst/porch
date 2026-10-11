@@ -164,7 +164,7 @@ func TestSignedProofOnlyNeedsProofAndReachesTheScope(t *testing.T) {
 	}
 	src := repoFile(t, "cmd/porchd/main.go")
 	set := strings.Index(src, "scope.RequireSigned = true")
-	use := strings.Index(src, "serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout)")
+	use := strings.Index(src, "serviceScanner(roots, scope, *resolver, *requestTimeout)")
 	if set < 0 || use < 0 || set > use {
 		t.Error("-verification-requires-dnssec is not set on the scope before the scanner is built")
 	}

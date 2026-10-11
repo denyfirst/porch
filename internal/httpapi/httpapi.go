@@ -1182,6 +1182,33 @@ func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
 	s.names = searcher
 }
 
+// ReadRegistrations gives the DNS check a registry client, so its report says
+// when the domain runs out and whether it is locked against transfer.
+//
+// Nil, the default, asks no registry. porchd sets it wherever a scan may reach
+// a name: a proven domain, or the demonstration's own.
+func (s *Server) ReadRegistrations(r dnsscan.Registry) {
+	s.dns.Registry = r
+}
+
+// CheckRoutes gives the DNS check a way to ask whether the routes to a
+// domain's addresses are signed. Nil, the default, asks nobody.
+func (s *Server) CheckRoutes(r dnsscan.RouteChecker) {
+	s.dns.Routes = r
+}
+
+// CheckLeaks gives the web check a way to ask for files a site should never
+// serve. Nil, the default, asks nothing.
+func (s *Server) CheckLeaks(l webscan.LeakProber) {
+	s.web.Leaks = l
+}
+
+// CheckPreload gives the web check the HSTS preload list to ask. Nil, the
+// default, asks nobody; porchd sets it wherever a scan may reach a host.
+func (s *Server) CheckPreload(p webscan.Preloader) {
+	s.web.Preload = p
+}
+
 // KeepInventoryFor tells this service to produce an inventory for a domain at
 // most once in the interval given, and to hand the copy to everybody else.
 //

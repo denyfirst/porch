@@ -175,6 +175,12 @@ type RelayProber interface {
 	ProbeRelay(ctx context.Context, host string) smtptls.Result
 }
 
+// LegacyProber also asks an exchanger, in a second conversation, whether it
+// negotiates TLS 1.1 or older. internal/smtptls is one.
+type LegacyProber interface {
+	ProbeLegacy(ctx context.Context, host string) smtptls.Legacy
+}
+
 // Scanner measures one domain's mail policy. The zero value is usable.
 type Scanner struct {
 	// Resolver asks the questions. Nil means one reading this machine's own
@@ -679,6 +685,34 @@ func (s *Scanner) readExchangers(ctx context.Context, r Resolver, domain string,
 			facts.MXAliases = append(facts.MXAliases, host)
 		}
 	}
+
+	// And whether each has an IPv6 address: one more question per
+	// exchanger, to the same resolver, bounded the same way. Reported and
+	// never graded (policy.MailIPv6Line says why).
+	if lookup, ok := r.(AddressResolver); ok {
+		for _, host := range hosts {
+			facts.MXIPv6Asked++
+			answer, err := lookup.LookupAddresses(ctx, host, dnsclient.TypeAAAA)
+			if err != nil {
+				continue
+			}
+			facts.MXIPv6Read++
+			for _, a := range answer.Addresses {
+				if a.Is6() && !a.Is4In6() {
+					facts.MXIPv6 = append(facts.MXIPv6, host)
+					break
+				}
+			}
+		}
+		facts.MXIPv6Line = policy.MailIPv6Line(*facts)
+	}
+}
+
+// AddressResolver is a Resolver that can also look up a name's addresses.
+// internal/dnsclient's is one. Separate, so a resolver without it still
+// reads everything else.
+type AddressResolver interface {
+	LookupAddresses(ctx context.Context, name string, qtype uint16) (dnsclient.ZoneAnswer, error)
 }
 
 // readTransportSecurity reads what the domain publishes about encrypting the
@@ -938,7 +972,9 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 
 	prober := s.exchangerProber()
 	relay, canAskRelay := prober.(RelayProber)
+	legacyProber, canAskLegacy := prober.(LegacyProber)
 	results := make([]smtptls.Result, len(hosts))
+	legacy := make([]smtptls.Legacy, len(hosts))
 
 	var wg sync.WaitGroup
 	for i, host := range hosts {
@@ -962,12 +998,25 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 			// here, and nothing claims otherwise.
 			if canAskRelay && within(host, domain) && !slices.Contains(facts.MXAliases, host) {
 				results[i] = relay.ProbeRelay(ctx, host)
-				return
+			} else {
+				results[i] = prober.Probe(ctx, host)
+				if canAskRelay && within(host, domain) {
+					results[i].RelayReason = "not asked, because its name is an alias and the server " +
+						"behind an alias may be somebody else's"
+				}
 			}
-			results[i] = prober.Probe(ctx, host)
-			if canAskRelay && within(host, domain) {
-				results[i].RelayReason = "not asked, because its name is an alias and the server " +
-					"behind an alias may be somebody else's"
+
+			// Whether it still speaks TLS 1.1 or older to a sender that offers
+			// nothing newer, which the conversation above cannot show: Go's
+			// client offers TLS 1.3 and a server that has it chooses it. Asked
+			// only where that conversation negotiated TLS 1.2 or 1.3, after it
+			// and not beside it, so an exchanger has one conversation open
+			// with this scan at a time. Where it negotiated something older,
+			// that is already the answer. Every exchanger the domain names, a
+			// provider's too: the question is the one any old sender's hello
+			// asks, and nothing beyond the hello is sent.
+			if canAskLegacy && results[i].Upgraded && modernVersion(results[i].Version) {
+				legacy[i] = legacyProber.ProbeLegacy(ctx, host)
 			}
 		}()
 	}
@@ -991,13 +1040,23 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 			Trusted:           r.Trusted,
 			NameMatches:       r.NameMatches,
 			CertificateReason: r.CertificateReason,
+			Expires:           leafExpiry(r),
 			Reason:            r.Reason,
 			ConnectTimedOut:   r.ConnectTimedOut,
 			RelayAsked:        r.RelayAsked,
 			RelayAccepted:     r.RelayAccepted,
 			RelayReason:       r.RelayReason,
+			LegacyAsked:       legacy[i].Asked,
+			LegacyAccepted:    legacy[i].Accepted,
+			LegacyVersion:     legacy[i].Version,
+			LegacyReason:      legacy[i].Reason,
 		})
 	}
+}
+
+// modernVersion is TLS 1.2 or 1.3, by the name internal/smtptls gives it.
+func modernVersion(v string) bool {
+	return v == "TLS 1.2" || v == "TLS 1.3"
 }
 
 // daneBinding says what one exchanger's DANE records made of what it presented.
@@ -1028,6 +1087,15 @@ func daneBinding(host string, answer dnsclient.TLSAAnswer, r smtptls.Result, now
 		b.Outcome, b.Reason = string(got.Outcome), got.Reason
 	}
 	return b
+}
+
+// leafExpiry is when the certificate an exchanger presented runs out, or zero
+// where none was presented.
+func leafExpiry(r smtptls.Result) time.Time {
+	if len(r.Chain) == 0 || r.Chain[0] == nil {
+		return time.Time{}
+	}
+	return r.Chain[0].NotAfter.UTC()
 }
 
 // exchangerProber is the one this scan asks with.

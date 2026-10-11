@@ -17,20 +17,11 @@ import (
 
 // CertSpotter reads SSLMate's index of the public logs.
 //
-// # Why there is a second monitor
+// # Why this one
 //
-// internal/ctsearch has said since it was written that the monitor is
-// replaceable — "a monitor that goes away, changes its interface, or that an
-// operator would rather not use is a substitution rather than a rewrite". That
-// was an argument on paper until 2026-09-25, when crt.sh answered 502 to every
-// request for a whole day and the inventory mode could not be demonstrated at
-// all. A claim about substitutability that has never been exercised is a claim
-// nobody has checked, including whoever made it.
-//
-// So there are two, with different owners, different infrastructure and
-// different answer formats. An operator whose monitor is down has somewhere to
-// go, and the interface has been shown to fit something it was not written
-// around.
+// It keeps up with the logs: on 2026-10-09 it listed all four of this
+// project's valid certificates within the hour, while crt.sh, asked until
+// then, listed one. See the package comment.
 //
 // # It answers in pages, and that is the thing to get right
 //
@@ -82,10 +73,9 @@ const (
 
 // certSpotterEntry is one issuance as SSLMate writes it.
 //
-// Its own type rather than the crt.sh one: the two monitors agree on nothing
-// but the idea. This one carries the names already split into an array and
-// identifies a certificate by its hash rather than a serial, which is the
-// better key of the two — a serial is unique per issuer and a hash is unique.
+// It carries the names already split into an array and identifies a
+// certificate by its hash, which is unique where a serial is unique only per
+// issuer.
 type certSpotterEntry struct {
 	ID        string   `json:"id"`
 	SHA256    string   `json:"cert_sha256"`
@@ -110,7 +100,7 @@ type spotterQuery struct {
 	domain string
 
 	// subdomains asks for every name under the domain; without it, the
-	// domain itself only, which is what crt.sh's Identity search gives.
+	// domain itself only.
 	subdomains bool
 
 	// certificates asks for each certificate and its issuer as well as its
@@ -120,9 +110,8 @@ type spotterQuery struct {
 
 // SearchEstate asks which names under a domain appear in logged certificates.
 //
-// The same answer shape the other monitor produces, so that everything above
-// this — the filtering, the counting, the report and the sentence about what it
-// cannot show — is written once.
+// Every name goes through collect, which keeps only what is under the domain
+// and counts each certificate once.
 func (c *CertSpotter) SearchEstate(ctx context.Context, domain string) Estate {
 	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
 	if domain == "" {
@@ -162,8 +151,7 @@ func (c *CertSpotter) SearchEstate(ctx context.Context, domain string) Estate {
 // certSpotterName is how a report names this monitor.
 const certSpotterName = "Cert Spotter"
 
-// Search asks what the logs hold for exactly one name, as the other monitor's
-// Identity search does.
+// Search asks what the logs hold for exactly one name.
 //
 // Each certificate comes with the certificate itself, and its serial is read
 // from that. The comparison a report makes — which of these is not the one the
@@ -233,8 +221,7 @@ func (c *CertSpotter) Search(ctx context.Context, name string) Result {
 		})
 	}
 
-	// Newest first, as the other monitor answers; this one answers in the
-	// order it found them.
+	// Newest first; the monitor answers in the order it found them.
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].NotBefore.After(entries[j].NotBefore) })
 	out.Distinct = len(entries)
 	if len(entries) > maxEntries {
@@ -348,9 +335,8 @@ func (c *CertSpotter) timeout() time.Duration {
 	return defaultTimeout
 }
 
-// client is built the same way the other monitor's is, so that a search of
-// either goes through the same refusal of private destinations and the same
-// trust store.
+// client refuses private destinations and judges the monitor's certificate
+// against the same trust store as everything else here.
 func (c *CertSpotter) client() *http.Client {
 	return monitorClient(c.Dial, c.Roots)
 }

@@ -136,6 +136,26 @@ var TLS13 = []Suite{
 	{0xC0B5, "TLS_SHA384_SHA384"},
 }
 
+// Legacy is what a TLS 1.0 or 1.1 client offers: the CBC suites of that era,
+// with ECDHE, finite-field DHE and plain RSA key exchange, and 3DES last.
+//
+// Wide on purpose. The question a hello offering these asks is whether a
+// server will speak TLS 1.1 or older at all, and a server that would, but
+// only with a suite this did not offer, would be read as one that refuses —
+// the flattering answer.
+var Legacy = []Suite{
+	{0xC009, "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA"},
+	{0xC00A, "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA"},
+	{0xC013, "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"},
+	{0xC014, "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"},
+	{0x0033, "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"},
+	{0x0039, "TLS_DHE_RSA_WITH_AES_256_CBC_SHA"},
+	{0x002F, "TLS_RSA_WITH_AES_128_CBC_SHA"},
+	{0x0035, "TLS_RSA_WITH_AES_256_CBC_SHA"},
+	{0xC012, "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"},
+	{0x000A, "TLS_RSA_WITH_3DES_EDE_CBC_SHA"},
+}
+
 // IDs is a list of suites as the values a hello carries.
 func IDs(suites []Suite) []uint16 {
 	out := make([]uint16, 0, len(suites))
@@ -151,7 +171,7 @@ func IDs(suites []Suite) []uint16 {
 // suite it was not offered, and a caller should not be given a name that makes
 // that look like an ordinary answer.
 func Name(id uint16) string {
-	for _, list := range [][]Suite{SSL3, Null, FFDHE, Anonymous, TLS13} {
+	for _, list := range [][]Suite{SSL3, Null, FFDHE, Anonymous, TLS13, Legacy} {
 		for _, s := range list {
 			if s.ID == id {
 				return s.Name

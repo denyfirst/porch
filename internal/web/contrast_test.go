@@ -124,11 +124,11 @@ func TestEveryColourTextIsSetInIsLegible(t *testing.T) {
 		t.Fatalf("only %d text colours were found in the stylesheet, which is too few to be right", len(used))
 	}
 
-	// The two surfaces anything can be printed on. A finding sits on the sunk
-	// paper and everything else on the paper, and neither is picked per rule
-	// here: a colour that is legible on one and not the other is a colour
-	// waiting for the day somebody moves the element.
-	surfaces := []string{"paper", "paper-sunk"}
+	// The surfaces anything can be printed on: the paper, the sunk paper, and
+	// the card a report is drawn on. None is picked per rule here: a colour
+	// that is legible on one and not another is a colour waiting for the day
+	// somebody moves the element.
+	surfaces := []string{"paper", "paper-sunk", "card"}
 
 	for _, scheme := range []string{"light", "dark"} {
 		tokens := tables[scheme]

@@ -112,7 +112,8 @@ const DEMO_SITE = document.body.dataset.site === "demo";
 // Defaulting to the TLS check rather than to nothing, because a page that
 // declared no check would otherwise fail at the first click with an error
 // about undefined rather than about anything a reader could act on.
-const CHECK = CHECKS[(form && form.dataset.check) || "tls"] || CHECKS.tls;
+const CHECK_NAME = CHECKS[(form && form.dataset.check) || "tls"] ? ((form && form.dataset.check) || "tls") : "tls";
+const CHECK = CHECKS[CHECK_NAME];
 
 // rangesAsked reads the address ranges typed beside the domain, where this
 // installation offers the field at all.
@@ -514,54 +515,6 @@ function summary(data) {
   return wrap;
 }
 
-function findings(list, verdict) {
-  const frag = document.createDocumentFragment();
-  frag.appendChild(sectionTitle("Findings"));
-
-  if (!list || list.length === 0) {
-    // An empty list means two entirely different things and the difference is
-    // the one this project exists to insist on.
-    //
-    // After a scan that reached the server, it means nothing fell short. After
-    // one that reached nothing — a name that does not resolve, a port that
-    // refused every version — it means there was nothing to fall short of, and
-    // saying "nothing fell short of the rules" there reads as a pass. It is
-    // true and it is misleading, which is the worst combination a report can
-    // manage.
-    frag.appendChild(el("p", "finding-body", verdict === "ungraded"
-      ? "Nothing was measured, so nothing could be graded. This is not a clean result; it is an absent one."
-      : "Nothing here fell short of the rules."));
-    return frag;
-  }
-
-  const sorted = list.slice().sort(
-    (a, b) => (VERDICT_ORDER[b.verdict] || 0) - (VERDICT_ORDER[a.verdict] || 0)
-  );
-
-  for (const f of sorted) {
-    const item = el("div", "finding " + verdictClass("finding", f.verdict));
-
-    const head = el("div", "finding-head");
-    head.appendChild(el("h3", "finding-title", f.title || "Untitled finding"));
-    if (f.ruleId) head.appendChild(el("span", "finding-rule", f.ruleId));
-    item.appendChild(head);
-
-    if (f.rationale) item.appendChild(el("p", "finding-body", f.rationale));
-
-    if (Array.isArray(f.references) && f.references.length) {
-      const sources = el("div", "sources");
-      for (const ref of f.references) {
-        sources.appendChild(link(ref.url, ref.label || ref.url));
-      }
-      item.appendChild(sources);
-    }
-
-    frag.appendChild(item);
-  }
-
-  return frag;
-}
-
 /*
   What happened at this version, in the words the probe used.
 
@@ -853,6 +806,11 @@ function ciphers(tls, report) {
   if (report && report.keyExchangeLine) {
     fact("Key exchange", report.keyExchangeLine);
   }
+  // Services on the host that should not face the internet. Built by the
+  // server, so both faces read the same line (R16).
+  if (report && report.exposureLine) {
+    fact("Exposed services", report.exposureLine);
+  }
   if (said) frag.appendChild(facts);
 
   return frag;
@@ -1015,6 +973,7 @@ const NOTE_SECTIONS = [
   {
     kind: "observed",
     title: "Observed",
+    box: "notes-section",
 
     // Folded, and this is safe because of what is in it.
     //
@@ -1038,7 +997,11 @@ const NOTE_SECTIONS = [
   {
     kind: "unsettled",
     title: "Not established for this host",
-    open: false,
+    box: "notes-section notes-limits",
+    // Open. What a scan could not establish is the half of a report a reader
+    // has to see to know what the rest is worth (R4), and it is short: a
+    // sentence for each thing, not the reasoning that folds above.
+    open: true,
     one: "1 limit",
     many: (n) => n + " limits",
   },
@@ -1084,7 +1047,7 @@ function notes(list, verdict, methodPage) {
     // is styled; a class assembled at runtime is invisible to that check, and
     // an unstyled class is exactly what it exists to catch. The three sections
     // differ by their words and by which of them opens, not by their colour.
-    const box = el("details", "notes-section");
+    const box = el("details", section.box);
     // An ungraded verdict means something was not reached, so the reasons are
     // opened rather than left behind a summary.
     box.open = section.open || verdict === "ungraded";
@@ -1145,8 +1108,6 @@ function buildTLS(data) {
   const verdict = verdictOf(data);
 
   const frag = document.createDocumentFragment();
-  frag.appendChild(summary(data));
-  frag.appendChild(findings(data.findings, verdict));
   frag.appendChild(versions(data.tls));
   frag.appendChild(ciphers(data.tls, data));
   frag.appendChild(legacy(data.tls));
@@ -1290,8 +1251,6 @@ function buildWeb(data) {
   const verdict = verdictOf(data);
 
   const frag = document.createDocumentFragment();
-  frag.appendChild(summary(data));
-  frag.appendChild(findings(data.findings, verdict));
   frag.appendChild(declared(data.declared));
   frag.appendChild(chains(data.observed));
   frag.appendChild(notes(data.notes, verdict, CHECKS.web.methodPage));
@@ -1319,8 +1278,6 @@ function buildDNS(data) {
   const verdict = verdictOf(data);
 
   const frag = document.createDocumentFragment();
-  frag.appendChild(summary(data));
-  frag.appendChild(findings(data.findings, verdict));
   frag.appendChild(published(data.observed));
   frag.appendChild(delegation(data.observed));
   frag.appendChild(notes(data.notes, verdict, CHECKS.dns.methodPage));
@@ -1352,6 +1309,8 @@ function published(facts) {
     row("IPv4 (A)", listOrNone(facts.ipv4));
     row("IPv6 (AAAA)", listOrNone(facts.ipv6));
   }
+  // The name and its name servers on IPv6, built by the server (R16).
+  if (facts.ipv6Line) row("IPv6", facts.ipv6Line);
 
   if (facts.aliasReason) {
     row("Alias (CNAME)", "not read: " + facts.aliasReason);
@@ -1376,6 +1335,15 @@ function published(facts) {
   row("Text records (TXT)", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
 
   row("DNSSEC (DS)", dnssecLine(facts), dnssecMark(facts));
+
+  // What the registry holds: when the domain runs out and whether it is
+  // locked against transfer. Built by the server, so both faces read the
+  // same line (R16).
+  if (facts.registrationLine) row("Registration", facts.registrationLine);
+
+  // Whether the routes to the addresses above, and to the name servers', are
+  // signed (RPKI). Also built by the server.
+  if (facts.routesLine) row("Routes (RPKI)", facts.routesLine);
 
   // The algorithm by the name an operator's own interface uses, and how
   // absent names are proved — both facts about a signed zone, neither a
@@ -1451,6 +1419,15 @@ function dnssecLine(facts) {
   if (!facts.apex) return "not read: the chain belongs to the zone above this name";
   if (!facts.signed) return "not signed";
   if (facts.chainReason) return "not checked: " + facts.chainReason;
+  if (facts.chainMatched && facts.signatureFault) {
+    return "signed, and the parent's digest matches a key here, but " + facts.signatureFault;
+  }
+  if (facts.chainMatched && facts.signaturesVerified) {
+    return "signed; the parent's digest matches a key here, and the signatures verify";
+  }
+  if (facts.chainMatched && facts.signatureCheckReason) {
+    return "signed, and the parent's digest matches a key here; signatures not checked: " + facts.signatureCheckReason;
+  }
   if (facts.chainMatched) return "signed, and the parent's digest matches a key here";
   if ((facts.keys || []).length === 0) return "anchored at the parent, and no key is published here";
   return "anchored at the parent, and no key here matches its digest";
@@ -1458,6 +1435,7 @@ function dnssecLine(facts) {
 
 function dnssecMark(facts) {
   if (!facts.signed || facts.chainReason) return null;
+  if (facts.chainMatched && facts.signatureFault) return "insecure";
   return facts.chainMatched ? "strong" : "insecure";
 }
 
@@ -1624,8 +1602,6 @@ function buildMail(data) {
   const verdict = verdictOf(data);
 
   const frag = document.createDocumentFragment();
-  frag.appendChild(summary(data));
-  frag.appendChild(findings(data.findings, verdict));
   frag.appendChild(zone(data.observed));
   frag.appendChild(notes(data.notes, verdict, CHECKS.mail.methodPage));
   return frag;
@@ -1743,6 +1719,8 @@ function zone(facts) {
     row("MX", hosts.length ? hosts.join(", ") : "none published");
     const aliased = facts.mxAliases || [];
     if (aliased.length) row("MX alias", aliased.join(", ") + ": a name RFC 2181 says carries an address", "weak");
+    // Built by the server, so both faces read the same line (R16).
+    if (facts.mxIPv6Line) row("MX IPv6", facts.mxIPv6Line);
   }
 
   row("MTA-STS", stsSays(facts));
@@ -1762,6 +1740,10 @@ function zone(facts) {
       for (const x of facts.exchangers || []) {
         if (!x.relayAsked && !x.relayReason) continue;
         row("RELAY", x.host + ": " + relaySays(x), x.relayAccepted ? "insecure" : null);
+      }
+      for (const x of facts.exchangers || []) {
+        if (!x.legacyAsked && !x.legacyReason) continue;
+        row("LEGACY", x.host + ": " + legacySays(x), x.legacyAccepted ? "weak" : null);
       }
       for (const b of facts.daneBindings || []) {
         row("DANE", b.host + ": " + daneSays(b));
@@ -1788,7 +1770,8 @@ function exchangerSays(x) {
   if (!x.upgraded) return "offered, not negotiated: " + x.reason;
   if (!x.trusted) return x.version + " " + x.suite + ", certificate does not verify: " + x.certificateReason;
   if (!x.nameMatches) return x.version + " " + x.suite + ", certificate does not name this exchanger";
-  return x.version + " " + x.suite + ", certificate verifies";
+  return x.version + " " + x.suite + ", certificate verifies" +
+    (x.expires ? ", runs out " + String(x.expires).slice(0, 10) : "");
 }
 
 // What the relay question found, in the words the terminal uses (R16).
@@ -1800,6 +1783,15 @@ function relaySays(x) {
   if (x.relayAccepted) return "forwards mail for a domain it does not serve";
   if (x.relayAsked) return "refuses to forward for other domains";
   return "not established: " + x.relayReason;
+}
+
+// Whether the exchanger still speaks TLS 1.1 or older to a sender that offers
+// nothing newer, in the words the terminal uses (R16). Asked and not answered
+// is not a refusal (R4).
+function legacySays(x) {
+  if (x.legacyAccepted) return "accepts " + x.legacyVersion + " from a sender offering nothing newer";
+  if (x.legacyAsked && !x.legacyReason) return "refuses TLS 1.1 and older";
+  return "not established: " + x.legacyReason;
 }
 
 // What one exchanger's DANE records made of its certificate.
@@ -1924,10 +1916,26 @@ if (form) form.addEventListener("submit", async event => {
   button.disabled = true;
   const label = button.textContent;
   button.textContent = "Checking";
+
+  // A check page draws its one check in the frame every report is read in;
+  // the names page draws an inventory, which grades nothing and has its own.
+  if (CHECK_ORDER.includes(CHECK_NAME)) {
+    try {
+      const frame = reportFrame(result, domainOnly(target), [CHECK_NAME], [CHECK_NAME]);
+      await reportRun(frame, frame.entries[0], () => check(target, CHECK, asked()));
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+    return;
+  }
+
   show(el("p", "working", CHECK.working));
 
   try {
-    show(CHECK.build(await check(target, CHECK, asked())));
+    const data = await check(target, CHECK, asked());
+    if (CHECK_NAME === "names") namesFrame(result, domainOnly(target), data);
+    else show(CHECK.build(data));
   } catch (err) {
     const hint = err.status === 429
       ? "Wait a moment before trying again."
@@ -1940,6 +1948,442 @@ if (form) form.addEventListener("submit", async event => {
     button.textContent = label;
   }
 });
+// ── The report ──────────────────────────────────────────────────────────
+
+/*
+  One frame for every report, whichever page draws it.
+
+  Read in the order a reader asks, and set as a record rather than a
+  dashboard. How did it end: the cover, with the domain, one sentence, and a
+  board with a row per check, the rule set that graded it, what it found and
+  its verdict stamped at the right. What do I have to do: one list of every
+  rule any check found broken, the insecure ones first, each stamped with its
+  severity and naming the check that found it. And then each check across the
+  page: the name it was asked about with its verdict stamped beside it, as the
+  first thing in the section, then the evidence at the full width it needs.
+
+  The console, the demonstration, the single-check pages and History all draw
+  this, through the same builders from the same JSON (R16), so a report reads
+  the same wherever it is opened.
+
+  Nothing on the cover is new evidence. Its figures are counts of findings and
+  of what the reports themselves say could not be established, and a check
+  that is still running, or did not run, says so in a dashed mark, which no
+  verdict is drawn in (R4).
+*/
+function reportFrame(container, target, names, chosen, opts) {
+  opts = opts || {};
+  clear(container);
+  container.hidden = false;
+
+  const frame = { entries: [], items: [] };
+
+  const cover = el("header", "report-cover");
+  frame.cover = cover;
+  const lead = el("div", "report-lead");
+  lead.appendChild(el("p", "report-eyebrow", "Porch report"));
+  lead.appendChild(el("h2", "report-domain", target));
+  lead.appendChild(el("p", "report-meta", opts.when
+    ? "Kept " + opts.when
+    : "Checked " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC, " +
+      (DEMO_SITE ? "by the demonstration's own server" : "from this installation")));
+  const proof = reportProof();
+  if (proof && !opts.when) lead.appendChild(el("p", "report-meta", proof));
+  cover.appendChild(lead);
+
+  const tally = el("div", "report-tally");
+  frame.say = el("p", "report-say", "Running the checks.");
+  frame.keys = el("p", "report-keys");
+  tally.appendChild(frame.say);
+  tally.appendChild(frame.keys);
+  cover.appendChild(tally);
+
+  // The board: a row per check, its verdict at the right. A report of one
+  // check has its verdict a few lines down, beside the name it is a verdict
+  // on, and a board of one row would say it twice.
+  const board = el("ol", "report-board");
+  board.setAttribute("aria-label", "Checks in this report");
+  if (names.length > 1) {
+    const wrap = el("div", "report-boardwrap");
+    const head = el("div", "report-row report-row-head");
+    head.setAttribute("aria-hidden", "true");
+    for (const label of ["", "Check", "Graded by", "Found", "Verdict"]) head.appendChild(el("span", null, label));
+    wrap.appendChild(head);
+    wrap.appendChild(board);
+    cover.appendChild(wrap);
+  }
+  container.appendChild(cover);
+
+  const findings = el("section", "report-findings");
+  const heading = el("h2", "report-heading", "Findings");
+  frame.found = el("span", "report-heading-count");
+  heading.appendChild(frame.found);
+  findings.appendChild(heading);
+  frame.todo = el("div", "report-todo");
+  findings.appendChild(frame.todo);
+  container.appendChild(findings);
+
+  // Every check named keeps its row, chosen or not, so the board keeps its
+  // shape and says what was left out; one that was not chosen has no section
+  // behind it, because there is nothing to show.
+  names.forEach((name, i) => {
+    const spec = CHECKS[name];
+    const on = chosen.includes(name);
+    const number = String(i + 1).padStart(2, "0");
+
+    const row = el("li", on ? "report-row" : "report-row report-row-off");
+    row.appendChild(el("span", "report-row-num", number));
+    const what = el("span", "report-row-name");
+    const title = el(on ? "a" : "span", "report-row-title", spec.label);
+    what.appendChild(title);
+    what.appendChild(el("span", "report-row-says", spec.says));
+    row.appendChild(what);
+    const policy = el("span", "report-row-policy", "—");
+    row.appendChild(policy);
+    const count = el("span", "report-row-count", on ? "running" : "not selected");
+    row.appendChild(count);
+    const state = el("span", "stamp stamp-small stamp-pending", on ? "running" : "off");
+    row.appendChild(state);
+    board.appendChild(row);
+    if (!on) return;
+    title.href = "#report-" + name;
+
+    // A card per check. Its head, the check's name and its verdict, stays
+    // at the top of the window while the card is read, and gives way to the
+    // next card's at the card's end: a reader scrolling through a long
+    // report always knows which check the rows in front of them belong to.
+    const section = el("section", "report-check report-check-pending");
+    section.id = "report-" + name;
+    const head = el("header", "report-check-head");
+    head.appendChild(el("span", "report-check-num", number));
+    const named = el("div", "report-check-named");
+    named.appendChild(el("h3", "report-check-name", spec.label));
+    named.appendChild(el("p", "report-check-says", spec.says));
+    head.appendChild(named);
+    const mark = el("span", "stamp stamp-pending", "running");
+    head.appendChild(mark);
+    section.appendChild(head);
+    const top = el("div", "report-check-top");
+    section.appendChild(top);
+    const body = el("div", "report-body");
+    body.appendChild(el("p", "working", spec.working));
+    section.appendChild(body);
+    container.appendChild(section);
+
+    frame.entries.push({ name, spec, row, state, count, policy, section, mark, top, body, done: false, verdict: null, open: 0 });
+  });
+
+  reportTally(frame);
+  return frame;
+}
+
+// reportFacts sets a list of labelled values as cells, each label over its
+// value, so a short value takes a short cell and a long one the whole row.
+// Set as one column of label and value, every row of a certificate came out
+// the same length, and a reader could not tell its validity from its
+// fingerprint without reading both. A row with no label of its own continues
+// the one above it, as the logged certificates continue "Logged".
+//
+// Only the arrangement changes: every node the builder made is kept, in the
+// order it made them.
+function reportFacts(dl) {
+  const cells = [];
+  let cell = null;
+  for (const node of Array.from(dl.children)) {
+    if (node.tagName === "DT" && (node.textContent.trim() !== "" || !cell)) {
+      cell = el("div", "report-fact");
+      cells.push(cell);
+    }
+    if (!cell) {
+      cell = el("div", "report-fact");
+      cells.push(cell);
+    }
+    cell.appendChild(node);
+  }
+  clear(dl);
+  dl.className = "report-facts";
+  for (const c of cells) {
+    const values = c.querySelectorAll("dd");
+    if (values.length > 1 || c.textContent.length > 46) c.classList.add("report-fact-wide");
+    dl.appendChild(c);
+  }
+}
+
+// reportProof says what this deployment required before it measured the name,
+// where it required anything. The page says it because the reader of a report
+// handed on cannot see the form it came from.
+function reportProof() {
+  if (DEMO_SITE) return "Our own domain: the demonstration checks nothing else.";
+  if (consoleForm && consoleForm.dataset.proof === "required") {
+    return "Measured only after the domain proved, with a record in its zone, that it is yours.";
+  }
+  return null;
+}
+
+// reportRun runs one check into its section, and says so on its row.
+//
+// A check that could not run says so in its own section and stops nothing:
+// a domain with no mail policy, a host that refuses a handshake, a name this
+// deployment has not been shown control of are each an answer about one check,
+// and letting one end the others would turn a refusal into a blank page.
+async function reportRun(frame, entry, run) {
+  try {
+    reportShow(frame, entry, await run());
+  } catch (err) {
+    const hint = err.status === 429
+      ? "Wait a moment before trying again. Each host has its own budget, whoever asks."
+      : err.status === 503
+        ? "Several scans are running. Try again shortly."
+        : null;
+    clear(entry.body);
+    entry.body.appendChild(failure(err.message || "The check did not complete.", hint));
+    entry.state.textContent = "not run";
+    entry.state.className = "stamp stamp-small stamp-pending";
+    entry.mark.textContent = "not run";
+    entry.count.textContent = "did not run";
+    entry.done = true;
+    reportTally(frame);
+  }
+}
+
+// reportShow draws one check's report into its section.
+function reportShow(frame, entry, data) {
+  const verdict = verdictOf(data);
+
+  // The verdict first, at the head of the card beside the check's name,
+  // where it stays in view while the card is read; then the name it is a
+  // verdict on and what it rests on; then the evidence.
+  const sum = summary(data);
+  const stamp = sum.querySelector(".summary-head > .stamp");
+  if (stamp) {
+    entry.mark.replaceWith(stamp);
+    entry.mark = stamp;
+  }
+  entry.section.className = "report-check " + verdictClass("report-check", verdict);
+  clear(entry.top);
+  entry.top.appendChild(sum);
+  clear(entry.body);
+  entry.body.appendChild(entry.spec.build(data));
+  for (const dl of entry.body.querySelectorAll("dl.pairs")) reportFacts(dl);
+
+  // The card's foot: where the check is explained, and where it ends.
+  const foot = el("p", "report-check-foot");
+  foot.appendChild(link(entry.spec.methodPage, "How this check works"));
+  entry.section.appendChild(foot);
+
+  entry.state.textContent = data.verdict ? verdict : "not graded";
+  entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);
+  if (data.policy) entry.policy.textContent = data.policy;
+
+  // A check that reached nothing broke no rule, and saying only that reads
+  // as a pass. It is said under the verdict instead: there was nothing to
+  // fall short of.
+  if (verdict === "ungraded") {
+    entry.top.appendChild(el("p", "report-absent",
+      "Nothing was measured, so nothing could be graded. This is not a clean result; it is an absent one."));
+  }
+
+  const found = Array.isArray(data.findings) ? data.findings : [];
+  entry.count.textContent = found.length
+    ? (found.length === 1 ? "1 rule broken" : found.length + " rules broken")
+    : (data.verdict ? "no rule broken" : "nothing graded");
+  for (const f of found) frame.items.push({ f, entry });
+
+  entry.open = (data.notes || []).filter((n) => n && n.kind === "unsettled").length;
+  entry.verdict = verdict;
+  entry.done = true;
+  reportTally(frame);
+}
+
+// reportTally writes the cover's sentence and the list of what needs doing,
+// from what has arrived so far.
+function reportTally(frame) {
+  const total = frame.entries.length;
+  const done = frame.entries.filter((e) => e.done).length;
+  const insecure = frame.items.filter((i) => i.f.verdict === "insecure").length;
+  const weak = frame.items.filter((i) => i.f.verdict === "weak").length;
+  const open = frame.entries.reduce((n, e) => n + e.open, 0);
+  const unrun = frame.entries.filter((e) => e.done && e.verdict === null).length;
+  const ungraded = frame.entries.filter((e) => e.verdict === "ungraded").length;
+
+  clear(frame.say);
+  if (done < total) {
+    frame.say.textContent = "Checking: " + done + " of " + total + " done.";
+  } else if (insecure) {
+    frame.say.textContent = insecure === 1 ? "1 thing is insecure." : insecure + " things are insecure.";
+  } else if (weak) {
+    frame.say.textContent = "Nothing is insecure.";
+  } else if (unrun || ungraded) {
+    // Nothing broken among what was graded is not nothing broken (R4).
+    frame.say.textContent = "No rule broken in what could be graded.";
+  } else {
+    frame.say.textContent = "No rule broken.";
+  }
+
+  clear(frame.keys);
+  const key = (count, cls, one, many) => {
+    const k = el("span", "report-key " + cls);
+    k.appendChild(el("b", null, String(count)));
+    k.appendChild(document.createTextNode(" " + (count === 1 ? one : many)));
+    frame.keys.appendChild(k);
+  };
+  key(insecure, "report-key-insecure", "insecure", "insecure");
+  key(weak, "report-key-weak", "weak", "weak");
+  key(open, "report-key-open", "not established", "not established");
+  if (unrun) key(unrun, "report-key-open", "check did not run", "checks did not run");
+
+  frame.found.textContent = done < total && !frame.items.length ? "" : String(frame.items.length);
+
+  clear(frame.todo);
+  const items = frame.items.slice().sort(
+    (a, b) => (VERDICT_ORDER[b.f.verdict] || 0) - (VERDICT_ORDER[a.f.verdict] || 0)
+  );
+  if (!items.length) {
+    frame.todo.appendChild(el("p", "report-todo-empty", done < total
+      ? "Nothing yet. The list fills in as each check finishes."
+      : (unrun || ungraded)
+        ? "None in what was graded. A check that did not run or graded nothing is not a pass."
+        : "None. No check found a rule broken."));
+    return;
+  }
+  for (const item of items) frame.todo.appendChild(reportItem(item.f, item.entry));
+}
+
+// reportItem is one broken rule, in the list of what needs doing: its
+// severity, what the rule says, which check found it and the documents it
+// rests on.
+function reportItem(f, entry) {
+  const item = el("article", "report-item " + verdictClass("report-item", f.verdict));
+  item.appendChild(el("span", "stamp stamp-small " + verdictClass("stamp", f.verdict), f.verdict || "finding"));
+
+  const main = el("div", "report-item-main");
+  main.appendChild(el("h3", "report-item-title", f.title || "Untitled finding"));
+  if (f.rationale) main.appendChild(el("p", "report-item-body", f.rationale));
+
+  const from = el("p", "report-item-from");
+  const check = el("a", "report-item-check", entry.spec.label);
+  check.href = "#report-" + entry.name;
+  from.appendChild(check);
+  if (f.ruleId) from.appendChild(el("span", "finding-rule", f.ruleId));
+  if (Array.isArray(f.references)) {
+    for (const ref of f.references) from.appendChild(link(ref.url, ref.label || ref.url));
+  }
+  main.appendChild(from);
+
+  item.appendChild(main);
+  return item;
+}
+
+// ── The names report ────────────────────────────────────────────────────
+
+/*
+  The inventory, in the frame a report is drawn in.
+
+  It grades nothing, so the cover carries no verdict and no stamp. It says
+  how many names were found, what the ones that were asked about are doing,
+  and which source answered with how many — a source that was not asked, or
+  could not be read, says that on its row rather than reading as one that
+  found nothing (R4).
+
+  One thing does go above the list: a name that is an alias to a name that
+  does not exist. Whoever claims that target next answers for the name, which
+  is the one finding here that is somebody else's to exploit.
+*/
+const NAME_SOURCES = [
+  ["The zone", "zone"], ["Its proofs", "nsec"], ["Certificates", "logs"], ["Records", "records"],
+  ["Passive DNS", "passive"], ["The hosts", "presented"], ["Reverse DNS", "reverse"], ["Your list", "known"],
+];
+
+function namesFrame(container, target, data, opts) {
+  opts = opts || {};
+  clear(container);
+  container.hidden = false;
+  data = data || {};
+
+  const cover = el("header", "report-cover");
+  const lead = el("div", "report-lead");
+  lead.appendChild(el("p", "report-eyebrow", "Porch names"));
+  lead.appendChild(el("h2", "report-domain", target));
+  const kept = data.producedAt && !data.producedAt.startsWith("0001-01-01");
+  lead.appendChild(el("p", "report-meta", opts.when
+    ? "Kept " + opts.when
+    : kept
+      ? "Listed " + producedAt(data.producedAt)
+      : "Listed " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC"));
+  const proof = reportProof();
+  if (proof && !opts.when) lead.appendChild(el("p", "report-meta", proof));
+  cover.appendChild(lead);
+
+  const hosts = (data.names || []).filter((n) => !n.wildcard);
+  const status = (n) => (n.now && n.now.status) || "";
+  const live = hosts.filter((n) => status(n) === "live").length;
+  const elsewhere = hosts.filter((n) => status(n) && status(n) !== "live").length;
+  const dangling = hosts.filter((n) => status(n) === "dangling");
+  const distinct = data.distinct || 0;
+
+  const tally = el("div", "report-tally");
+  tally.appendChild(el("p", "report-say", distinct === 1 ? "1 name found." : distinct + " names found."));
+  const keys = el("p", "report-keys");
+  const key = (count, cls, word) => {
+    const k = el("span", "report-key " + cls);
+    k.appendChild(el("b", null, String(count)));
+    k.appendChild(document.createTextNode(" " + word));
+    keys.appendChild(k);
+  };
+  if (data.probed) {
+    key(live, "report-key-live", "live");
+    key(elsewhere, "report-key-weak", "not live");
+  } else {
+    keys.appendChild(el("span", "report-key report-key-open", "what each name is doing was not asked"));
+  }
+  if (data.wildcards) key(data.wildcards, "report-key-open", data.wildcards === 1 ? "wildcard" : "wildcards");
+  tally.appendChild(keys);
+  cover.appendChild(tally);
+
+  const board = el("ol", "report-board report-board-sources");
+  board.setAttribute("aria-label", "Sources read");
+  NAME_SOURCES.forEach(([label, field], i) => {
+    const reading = data[field] || {};
+    const row = el("li", "report-row");
+    row.appendChild(el("span", "report-row-num", String(i + 1).padStart(2, "0")));
+    row.appendChild(el("span", "report-row-title", label));
+    let state;
+    if (reading.reason) state = "not established";
+    else if (!reading.asked) state = "not asked";
+    else state = (reading.named || 0) === 1 ? "1 name" : (reading.named || 0) + " names";
+    row.appendChild(el("span", answered(reading) ? "report-row-count" : "report-row-count report-row-quiet", state));
+    board.appendChild(row);
+  });
+  cover.appendChild(board);
+  container.appendChild(cover);
+
+  if (dangling.length) {
+    const findings = el("section", "report-findings");
+    const heading = el("h2", "report-heading", "Findings");
+    heading.appendChild(el("span", "report-heading-count", String(dangling.length)));
+    findings.appendChild(heading);
+    const todo = el("div", "report-todo");
+    for (const n of dangling) {
+      const item = el("article", "report-item report-item-weak");
+      item.appendChild(el("span", "stamp stamp-small stamp-weak", "Review"));
+      const main = el("div", "report-item-main");
+      main.appendChild(el("h3", "report-item-title", n.name + " is an alias to a name that does not exist"));
+      main.appendChild(el("p", "report-item-body",
+        "It points at " + n.now.alias + ", which does not resolve. Whoever claims that name next " +
+        "answers for " + n.name + ". Remove the alias, or point it at something you control."));
+      item.appendChild(main);
+      todo.appendChild(item);
+    }
+    findings.appendChild(todo);
+    container.appendChild(findings);
+  }
+
+  const body = el("div", "report-body report-names");
+  body.appendChild(buildNames(data));
+  for (const dl of body.querySelectorAll("dl.pairs")) reportFacts(dl);
+  container.appendChild(body);
+}
+
 // ── The console ─────────────────────────────────────────────────────────
 
 /*
@@ -1976,71 +2420,6 @@ function selectedChecks() {
     if (box.checked && CHECKS[box.value]) chosen.add(box.value);
   });
   return CHECK_ORDER.filter(name => chosen.has(name));
-}
-
-// consoleSection is one check's block: a heading that says which check and
-// how it ended, and room for the report underneath.
-function consoleSection(spec) {
-  const section = el("section", "run");
-
-  const head = el("div", "run-head");
-  head.appendChild(el("h2", "run-name", spec.label));
-  head.appendChild(el("p", "run-says", spec.says));
-
-  const state = el("p", "run-state", "running");
-  head.appendChild(state);
-  section.appendChild(head);
-
-  const body = el("div", "run-body");
-  section.appendChild(body);
-
-  return { section, state, body };
-}
-
-/*
-  A check that could not run says so in its own section and stops nothing.
-
-  The whole reason the runs are separate. A domain with no mail policy at all,
-  a host that refuses a handshake, a name this deployment has not been shown
-  control of — each of those is an answer about one check, and letting it end
-  the other two would turn one refusal into a blank page. An operator reading
-  "Transport: strong, Mail: refused" knows exactly where they stand; an
-  operator reading nothing does not.
-*/
-async function runCheck(name, target) {
-  const spec = CHECKS[name];
-  const { section, state, body } = consoleSection(spec);
-  consoleResults.appendChild(section);
-
-  body.appendChild(el("p", "working", spec.working));
-
-  try {
-    const data = await check(target, spec, selectorsAsked(name));
-    clear(body);
-    body.appendChild(spec.build(data));
-
-    // The report drawn above carries the verdict, so the heading stops
-    // repeating it: one result said twice is a reader checking whether the
-    // two agree. What the heading is for is the states a report cannot
-    // show — running, and a check that never produced one.
-    const verdict = verdictOf(data);
-    state.textContent = "";
-    state.className = "run-state";
-    return verdict;
-  } catch (err) {
-    clear(body);
-
-    const hint = err.status === 429
-      ? "Wait a moment before trying again. Each host has its own budget, whoever asks."
-      : err.status === 503
-        ? "Several scans are running. Try again shortly."
-        : null;
-
-    body.appendChild(failure(err.message || "The check did not complete.", hint));
-    state.textContent = "not run";
-    state.className = "run-state stamp-ungraded";
-    return null;
-  }
 }
 
 /*
@@ -2462,8 +2841,9 @@ if (consoleForm) {
       if (!(await proven(target))) return;
 
       // Awaited one at a time on purpose. See the note above.
-      for (const name of chosen) {
-        await runCheck(name, target);
+      const frame = reportFrame(consoleResults, target, CHECK_ORDER, chosen);
+      for (const entry of frame.entries) {
+        await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name)));
       }
     } finally {
       consoleButton.disabled = false;
@@ -2475,126 +2855,18 @@ if (consoleForm) {
 // ── The Porch page ──────────────────────────────────────────────────────
 
 /*
-  Every check on one name, each in a tab of its own.
+  Every check on one name, in the frame every report is drawn in.
 
-  A tab per check rather than one long page, because the three answer
-  different questions over different evidence and a reader usually wants one
-  of them. Each tab carries its own state — running, a verdict, not graded, not
-  run — so a TLS result is never read as saying anything about mail, and a
-  check that failed says so without hiding the two that did not.
-
-  The report inside a tab is the one every other page draws, built by the
-  same functions from the same JSON (R16). Only the arrangement is new.
+  It was a tab per check. The board's rows on the cover now do what the tabs
+  did — each carries its own state, running, a verdict, not graded or not
+  run, so a TLS result is never read as saying anything about mail — and
+  what the tabs could not do is the list above the checks: every rule any of
+  them found broken, in one place, worst first.
 */
 const porchForm = document.getElementById("porch-form");
 const porchTarget = document.getElementById("porch-target");
 const porchButton = document.getElementById("porch-submit");
 const porchResults = document.getElementById("porch-results");
-
-function porchTabs(target, chosen) {
-  clear(porchResults);
-  porchResults.hidden = false;
-
-  const head = el("div", "porch-report-head");
-  head.appendChild(el("p", "eyebrow", "Live report"));
-  head.appendChild(el("h2", "porch-report-title", target));
-  porchResults.appendChild(head);
-
-  const tabs = el("div", "tabs");
-  tabs.setAttribute("role", "tablist");
-  tabs.setAttribute("aria-label", "Checks");
-  porchResults.appendChild(tabs);
-
-  // Every check has a tab, run or not. One chosen check drew one tab across
-  // the whole width, which read as a banner rather than a choice; the others
-  // are drawn switched off, so the row keeps its shape and says what was
-  // left out. A switched-off tab has no panel and is not in the arrow-key
-  // rotation, because there is nothing behind it.
-  const entries = [];
-  for (const name of CHECK_ORDER) {
-    const spec = CHECKS[name];
-    const on = chosen.includes(name);
-
-    const tab = el("button", on ? "tab" : "tab tab-off");
-    tab.type = "button";
-    tab.id = "tab-" + name;
-    tab.setAttribute("role", "tab");
-    tab.appendChild(el("span", "tab-name", spec.label));
-    const state = el("span", "tab-state", on ? "running" : "not selected");
-    tab.appendChild(state);
-    tab.appendChild(el("span", "tab-says", spec.says));
-    tabs.appendChild(tab);
-
-    if (!on) {
-      tab.disabled = true;
-      tab.setAttribute("aria-disabled", "true");
-      tab.setAttribute("aria-selected", "false");
-      tab.tabIndex = -1;
-      continue;
-    }
-    tab.setAttribute("aria-controls", "panel-" + name);
-
-    const panel = el("div", "tab-panel");
-    panel.id = "panel-" + name;
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", tab.id);
-    panel.appendChild(el("p", "working", spec.working));
-    porchResults.appendChild(panel);
-
-    entries.push({ spec, tab, state, panel });
-  }
-
-  const select = index => {
-    entries.forEach((entry, i) => {
-      const on = i === index;
-      entry.tab.setAttribute("aria-selected", String(on));
-      entry.tab.tabIndex = on ? 0 : -1;
-      entry.panel.hidden = !on;
-    });
-  };
-
-  entries.forEach((entry, i) => entry.tab.addEventListener("click", () => select(i)));
-
-  // The arrow keys move between tabs, as a tab list is expected to.
-  tabs.addEventListener("keydown", event => {
-    const at = entries.findIndex(entry => entry.tab === document.activeElement);
-    if (at < 0) return;
-    let next = at;
-    if (event.key === "ArrowRight") next = (at + 1) % entries.length;
-    else if (event.key === "ArrowLeft") next = (at - 1 + entries.length) % entries.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = entries.length - 1;
-    else return;
-    event.preventDefault();
-    select(next);
-    entries[next].tab.focus();
-  });
-
-  select(0);
-  return entries;
-}
-
-async function runPorchEntry(entry, target) {
-  try {
-    const data = await check(target, entry.spec);
-    clear(entry.panel);
-    entry.panel.appendChild(entry.spec.build(data));
-
-    const verdict = verdictOf(data);
-    entry.state.textContent = data.verdict ? verdict : "not graded";
-    entry.state.className = "tab-state " + verdictClass("stamp", verdict);
-  } catch (err) {
-    clear(entry.panel);
-    const hint = err.status === 429
-      ? "Wait a moment before trying again. Each host has its own budget, whoever asks."
-      : err.status === 503
-        ? "Several checks are running. Try again shortly."
-        : null;
-    entry.panel.appendChild(failure(err.message || "The check did not complete.", hint));
-    entry.state.textContent = "not run";
-    entry.state.className = "tab-state stamp-ungraded";
-  }
-}
 
 if (porchForm) {
   porchForm.addEventListener("submit", async event => {
@@ -2614,14 +2886,14 @@ if (porchForm) {
     porchButton.textContent = "Checking";
 
     try {
-      const entries = porchTabs(target, chosen);
+      const frame = reportFrame(porchResults, target, CHECK_ORDER, chosen);
       const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       porchResults.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
 
       // One at a time, as the console runs them: each check spends from the
       // host's budget, and three at once is the shape the budget discourages.
-      for (const entry of entries) {
-        await runPorchEntry(entry, target);
+      for (const entry of frame.entries) {
+        await reportRun(frame, entry, () => check(target, entry.spec));
       }
     } finally {
       porchButton.disabled = false;
@@ -2804,32 +3076,35 @@ function historyRow(entry) {
     open.disabled = true;
     try {
       const record = await historyRequest("GET", "/api/v1/history/" + entry.id);
-      const view = CHECKS[record.check];
+      const view = CHECK_ORDER.includes(record.check) ? CHECKS[record.check] : null;
       clear(historyReport);
-      const head = el("div", "porch-report-head");
-      // The report names its own target; the line above says which check
-      // and when, which the report does not.
-      head.appendChild(el("p", "eyebrow", (view ? view.label : record.check) + " · kept " + record.date));
-      historyReport.appendChild(head);
+      // In the frame every report is drawn in, with one check, saying when
+      // it was kept rather than when it was checked.
+      let frame = null;
+      if (view) {
+        frame = reportFrame(historyReport, entry.target, [record.check], [record.check], { when: record.date });
+        reportShow(frame, frame.entries[0], record.report);
+      }
       // The report kept before this one for the same check and host, set
-      // above it. Asked for only when this one is opened, through the same
-      // gate; a failure to read it costs the comparison and nothing else.
+      // under the cover. Asked for only when this one is opened, through the
+      // same gate; a failure to read it costs the comparison and nothing else.
       const previous = earlierEntry(entry);
-      if (previous && previous.policy && record.report && typeof record.report === "object" &&
+      if (frame && previous && previous.policy && record.report && typeof record.report === "object" &&
           typeof record.report.policy === "string" && record.report.policy !== "") {
         try {
           const before = await historyRequest("GET", "/api/v1/history/" + previous.id);
           if (before && before.report && typeof before.report === "object") {
             const changes = reportChanges(record.report, before.report);
-            historyReport.appendChild(changesBlock(changes, record.report, before.report, previous.date));
+            frame.cover.after(changesBlock(changes, record.report, before.report, previous.date));
           }
         } catch {
           // The comparison is extra; the report below is what was asked for.
         }
       }
-      if (view) {
-        historyReport.appendChild(view.build(record.report));
-      } else {
+      if (!view && record.check === "names") {
+        // An inventory grades nothing and is drawn as one.
+        namesFrame(historyReport, entry.target, record.report, { when: record.date });
+      } else if (!view) {
         historyReport.appendChild(failure("This report is from a check this build does not draw."));
       }
       historyReport.hidden = false;

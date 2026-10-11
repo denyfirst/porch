@@ -60,6 +60,8 @@ import (
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/rdap"
+	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -82,6 +84,11 @@ type Resolver interface {
 	LookupCNAME(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupNSEC3PARAM(ctx context.Context, name string) (dnsclient.ZoneAnswer, error)
 	LookupTXT(ctx context.Context, name string) (dnsclient.TXTAnswer, error)
+
+	// LookupUnchecked asks again with the checking-disabled bit, where a
+	// resolver failed the question: what a validating one does with a zone
+	// whose signatures do not hold.
+	LookupUnchecked(ctx context.Context, name string, qtype uint16) (dnsclient.ZoneAnswer, error)
 }
 
 // Scanner reads one domain's DNS.
@@ -112,8 +119,27 @@ type Scanner struct {
 	// package's own.
 	Servers ServerAsker
 
+	// Registry reads the domain's registration from the registry that holds
+	// it. Nil asks none. Set wherever the zone is proven, or is the
+	// demonstration's own (internal/rdap).
+	Registry Registry
+
+	// Routes asks whether the routes to the name's addresses, and to its
+	// name servers', are signed (internal/rpki). Nil asks nobody.
+	Routes RouteChecker
+
 	// Now is the clock, for a test that needs a fixed duration.
 	Now func() time.Time
+}
+
+// Registry is what reads a registration.
+type Registry interface {
+	Lookup(ctx context.Context, name string) rdap.Registration
+}
+
+// RouteChecker is what asks whether the routes to addresses are signed.
+type RouteChecker interface {
+	Check(ctx context.Context, addresses []string) []rpki.Route
 }
 
 // Result is one domain's DNS as it was read.
@@ -175,32 +201,90 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	}
 
 	facts := policy.DNSFacts{Policy: policy.DNSVersion}
-	s.readZone(ctx, resolver, domain, &facts)
+	soa := s.readZone(ctx, resolver, domain, &facts)
 	s.readAddresses(ctx, resolver, domain, &facts)
 	s.readAlias(ctx, resolver, domain, &facts)
 	s.readNameServers(ctx, resolver, domain, &facts)
-	s.readChain(ctx, resolver, domain, &facts)
+	s.readChain(ctx, resolver, domain, soa, &facts)
 	s.readAbsence(ctx, resolver, domain, &facts)
 	s.askServers(ctx, domain, &facts)
 	s.askParent(ctx, resolver, domain, &facts)
 
+	s.readRegistration(ctx, domain, &facts)
+	s.readRoutes(ctx, &facts)
+	facts.IPv6Line = policy.DNSIPv6Line(facts)
+
 	graded := policy.GradeDNS(facts, s.now())
+	notes := graded.Notes
+	if facts.Registration != nil {
+		notes = append(notes, policy.DescribeRegistration(*facts.Registration, s.now())...)
+	}
+	notes = append(notes, policy.DescribeRoutes(facts.Routes)...)
 
 	return &Result{
 		Domain:   domain,
 		Policy:   policy.DNSVersion,
 		Verdict:  graded.Verdict,
 		Findings: graded.Findings,
-		Notes:    graded.Notes,
+		Notes:    notes,
 		Observed: &facts,
 		Duration: s.now().Sub(started),
 	}, nil
 }
 
+// readRegistration asks the registry what it holds for the domain this name
+// belongs to, which is the one thing about a domain its own DNS cannot say.
+func (s *Scanner) readRegistration(ctx context.Context, domain string, facts *policy.DNSFacts) {
+	if s.Registry == nil {
+		return
+	}
+	r := s.Registry.Lookup(ctx, domain)
+	f := policy.RegistrationFacts{
+		Asked:            r.Asked,
+		Domain:           r.Domain,
+		Registry:         r.Registry,
+		Registrar:        r.Registrar,
+		Created:          r.Created,
+		Expires:          r.Expires,
+		Changed:          r.Changed,
+		Statuses:         r.Statuses,
+		TransferLocked:   r.TransferLocked(),
+		RegistryLocked:   r.RegistryLocked(),
+		DelegationSigned: r.DelegationSigned,
+		Reason:           r.Reason,
+	}
+	facts.Registration = &f
+	facts.RegistrationLine = policy.RegistrationLine(f, s.now())
+}
+
+// readRoutes asks whether the routes to the name's own addresses, and then to
+// its name servers', are signed. The name's first, because they are what a
+// visitor reaches; the client bounds how many are asked about.
+func (s *Scanner) readRoutes(ctx context.Context, facts *policy.DNSFacts) {
+	if s.Routes == nil {
+		return
+	}
+	addresses := append(append([]string{}, facts.IPv4...), facts.IPv6...)
+	for _, ns := range facts.NameServers {
+		addresses = append(addresses, ns.Addresses...)
+	}
+	if len(addresses) == 0 {
+		return
+	}
+	for _, r := range s.Routes.Check(ctx, addresses) {
+		facts.Routes = append(facts.Routes, policy.RouteFacts{
+			Address: r.Address, Prefix: r.Prefix, Origins: r.Origins, State: r.State, Reason: r.Reason,
+		})
+	}
+	facts.RoutesLine = policy.RoutesLine(facts.Routes)
+}
+
 // readZone reads the record at the top of the zone and the text records, and
-// decides whether a zone begins here at all.
-func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
+// decides whether a zone begins here at all. The answer is returned for the
+// signature check, which needs the record as it was signed.
+func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) dnsclient.ZoneAnswer {
 	answer, err := r.LookupSOA(ctx, domain)
+	answer, err = s.unlessRejected(ctx, r, domain, dnsclient.TypeSOA, answer, err, facts)
 
 	// The signature over the record at the top of the zone, which came with
 	// the answer because every query here asks for DNSSEC data.
@@ -248,6 +332,32 @@ func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts
 			facts.Text = append(facts.Text, display.Mark(v))
 		}
 	}
+	return answer
+}
+
+// unlessRejected asks again, with checking disabled, where the resolver failed
+// a question about the zone's own records.
+//
+// A validating resolver answers SERVFAIL, and nothing else, for a zone whose
+// signatures do not hold — the case this check exists for. Taken at its word,
+// that left the report saying no zone begins at the name and nothing about
+// why. Asked again with the CD bit, the same resolver hands over the records
+// and their signatures, and the check below says what is wrong with them.
+//
+// Only the record at the top of the zone, the digest and the keys, which are
+// what that check reads; every other question keeps the answer a visitor gets.
+// And nothing that comes back this way is believed for being there: it is
+// marked, and graded only by what verifying it finds.
+func (s *Scanner) unlessRejected(ctx context.Context, r Resolver, domain string, qtype uint16, answer dnsclient.ZoneAnswer, err error, facts *policy.DNSFacts) (dnsclient.ZoneAnswer, error) {
+	if !errors.Is(err, dnsclient.ErrServerFail) {
+		return answer, err
+	}
+	again, againErr := r.LookupUnchecked(ctx, domain, qtype)
+	if againErr != nil || !carries(again, qtype) {
+		return answer, err
+	}
+	facts.ResolverRejected = true
+	return again, nil
 }
 
 // readAddresses asks for both address types, because they are two questions
@@ -306,13 +416,14 @@ func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string
 }
 
 // readChain reads both ends of the DNSSEC link and works out whether they
-// meet.
-func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
+// meet, and then checks the signatures the link exists for.
+func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, soa dnsclient.ZoneAnswer, facts *policy.DNSFacts) {
 	if !facts.Apex {
 		return
 	}
 
 	signers, err := r.LookupDS(ctx, domain)
+	signers, err = s.unlessRejected(ctx, r, domain, dnsclient.TypeDS, signers, err, facts)
 	if err != nil {
 		facts.ChainReason = shape(err)
 		return
@@ -324,6 +435,7 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, fact
 	facts.Signed = true
 
 	keys, err := r.LookupDNSKEY(ctx, domain)
+	keys, err = s.unlessRejected(ctx, r, domain, dnsclient.TypeDNSKEY, keys, err, facts)
 	if err != nil {
 		facts.ChainReason = shape(err)
 		return
@@ -345,6 +457,7 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, fact
 		return
 	}
 
+	var anchored []dnsclient.DNSKEY
 	for _, ds := range signers.DS {
 		record := policy.DelegationSigner{
 			KeyTag:     ds.KeyTag,
@@ -367,10 +480,30 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, fact
 			if equalBytes(digest.Sum(nil), ds.Digest) {
 				record.Matched = true
 				facts.ChainMatched = true
+				anchored = append(anchored, k)
 				break
 			}
 		}
 		facts.Signers = append(facts.Signers, record)
+	}
+
+	if facts.ChainMatched {
+		s.checkSignatures(owner, domain, keys, soa, anchored, facts)
+	}
+}
+
+// carries says whether an answer holds records of the type asked for. An
+// unchecked answer that holds none says nothing the failure did not.
+func carries(answer dnsclient.ZoneAnswer, qtype uint16) bool {
+	switch qtype {
+	case dnsclient.TypeSOA:
+		return len(answer.SOA) > 0
+	case dnsclient.TypeDS:
+		return len(answer.DS) > 0
+	case dnsclient.TypeDNSKEY:
+		return len(answer.Keys) > 0
+	default:
+		return false
 	}
 }
 

@@ -37,10 +37,12 @@ is nil
 
 *Guarded by:* `TestPrivateTargetsAreRefused`
 
-### N3 — Only implicit-TLS ports are dialled
+### N3 — Only implicit-TLS ports are dialled, and a fixed list of services that should not face the internet
 
 *Enforced in:* `internal/scan`, in `Scanner.Scan`, unless `AllowAnyPort`;
-`internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`
+`internal/scan.Scanner.prober`, passed to `internal/safedial.Dialer`;
+`internal/exposure.Services` and `internal/exposure.Prober.Probe`, which dial
+only those ports, through safedial, at two addresses at most, and send nothing
 
 *Lifted by:* the command line only
 
@@ -57,7 +59,18 @@ is nil
 `TestAnExchangerBehindAnAliasIsNotAskedAboutRelay`,
 `TestAnOpenRelayIsGradedAndSilenceIsNot`,
 `TestTheRelayQuestionIsAskedOverEncryptionWhereThereIsOne`,
-`TestTheRelayAnswerReachesBothFacesOfTheReport`
+`TestTheRelayAnswerReachesBothFacesOfTheReport`,
+`TestAnExchangerThatChoosesAnOldVersionIsSaidToAcceptIt`,
+`TestARefusalAndASilenceAreTwoAnswers`,
+`TestTheOldVersionQuestionNeedsTheWholeOpening`,
+`TestTheOldVersionQuestionIsAskedOnlyWhereItAddsSomething`,
+`TestOldTLSOnAnExchangerIsGradedByWhatItStillSpeaks`,
+`TestTheOldVersionAnswerReachesBothFaces`,
+`TestAnOpenServiceIsReportedAndSentNothing`,
+`TestOneAddressOfEachFamilyIsAsked`, `TestThePrivateNetworkIsNeverAsked`,
+`TestNoAddressIsNotAnAnswer`, `TestTheListIsFixedAndEachEntrySaysWhy`,
+`TestAScanSaysWhichRiskyServicesAnswer`,
+`TestTheExposureLineNamesWhatAnswered`
 
 ### N4 — Every network operation is bounded
 
@@ -128,13 +141,22 @@ One `GET` of `/` over HTTPS and over plaintext; after that, only the addresses
 a `Location` header names. The only other paths ever asked for are files that
 exist to be read by strangers: `/.well-known/security.txt`,
 `/.well-known/mta-sts.txt` where a zone announces a policy, and
-`/.well-known/porch-challenge` for proof of control.
+`/.well-known/porch-challenge` for proof of control — and the fixed list in
+`internal/leaks.Files` of files that must never be served, each asked for by
+name, never derived from anything the site said, and nothing they hold kept.
 
 *Enforced in:* `internal/webprobe`, `internal/markup`,
 `internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
-`internal/httpapi.Server.operatorView`
+`internal/httpapi.Server.operatorView`, `internal/leaks.Files`,
+`internal/leaks.Prober.Probe`, `internal/webscan.withLeaks`
 
 *Guarded by:* `TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestASiteThatAnswersEverythingHasNothingExposed`,
+`TestEachFileIsRecognisedByWhatItIs`, `TestALookAlikeIsNotTheFile`,
+`TestASiteNotReachedIsNotASiteWithNothingExposed`,
+`TestTheListIsFixedAndEveryEntryRecognisesSomething`,
+`TestServedSecretsAreGradedByWhatTheyGiveAway`,
+`TestTheLeaksLineSaysWhatWasChecked`, `TestAServedSecretIsGradedAndShown`,
 `TestTheCommandLinePrintsTheSecurityContacts`,
 `TestTheServicePrintsSecurityContactsOnlyWhereItRequiredProof`,
 `TestTheContactsKeptAreBoundedAndTheCountIsNot`,
@@ -340,7 +362,7 @@ exist to be read by strangers: `/.well-known/security.txt`,
 `internal/scan.listStatus`, `internal/policy.GradeStapling`,
 `internal/policy.RevocationLine`
 
-*Guarded by:* `TestAReportThatAskedTheResponderDoesNotSayNobodyDid`,
+*Guarded by:* `TestAReportThatAskedTheResponderSaysSo`,
 `TestACertificateOnTheListIsRevoked`, `TestACertificateNotOnTheListIsGood`,
 `TestAListTheIssuerDidNotSignIsRefused`,
 `TestAListThatDoesNotCoverTheCertificateIsNotAnAnswer`,
@@ -364,12 +386,18 @@ exist to be read by strangers: `/.well-known/security.txt`,
 `TestAListThatCouldNotBeReadSaysWhy`, `TestOneWithdrawalIsOneFinding`,
 `TestADeploymentThatReadsNoListIsUnchanged`
 
-### N12 — A question that names the domain is a disclosure, and is treated as one
+### N12 — A question that names the domain goes to the source that holds the answer, and only about a name the scan may reach
 
 *Enforced in:* `cmd/porch-scan.httpsEndpoint`, `cmd/porchd.httpsEndpoint`,
 `internal/policy.UnaccountedLine`, `internal/scan.Scanner.searchLogs`,
-`internal/ctsearch`, `internal/ctsearch.SearchEstate`, `internal/ctsearch.Fallback`,
-`internal/ctsearch.Cached`, `cmd/porchd.demoMonitor`, `internal/liveness`,
+`internal/ctsearch`, `internal/ctsearch.SearchEstate`, `internal/ctsearch.Cached`,
+`cmd/porchd.demoMonitor`, `cmd/porchd.certSpotter`,
+`cmd/porch-scan.certSpotter`, `cmd/porchd.removedFlags`,
+`internal/rdap`, `internal/rdap.Client.Lookup`,
+`internal/dnsscan.Scanner.readRegistration`,
+`internal/hstspreload`, `internal/webscan.withPreload`,
+`internal/rpki`, `internal/dnsscan.Scanner.readRoutes`,
+`cmd/porch-scan.removedFlags`, `internal/liveness`,
 `internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`, `internal/inventory`,
 `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
@@ -523,11 +551,10 @@ exist to be read by strangers: `/.well-known/security.txt`,
 `TestACheckRefusesAListOfNames`,
 `TestTheConsoleOffersTheInventoryAsADoorNotABox`,
 `TestTheDemonstrationOffersTheInventoryAsADoor`,
-`TestAMonitorOrRegisterIsAskedOnlyOverHTTPS`,
+`TestARegisterIsAskedOnlyOverHTTPS`,
 `TestTheCertificatesTheLoggedLineCountsAreListed`,
 `TestTheCertificatesTheLoggedLineCountsArePrinted`,
-`TestOneCertificateLoggedTwiceIsOneCertificate`,
-`TestTwoDifferentCertificatesAreTwo`, `TestTheNameIsEscapedIntoTheQuery`,
+`TestTheNameIsFoldedIntoTheQuery`,
 `TestAwkwardNamesDoNotEscapeTheQuery`,
 `TestNothingThatIsNotAnAnswerReadsAsNoneFound`,
 `TestAnEmptyAnswerIsNotAFailure`, `TestWhatTheMonitorSaysIsBoundedAndStripped`,
@@ -541,10 +568,28 @@ exist to be read by strangers: `/.well-known/security.txt`,
 `TestACheckKeptForLongerIsKeptForLonger`,
 `TestKeepingOneCheckLongerKeepsNothingOnItsOwn`,
 `TestKeepingACheckThatDoesNotExistStops`,
-`TestTheDemonstrationAsksTheMonitorThatKeepsUpFirst`,
+`TestEveryDeploymentAsksTheMonitorThatKeepsUp`,
 `TestOnlyAnAnsweredReportIsKept`, `TestWithoutAnIntervalEveryCallerIsScanned`,
 `TestTheOrdinaryBuildSearchesTheLogsWhenAsked`, `TestNoSearcherMeansNoSearch`,
-`TestTheLogSearchIsOffUntilItIsAskedFor`,
+`TestEveryScanAsksTheMonitorAndTheAuthority`,
+`TestARemovedFlagIsRefusedWithItsReason`,
+`TestTheRegistrationIsReadAndOnlyTheDomainIsNamed`,
+`TestADomainUnderASuffixIsFoundAboveIt`,
+`TestNothingThatIsNotARegistrationReadsAsOne`,
+`TestARegistryIsAskedOnlyOverHTTPS`, `TestTheListIsReadOnceAndKept`,
+`TestAListThatCannotBeReadIsNotHammered`, `TestATopLevelNameIsNotAskedAbout`,
+`TestARegistryLockIsAllThreeServerProhibitions`,
+`TestTheRegistrationReachesTheReport`, `TestNoRegistryAsksNothing`,
+`TestTheRegistryIsAskedWhereAScanMayReach`,
+`TestTheRegistrationLineSaysWhenAndWhetherItIsLocked`,
+`TestARegistrationNotEstablishedClaimsNothing`,
+`TestTheListIsAskedAboutTheHost`, `TestOnlyWhatTheServiceDefinesIsBelieved`,
+`TestARedirectIsNotFollowed`, `TestThePreloadListSitsBesideTheHeader`,
+`TestAnAnswerIsKeptForAnHour`,
+`TestEachAddressGetsItsRoutesState`, `TestTheWorstOriginDecides`,
+`TestAnAnswerThatDoesNotParseIsNoAnswer`, `TestTheAddressesAreBounded`,
+`TestAServiceThatCannotBeReachedSaysSo`, `TestTheRoutesReachTheReport`,
+`TestTheRoutesLineCountsEachState`,
 `TestADeploymentThatSearchedNoLogsSaysNothing`,
 `TestAFailedSearchIsNotAnEmptyEstate`, `TestOneCertificateInUseReadsAsSettled`,
 `TestACertificateNotPresentedIsSaidPlainly`,
@@ -560,11 +605,10 @@ exist to be read by strangers: `/.well-known/security.txt`,
 `TestTheInventoryAlwaysSaysWhatItCannotShow`,
 `TestAFailedSearchPrintsNoInventory`, `TestTheInventoryCountsInWords`,
 `TestTheInventoryTakesADomainAndNotAnAddress`,
-`TestTheSecondMonitorKeepsOnlyThisEstate`,
+`TestTheMonitorKeepsOnlyThisEstate`,
 `TestTheSearchForOneNameAsksForThatNameAndItsCertificates`,
 `TestTheSerialComesFromTheCertificateAndAPrecertificateIsTheSame`,
 `TestAnAnswerWithACertificateThisCannotReadIsNoAnswer`,
-`TestTheSecondMonitorIsAskedOnlyWhenTheFirstFails`,
 `TestAKeptAnswerIsHandedOutUntilItIsDue`,
 `TestTheLastGoodAnswerStandsInForADayAndSaysItsAge`,
 `TestAFailureIsNotKept`, `TestCallersOnAColdEntryShareOneRequest`,
@@ -760,7 +804,7 @@ exist to be read by strangers: `/.well-known/security.txt`,
 `TestEveryUndertakingCanBeCheckedAndIsNamed`,
 `TestTheOrganisationNamesNoProduct`,
 `TestTheUndertakingsAreNotCopiedIntoAnyPage`,
-`TestThePrivacyPageSaysWhichThirdPartiesAreAsked`,
+`TestThePrivacyPageSaysWhichSourcesAreAsked`,
 `TestThePagesAreToldWhatThisInstallationAsks`
 
 ### I1 — One implementation of target parsing
@@ -1044,15 +1088,15 @@ listener
 `TestThePageReadsTheAddressFieldsTheAPISends`,
 `TestTheReportSaysWhoseRootStoreDecided`
 
-### R3a — No authority is asked, and the claim about revocation is made where the answer is known
+### R3a — The authority is asked about a certificate only for a name the scan may reach, and the claim about revocation is made where the answer is known
 
 *Enforced in:* `policy.GradeStapling`, in the notes
 
 *Guarded by:* `TestNoAuthorityIsAskedOnAnyStapleOutcome`,
 `TestThisPackageClaimsNothingAboutRevocation`,
-`TestTheResponderIsAskedOnlyWhenAskedFor`,
+`TestEveryScanAsksTheMonitorAndTheAuthority`,
 `TestWhatAServiceAsksBeyondTheHandshake`,
-`TestAskingTheResponderWithoutProofIsRefused`,
+`TestARemovedFlagIsRefusedWithItsReason`,
 `TestAScanGivenAResponderAsksItAndReportsWhatItVerified`,
 `TestAScanGivenNoResponderAsksNone`,
 `TestTheRequestAsksAboutWhatARealResponderAnswered`,
@@ -1090,12 +1134,13 @@ listener
 `TestTheIssuerIsFoundWhereverItSitsInTheChain`,
 `TestTheRevocationLineSaysWhetherTheResponseWasVerified`, `FuzzCheck`
 
-### R3c — Transparency receipts are counted, and checked against a list that names its date
+### R3c — Transparency receipts are counted, checked against a list that names its date, and compared with Chrome's policy
 
 *Enforced in:* `internal/certinfo.embeddedSCTs` for the count,
 `internal/ctlogs.Parse` and `internal/ctlogs.CheckEmbedded` for the check,
-`internal/policy.DescribeTransparency` for what it means, joined in
-`internal/scan.checkReceipts`
+`internal/policy.DescribeTransparency` for what it means,
+`internal/policy.JudgeChromeCT` for whether Chrome would accept them, joined
+in `internal/scan.checkReceipts`
 
 *Guarded by:* `TestParseSCTListCountsTimestampsAndLogs`,
 `TestParseSCTListRefusesMalformedInput`, `FuzzParseSCTList`,
@@ -1119,7 +1164,10 @@ listener
 `TestAnUnreadableReceiptIsUnsettled`,
 `TestTheTransparencyLineSaysHowManySignaturesVerified`,
 `TestCoverageSaysVerifiedOnlyWhenEveryReceiptWas`,
-`TestTheReceiptsLimitNamesTheListAndNoPolicy`,
+`TestTheReceiptsLimitNamesTheListAndWhosePolicy`,
+`TestChromesPolicyIsAppliedAsItIsWritten`,
+`TestARetiredLogCountsOnlyForWhatItSignedBeforeRetiring`,
+`TestNothingToCompareIsNotAVerdict`, `TestTheLineSaysWhetherChromeWouldAccept`,
 `TestAScanChecksTheReceiptsItCounts`,
 `TestAChainWithoutItsIssuerVerifiesNothing`,
 `TestNoCertificateMeansNothingChecked`, `TestAHandshakeReceiptIsCheckedToo`,
@@ -1358,10 +1406,24 @@ listener
 
 ### R16 — One result, two renderers, one set of facts
 
-*Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
-`internal/scan.Result.Notes`
+Every page that draws a report draws it in one frame (`reportFrame` in
+`internal/web/assets/app.js`): the console, the demonstration, a check's own
+page and History, through the same builders, and the names inventory in the
+same cover (`namesFrame`). The builders draw evidence; the frame draws the
+verdict and the one list of rules found broken, so neither is drawn twice.
+Each check is a card whose head, held in view while the card is read, has
+the check's verdict stamped beside its name, above the evidence; a check with
+no verdict is marked in a dashed stamp that no verdict is drawn in.
 
-*Guarded by:* `TestBothFacesOfTheReportShowTheSameFacts`,
+*Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
+`internal/scan.Result.Notes`, `internal/web/assets/app.js` (`reportFrame`,
+`reportShow`, `namesFrame`)
+
+*Guarded by:* `TestEachCheckHasARowAndAStateOfItsOwn`,
+`TestAnUnchosenCheckKeepsARowItCannotOpen`, `TestAVerdictIsStampedAtTheHeadOfItsCard`,
+`TestAnAbsentVerdictIsNeverDrawnAsOne`, `TestAReportOnPaperIsTheReport`,
+`TestTheNamesAreDrawnInTheFrame`,
+`TestBothFacesOfTheReportShowTheSameFacts`,
 `TestAReportSaysWhatWasMeasured`, `TestThePageReadsTheLegacyFieldsTheAPISends`,
 `TestSSL3IsAVersionRowInTheSameWords`,
 `TestTheHandWrittenHellosArePrintedWithWhatTheyFound`,
@@ -1409,10 +1471,12 @@ listener
 ### R9a — A CAA value is an authority and its parameters, not one string
 
 *Enforced in:* `internal/policy.readable`, applied by
-`internal/policy.describeAuthorities`
+`internal/policy.describeAuthorities`; `internal/policy.bindings` for the
+RFC 8657 account and method limits
 
 *Guarded by:* `TestCAAParametersAreNotMistakenForAuthorities`,
-`TestAuthoritiesWithoutParametersAreUnchanged`
+`TestAuthoritiesWithoutParametersAreUnchanged`,
+`TestAnAuthorityIsBoundOnlyIfEveryPropertyBindsIt`
 
 ### R10 — A report cannot act on the display that shows it
 
@@ -1491,7 +1555,11 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestAHostThatAnsweredNothingIsNotDescribedAsSendingNoHeaders`,
 `TestASiteThatSendsEverythingIsToldNothing`, `TestTheReportedListIsStable`,
 `TestTheHeaderRulesReachAGradedReport`,
-`TestTheHeadersReadAreTheOnesOnTheResponseAVisitorLandsOn`
+`TestTheHeadersReadAreTheOnesOnTheResponseAVisitorLandsOn`,
+`TestTheIPv6LineSaysWhatWasRead`,
+`TestTheExchangersIPv6LineCountsWhatWasRead`,
+`TestWhetherTheExchangersHaveIPv6IsReadAndSaid`,
+`TestTheIPv6LineReachesBothFaces`
 
 ### R22 — One rule set grades one check, and every verdict names its own
 
@@ -1569,6 +1637,45 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestTheDNSReportSeparatesWhatWasReadFromWhatWasWritten`,
 `TestThePublishedRecordsAreBounded`, `TestNoStringLiteralInAScriptIsLeftOpen`,
 `TestEveryRuleSetNamesTheToolAndTheCheck`
+
+### R24a — A DNSSEC signature is checked with the zone's own keys, and a limit of the check is not a fault of the zone
+
+The digest at the parent matching a key is half of the link. The key it names
+has to sign the zone's key set, and a key in that set has to sign the record
+at the top of the zone; both are checked here, by RFC 4034 §3.1.8.1 and RFC
+4035 §5.3, with nothing asked that was not asked already. A signature is found
+wanting only where its key was read, its algorithm is one this verifies, and
+the arithmetic says no. An algorithm not implemented here, a key that cannot
+be read, an RSA key outside 1024 to 4096 bits, a signer's name compressed
+against RFC 4034 §3.1.7, more than eight checks for one record set (KeyTrap,
+CVE-2023-50387): each is said as a check not made (R4), never graded.
+A resolver that set the AD bit on an answer this check finds wanting is said
+as a disagreement, not graded over.
+
+Where the resolver fails the top of the zone, its digest or its keys, those
+three are asked once more of the same resolver with the CD bit (RFC 4035
+§3.2.2), because a validating resolver answers a zone whose signatures fail
+with SERVFAIL and nothing else. What comes back is marked, never believed for
+being there, and graded only by what verifying it finds. The end of the top's
+signature's validity is dns.signature-expired's and is not counted twice.
+
+*Enforced in:* `internal/dnsscan.checkSignatures`, `internal/dnsscan.checkSet`,
+`internal/dnsscan.verifySignature`, `internal/dnsscan.unlessRejected`,
+`internal/dnsclient.parseRRSIG`, `internal/dnsclient.Client.LookupUnchecked`,
+`internal/policy.GradeDNS`
+
+*Guarded by:* `TestTheRFCExamplesVerify`, `TestAnRSASignatureVerifies`,
+`TestWhatThisCannotCheckIsNotAFailure`,
+`TestTheSignaturesAreCheckedWithTheZonesOwnKeys`,
+`TestSignaturesNotCheckedAreNotGraded`,
+`TestAZoneTheResolverRejectsIsReadUnchecked`,
+`TestASignatureKeepsWhatCheckingItNeeds`,
+`TestACompressedSignerGivesTheDateAndNoSignature`,
+`TestALiteralNameStaysInsideItsRecord`,
+`TestTheTopOfTheZoneIsKeptAsItWasSigned`,
+`TestAnUncheckedQuestionSetsCDAndBelievesNoAD`,
+`TestTheSignatureCheckReachesBothFaces`, `FuzzParseRRSIG`,
+`FuzzVerifySignature`
 
 ### R23 — The policy read is the one a browser would hold
 
@@ -1885,14 +1992,13 @@ step
 Listed rather than hidden. A gap closed in code stays here until somebody
 removes it, so a stale entry is a bug in this page.
 
-- **Transparency receipts are counted, not verified.** R3c. Verifying one
-  needs each log's public key, from a list browsers keep on their own
-  schedule.
+- **Transparency receipts are judged by one browser's policy.** R3c.
+  Chrome's, against the dated list this build carries. Other browsers count
+  by rules of their own.
 - **A stapled response's responder is not checked for revocation.** R3b.
-  That would mean fetching from an address the scanned party chooses, and
-  this scanner fetches nothing.
-- **Revocation is seen only where the server staples.** R3a. About a third of
-  hosts do. A report says so on its Revocation line.
+  RFC 6960 lets an issuer waive it, and most do.
+- **Revocation cannot be seen for a certificate that names neither a list nor
+  a responder.** R3a. Nobody can see it, and the report says so.
 - **The per-target limit still answers at its edge.** A9. A host checked many
   times in a window can be seen to be busy. That is a fact about load, not
   about a person.

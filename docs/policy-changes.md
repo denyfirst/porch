@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v7`, `porch-web-v3`, `porch-mail-v3` and `porch-dns-v2`. Reports
+`porch-tls-v7`, `porch-web-v4`, `porch-mail-v4` and `porch-dns-v3`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,69 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-mail-v3` → `porch-mail-v4`
+
+Released in v0.27.0, 2026-10.
+
+- **Added `mail.exchanger-only-legacy-tls`, insecure.** An exchanger offered
+  nothing newer than TLS 1.1 to a client offering TLS 1.3 (RFC 8996).
+- **Added `mail.exchanger-legacy-tls`, weak.** An exchanger that negotiates TLS
+  1.2 or 1.3 still chose TLS 1.1 or older for a sender that offered nothing
+  newer. Weak rather than insecure because a mail sender refused there falls
+  back to plain text unless MTA-STS or DANE is enforced (RFC 7435).
+- The second case is asked in a second, short conversation with each
+  exchanger that negotiated TLS 1.2 or 1.3: greeting, EHLO, STARTTLS, one hello
+  offering nothing newer than TLS 1.1, and the first record of the answer. No
+  handshake is completed and the connection is closed there. An exchanger that
+  closes without answering is reported as not established, not as refusing.
+- **Reported, not graded:** whether each exchanger has an IPv6 address.
+
+---
+
+## `porch-dns-v2` → `porch-dns-v3`
+
+Released in v0.27.0, 2026-10.
+
+- **Added `dns.dnssec-signature-invalid`, insecure.** The parent's digest
+  matches a key, but the signatures at the top of the zone do not hold when
+  checked with the zone's own keys: the key the digest names does not sign the
+  key set, or no key in the set signs the record at the top of the zone, or the
+  signature is outside its validity period (RFC 4035 §5.3). Until now this was
+  the resolver's word. A signature is found wanting only where its key was
+  read and its algorithm is one Porch verifies; anything else is reported as
+  not checked.
+- Where the resolver fails the zone's own records, which is what a validating
+  resolver does with a zone whose signatures do not hold, the top of the zone,
+  the digest and the keys are asked for once more with checking disabled
+  (RFC 4035 §3.2.2). Such a zone used to be reported as a name inside another
+  zone, with nothing graded.
+- **Reported, not graded:** whether the resolver rejected the zone, and why the
+  signatures were not checked where they were not.
+
+---
+
+## `porch-web-v3` → `porch-web-v4`
+
+Released in v0.27.0, 2026-10.
+
+- **Added `web.exposed-source`, insecure.** A Git or Subversion repository is
+  served from the web root, which hands over the site's code and history
+  (CWE-527).
+- **Added `web.exposed-secrets`, insecure.** A file of passwords or keys is
+  served: an environment file, cloud credentials, a backup of WordPress's
+  settings, a password file, or a Spring Boot application's settings
+  (CWE-538).
+- **Added `web.exposed-diagnostics`, weak.** Apache's status page or PHP's
+  configuration page is served (CWE-497).
+- **Added `web.exposed-listing`, weak.** A macOS folder index naming the files
+  beside it is served (CWE-548).
+- Each is asked for by one GET of a fixed path, and counts only if what comes
+  back is what that file looks like; a site that answers every path with its
+  own page has nothing exposed. What a file held is never kept.
+- **Reported, not graded:** whether the host is on the HSTS preload list.
 
 ---
 

@@ -679,13 +679,12 @@ func render(p *page) ([]byte, error) {
 // is added.
 // Installation is what this copy of the service is, as its pages describe it.
 //
-// A struct rather than three booleans and then five: the privacy page has to
-// say which third parties this installation asks, and every one of those is a
-// flag somebody set. It said "no certificate transparency log and no
-// revocation responder is asked by this service" unconditionally, which stopped
-// being true the day -names-monitor and -ask-responder existed — a page telling
-// an operator something false about their own installation is the worst thing
-// on this site, because it is the page they would quote (N14).
+// A struct rather than a row of booleans: the privacy page has to say which
+// sources this installation asks, and a page telling an operator something
+// false about their own installation is the worst thing on this site, because
+// it is the page they would quote (N14). It said "no certificate transparency
+// log and no revocation responder is asked by this service" unconditionally
+// until 2026-09-27, while both were.
 type Installation struct {
 	// Verified says a boundary was configured, Keeps that results are written
 	// to disk, and Guarded that a password is in front of the service.
@@ -693,9 +692,8 @@ type Installation struct {
 	Keeps    bool
 	Guarded  bool
 
-	// Monitor names the certificate transparency monitor the inventory asks,
-	// and Register the passive register. Empty means none was configured.
-	Monitor  string
+	// Register names the passive register the inventory asks. Empty means
+	// none was configured.
 	Register string
 
 	// OperatorOnly says the only people who can call this installation are the
@@ -705,23 +703,19 @@ type Installation struct {
 	OperatorOnly bool
 
 	// ReadsCertificates says each name that answers may be asked for the
-	// certificate it presents, and AsksResponder that a certificate's own
-	// authority may be asked whether it has been revoked.
+	// certificate it presents.
 	ReadsCertificates bool
-	AsksResponder     bool
 }
 
-// AsksNobodyElse reports that no third party is asked anything a scan does
-// not already send to the host: no monitor, no register, no responder, and no
+// AsksNobodyElse reports that no source is asked anything a scan does not
+// already send to the host: no monitor, no authority, no register, and no
 // certificate read for the inventory.
 //
-// Verified is on the list because a scope turns on the transparency search in
-// the TLS check (N12): every name a proven installation checks is also named to
-// crt.sh. The page said nobody was asked on exactly those installations until
-// 2026-09-28, because this list was written about the inventory's flags and
-// the TLS check's search was wired to the scope, not to a flag.
+// Verified is on the list because a scope is what turns on the monitor and
+// the authority (N12, R3a): every name a proven installation checks is named to
+// both.
 func (i Installation) AsksNobodyElse() bool {
-	return !i.Verified && i.Monitor == "" && i.Register == "" && !i.ReadsCertificates && !i.AsksResponder
+	return !i.Verified && i.Register == "" && !i.ReadsCertificates
 }
 
 // Whole reports that a report here is read by the person the estate belongs
@@ -990,13 +984,11 @@ type privacyPage struct {
 	// Porch is what this tool promises, carried on the page.
 	Porch promises.Product
 
-	// Monitor, Register, ReadsCertificates and AsksResponder say which third
-	// parties this installation asks, and AsksNobodyElse that it asks none of
-	// them. The page said the last of those unconditionally until 2026-09-27.
-	Monitor           string
+	// Register and ReadsCertificates say which further sources this
+	// installation asks, and AsksNobodyElse that it asks none at all. The page
+	// said the last of those unconditionally until 2026-09-27.
 	Register          string
 	ReadsCertificates bool
-	AsksResponder     bool
 	AsksNobodyElse    bool
 
 	// WalksRanges says this installation will read the reverse records of an
@@ -1031,10 +1023,8 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 		Data: privacyPage{
 			Tool:              ToolName,
 			Porch:             promises.Porch,
-			Monitor:           in.Monitor,
 			Register:          in.Register,
 			ReadsCertificates: in.ReadsCertificates,
-			AsksResponder:     in.AsksResponder,
 			AsksNobodyElse:    in.AsksNobodyElse(),
 			WalksRanges:       in.OperatorOnly,
 			Verified:          verified,

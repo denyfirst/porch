@@ -66,6 +66,14 @@ jobs:
             target: FuzzParseReply
           - package: ./internal/dnsclient
             target: FuzzSkipName
+          # A signature record is bytes a resolver chose; what is kept of it
+          # has to lie inside the record.
+          - package: ./internal/dnsclient
+            target: FuzzParseRRSIG
+          # The zone's keys and signatures, all chosen by whoever runs the
+          # zone, checked by the only DNSSEC verifier this project owns.
+          - package: ./internal/dnsscan
+            target: FuzzVerifySignature
           # Everything this target reads is chosen by the scanned server, and
           # it is the only cryptographic parser this project owns.
           - package: ./internal/ocsp

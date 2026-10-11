@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/hstspreload"
+	"github.com/denyfirst/porch/internal/leaks"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/verify"
@@ -95,6 +97,15 @@ func webScanner(timeout time.Duration, allowPrivate bool) *webscan.Scanner {
 		// their own file is checking whether the address still reaches
 		// somebody — which a count cannot say.
 		ShowContacts: true,
+
+		// And asks the preload list, which holds the one fact about HSTS no
+		// response can show. Every name this command checks is one the
+		// operator proved.
+		Preload: &hstspreload.Client{Timeout: timeout},
+
+		// And asks for the files a site should never serve, through
+		// safedial whatever -allow-private says (internal/leaks).
+		Leaks: &leaks.Prober{Timeout: timeout},
 	}
 	if allowPrivate {
 		// The same deliberate opt-out the TLS check offers, and for the same
