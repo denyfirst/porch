@@ -174,6 +174,11 @@ type DNSFacts struct {
 	Registration     *RegistrationFacts `json:"registration,omitempty"`
 	RegistrationLine string             `json:"registrationLine,omitempty"`
 
+	// Routes is how the routes to the name's addresses and its name
+	// servers' validated against RPKI, and RoutesLine says it in one line.
+	Routes     []RouteFacts `json:"routes,omitempty"`
+	RoutesLine string       `json:"routesLine,omitempty"`
+
 	// IPv4 and IPv6 are what the name itself resolves to, kept apart because
 	// they are two questions: a name with an address of one kind and none of
 	// the other is ordinary, and a report that merged them could not say which

@@ -1382,6 +1382,10 @@ function published(facts) {
   // same line (R16).
   if (facts.registrationLine) row("Registration", facts.registrationLine);
 
+  // Whether the routes to the addresses above, and to the name servers', are
+  // signed (RPKI). Also built by the server.
+  if (facts.routesLine) row("Routes (RPKI)", facts.routesLine);
+
   // The algorithm by the name an operator's own interface uses, and how
   // absent names are proved — both facts about a signed zone, neither a
   // verdict about it.

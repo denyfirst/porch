@@ -15,6 +15,7 @@ import (
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/rdap"
 	"github.com/denyfirst/porch/internal/results"
+	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -41,7 +42,8 @@ func runDNS(ctx context.Context, scope *verify.Scope, domains []string, timeout 
 	// operator's own machine, from their own address, under their
 	// responsibility — the argument -allow-private rests on for the other
 	// checks.
-	scanner := &dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout}}
+	scanner := &dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout},
+		Routes: &rpki.Client{Timeout: timeout}}
 	if resolver != "" {
 		scanner.Resolver = &dnsclient.Client{Server: resolver, Timeout: timeout}
 	}
@@ -134,6 +136,9 @@ func printDNS(w io.Writer, r dnsResult) {
 		field(w, "DNSSEC (DS)", dnssecLine(*f))
 		if f.RegistrationLine != "" {
 			field(w, "Registration", f.RegistrationLine)
+		}
+		if f.RoutesLine != "" {
+			field(w, "Routes (RPKI)", f.RoutesLine)
 		}
 
 		// The algorithm by the name an operator's own interface uses, and how

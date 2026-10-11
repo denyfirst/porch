@@ -1191,6 +1191,12 @@ func (s *Server) ReadRegistrations(r dnsscan.Registry) {
 	s.dns.Registry = r
 }
 
+// CheckRoutes gives the DNS check a way to ask whether the routes to a
+// domain's addresses are signed. Nil, the default, asks nobody.
+func (s *Server) CheckRoutes(r dnsscan.RouteChecker) {
+	s.dns.Routes = r
+}
+
 // CheckPreload gives the web check the HSTS preload list to ask. Nil, the
 // default, asks nobody; porchd sets it wherever a scan may reach a host.
 func (s *Server) CheckPreload(p webscan.Preloader) {

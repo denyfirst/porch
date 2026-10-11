@@ -281,7 +281,7 @@ func TestTheCommandLineAsksTheZonesOwnServers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout}}") {
+	if !strings.Contains(string(body), "dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout},\n\t\tRoutes: &rpki.Client{Timeout: timeout}}") {
 		t.Error("the command line no longer asks the servers the zone names and the registry that holds it")
 	}
 }

@@ -50,6 +50,7 @@ import (
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/rdap"
 	"github.com/denyfirst/porch/internal/results"
+	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/smtptls"
 	"github.com/denyfirst/porch/internal/truststore"
@@ -558,6 +559,7 @@ func run() int {
 	if scope != nil || demo.Enabled {
 		api.ReadRegistrations(&rdap.Client{Timeout: *requestTimeout})
 		api.CheckPreload(&hstspreload.Client{Timeout: *requestTimeout})
+		api.CheckRoutes(&rpki.Client{Timeout: *requestTimeout})
 	}
 
 	// The demonstration lists this project's own estate, and both halves of

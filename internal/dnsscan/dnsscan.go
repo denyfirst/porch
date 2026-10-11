@@ -61,6 +61,7 @@ import (
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/rdap"
+	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -118,6 +119,10 @@ type Scanner struct {
 	// demonstration's own (internal/rdap).
 	Registry Registry
 
+	// Routes asks whether the routes to the name's addresses, and to its
+	// name servers', are signed (internal/rpki). Nil asks nobody.
+	Routes RouteChecker
+
 	// Now is the clock, for a test that needs a fixed duration.
 	Now func() time.Time
 }
@@ -125,6 +130,11 @@ type Scanner struct {
 // Registry is what reads a registration.
 type Registry interface {
 	Lookup(ctx context.Context, name string) rdap.Registration
+}
+
+// RouteChecker is what asks whether the routes to addresses are signed.
+type RouteChecker interface {
+	Check(ctx context.Context, addresses []string) []rpki.Route
 }
 
 // Result is one domain's DNS as it was read.
@@ -196,12 +206,14 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.askParent(ctx, resolver, domain, &facts)
 
 	s.readRegistration(ctx, domain, &facts)
+	s.readRoutes(ctx, &facts)
 
 	graded := policy.GradeDNS(facts, s.now())
 	notes := graded.Notes
 	if facts.Registration != nil {
 		notes = append(notes, policy.DescribeRegistration(*facts.Registration, s.now())...)
 	}
+	notes = append(notes, policy.DescribeRoutes(facts.Routes)...)
 
 	return &Result{
 		Domain:   domain,
@@ -237,6 +249,28 @@ func (s *Scanner) readRegistration(ctx context.Context, domain string, facts *po
 	}
 	facts.Registration = &f
 	facts.RegistrationLine = policy.RegistrationLine(f, s.now())
+}
+
+// readRoutes asks whether the routes to the name's own addresses, and then to
+// its name servers', are signed. The name's first, because they are what a
+// visitor reaches; the client bounds how many are asked about.
+func (s *Scanner) readRoutes(ctx context.Context, facts *policy.DNSFacts) {
+	if s.Routes == nil {
+		return
+	}
+	addresses := append(append([]string{}, facts.IPv4...), facts.IPv6...)
+	for _, ns := range facts.NameServers {
+		addresses = append(addresses, ns.Addresses...)
+	}
+	if len(addresses) == 0 {
+		return
+	}
+	for _, r := range s.Routes.Check(ctx, addresses) {
+		facts.Routes = append(facts.Routes, policy.RouteFacts{
+			Address: r.Address, Prefix: r.Prefix, Origins: r.Origins, State: r.State, Reason: r.Reason,
+		})
+	}
+	facts.RoutesLine = policy.RoutesLine(facts.Routes)
 }
 
 // readZone reads the record at the top of the zone and the text records, and
