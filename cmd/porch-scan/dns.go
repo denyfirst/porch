@@ -131,6 +131,12 @@ func printDNS(w io.Writer, r dnsResult) {
 
 		if f.SOAFound {
 			field(w, "Zone (SOA)", fmt.Sprintf("begins here, serial %d, primary %s", f.SOASerial, f.SOAPrimary))
+			if f.TimersLine != "" {
+				field(w, "Timers (SOA)", f.TimersLine)
+			}
+			if f.SOAMailbox != "" {
+				field(w, "Mailbox (SOA)", f.SOAMailbox)
+			}
 		} else {
 			field(w, "Zone (SOA)", "begins above this name")
 		}
@@ -148,14 +154,26 @@ func printDNS(w io.Writer, r dnsResult) {
 		// absent names are proved: both facts about a signed zone, neither a
 		// verdict about it.
 		if f.Signed {
-			if names := algorithmNames(f.Keys); names != "" {
+			// The keys line names the algorithm too, so the algorithm alone
+			// is said only for a result from before that line was built.
+			if names := algorithmNames(f.Keys); names != "" && f.KeysLine == "" {
 				field(w, "Signed with (DNSKEY)", names)
+			}
+			if f.KeysLine != "" {
+				field(w, "Keys (DNSKEY)", f.KeysLine)
+			}
+			if f.DigestLine != "" {
+				field(w, "Digests (DS)", f.DigestLine)
 			}
 			if f.SignatureRead && !f.SignatureExpires.IsZero() {
 				// The date on its own line, because it is the one fact in this
 				// block that becomes wrong by itself while nothing changes.
-				field(w, "Signature (RRSIG)", fmt.Sprintf("runs out %s, made by key %d",
-					f.SignatureExpires.Format("2006-01-02"), f.SignatureKeyTag))
+				signed := ""
+				if !f.SignatureInception.IsZero() {
+					signed = "signed " + f.SignatureInception.Format("2006-01-02") + ", "
+				}
+				field(w, "Signature (RRSIG)", fmt.Sprintf("%sruns out %s, made by key %d",
+					signed, f.SignatureExpires.Format("2006-01-02"), f.SignatureKeyTag))
 			}
 			if f.NSEC3Read {
 				field(w, "Absent (NSEC3)", absenceLine(*f))
@@ -215,6 +233,12 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 	}
 
 	for _, ns := range f.NameServers {
+		// The serial each server answered with, as the page's third column
+		// shows it (R16): servers that disagree serve different copies.
+		serial := ""
+		if ns.SerialRead {
+			serial = fmt.Sprintf(", serial %d", ns.Serial)
+		}
 		switch {
 		case ns.Reason != "":
 			fmt.Fprintf(w, "    %-28s not read: %s\n", ns.Name, ns.Reason)
@@ -234,7 +258,7 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 		case len(ns.Addresses) == 0:
 			fmt.Fprintf(w, "    %-28s resolves to nothing\n", ns.Name)
 		default:
-			fmt.Fprintf(w, "    %-28s %s\n", ns.Name, strings.Join(ns.Addresses, ", "))
+			fmt.Fprintf(w, "    %-28s %s%s\n", ns.Name, strings.Join(ns.Addresses, ", "), serial)
 		}
 	}
 	if len(f.NameServers) > 1 && f.Networks == 1 {

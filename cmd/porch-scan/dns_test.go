@@ -165,7 +165,7 @@ func TestASignedZoneSaysItsAlgorithmAndHowItProvesAbsence(t *testing.T) {
 	for _, want := range []string{
 		`"named plainly, so the zone can be listed"`,
 		`"hashed, " + iterations + " extra times"`,
-		`row("Signed with (DNSKEY)", [...new Set(names)].join(", "));`,
+		`if (names.length && !facts.keysLine) row("Signed with (DNSKEY)", [...new Set(names)].join(", "));`,
 		`text = "an alias for " + server.alias;`,
 	} {
 		if !strings.Contains(script, want) {
@@ -457,7 +457,8 @@ func TestWhenTheSignatureRunsOutIsDrawnInBothFaces(t *testing.T) {
 	script := string(page)
 	for _, want := range []string{
 		`facts.signatureRead && facts.signatureExpires`,
-		`row("Signature (RRSIG)", "runs out " + facts.signatureExpires.slice(0, 10) +`,
+		`row("Signature (RRSIG)", signedOn(facts.signatureInception) + "runs out " + facts.signatureExpires.slice(0, 10) +`,
+		`"signed " + String(inception).slice(0, 10) + ", "`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s, so the two faces disagree", want)
@@ -479,6 +480,26 @@ func TestWhenTheSignatureRunsOutIsDrawnInBothFaces(t *testing.T) {
 	})
 	if !strings.Contains(buf.String(), "Signature (RRSIG)    runs out 2026-10-01, made by key 53731") {
 		t.Errorf("the report does not say when the signature runs out:\n%s", buf.String())
+	}
+
+	// And when it was made, where that was read: the two together are the
+	// window a validator accepts.
+	buf.Reset()
+	printDNS(&buf, dnsResult{
+		Domain: "example.com",
+		Result: &dnsscan.Result{
+			Domain: "example.com", Policy: policy.DNSVersion,
+			Observed: &policy.DNSFacts{
+				Apex: true, SOAFound: true, Signed: true, ChainMatched: true,
+				SignatureRead:      true,
+				SignatureInception: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC),
+				SignatureExpires:   time.Date(2026, 10, 1, 3, 4, 5, 0, time.UTC),
+				SignatureKeyTag:    53731,
+			},
+		},
+	})
+	if !strings.Contains(buf.String(), "Signature (RRSIG)    signed 2026-09-10, runs out 2026-10-01, made by key 53731") {
+		t.Errorf("the report does not say when the signature was made:\n%s", buf.String())
 	}
 
 	// A zone whose signature was not read says nothing rather than a date.

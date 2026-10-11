@@ -531,7 +531,7 @@ func TestTheRecordsArePrintedUnderTheirRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, field := range []string{"facts.spfRecord", "facts.dmarcRecord", "facts.tlsRptRecord"} {
-		if !strings.Contains(string(page), `row("Record", `+field+`)`) {
+		if !strings.Contains(string(page), `row("Record", `+field+`, null, true)`) {
 			t.Errorf("the page does not draw %s", field)
 		}
 	}

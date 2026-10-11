@@ -1,6 +1,7 @@
 package web
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -230,6 +231,133 @@ func TestAReportOnPaperIsTheReport(t *testing.T) {
 		body := rule(selector)
 		if !strings.Contains(body, "border:") || strings.Contains(body, "background:") {
 			t.Errorf("%s is drawn as a fill, which a browser leaves off paper: %s", selector, body)
+		}
+	}
+}
+
+// A card's head, held at the top of the window, floats clear of its edge.
+//
+// Held flush against it, the verdict's coloured edge ran into the browser's
+// own bar. The head is held 12px down; held, it is drawn as a lifted bar with
+// the page's colour above it, and only an observer can tell it is held. Both
+// thresholds are watched, because a jump from far down the page lands a head
+// held without its ever having been wholly in view.
+func TestAHeldHeadFloatsClearOfTheWindow(t *testing.T) {
+	css := stylesheet(t)
+	_, head, _ := strings.Cut(css, ".report-check-head {")
+	head, _, _ = strings.Cut(head, "}")
+	if !strings.Contains(head, "top: 12px;") {
+		t.Errorf("a card's head is not held clear of the window's edge: %s", head)
+	}
+	_, held, ok := strings.Cut(css, ".report-check-head.is-held {")
+	held, _, _ = strings.Cut(held, "}")
+	if !ok || !strings.Contains(held, "0 -13px 0 1px var(--paper)") {
+		t.Errorf("a held head has no band of the page's colour above it: %s", held)
+	}
+	src := script(t)
+	for _, want := range []string{
+		`{ rootMargin: "-13px 0px 0px 0px", threshold: [0, 1] }`,
+		`s.target.classList.toggle("is-held", held);`,
+		"if (heldHeads) heldHeads.observe(head);",
+		"if (heldHeads) heldHeads.disconnect();",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the script no longer contains %q", want)
+		}
+	}
+}
+
+// A list of names, addresses or keys is set one mark per item, and nothing
+// else is.
+//
+// Written as "denyfirst.dev, mta-sts.denyfirst.dev, porch.denyfirst.dev", the
+// names a certificate covers were among the most important answers on the
+// page and read like a sentence. The patterns are read from the script and
+// run here, against lists the reports carry and sentences they must leave
+// alone.
+func TestAListOfNamesIsSetOneMarkEach(t *testing.T) {
+	src := script(t)
+	start := strings.Index(src, "const LIST_ITEM = [")
+	if start < 0 {
+		t.Fatal("the script names no list items")
+	}
+	block := src[start:]
+	block = block[:strings.Index(block, "];")]
+	var patterns []*regexp.Regexp
+	for _, m := range regexp.MustCompile(`(?m)^\s*/(.+)/(i?),`).FindAllStringSubmatch(block, -1) {
+		flags := ""
+		if m[2] == "i" {
+			flags = "(?i)"
+		}
+		patterns = append(patterns, regexp.MustCompile(flags+m[1]))
+	}
+	if len(patterns) != 4 {
+		t.Fatalf("read %d list patterns, want 4", len(patterns))
+	}
+	isList := func(s string) bool {
+		items := strings.Split(s, ", ")
+		if len(items) < 2 {
+			return false
+		}
+		for _, item := range items {
+			matched := false
+			for _, re := range patterns {
+				matched = matched || re.MatchString(item)
+			}
+			if !matched {
+				return false
+			}
+		}
+		return true
+	}
+	for _, list := range []string{
+		"denyfirst.dev, mta-sts.denyfirst.dev, porch.denyfirst.dev",
+		"*.example.com, example.com",
+		"aspmx2.migadu.com, aspmx1.migadu.com",
+		"key1 (RSA 2048), key2 (RSA 2048)",
+		"157.53.224.1, 2607:f740:e00a:deec::2",
+	} {
+		if !isList(list) {
+			t.Errorf("%q is not set as a list", list)
+		}
+	}
+	for _, sentence := range []string{
+		"certificate, host",
+		"accepted, refused",
+		"denyfirst.dev",
+		"not stapled; the authority's revocation list, published 2026-10-10, does not name this certificate",
+		"issuance limited to letsencrypt.org (2 accounts, dns-01 only); wildcards refused (from denyfirst.dev)",
+		"trusted by Mozilla, Chrome, Microsoft and Apple (stores of 2026-09-13)",
+	} {
+		if isList(sentence) {
+			t.Errorf("%q would be cut into marks", sentence)
+		}
+	}
+
+	// Only a cell holding text alone, so markup a builder made is left alone,
+	// and every report and the inventory are read for lists.
+	lists := functionBody(t, src, "reportLists")
+	if !strings.Contains(lists, "cell.childNodes.length !== 1 || cell.firstChild.nodeType !== Node.TEXT_NODE") {
+		t.Error("reportLists no longer leaves built cells alone")
+	}
+	if !strings.Contains(functionBody(t, src, "reportShow"), "reportLists(entry.body);") ||
+		!strings.Contains(functionBody(t, src, "namesFrame"), "reportLists(body);") {
+		t.Error("a report or the inventory is not read for lists")
+	}
+}
+
+// A logged certificate this host did not present is set from the entry its
+// sentence was written from, and a sentence with no entry is shown as written.
+func TestALoggedCertificateIsSetFromItsEntry(t *testing.T) {
+	cert := functionBody(t, script(t), "certificate")
+	for _, want := range []string{
+		`c.startsWith("serial " + e.serial + ",")`,
+		`pairs.appendChild(el("dd", null, "· " + c));`,
+		`names.appendChild(el("span", "report-list-item", name));`,
+		"for (const b of (issuance && issuance.bindings) || []) {",
+	} {
+		if !strings.Contains(cert, want) {
+			t.Errorf("the certificate no longer contains %q", want)
 		}
 	}
 }

@@ -889,7 +889,26 @@ function certificate(cert, tls, issuance, stapling, report) {
   pair("Names", (leaf.dnsNames || []).join(", "), "none");
   pair("Addresses", (leaf.ipAddresses || []).join(", "), "none");
 
+  pair("Name match", cert.nameLine, "not checked");
   pair("Chain", cert.chain.length + (cert.trusted ? " certificates, trusted" : " certificates, not trusted"));
+
+  // Each certificate above the leaf: which authority issued it, under which
+  // root, and when each runs out. Composed in internal/policy, as the
+  // terminal prints them (R16); here the name is set apart from the rest.
+  for (const line of cert.chainLines || []) {
+    pairs.appendChild(el("dt", null, ""));
+    const dd = el("dd", "report-logged");
+    const cut = line.indexOf(": ");
+    if (cut > 0) {
+      const head = el("span", "report-logged-head");
+      head.appendChild(el("span", "report-logged-serial", line.slice(0, cut)));
+      head.appendChild(el("span", null, line.slice(cut + 2)));
+      dd.appendChild(head);
+    } else {
+      dd.textContent = line;
+    }
+    pairs.appendChild(dd);
+  }
 
   // What Mozilla, Chrome, Microsoft and Apple make of the chain, in the words
   // certinfo wrote, which the terminal prints too (R16).
@@ -914,6 +933,23 @@ function certificate(cert, tls, issuance, stapling, report) {
   // the most useful sentence in the report — one DNS record, nothing to break
   // by adding it — and a sentence nobody opens is a sentence nobody reads.
   pair("Issuance", issuance && issuance.line, "not read");
+
+  // The accounts a bound authority is held to, one mark each, under the line
+  // that counts them. The note under the report names them in a sentence, as
+  // the terminal prints it (R16); here they are what a reader checks against
+  // their own, so each is set where it can be read whole.
+  for (const b of (issuance && issuance.bindings) || []) {
+    if (!Array.isArray(b.accounts) || !b.accounts.length) continue;
+    const held = el("dd", "report-held");
+    held.appendChild(el("span", "report-held-label",
+      (b.accounts.length === 1 ? "The account " : "The accounts ") + b.authority +
+      (b.wildcard ? " may use for wildcards" : " may use")));
+    const list = el("span", "report-list");
+    for (const account of b.accounts) list.appendChild(el("span", "report-list-item", account));
+    held.appendChild(list);
+    pairs.appendChild(el("dt", null, ""));
+    pairs.appendChild(held);
+  }
   pair("Transparency", report && report.transparencyLine, "not read");
 
   // What the public logs hold for this name, where a deployment searched them.
@@ -926,9 +962,32 @@ function certificate(cert, tls, issuance, stapling, report) {
   // And the certificates that line counts, one under another, because a count
   // asking the reader to check a list is no use without the list. Composed in
   // internal/policy, as the terminal prints them (R16).
+  //
+  // Each is set from the entry the sentence was written from, where the
+  // report carries it: the serial, the issuer and the dates on one line, the
+  // names it covers as marks under them. Written as one sentence each, three
+  // certificates were three lines of serials, distinguished names and comma
+  // lists, and the names a reader needed to check were the hardest part to
+  // find. A sentence with no entry behind it is shown as written.
+  const entries = (report && report.logged && Array.isArray(report.logged.entries)) ? report.logged.entries : [];
   for (const c of (report && report.loggedUnaccounted) || []) {
     pairs.appendChild(el("dt", null, ""));
-    pairs.appendChild(el("dd", null, "· " + c));
+    const entry = entries.find((e) => e && e.serial && c.startsWith("serial " + e.serial + ","));
+    if (!entry) {
+      pairs.appendChild(el("dd", null, "· " + c));
+      continue;
+    }
+    const dd = el("dd", "report-logged");
+    const head = el("span", "report-logged-head");
+    head.appendChild(el("span", "report-logged-serial", entry.serial));
+    head.appendChild(el("span", null, "issued by " + entry.issuer));
+    head.appendChild(el("span", null, "valid " + String(entry.notBefore || "").slice(0, 10) +
+      " to " + String(entry.notAfter || "").slice(0, 10)));
+    dd.appendChild(head);
+    const names = el("span", "report-list");
+    for (const name of entry.names || []) names.appendChild(el("span", "report-list-item", name));
+    dd.appendChild(names);
+    pairs.appendChild(dd);
   }
 
   pair("SHA-256", leaf.fingerprintSha256);
@@ -1327,6 +1386,10 @@ function published(facts) {
   if (facts.soaFound) {
     row("Zone (SOA)", "begins here, serial " + facts.soaSerial);
     row("Primary", facts.soaPrimary);
+    // The zone's timers and its contact, read with the serial and shown only
+    // in a folded note until now. Built by the server (R16).
+    if (facts.timersLine) row("Timers (SOA)", facts.timersLine);
+    if (facts.soaMailbox) row("Mailbox (SOA)", facts.soaMailbox);
   } else {
     row("Zone (SOA)", "begins above this name");
   }
@@ -1350,11 +1413,17 @@ function published(facts) {
   // verdict about it.
   if (facts.signed) {
     const names = (facts.keys || []).map(k => k.name || ("algorithm " + k.algorithm));
-    if (names.length) row("Signed with (DNSKEY)", [...new Set(names)].join(", "));
+    // Each key by its tag and what it signs, and each digest the parent holds
+    // for one, by the hash: the two halves of the chain, built by the server.
+    // The keys line names the algorithm too, so the algorithm alone is said
+    // only for a result from before the server built that line.
+    if (names.length && !facts.keysLine) row("Signed with (DNSKEY)", [...new Set(names)].join(", "));
+    if (facts.keysLine) row("Keys (DNSKEY)", facts.keysLine);
+    if (facts.digestLine) row("Digests (DS)", facts.digestLine);
     // The date, on its own row. It is the one fact in this block that becomes
     // wrong by itself, while nobody changes anything.
     if (facts.signatureRead && facts.signatureExpires) {
-      row("Signature (RRSIG)", "runs out " + facts.signatureExpires.slice(0, 10) +
+      row("Signature (RRSIG)", signedOn(facts.signatureInception) + "runs out " + facts.signatureExpires.slice(0, 10) +
         ", made by key " + facts.signatureKeyTag);
     }
     if (facts.nsec3Read) row("Absent names (NSEC3)", absenceLine(facts));
@@ -1364,6 +1433,12 @@ function published(facts) {
   frag.appendChild(table);
   frag.appendChild(textRecords(text));
   return frag;
+}
+
+// signedOn says when a signature was made, where the report carries it, ahead
+// of when it runs out: the two together are the window a validator accepts.
+function signedOn(inception) {
+  return inception && !String(inception).startsWith("0001-01-01") ? "signed " + String(inception).slice(0, 10) + ", " : "";
 }
 
 // listOrNone writes a list, or says there was none. Empty is a fact here: the
@@ -1489,7 +1564,7 @@ function delegation(facts) {
   const table = el("table", "grid");
   const head = el("thead");
   const headRow = el("tr");
-  for (const name of ["Server (NS)", "Addresses"]) headRow.appendChild(el("th", null, name));
+  for (const name of ["Server (NS)", "Addresses", "Serial (SOA)"]) headRow.appendChild(el("th", null, name));
   head.appendChild(headRow);
   table.appendChild(head);
 
@@ -1520,6 +1595,10 @@ function delegation(facts) {
       mark = "weak";
     }
     tr.appendChild(el("td", mark ? markClass(mark) : null, text));
+    // The serial each server answered with. Servers that disagree are serving
+    // different copies of the zone, which only this column shows.
+    tr.appendChild(el("td", server.serialRead ? null : "mark-faint",
+      server.serialRead ? String(server.serial) : "not read"));
     body.appendChild(tr);
   }
   table.appendChild(body);
@@ -1623,10 +1702,12 @@ function zone(facts) {
   const table = el("table", "grid");
   const body = el("tbody");
 
-  const row = (name, value, mark) => {
+  // A record as the zone publishes it is text somebody copies, so it is set
+  // in the monospace, as a record is wherever else it is shown.
+  const row = (name, value, mark, record) => {
     const tr = el("tr");
     tr.appendChild(el("th", null, name));
-    const td = el("td", mark ? markClass(mark) : null, value);
+    const td = el("td", [mark ? markClass(mark) : "", record ? "dns-record" : ""].join(" ").trim() || null, value);
     tr.appendChild(td);
     body.appendChild(tr);
   };
@@ -1645,11 +1726,16 @@ function zone(facts) {
       (facts.spfLookupsAtLeast ? "at least " : "") + facts.spfLookups + " of the ten RFC 7208 allows",
       facts.spfLookupLimit ? "insecure" : null,
     );
+    // The names the policy asks for that answer nothing. RFC 7208 allows two
+    // before the policy fails, and a count of them was measured on every
+    // report and shown only when it went over.
+    row("Void lookups", facts.spfVoidLookups + " of the two RFC 7208 allows",
+      facts.spfVoidLimit ? "weak" : null);
   }
   // The record itself, where the report is read by the person the domain
   // belongs to. The service decides that and leaves the field empty otherwise,
   // and the terminal prints the same field under the same row (R16).
-  if (facts.spfRecord) row("Record", facts.spfRecord);
+  if (facts.spfRecord) row("Record", facts.spfRecord, null, true);
 
   if (facts.dmarcReason) {
     row("DMARC", "not read: " + facts.dmarcReason);
@@ -1662,7 +1748,7 @@ function zone(facts) {
   } else {
     row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%");
   }
-  if (facts.dmarcRecord) row("Record", facts.dmarcRecord);
+  if (facts.dmarcRecord) row("Record", facts.dmarcRecord, null, true);
 
   // Where the aggregate reports go, under the policy that asks for them.
   //
@@ -1674,7 +1760,7 @@ function zone(facts) {
   if (reportTo) row("Reports to", reportTo);
 
   row("TLS-RPT", facts.tlsReporting ? "yes" : "no");
-  if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord);
+  if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord, null, true);
 
   // Signing keys, and which names were looked under.
   //
@@ -1823,12 +1909,23 @@ function daneSays(b) {
 // A mode that was read is shown. A mode that was not is shown as not read, with
 // the reason, because an empty mode drawn as a mode is the R4 failure this
 // project keeps finding in other tools.
+// maxAge writes an MTA-STS max_age in the unit it was most likely chosen in,
+// as the terminal's maxAge does (R16).
+function maxAge(seconds) {
+  const unit = (n, one) => n + " " + one + (n === 1 ? "" : "s");
+  if (seconds % 86400 === 0) return unit(seconds / 86400, "day");
+  if (seconds % 3600 === 0) return unit(seconds / 3600, "hour");
+  return unit(seconds, "second");
+}
+
 function stsSays(facts) {
   if (!facts.mtaStsRecords) {
     return "no";
   }
   if (facts.mtaStsPolicyRead && facts.mtaStsMode) {
     let out = "mode " + facts.mtaStsMode;
+    // How long a sender keeps the policy, the other half of what it promises.
+    if (facts.mtaStsMaxAge > 0) out += ", max_age " + maxAge(facts.mtaStsMaxAge);
     const uncovered = facts.mtaStsUncovered || [];
     if (uncovered.length) {
       const hosts = facts.mxHosts || [];
@@ -1950,6 +2047,54 @@ if (form) form.addEventListener("submit", async event => {
 });
 // ── The report ──────────────────────────────────────────────────────────
 
+// A card's head held at the top of the window is drawn as a bar floating clear
+// of the window's edge. Held flush against it, the verdict's coloured edge ran
+// into the browser's own bar and read as part of it. Only an observer can tell
+// a held head from one at rest, so the class comes from one; without it the
+// head is still held, plainly. The 13px is the head's 12px offset and one
+// more: a held head sits a pixel above the line, and is then not wholly in.
+// Both thresholds, because a jump from far down the page lands a head held
+// without its ever having been wholly in view, and a lone threshold of 1 is
+// never crossed on the way.
+const heldHeads = "IntersectionObserver" in window
+  ? new IntersectionObserver((seen) => {
+      for (const s of seen) {
+        const held = s.rootBounds !== null && s.intersectionRatio < 1 &&
+          s.boundingClientRect.top < s.rootBounds.top;
+        s.target.classList.toggle("is-held", held);
+      }
+    }, { rootMargin: "-13px 0px 0px 0px", threshold: [0, 1] })
+  : null;
+
+// What one item of a list a builder wrote as "a, b, c" may be. Only a cell
+// holding nothing but such items is set as a list (reportLists).
+const LIST_ITEM = [
+  /^(?:\*\.)?(?:[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?\.)+[a-z0-9-]{2,63}\.?$/i, // a DNS name
+  /^\d{1,3}(?:\.\d{1,3}){3}$/,                                          // an IPv4 address
+  /^[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}$/i,                            // an IPv6 address
+  /^[a-z0-9_.-]+ \([^()]{1,40}\)$/i,                                    // a selector and its key
+];
+
+// reportLists sets a list of names, addresses or keys, which a builder writes
+// as one string with commas in it, as one mark per item. Written as a
+// sentence, "denyfirst.dev, mta-sts.denyfirst.dev, porch.denyfirst.dev" was
+// among the most important answers on the page and looked like the least.
+//
+// A cell is changed only when its one child is text and every item in it is
+// one of LIST_ITEM: a sentence with commas in it, or a cell a builder already
+// built, stays as it was. The items are the builder's own text, in its order.
+function reportLists(root) {
+  for (const cell of root.querySelectorAll("dd, td")) {
+    if (cell.childNodes.length !== 1 || cell.firstChild.nodeType !== Node.TEXT_NODE) continue;
+    const items = cell.textContent.split(", ");
+    if (items.length < 2 || !items.every((item) => LIST_ITEM.some((re) => re.test(item)))) continue;
+    clear(cell);
+    const list = el("span", "report-list");
+    for (const item of items) list.appendChild(el("span", "report-list-item", item));
+    cell.appendChild(list);
+  }
+}
+
 /*
   One frame for every report, whichever page draws it.
 
@@ -1977,6 +2122,8 @@ function reportFrame(container, target, names, chosen, opts) {
   container.hidden = false;
 
   const frame = { entries: [], items: [] };
+  // The heads of a report drawn before this one are gone with it.
+  if (heldHeads) heldHeads.disconnect();
 
   const cover = el("header", "report-cover");
   frame.cover = cover;
@@ -2063,6 +2210,7 @@ function reportFrame(container, target, names, chosen, opts) {
     const mark = el("span", "stamp stamp-pending", "running");
     head.appendChild(mark);
     section.appendChild(head);
+    if (heldHeads) heldHeads.observe(head);
     const top = el("div", "report-check-top");
     section.appendChild(top);
     const body = el("div", "report-body");
@@ -2165,10 +2313,17 @@ function reportShow(frame, entry, data) {
   clear(entry.body);
   entry.body.appendChild(entry.spec.build(data));
   for (const dl of entry.body.querySelectorAll("dl.pairs")) reportFacts(dl);
+  reportLists(entry.body);
 
-  // The card's foot: where the check is explained, and where it ends.
-  const foot = el("p", "report-check-foot");
+  // The card's foot: where the check is explained, and where it ends. The
+  // limits every scan of this kind shares go here too, beside the page that
+  // lists them: the same on every report, they are not a finding about this
+  // host, and as the last line of the evidence they read as one. What could
+  // not be established for this host stays open in the card above (R4).
+  const foot = el("div", "report-check-foot");
   foot.appendChild(link(entry.spec.methodPage, "How this check works"));
+  const standing = entry.body.querySelector(".notes-method");
+  if (standing) foot.appendChild(standing);
   entry.section.appendChild(foot);
 
   entry.state.textContent = data.verdict ? verdict : "not graded";
@@ -2381,6 +2536,7 @@ function namesFrame(container, target, data, opts) {
   const body = el("div", "report-body report-names");
   body.appendChild(buildNames(data));
   for (const dl of body.querySelectorAll("dl.pairs")) reportFacts(dl);
+  reportLists(body);
   container.appendChild(body);
 }
 

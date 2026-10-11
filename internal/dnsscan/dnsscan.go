@@ -213,6 +213,9 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.readRegistration(ctx, domain, &facts)
 	s.readRoutes(ctx, &facts)
 	facts.IPv6Line = policy.DNSIPv6Line(facts)
+	facts.TimersLine = policy.DNSTimersLine(facts)
+	facts.KeysLine = policy.DNSKeysLine(facts.Keys)
+	facts.DigestLine = policy.DNSDigestLine(facts.Signers)
 
 	graded := policy.GradeDNS(facts, s.now())
 	notes := graded.Notes
