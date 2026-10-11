@@ -544,3 +544,50 @@ func TestTheRecordsArePrintedUnderTheirRows(t *testing.T) {
 		t.Errorf("a report carrying no record prints a Record row:\n%s", buf.String())
 	}
 }
+
+// The old-version answer reaches both faces of the report, in the same words
+// (R16), and only where the question was put.
+func TestTheOldVersionAnswerReachesBothFaces(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	script := string(page)
+	for _, want := range []string{
+		`"accepts " + x.legacyVersion + " from a sender offering nothing newer"`,
+		`"refuses TLS 1.1 and older"`,
+		`"not established: " + x.legacyReason`,
+		`row("LEGACY", x.host + ": " + legacySays(x)`,
+		"function legacySays(x) {",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+
+	r := mailSample()
+	r.Observed.MXRead = true
+	r.Observed.MXHosts = []string{"mx1.example.com", "mx2.example.com", "mx3.example.com", "mx4.example.com"}
+	r.Observed.ExchangersContacted = true
+	r.Observed.Exchangers = []policy.ExchangerTLS{
+		{Host: "mx1.example.com", Measured: true, LegacyAsked: true, LegacyAccepted: true, LegacyVersion: "TLS 1.0"},
+		{Host: "mx2.example.com", Measured: true, LegacyAsked: true},
+		{Host: "mx3.example.com", Measured: true, LegacyAsked: true, LegacyReason: "the server closed the connection without answering"},
+		{Host: "mx4.example.com", Measured: true},
+	}
+	var buf bytes.Buffer
+	printMail(&buf, r)
+	text := buf.String()
+	for _, want := range []string{
+		"LEGACY     mx1.example.com: accepts TLS 1.0 from a sender offering nothing newer",
+		"LEGACY     mx2.example.com: refuses TLS 1.1 and older",
+		"LEGACY     mx3.example.com: not established: the server closed the connection without answering",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the terminal does not print %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "LEGACY     mx4.example.com") {
+		t.Errorf("an exchanger that was not asked has a row:\n%s", text)
+	}
+}

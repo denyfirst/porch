@@ -126,7 +126,9 @@
       <li><strong>Mail</strong>: DNS lookups for SPF, DMARC, TLS-RPT, MTA-STS,
         the mail servers, DANE and DKIM keys.
         {{if .Whole}}It also fetches the MTA-STS policy and asks each mail
-        exchanger on port 25 whether it offers STARTTLS. A mail server inside
+        exchanger on port 25 whether it offers STARTTLS, and, where it
+        negotiates TLS 1.2 or newer, once more whether it still accepts TLS 1.1
+        or older: one hello, no handshake completed. A mail server inside
         the domain is also asked whether it would relay for a domain it does
         not serve, using an address that cannot exist, and reset before any
         message. No message is ever composed. The mailboxes DMARC reports are

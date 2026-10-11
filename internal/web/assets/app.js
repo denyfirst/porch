@@ -1791,6 +1791,10 @@ function zone(facts) {
         if (!x.relayAsked && !x.relayReason) continue;
         row("RELAY", x.host + ": " + relaySays(x), x.relayAccepted ? "insecure" : null);
       }
+      for (const x of facts.exchangers || []) {
+        if (!x.legacyAsked && !x.legacyReason) continue;
+        row("LEGACY", x.host + ": " + legacySays(x), x.legacyAccepted ? "weak" : null);
+      }
       for (const b of facts.daneBindings || []) {
         row("DANE", b.host + ": " + daneSays(b));
       }
@@ -1829,6 +1833,15 @@ function relaySays(x) {
   if (x.relayAccepted) return "forwards mail for a domain it does not serve";
   if (x.relayAsked) return "refuses to forward for other domains";
   return "not established: " + x.relayReason;
+}
+
+// Whether the exchanger still speaks TLS 1.1 or older to a sender that offers
+// nothing newer, in the words the terminal uses (R16). Asked and not answered
+// is not a refusal (R4).
+function legacySays(x) {
+  if (x.legacyAccepted) return "accepts " + x.legacyVersion + " from a sender offering nothing newer";
+  if (x.legacyAsked && !x.legacyReason) return "refuses TLS 1.1 and older";
+  return "not established: " + x.legacyReason;
 }
 
 // What one exchanger's DANE records made of its certificate.

@@ -39,6 +39,12 @@ type script struct {
 	mail string
 	rcpt string
 
+	// legacy, when set, is what the server writes in answer to the hello
+	// that follows STARTTLS, in place of a handshake: a hand-made ServerHello
+	// or nothing at all. The hello is kept in hello.
+	legacy []byte
+	hello  []byte
+
 	mu    sync.Mutex
 	heard []string
 
@@ -85,6 +91,15 @@ func (s *script) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, s.ehlo)
 		case "STARTTLS":
 			_, _ = io.WriteString(conn, s.starttls+s.afterStarttls)
+			if s.legacy != nil && strings.HasPrefix(s.starttls, "220") {
+				buf := make([]byte, 4096)
+				n, _ := r.Read(buf)
+				s.mu.Lock()
+				s.hello = append([]byte(nil), buf[:n]...)
+				s.mu.Unlock()
+				_, _ = conn.Write(s.legacy)
+				return
+			}
 			if s.cert == nil || !strings.HasPrefix(s.starttls, "220") {
 				continue
 			}

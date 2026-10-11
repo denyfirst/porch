@@ -123,12 +123,18 @@ sixteen. And whether each mail server (up to eight) has an IPv6 address, which
 is reported and not graded.
 
 **Connects to:** the MTA-STS policy file, if announced, and each mail server
-(up to eight) on port 25, asked only whether it offers STARTTLS. Only for a
-domain proven to the copy asking, or where only its operator can use it.
+(up to eight) on port 25, asked whether it offers STARTTLS. A server that
+negotiates TLS 1.2 or 1.3 is asked once more, in a second short conversation,
+whether it still accepts TLS 1.1 or older: one hello offering nothing newer,
+the first record of the answer read, no handshake completed. Only for a domain
+proven to the copy asking, or where only its operator can use it.
 
 **Grades** only what a standard calls an error: two SPF records, more than ten
-SPF lookups, `+all`, two DMARC records, an unusable MTA-STS policy. `~all`,
-`p=none` and the choice of MTA-STS or DANE are observed, not graded.
+SPF lookups, `+all`, two DMARC records, an unusable MTA-STS policy, and a mail
+server still speaking TLS 1.0 or 1.1, which RFC 8996 retired (weak where it
+also speaks TLS 1.2 or 1.3, because a sender refused there falls back to plain
+text; insecure where it speaks nothing newer). `~all`, `p=none` and the choice
+of MTA-STS or DANE are observed, not graded.
 
 Many mail servers refuse an address with no reverse DNS name. Give yours one
 and pass it with `-helo`. A blocked outbound port 25 is reported as such.

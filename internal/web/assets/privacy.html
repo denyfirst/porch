@@ -110,7 +110,8 @@
         connection to each of sixteen ports of services that should not face
         the internet, closed as it opens. Only our own hosts.</li>
       <li><strong>Mail:</strong> DNS lookups, the MTA-STS policy file, and a
-        STARTTLS check on port 25. No mail is sent.</li>
+        STARTTLS check on port 25, with a second short one asking whether TLS
+        1.1 or older is still accepted. No mail is sent.</li>
       <li><strong>DNS:</strong> lookups, and questions to our name servers.
         A zone transfer is asked for and not read.</li>
     </ul>

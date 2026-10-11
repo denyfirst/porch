@@ -40,7 +40,7 @@ import (
 // and the domain therefore gets none. No rule changed its meaning and no
 // threshold moved — but a domain that graded clean yesterday can grade worse
 // today on an unchanged configuration, and that is a version change.
-const MailVersion = "porch-mail-v3"
+const MailVersion = "porch-mail-v4"
 
 var (
 	rfc7208 = Reference{
@@ -395,6 +395,22 @@ type ExchangerTLS struct {
 	RelayAsked    bool   `json:"relayAsked,omitempty"`
 	RelayAccepted bool   `json:"relayAccepted,omitempty"`
 	RelayReason   string `json:"relayReason,omitempty"`
+
+	// LegacyAsked is whether this exchanger was asked, in a second
+	// conversation, to negotiate TLS 1.1 or older, and LegacyAccepted whether
+	// it chose one, LegacyVersion which. Asked only where the first
+	// conversation negotiated TLS 1.2 or 1.3; LegacyReason says why nothing
+	// was established where the question was put and not answered (R4).
+	LegacyAsked    bool   `json:"legacyAsked,omitempty"`
+	LegacyAccepted bool   `json:"legacyAccepted,omitempty"`
+	LegacyVersion  string `json:"legacyVersion,omitempty"`
+	LegacyReason   string `json:"legacyReason,omitempty"`
+}
+
+// legacyVersion is a version RFC 8996 retired, or older, by the name
+// internal/smtptls gives it.
+func legacyVersion(v string) bool {
+	return v == "TLS 1.0" || v == "TLS 1.1" || v == "SSL 3.0"
 }
 
 // MailFinding is the graded result.
@@ -700,6 +716,45 @@ func GradeMail(f MailFacts) MailFinding {
 					"anybody's name. No message was sent.",
 				rfc2505, rfc5321)
 		}
+	}
+
+	// Exchangers still speaking TLS 1.0 or 1.1, which RFC 8996 retired.
+	//
+	// Two cases, graded apart. One that offered nothing newer to a client
+	// offering TLS 1.3 gives every sender a retired version, and a sender
+	// that insists on TLS 1.2 nothing at all: insecure, as the TLS check
+	// grades a web server that negotiates one. One that speaks TLS 1.2 or 1.3
+	// and still answers an old hello with an old version is weak rather than
+	// insecure, and that is opportunistic encryption rather than leniency
+	// (RFC 7435): a sender that cannot do better is otherwise sent to plain
+	// text, unless MTA-STS or DANE is enforced, so refusing it buys nothing
+	// for that sender. RFC 8996 still says the version must not be
+	// negotiated, so it is graded.
+	var onlyLegacy, alsoLegacy []string
+	for _, x := range f.Exchangers {
+		switch {
+		case x.Upgraded && legacyVersion(x.Version):
+			onlyLegacy = append(onlyLegacy, x.Host+" ("+x.Version+")")
+		case x.LegacyAccepted:
+			alsoLegacy = append(alsoLegacy, x.Host+" ("+x.LegacyVersion+")")
+		}
+	}
+	if len(onlyLegacy) > 0 {
+		add("mail.exchanger-only-legacy-tls", Insecure,
+			"An exchanger negotiates nothing newer than TLS 1.1",
+			"RFC 8996 says TLS 1.0 and 1.1 must not be negotiated. "+strings.Join(onlyLegacy, ", ")+
+				" offered nothing newer to a client offering TLS 1.3, so mail to it travels over a "+
+				"retired version, and a sender that insists on TLS 1.2 cannot encrypt to it at all.",
+			rfc8996)
+	}
+	if len(alsoLegacy) > 0 {
+		add("mail.exchanger-legacy-tls", Weak,
+			"An exchanger still accepts TLS 1.0 or 1.1",
+			"RFC 8996 says TLS 1.0 and 1.1 must not be negotiated. "+strings.Join(alsoLegacy, ", ")+
+				" chose one for a sender that offered nothing newer. Modern senders still get TLS 1.2 "+
+				"or 1.3. Weak rather than insecure because, for mail, a sender refused here falls "+
+				"back to plain text unless MTA-STS or DANE is enforced.",
+			rfc8996)
 	}
 
 	// A domain whose principal records could not be read is not strong.

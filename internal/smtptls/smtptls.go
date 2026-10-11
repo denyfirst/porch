@@ -14,6 +14,12 @@
 // and left — which is what every sending server that finds nothing to deliver
 // looks like.
 //
+// A caller may ask for a second, shorter one (ProbeLegacy): the same opening,
+// then one hello offering nothing newer than TLS 1.1, the first record of the
+// answer read, and the connection closed. It is the only way to learn whether
+// a server that speaks TLS 1.3 to a modern client still speaks a version RFC
+// 8996 retired to an old one.
+//
 // # The one question that names anybody
 //
 // A caller may ask whether the exchanger forwards mail for a domain it does not
@@ -64,6 +70,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/rawhello"
 	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/truststore"
 )
@@ -336,6 +343,112 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 
 	quit(tlsConn)
 	return out
+}
+
+// Legacy is what asking an exchanger for a version older than TLS 1.2 found.
+//
+// Three states and never two, as everywhere a question goes unanswered: it
+// chose an old version, it declined, or nothing was established — and a
+// connection that closed without a word is the last, not a refusal (R4).
+type Legacy struct {
+	// Asked is true once the hello was sent.
+	Asked bool
+
+	Accepted bool
+	Refused  bool
+
+	// Version is the version it chose, when it accepted.
+	Version string
+
+	// Reason says why nothing was established.
+	Reason string
+}
+
+// ProbeLegacy asks one exchanger, in a conversation of its own, whether it
+// will negotiate TLS 1.1 or older.
+//
+// RFC 8996 says neither may be negotiated, and Probe cannot tell: Go's client
+// offers TLS 1.3 down to 1.0, and a server that speaks 1.3 chooses it. So
+// this is a second, shorter conversation: greeting, EHLO, STARTTLS, then one
+// hello written by hand (internal/rawhello) that offers nothing newer than
+// TLS 1.1, and the first record of the answer. No handshake is completed,
+// nothing is encrypted, no command follows, and the connection is closed
+// there — what a sender stuck on an old library looks like, and nothing more.
+func (p *Prober) ProbeLegacy(ctx context.Context, host string) Legacy {
+	host = strings.TrimSuffix(host, ".")
+
+	ctx, cancel := context.WithTimeout(ctx, p.timeout())
+	defer cancel()
+
+	conn, err := p.dialFunc()(ctx, "tcp", net.JoinHostPort(host, Port))
+	if err != nil {
+		reason, _ := dialReason(err)
+		return Legacy{Reason: reason}
+	}
+	defer conn.Close()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
+	defer stop()
+
+	r := bufio.NewReaderSize(conn, maxLine)
+	const again = "a second conversation, to ask about older versions, "
+
+	if code, _, err := readReply(r); err != nil || code != 220 {
+		if err == nil {
+			quit(conn)
+		}
+		return Legacy{Reason: again + "was not greeted"}
+	}
+	if err := writeLine(conn, "EHLO "+p.heloName(conn)); err != nil {
+		return Legacy{Reason: again + "closed before EHLO"}
+	}
+	code, lines, err := readReply(r)
+	if err != nil || code != 250 || !offersSTARTTLS(lines) {
+		if err == nil {
+			quit(conn)
+		}
+		return Legacy{Reason: again + "was not offered STARTTLS"}
+	}
+	if err := writeLine(conn, "STARTTLS"); err != nil {
+		return Legacy{Reason: again + "closed before STARTTLS"}
+	}
+	if code, _, err := readReply(r); err != nil || code != 220 {
+		if err == nil {
+			quit(conn)
+		}
+		return Legacy{Reason: again + "was refused STARTTLS"}
+	}
+	// RFC 3207, as in Probe: nothing may arrive before encryption begins.
+	if r.Buffered() > 0 {
+		return Legacy{Reason: again + "was sent more before encryption began, which RFC 3207 forbids"}
+	}
+
+	got := rawhello.Ask(ctx, conn, rawhello.Hello{
+		RecordVersion: tls.VersionTLS10,
+		ClientVersion: tls.VersionTLS11,
+		Suites:        rawhello.IDs(rawhello.Legacy),
+		Extensions:    true,
+		ServerName:    host,
+	})
+	switch got.Answer {
+	case rawhello.Accepted:
+		switch got.Version {
+		case tls.VersionTLS10, tls.VersionTLS11:
+			return Legacy{Asked: true, Accepted: true, Version: versionName(got.Version)}
+		case 0x0300:
+			return Legacy{Asked: true, Accepted: true, Version: "SSL 3.0"}
+		}
+		// A version it was not offered: whatever that is, it is not an old
+		// one accepted.
+		return Legacy{Asked: true, Refused: true}
+	case rawhello.Refused:
+		return Legacy{Asked: true, Refused: true}
+	default:
+		return Legacy{Asked: true, Reason: "the server closed the connection without answering, which a refusal and a broken connection both look like"}
+	}
 }
 
 // judge verifies a chain against the deployment's store, and its name.

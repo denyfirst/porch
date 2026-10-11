@@ -43,6 +43,13 @@ func printExchangers(w io.Writer, f *policy.MailFacts) {
 		}
 		fmt.Fprintf(w, "    RELAY      %s: %s\n", x.Host, relayLine(x))
 	}
+	for _, x := range f.Exchangers {
+		// Only where the old-version question was put, as with relaying.
+		if !x.LegacyAsked && x.LegacyReason == "" {
+			continue
+		}
+		fmt.Fprintf(w, "    LEGACY     %s: %s\n", x.Host, oldVersionLine(x))
+	}
 	for _, b := range f.DANEBindings {
 		fmt.Fprintf(w, "    DANE       %s: %s\n", b.Host, daneLine(b))
 	}
@@ -92,6 +99,19 @@ func exchangerLine(x policy.ExchangerTLS) string {
 		return x.Version + " " + x.Suite + ", certificate does not name this exchanger"
 	default:
 		return x.Version + " " + x.Suite + ", certificate verifies" + runsOut(x.Expires)
+	}
+}
+
+// oldVersionLine says whether the exchanger still speaks TLS 1.1 or older to
+// a sender that offers nothing newer, in the words the page uses (R16).
+func oldVersionLine(x policy.ExchangerTLS) string {
+	switch {
+	case x.LegacyAccepted:
+		return "accepts " + x.LegacyVersion + " from a sender offering nothing newer"
+	case x.LegacyAsked && x.LegacyReason == "":
+		return "refuses TLS 1.1 and older"
+	default:
+		return "not established: " + x.LegacyReason
 	}
 }
 

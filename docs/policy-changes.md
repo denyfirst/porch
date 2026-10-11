@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v7`, `porch-web-v4`, `porch-mail-v3` and `porch-dns-v3`. Reports
+`porch-tls-v7`, `porch-web-v4`, `porch-mail-v4` and `porch-dns-v3`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,25 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-mail-v3` → `porch-mail-v4`
+
+Unreleased.
+
+- **Added `mail.exchanger-only-legacy-tls`, insecure.** An exchanger offered
+  nothing newer than TLS 1.1 to a client offering TLS 1.3 (RFC 8996).
+- **Added `mail.exchanger-legacy-tls`, weak.** An exchanger that negotiates TLS
+  1.2 or 1.3 still chose TLS 1.1 or older for a sender that offered nothing
+  newer. Weak rather than insecure because a mail sender refused there falls
+  back to plain text unless MTA-STS or DANE is enforced (RFC 7435).
+- The second case is asked in a second, short conversation with each
+  exchanger that negotiated TLS 1.2 or 1.3: greeting, EHLO, STARTTLS, one hello
+  offering nothing newer than TLS 1.1, and the first record of the answer. No
+  handshake is completed and the connection is closed there. An exchanger that
+  closes without answering is reported as not established, not as refusing.
+- **Reported, not graded:** whether each exchanger has an IPv6 address.
 
 ---
 
