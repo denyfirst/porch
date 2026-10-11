@@ -2014,12 +2014,14 @@ function reportFrame(container, target, names, chosen, opts) {
   }
   container.appendChild(cover);
 
+  const findings = el("section", "report-findings");
   const heading = el("h2", "report-heading", "Findings");
   frame.found = el("span", "report-heading-count");
   heading.appendChild(frame.found);
-  container.appendChild(heading);
+  findings.appendChild(heading);
   frame.todo = el("div", "report-todo");
-  container.appendChild(frame.todo);
+  findings.appendChild(frame.todo);
+  container.appendChild(findings);
 
   // Every check named keeps its row, chosen or not, so the board keeps its
   // shape and says what was left out; one that was not chosen has no section
@@ -2046,12 +2048,20 @@ function reportFrame(container, target, names, chosen, opts) {
     if (!on) return;
     title.href = "#report-" + name;
 
-    const section = el("section", "report-check");
+    // A card per check. Its head, the check's name and its verdict, stays
+    // at the top of the window while the card is read, and gives way to the
+    // next card's at the card's end: a reader scrolling through a long
+    // report always knows which check the rows in front of them belong to.
+    const section = el("section", "report-check report-check-pending");
     section.id = "report-" + name;
-    const head = el("div", "report-check-head");
+    const head = el("header", "report-check-head");
     head.appendChild(el("span", "report-check-num", number));
-    head.appendChild(el("h3", "report-check-name", spec.label));
-    head.appendChild(el("p", "report-check-says", spec.says));
+    const named = el("div", "report-check-named");
+    named.appendChild(el("h3", "report-check-name", spec.label));
+    named.appendChild(el("p", "report-check-says", spec.says));
+    head.appendChild(named);
+    const mark = el("span", "stamp stamp-pending", "running");
+    head.appendChild(mark);
     section.appendChild(head);
     const top = el("div", "report-check-top");
     section.appendChild(top);
@@ -2060,11 +2070,43 @@ function reportFrame(container, target, names, chosen, opts) {
     section.appendChild(body);
     container.appendChild(section);
 
-    frame.entries.push({ name, spec, row, state, count, policy, head, top, body, done: false, verdict: null, open: 0 });
+    frame.entries.push({ name, spec, row, state, count, policy, section, mark, top, body, done: false, verdict: null, open: 0 });
   });
 
   reportTally(frame);
   return frame;
+}
+
+// reportFacts sets a list of labelled values as cells, each label over its
+// value, so a short value takes a short cell and a long one the whole row.
+// Set as one column of label and value, every row of a certificate came out
+// the same length, and a reader could not tell its validity from its
+// fingerprint without reading both. A row with no label of its own continues
+// the one above it, as the logged certificates continue "Logged".
+//
+// Only the arrangement changes: every node the builder made is kept, in the
+// order it made them.
+function reportFacts(dl) {
+  const cells = [];
+  let cell = null;
+  for (const node of Array.from(dl.children)) {
+    if (node.tagName === "DT" && (node.textContent.trim() !== "" || !cell)) {
+      cell = el("div", "report-fact");
+      cells.push(cell);
+    }
+    if (!cell) {
+      cell = el("div", "report-fact");
+      cells.push(cell);
+    }
+    cell.appendChild(node);
+  }
+  clear(dl);
+  dl.className = "report-facts";
+  for (const c of cells) {
+    const values = c.querySelectorAll("dd");
+    if (values.length > 1 || c.textContent.length > 46) c.classList.add("report-fact-wide");
+    dl.appendChild(c);
+  }
 }
 
 // reportProof says what this deployment required before it measured the name,
@@ -2097,6 +2139,7 @@ async function reportRun(frame, entry, run) {
     entry.body.appendChild(failure(err.message || "The check did not complete.", hint));
     entry.state.textContent = "not run";
     entry.state.className = "stamp stamp-small stamp-pending";
+    entry.mark.textContent = "not run";
     entry.count.textContent = "did not run";
     entry.done = true;
     reportTally(frame);
@@ -2107,16 +2150,26 @@ async function reportRun(frame, entry, run) {
 function reportShow(frame, entry, data) {
   const verdict = verdictOf(data);
 
-  // The verdict and the name it is a verdict on, first, across the page; the
-  // evidence under it.
+  // The verdict first, at the head of the card beside the check's name,
+  // where it stays in view while the card is read; then the name it is a
+  // verdict on and what it rests on; then the evidence.
+  const sum = summary(data);
+  const stamp = sum.querySelector(".summary-head > .stamp");
+  if (stamp) {
+    entry.mark.replaceWith(stamp);
+    entry.mark = stamp;
+  }
+  entry.section.className = "report-check " + verdictClass("report-check", verdict);
   clear(entry.top);
-  entry.top.appendChild(summary(data));
+  entry.top.appendChild(sum);
   clear(entry.body);
   entry.body.appendChild(entry.spec.build(data));
+  for (const dl of entry.body.querySelectorAll("dl.pairs")) reportFacts(dl);
 
-  const how = link(entry.spec.methodPage, "How this check works");
-  how.classList.add("report-how");
-  entry.head.appendChild(how);
+  // The card's foot: where the check is explained, and where it ends.
+  const foot = el("p", "report-check-foot");
+  foot.appendChild(link(entry.spec.methodPage, "How this check works"));
+  entry.section.appendChild(foot);
 
   entry.state.textContent = data.verdict ? verdict : "not graded";
   entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);
@@ -2305,9 +2358,10 @@ function namesFrame(container, target, data, opts) {
   container.appendChild(cover);
 
   if (dangling.length) {
+    const findings = el("section", "report-findings");
     const heading = el("h2", "report-heading", "Findings");
     heading.appendChild(el("span", "report-heading-count", String(dangling.length)));
-    container.appendChild(heading);
+    findings.appendChild(heading);
     const todo = el("div", "report-todo");
     for (const n of dangling) {
       const item = el("article", "report-item report-item-weak");
@@ -2320,11 +2374,13 @@ function namesFrame(container, target, data, opts) {
       item.appendChild(main);
       todo.appendChild(item);
     }
-    container.appendChild(todo);
+    findings.appendChild(todo);
+    container.appendChild(findings);
   }
 
   const body = el("div", "report-body report-names");
   body.appendChild(buildNames(data));
+  for (const dl of body.querySelectorAll("dl.pairs")) reportFacts(dl);
   container.appendChild(body);
 }
 
@@ -2801,11 +2857,11 @@ if (consoleForm) {
 /*
   Every check on one name, in the frame every report is drawn in.
 
-  It was a tab per check. The cover's tiles now do what the tabs did — each
-  carries its own state, running, a verdict, not graded or not run, so a TLS
-  result is never read as saying anything about mail — and what the tabs
-  could not do is the list above the checks: every rule any of them found
-  broken, in one place, worst first.
+  It was a tab per check. The board's rows on the cover now do what the tabs
+  did — each carries its own state, running, a verdict, not graded or not
+  run, so a TLS result is never read as saying anything about mail — and
+  what the tabs could not do is the list above the checks: every rule any of
+  them found broken, in one place, worst first.
 */
 const porchForm = document.getElementById("porch-form");
 const porchTarget = document.getElementById("porch-target");

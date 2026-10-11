@@ -1410,17 +1410,17 @@ Every page that draws a report draws it in one frame (`reportFrame` in
 `internal/web/assets/app.js`): the console, the demonstration, a check's own
 page and History, through the same builders, and the names inventory in the
 same cover (`namesFrame`). The builders draw evidence; the frame draws the
-verdict and the one list of rules found broken, so neither is drawn twice. A
-check's verdict is stamped beside the name it is a verdict on, above its
-evidence, and a check with no verdict is marked in a dashed stamp that no
-verdict is drawn in.
+verdict and the one list of rules found broken, so neither is drawn twice.
+Each check is a card whose head, held in view while the card is read, has
+the check's verdict stamped beside its name, above the evidence; a check with
+no verdict is marked in a dashed stamp that no verdict is drawn in.
 
 *Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
 `internal/scan.Result.Notes`, `internal/web/assets/app.js` (`reportFrame`,
 `reportShow`, `namesFrame`)
 
 *Guarded by:* `TestEachCheckHasARowAndAStateOfItsOwn`,
-`TestAnUnchosenCheckKeepsARowItCannotOpen`, `TestAVerdictIsStampedAboveItsEvidence`,
+`TestAnUnchosenCheckKeepsARowItCannotOpen`, `TestAVerdictIsStampedAtTheHeadOfItsCard`,
 `TestAnAbsentVerdictIsNeverDrawnAsOne`, `TestTheNamesAreDrawnInTheFrame`,
 `TestBothFacesOfTheReportShowTheSameFacts`,
 `TestAReportSaysWhatWasMeasured`, `TestThePageReadsTheLegacyFieldsTheAPISends`,

@@ -36,6 +36,8 @@
 :root {
   --paper:       #f7f7f8;
   --paper-sunk:  #ececf0;
+  /* A report's cards: a step above the page. */
+  --card:        #ffffff;
   --ink:         #16171b;
   --ink-soft:    #464953;
   /* The faint ink carries the coverage line, the words "not measured", and
@@ -131,6 +133,7 @@
   :root:not([data-theme="light"]) {
     --paper:      #101114;
     --paper-sunk: #18191d;
+    --card:       #17181d;
     --ink:        #f0f0f2;
     --ink-soft:   #b4b5be;
     --ink-faint:  #999ba6;
@@ -161,6 +164,7 @@
   :root[data-theme="dark"] {
     --paper:      #101114;
     --paper-sunk: #18191d;
+    --card:       #17181d;
     --ink:        #f0f0f2;
     --ink-soft:   #b4b5be;
     --ink-faint:  #999ba6;
@@ -1229,25 +1233,40 @@ code.flag { white-space: nowrap; }
 .summary-worst { color: var(--ink-soft); }
 
 /* ── The report ─────────────────────────────────────────────────────────
-   One frame for every report, set as a record: a cover with the domain, one
-   sentence and a board of the checks with their verdicts stamped at the
-   right; one list of findings; then each check across the page, its verdict
-   stamped beside the name it is a verdict on, as before the frame, and its
-   evidence under it at full width. */
+   One frame for every report, in cards on the page: the cover, with the
+   domain, one sentence and a board of the checks with their verdicts; the
+   findings; then a card per check. A check's card has a head that stays at
+   the top of the window while the card is read, its verdict stamped at the
+   right of it, and an edge in the verdict's colour, so where one check ends
+   and the next begins is never a matter of reading. Inside, the evidence is
+   set in blocks with titles that can be found by eye, labelled values as
+   cells, and tables with a head. */
+
+.report-cover,
+.report-findings,
+.report-check {
+  margin: 1.4rem 0 0;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent);
+}
 
 .report-cover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   gap: 1.4rem 2.6rem;
   align-items: end;
-  margin: 2rem 0 0;
-  padding-top: 1.3rem;
-  border-top: 3px solid var(--ink);
+  margin-top: 2rem;
+  padding: clamp(1.2rem, 3vw, 1.9rem) clamp(1.1rem, 3vw, 1.9rem) 0.6rem;
 }
 
 .report-lead { min-width: 0; }
 
 .report-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0;
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -1256,9 +1275,16 @@ code.flag { white-space: nowrap; }
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+.report-eyebrow::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--tool);
+}
 
 .report-domain {
-  margin: 0.45rem 0 0;
+  margin: 0.5rem 0 0;
   font-size: clamp(1.8rem, 4.4vw, 2.7rem);
   font-weight: 800;
   letter-spacing: -0.025em;
@@ -1296,7 +1322,7 @@ code.flag { white-space: nowrap; }
   color: var(--ink-faint);
 }
 .report-key { display: inline-flex; align-items: center; gap: 0.45rem; }
-.report-key::before { content: ""; width: 0.55rem; height: 0.55rem; background: var(--ink-faint); }
+.report-key::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 2px; background: var(--ink-faint); }
 .report-key b { color: var(--ink); font-weight: 700; }
 .report-key-insecure::before { background: var(--insecure); }
 .report-key-weak::before { background: var(--weak); }
@@ -1304,24 +1330,26 @@ code.flag { white-space: nowrap; }
 .report-key-open::before { background: transparent; border: 1.5px dashed var(--ink-faint); }
 
 /* The board: a row per check. The verdict is in the same place on every row,
-   at the right, as it is at the head of each check below. */
+   at the right, as it is at the head of each check's card below. */
+.report-boardwrap { grid-column: 1 / -1; min-width: 0; }
+
 .report-board {
   grid-column: 1 / -1;
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--ink);
+  border-top: 1px solid var(--rule);
 }
-.report-boardwrap { grid-column: 1 / -1; min-width: 0; }
 
 .report-row {
   display: grid;
   grid-template-columns: 2.2rem minmax(0, 1fr) 9.5rem 9.5rem 7.5rem;
   align-items: center;
   gap: 0.25rem 1rem;
-  padding: 0.7rem 0;
+  padding: 0.75rem 0;
   border-bottom: 1px solid var(--rule);
 }
+.report-board > .report-row:last-child { border-bottom: 0; }
 
 .report-row-head {
   padding: 0 0 0.45rem;
@@ -1349,7 +1377,7 @@ code.flag { white-space: nowrap; }
   color: var(--ink);
   text-decoration: none;
 }
-a.report-row-title:hover { text-decoration: underline; }
+a.report-row-title:hover { color: var(--link); }
 
 .report-row-says { font-size: 0.82rem; color: var(--ink-faint); }
 
@@ -1387,44 +1415,49 @@ a.report-row-title:hover { text-decoration: underline; }
   column-gap: 2.6rem;
 }
 .report-board-sources .report-row { grid-template-columns: 2.2rem minmax(0, 1fr) auto; }
+.report-board-sources > .report-row:last-child { border-bottom: 1px solid var(--rule); }
+.report-board-sources > .report-row:nth-last-child(-n + 2) { border-bottom: 0; }
 .report-board-sources .report-row-count { text-align: right; font-variant-numeric: tabular-nums; }
 .report-row-quiet { color: var(--ink-faint); }
 
-/* The inventory's evidence starts under its cover. */
-.report-names { margin-top: 2.4rem; }
-.report-names > .section-title:first-child { margin-top: 0; }
-.report-names .grid + .rows { margin-top: 1.8rem; }
+/* Findings: one list, insecure first, each stamped with its severity and a
+   rail in its colour down the row's edge. */
+.report-findings { padding: 0 clamp(1.1rem, 3vw, 1.9rem); }
 
-/* Findings: one list, insecure first, each with its severity stamped. */
 .report-heading {
   display: flex;
   align-items: baseline;
-  gap: 0.7rem;
-  margin: 3rem 0 0;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--ink);
-  font-size: 0.86rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 1.1rem 0 0.8rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 1.1rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
 }
 .report-heading-count {
+  min-width: 1.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, var(--card));
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  letter-spacing: 0;
-  color: var(--ink-faint);
+  text-align: center;
+  color: var(--ink-soft);
 }
+.report-heading-count:empty { display: none; }
 
-.report-todo-empty { margin: 0; padding: 0.9rem 0; color: var(--ink-soft); border-bottom: 1px solid var(--rule); }
+.report-todo-empty { margin: 0; padding: 1rem 0 1.15rem; color: var(--ink-soft); }
 
 .report-item {
   display: grid;
   grid-template-columns: 7.5rem minmax(0, 1fr);
   gap: 0.4rem 1.2rem;
-  padding: 1.05rem 0;
+  padding: 1.1rem 0;
   border-bottom: 1px solid var(--rule);
 }
+.report-todo > .report-item:last-child { border-bottom: 0; }
 .report-item > .stamp { align-self: start; justify-self: start; margin-top: 0.1rem; }
 
 /* A rail in the severity's colour down the row's left edge, so the list can
@@ -1461,62 +1494,209 @@ a.report-row-title:hover { text-decoration: underline; }
 .report-item-check { font-weight: 700; text-decoration: none; }
 .report-item-check:hover { text-decoration: underline; }
 
-/* One check, across the page: its name, then its verdict stamped beside the
-   name it is a verdict on, then the evidence. */
-.report-check { margin: 3.6rem 0 0; scroll-margin-top: 1rem; }
+/* A check's card. Its edge is the verdict's colour; a check still running,
+   or that did not run, keeps the rule's. */
+.report-check {
+  --sev: var(--rule);
+  margin-top: 1.6rem;
+  scroll-margin-top: 1rem;
+}
+.report-check-strong   { --sev: var(--strong); }
+.report-check-weak     { --sev: var(--weak); }
+.report-check-insecure { --sev: var(--insecure); }
+.report-check-ungraded,
+.report-check-pending  { --sev: var(--ink-faint); }
 
+/* The head: held at the top of the window for as long as its card is on
+   screen, so the verdict and the name of the check stay in view while the
+   rows under them are read. */
 .report-check-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.2rem 0.8rem;
-  padding-bottom: 0.7rem;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.95rem clamp(1.1rem, 3vw, 1.9rem) 0.85rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 14px 14px 0 0;
+  box-shadow: inset 0 4px 0 var(--sev);
 }
 
-.report-check-num { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-faint); }
+.report-check-num {
+  flex: 0 0 auto;
+  padding: 0.12rem 0.45rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 7%, var(--card));
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.report-check-named { flex: 1 1 auto; min-width: 0; }
 
 .report-check-name {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 1.22rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
 }
 
-.report-check-says { margin: 0; font-size: 0.86rem; color: var(--ink-faint); }
+.report-check-says { margin: 0.1rem 0 0; font-size: 0.84rem; color: var(--ink-faint); }
 
-.report-how { margin-left: auto; font-size: 0.82rem; font-weight: 600; }
+.report-check-head > .stamp { flex: 0 0 auto; }
 
-.report-check-top .summary { padding-bottom: 1.2rem; }
+.report-check-top,
+.report-body,
+.report-check-foot { padding-inline: clamp(1.1rem, 3vw, 1.9rem); }
+
+/* What the verdict is on and what it rests on, under the head. The summary's
+   row lost its stamp to the head, so it holds the name alone. */
+.report-check-top .summary { padding: 1.1rem 0 1.2rem; border-top: 0; }
+.report-check-top .summary-target { font-size: 1.12rem; }
 /* The coverage line is a sentence to read, so it is set as one. */
-.report-check-top .summary-coverage { font-family: var(--sans); font-size: 0.9rem; color: var(--ink-soft); max-width: 44rem; }
-.report-absent { margin: 0.9rem 0 0; font-size: 0.9rem; color: var(--ink-soft); }
+.report-check-top .summary-coverage { font-family: var(--sans); font-size: 0.9rem; color: var(--ink-soft); max-width: 46rem; }
+.report-absent { margin: 0 0 1.1rem; font-size: 0.9rem; color: var(--ink-soft); }
+
+.report-check-foot {
+  margin: 1.6rem 0 0;
+  padding-block: 0.85rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
 
 .report-body { min-width: 0; }
-.report-body > .working { margin-top: 0; padding-top: 1.2rem; border-top: 2px solid var(--ink); }
+.report-body > .working { margin: 0; padding-block: 1.2rem; }
 
-/* Inside a report the evidence is set for reading: section labels as the
-   record's, in the monospace, and labels and values in the sans with a
-   hairline under each row. The monospace stays where a value is copied
-   rather than read: suite names, host names, the address line. */
-.report-body > .section-title:first-child { margin-top: 1.8rem; }
+/* A block's title, with a hairline running on from it to the card's edge,
+   so each block of evidence starts somewhere the eye can find. */
+.report-body .section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 2.1rem 0 0.8rem;
+  padding: 0;
+  border: 0;
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--ink);
+}
+.report-body .section-title::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--rule); }
+.report-body > .section-title:first-child { margin-top: 0.4rem; }
+.report-body .group-label { margin-top: 1.1rem; }
 
-/* Proportional figures here: tabular ones give the full stop in "TLS 1.3" a
-   digit's width in the sans, and the version read as "1 . 3". */
-.report-body .rows { font-family: var(--sans); font-size: 0.92rem; font-variant-numeric: normal; }
-.report-body .rows th { font-family: var(--mono); font-size: 0.66rem; font-weight: 600; letter-spacing: 0.14em; }
-.report-body .rows td { padding: 0.55rem 0.9rem 0.55rem 0; }
+/* Tables with a tinted head and rounded ends, in the sans; the monospace stays
+   where a value is copied rather than read. Proportional figures, because
+   tabular ones give the full stop in "TLS 1.3" a digit's width in the sans
+   and the version read as "1 . 3". */
+.report-body .rows {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--sans);
+  font-size: 0.92rem;
+  font-variant-numeric: normal;
+}
+.report-body .rows th {
+  padding: 0.5rem 0.9rem 0.5rem 0;
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+  border-bottom: 0;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+.report-body .rows th:first-child { padding-left: 0.75rem; border-radius: 8px 0 0 8px; }
+.report-body .rows th:last-child { padding-right: 0.75rem; border-radius: 0 8px 8px 0; }
+.report-body .rows td { padding: 0.62rem 0.9rem 0.62rem 0; }
+.report-body .rows td:first-child { padding-left: 0.75rem; }
+.report-body .rows td:last-child { padding-right: 0.75rem; }
+.report-body .rows tbody tr:last-child td { border-bottom: 0; }
+.report-body .rows tbody tr:hover td { background: color-mix(in srgb, var(--ink) 3%, var(--card)); }
 .report-body .rows td.identifier,
 .report-body .rows td.hostname { font-family: var(--mono); font-size: 0.84rem; }
+.report-body .table-scroll {
+  background:
+    linear-gradient(to right, var(--card), rgba(0, 0, 0, 0)) left / 1.4rem 100% no-repeat local,
+    linear-gradient(to left,  var(--card), rgba(0, 0, 0, 0)) right / 1.4rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--edge), rgba(0, 0, 0, 0)) left / 0.5rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--edge), rgba(0, 0, 0, 0)) right / 0.5rem 100% no-repeat scroll;
+}
 
-.report-body .pairs,
-.report-body .grid { font-family: var(--sans); font-size: 0.92rem; }
-.report-body .pairs { grid-template-columns: minmax(7.5rem, 12rem) minmax(0, 1fr); gap: 0; }
-.report-body .pairs dt,
-.report-body .pairs dd { padding: 0.55rem 0; border-bottom: 1px solid var(--rule); }
-.report-body .pairs dt,
+/* A grade in a table carries a dot in its colour, so a column of them can be
+   scanned for the one that is not green. */
+.report-body :is(.mark-strong, .mark-weak, .mark-insecure) { font-weight: 600; }
+.report-body :is(.mark-strong, .mark-weak, .mark-insecure)::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.06em;
+}
+
+/* The cipher tables, measured again for the card. The page's own widths are
+   in ch of a monospace table; here only the suite is in the monospace, and
+   the sans's wider figure gave every column room for a word it never holds,
+   so the table came out a hair wider than the card and showed the edge that
+   says there is more to scroll. In rem, from the worst case of each column:
+   a dot and "insecure", "ephemeral (TLS 1.3)", "ChaCha20-Poly1305", and the
+   forty-five characters of the longest suite name. */
+.report-body .suites { min-width: 52rem; }
+.report-body .suites .col-grade  { width: 7.6rem; }
+.report-body .suites .col-kex    { width: 10.6rem; }
+.report-body .suites .col-cipher { width: 10.4rem; }
+
+/* Labelled values as cells, the label over its value: a short value takes a
+   short cell and a long one the whole row (reportFacts). */
+.report-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+  font-family: var(--sans);
+}
+:is(table, .table-scroll) + .report-facts { margin-top: 1.1rem; }
+.report-fact {
+  min-width: 0;
+  padding: 0.7rem 0.9rem 0.75rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+}
+.report-fact-wide { grid-column: 1 / -1; }
+.report-fact dt {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.report-fact dt:empty { display: none; }
+.report-fact dd {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.report-fact dd + dd { margin-top: 0.35rem; color: var(--ink-soft); font-size: 0.88rem; }
+
+/* A table of names and what each says, such as the headers a site sends:
+   the names in a tinted band down the left, so the eye can run down them and
+   across to a value. */
+.report-body .grid { border-collapse: separate; border-spacing: 0; font-family: var(--sans); font-size: 0.92rem; }
 .report-body .grid th {
+  padding-left: 0.75rem;
   padding-right: 1rem;
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
   font-family: var(--sans);
   font-size: 0.9rem;
   font-weight: 650;
@@ -1524,21 +1704,27 @@ a.report-row-title:hover { text-decoration: underline; }
   text-transform: none;
   color: var(--ink);
 }
-.report-body .pairs dd { color: var(--ink-soft); }
 .report-body .grid th,
-.report-body .grid td { padding-block: 0.55rem; border-bottom: 1px solid var(--rule); }
+.report-body .grid td { padding-block: 0.6rem; border-bottom: 1px solid var(--rule); }
+.report-body .grid tr:first-child th { border-top-left-radius: 8px; }
+.report-body .grid tr:last-child th { border-bottom-left-radius: 8px; }
+.report-body .grid tr:last-child :is(th, td) { border-bottom: 0; }
+.report-body .grid td { padding-left: 1rem; }
 .report-body .grid td { color: var(--ink-soft); }
 
 /* What the scan observed folds into one bar; what it could not establish is
    open and set apart, because it is what the rest of the report is worth. */
 .report-body .notes-section {
-  margin-top: 1.6rem;
+  margin-top: 1.8rem;
   padding: 0.3rem 1rem;
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-radius: 10px;
 }
 .report-body .notes-section + .notes-section { margin-top: 0.7rem; }
-.report-body .notes-limits { background: var(--paper-sunk); border-color: var(--paper-sunk); }
+.report-body .notes-limits {
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+  border-color: transparent;
+}
 .report-body .notes-title,
 .report-body .notes-count {
   font-family: var(--sans);
@@ -1550,6 +1736,16 @@ a.report-row-title:hover { text-decoration: underline; }
 .report-body .notes li { border-left: 0; padding-left: 0; }
 .report-body .notes-method { margin-top: 0.9rem; }
 
+/* The inventory's evidence, in a card of its own under the cover. */
+.report-names {
+  margin-top: 1.6rem;
+  padding-block: 1.4rem 1.6rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+}
+.report-names .grid + .rows { margin-top: 1.8rem; }
+
 /* By the width the report has, not the window's: the same report sits beside
    a rail on an installation and across the page on the demonstration. */
 .console-results,
@@ -1557,13 +1753,12 @@ a.report-row-title:hover { text-decoration: underline; }
 .result { container-type: inline-size; }
 
 /* Narrower, the board drops its column heads and each row folds: the check
-   and its verdict on one line, what it found and what graded it under. */
+   and its verdict on one line, what it found under. */
 @container (max-width: 46rem) {
   .report-cover { grid-template-columns: minmax(0, 1fr); }
   .report-tally { justify-items: start; text-align: left; }
   .report-keys { justify-content: flex-start; }
   .report-row-head { display: none; }
-  .report-board { border-top: 1px solid var(--ink); }
   .report-row {
     grid-template-columns: 2.2rem minmax(0, 1fr) auto;
     grid-template-areas: "num name stamp" ". found found";
@@ -1576,21 +1771,23 @@ a.report-row-title:hover { text-decoration: underline; }
   .report-board-sources { grid-template-columns: minmax(0, 1fr); }
   .report-board-sources .report-row { grid-template-areas: none; }
   .report-board-sources .report-row-count { grid-area: auto; }
+  .report-board-sources > .report-row:nth-last-child(2) { border-bottom: 1px solid var(--rule); }
 }
 
-/* On a phone a label goes above its value: beside it, a 7.5rem label column
-   leaves a long value a few words to a line. */
+/* On a phone the head keeps the name and the verdict, and lets the
+   description go: it is on the board above. */
 @container (max-width: 34rem) {
-  .report-body .pairs { grid-template-columns: minmax(0, 1fr); }
-  .report-body .pairs dt { padding-bottom: 0; border-bottom: 0; }
-  .report-body .pairs dd { padding-top: 0.15rem; }
+  .report-check-says { display: none; }
+  .report-check-name { font-size: 1.08rem; }
+  .report-check-head { gap: 0.65rem; }
   .report-item { grid-template-columns: minmax(0, 1fr); }
-  .report-how { margin-left: 0; flex-basis: 100%; }
+  .report-facts { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media print {
-  .report-check { break-before: auto; }
-  .report-how { display: none; }
+  .report-cover, .report-findings, .report-check, .report-names { box-shadow: none; }
+  .report-check-head { position: static; }
+  .report-check-foot { display: none; }
 }
 
 /* ── The console ─────────────────────────────────────────────────────────
@@ -5127,6 +5324,7 @@ main > .band:last-child { border-bottom: 0; }
   */
   :root, :root[data-theme="dark"] {
     --paper:      #ffffff;
+    --card:       #ffffff;
     --panel:      #ffffff;
     --ink:        #16181d;
     --ink-soft:   #3a3f4a;

@@ -47,22 +47,38 @@ func TestEachCheckHasARowAndAStateOfItsOwn(t *testing.T) {
 	}
 }
 
-// A check's verdict is the first thing in its section, stamped beside the
-// name it is a verdict on, and above the evidence.
+// A check's verdict is stamped at the head of its card, beside the check's
+// name, before the name it is a verdict on and before the evidence, and the
+// head stays in view while the card is read.
 //
 // Between 2026-10-10 and 2026-10-11 it was a pill in a column beside the
 // evidence, under the check's name and its description, and a reader looking
-// for how a check ended had to find it.
-func TestAVerdictIsStampedAboveItsEvidence(t *testing.T) {
+// for how a check ended had to find it; and with the checks set one after
+// another down the page, a reader scrolling could not tell where one check
+// ended and the next began.
+func TestAVerdictIsStampedAtTheHeadOfItsCard(t *testing.T) {
 	show := functionBody(t, script(t), "reportShow")
-	top := strings.Index(show, "entry.top.appendChild(summary(data));")
-	evidence := strings.Index(show, "entry.body.appendChild(entry.spec.build(data));")
-	if top < 0 || evidence < 0 || top > evidence {
-		t.Error("a check's verdict is not drawn first, above its evidence")
+	at := func(needle string) int {
+		i := strings.Index(show, needle)
+		if i < 0 {
+			t.Fatalf("reportShow no longer contains %q", needle)
+		}
+		return i
+	}
+	if !(at("entry.mark.replaceWith(stamp);") < at("entry.top.appendChild(sum);") &&
+		at("entry.top.appendChild(sum);") < at("entry.body.appendChild(entry.spec.build(data));")) {
+		t.Error("a check's verdict is not given first, at the head of its card, above its evidence")
 	}
 	frame := functionBody(t, script(t), "reportFrame")
-	if strings.Index(frame, `"report-check-top"`) > strings.Index(frame, `"report-body"`) {
-		t.Error("the verdict's place in a section comes after the evidence's")
+	if strings.Index(frame, `"report-check-head"`) > strings.Index(frame, `"report-check-top"`) ||
+		strings.Index(frame, `"report-check-top"`) > strings.Index(frame, `"report-body"`) {
+		t.Error("a card's head, the name it grades and its evidence are not made in that order")
+	}
+	css := stylesheet(t)
+	_, head, _ := strings.Cut(css, ".report-check-head {")
+	head, _, _ = strings.Cut(head, "}")
+	if !strings.Contains(head, "position: sticky") {
+		t.Error("a card's head no longer stays in view while the card is read")
 	}
 }
 
@@ -111,7 +127,7 @@ func TestAnUnchosenCheckKeepsARowItCannotOpen(t *testing.T) {
 	}
 	// The switch-off comes before the section is made, so an unchosen check
 	// has none.
-	if strings.Index(body, "if (!on) return;") > strings.Index(body, `el("section", "report-check")`) {
+	if strings.Index(body, "if (!on) return;") > strings.Index(body, `el("section", "report-check`) {
 		t.Error("an unchosen check is given a section before it is skipped")
 	}
 	if !strings.Contains(stylesheet(t), ".report-row-off .report-row-title") {
