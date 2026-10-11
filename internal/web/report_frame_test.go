@@ -7,22 +7,22 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 )
 
-// Every report is drawn in one frame, and each check in it has a state of its
-// own.
+// Every report is drawn in one frame, and each check in it has a row and a
+// state of its own.
 //
 // Read from the source, as the other script tests are: nothing here runs it.
-// What matters is that a check's verdict is written to that check's tile only,
+// What matters is that a check's verdict is written to that check's row only,
 // that a failure is written as "not run" rather than left as "running", that
 // the checks run one at a time, and that every page that draws a report draws
 // it through the frame.
-func TestEachCheckHasATileAndAStateOfItsOwn(t *testing.T) {
+func TestEachCheckHasARowAndAStateOfItsOwn(t *testing.T) {
 	src := script(t)
 	for _, want := range []string{
-		`entry.state.className = "report-tile-state " + verdictClass("stamp", verdict);`,
+		`entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);`,
 		`entry.state.textContent = "not run";`,
 		`entry.body.appendChild(entry.spec.build(data));`,
-		`tiles.setAttribute("aria-label", "Checks in this report");`,
-		`tile.href = "#report-" + name;`,
+		`board.setAttribute("aria-label", "Checks in this report");`,
+		`title.href = "#report-" + name;`,
 		// The console, the demonstration, a check's own page and History.
 		`const frame = reportFrame(consoleResults, target, CHECK_ORDER, chosen);`,
 		`const frame = reportFrame(porchResults, target, CHECK_ORDER, chosen);`,
@@ -47,18 +47,63 @@ func TestEachCheckHasATileAndAStateOfItsOwn(t *testing.T) {
 	}
 }
 
-// Every check keeps its tile when fewer are chosen.
+// A check's verdict is the first thing in its section, stamped beside the
+// name it is a verdict on, and above the evidence.
+//
+// Between 2026-10-10 and 2026-10-11 it was a pill in a column beside the
+// evidence, under the check's name and its description, and a reader looking
+// for how a check ended had to find it.
+func TestAVerdictIsStampedAboveItsEvidence(t *testing.T) {
+	show := functionBody(t, script(t), "reportShow")
+	top := strings.Index(show, "entry.top.appendChild(summary(data));")
+	evidence := strings.Index(show, "entry.body.appendChild(entry.spec.build(data));")
+	if top < 0 || evidence < 0 || top > evidence {
+		t.Error("a check's verdict is not drawn first, above its evidence")
+	}
+	frame := functionBody(t, script(t), "reportFrame")
+	if strings.Index(frame, `"report-check-top"`) > strings.Index(frame, `"report-body"`) {
+		t.Error("the verdict's place in a section comes after the evidence's")
+	}
+}
+
+// A check that has no verdict, because it is running, was not chosen or did
+// not run, is marked in a dashed stamp in the faint ink, never in a verdict's
+// colour, so an absence never reads as a result (R4).
+func TestAnAbsentVerdictIsNeverDrawnAsOne(t *testing.T) {
+	src := script(t)
+	for _, want := range []string{
+		`el("span", "stamp stamp-small stamp-pending", on ? "running" : "off")`,
+		`entry.state.className = "stamp stamp-small stamp-pending";`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the frame no longer contains %q", want)
+		}
+	}
+	css := stylesheet(t)
+	_, rule, _ := strings.Cut(css, ".stamp-pending {")
+	rule, _, _ = strings.Cut(rule, "}")
+	if !strings.Contains(rule, "border-style: dashed") || !strings.Contains(rule, "var(--ink-faint)") {
+		t.Errorf("a pending stamp is not dashed in the faint ink: %s", rule)
+	}
+	for _, verdict := range []string{"--strong", "--weak", "--insecure"} {
+		if strings.Contains(rule, verdict) {
+			t.Errorf("a pending stamp is drawn in %s", verdict)
+		}
+	}
+}
+
+// Every check keeps its row when fewer are chosen.
 //
 // One chosen check drew a single tab across the whole row once. The others are
 // drawn switched off, saying so, with no section behind them.
-func TestAnUnchosenCheckKeepsATileItCannotOpen(t *testing.T) {
+func TestAnUnchosenCheckKeepsARowItCannotOpen(t *testing.T) {
 	body := functionBody(t, script(t), "reportFrame")
 	for _, want := range []string{
-		"for (const name of names) {",
+		"names.forEach((name, i) => {",
 		`const on = chosen.includes(name);`,
-		`on ? "report-tile" : "report-tile report-tile-off"`,
+		`on ? "report-row" : "report-row report-row-off"`,
 		`on ? "running" : "not selected"`,
-		"continue;",
+		"if (!on) return;",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the frame no longer contains %q", want)
@@ -66,11 +111,11 @@ func TestAnUnchosenCheckKeepsATileItCannotOpen(t *testing.T) {
 	}
 	// The switch-off comes before the section is made, so an unchosen check
 	// has none.
-	if strings.Index(body, "continue;") > strings.Index(body, `el("section", "report-check")`) {
+	if strings.Index(body, "if (!on) return;") > strings.Index(body, `el("section", "report-check")`) {
 		t.Error("an unchosen check is given a section before it is skipped")
 	}
-	if !strings.Contains(stylesheet(t), ".report-tile-off {") {
-		t.Error("a switched-off tile is not styled")
+	if !strings.Contains(stylesheet(t), ".report-row-off .report-row-title") {
+		t.Error("a switched-off row is not styled")
 	}
 }
 
@@ -90,13 +135,13 @@ func TestThePorchHelpLeadsToTheSteps(t *testing.T) {
 	}
 }
 
-// The inventory is drawn in the same frame, with a tile for every source it
+// The inventory is drawn in the same frame, with a row for every source it
 // reads and nothing above the list but a name somebody else could take.
 func TestTheNamesAreDrawnInTheFrame(t *testing.T) {
 	src := script(t)
 
-	// One tile per source, and the same sources the inventory reads: a source
-	// added to one and not the other is a tile missing, or a tile for nothing.
+	// One row per source, and the same sources the inventory reads: a source
+	// added to one and not the other is a row missing, or a row for nothing.
 	readings := functionBody(t, src, "readings")
 	start := strings.Index(src, "const NAME_SOURCES = [")
 	if start < 0 {
@@ -106,7 +151,7 @@ func TestTheNamesAreDrawnInTheFrame(t *testing.T) {
 	sources = sources[:strings.Index(sources, "];")]
 	for _, field := range []string{"zone", "nsec", "logs", "records", "passive", "presented", "reverse", "known"} {
 		if !strings.Contains(readings, "data."+field) || !strings.Contains(sources, `"`+field+`"]`) {
-			t.Errorf("the source %q is not both read and tiled", field)
+			t.Errorf("the source %q is not both read and listed", field)
 		}
 	}
 

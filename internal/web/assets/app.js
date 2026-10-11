@@ -1953,11 +1953,14 @@ if (form) form.addEventListener("submit", async event => {
 /*
   One frame for every report, whichever page draws it.
 
-  Read in the order a reader asks. How did it end: the cover, with the domain,
-  one sentence and a tile per check. What do I have to do: one list of every
-  rule any check found broken, the insecure ones first, each saying which
-  check found it. And then each check's evidence, beside what it was asked,
-  what graded it and how much of the picture it reached.
+  Read in the order a reader asks, and set as a record rather than a
+  dashboard. How did it end: the cover, with the domain, one sentence, and a
+  board with a row per check, the rule set that graded it, what it found and
+  its verdict stamped at the right. What do I have to do: one list of every
+  rule any check found broken, the insecure ones first, each stamped with its
+  severity and naming the check that found it. And then each check across the
+  page: the name it was asked about with its verdict stamped beside it, as the
+  first thing in the section, then the evidence at the full width it needs.
 
   The console, the demonstration, the single-check pages and History all draw
   this, through the same builders from the same JSON (R16), so a report reads
@@ -1965,8 +1968,8 @@ if (form) form.addEventListener("submit", async event => {
 
   Nothing on the cover is new evidence. Its figures are counts of findings and
   of what the reports themselves say could not be established, and a check
-  that is still running, or did not run, says that and never reads as a pass
-  (R4).
+  that is still running, or did not run, says so in a dashed mark, which no
+  verdict is drawn in (R4).
 */
 function reportFrame(container, target, names, chosen, opts) {
   opts = opts || {};
@@ -1995,45 +1998,70 @@ function reportFrame(container, target, names, chosen, opts) {
   tally.appendChild(frame.keys);
   cover.appendChild(tally);
 
-  const tiles = el("nav", "report-tiles");
-  tiles.setAttribute("aria-label", "Checks in this report");
-  cover.appendChild(tiles);
+  // The board: a row per check, its verdict at the right. A report of one
+  // check has its verdict a few lines down, beside the name it is a verdict
+  // on, and a board of one row would say it twice.
+  const board = el("ol", "report-board");
+  board.setAttribute("aria-label", "Checks in this report");
+  if (names.length > 1) {
+    const wrap = el("div", "report-boardwrap");
+    const head = el("div", "report-row report-row-head");
+    head.setAttribute("aria-hidden", "true");
+    for (const label of ["", "Check", "Graded by", "Found", "Verdict"]) head.appendChild(el("span", null, label));
+    wrap.appendChild(head);
+    wrap.appendChild(board);
+    cover.appendChild(wrap);
+  }
   container.appendChild(cover);
 
-  container.appendChild(el("h2", "report-heading", "What needs you"));
+  const heading = el("h2", "report-heading", "Findings");
+  frame.found = el("span", "report-heading-count");
+  heading.appendChild(frame.found);
+  container.appendChild(heading);
   frame.todo = el("div", "report-todo");
   container.appendChild(frame.todo);
 
-  // Every check named keeps its tile, chosen or not, so the row keeps its
+  // Every check named keeps its row, chosen or not, so the board keeps its
   // shape and says what was left out; one that was not chosen has no section
   // behind it, because there is nothing to show.
-  for (const name of names) {
+  names.forEach((name, i) => {
     const spec = CHECKS[name];
     const on = chosen.includes(name);
+    const number = String(i + 1).padStart(2, "0");
 
-    const tile = el(on ? "a" : "span", on ? "report-tile" : "report-tile report-tile-off");
-    tile.appendChild(el("span", "report-tile-name", spec.label));
-    const state = el("span", "report-tile-state", on ? "running" : "not selected");
-    tile.appendChild(state);
-    const count = el("span", "report-tile-count", spec.says);
-    tile.appendChild(count);
-    tiles.appendChild(tile);
-    if (!on) continue;
-    tile.href = "#report-" + name;
+    const row = el("li", on ? "report-row" : "report-row report-row-off");
+    row.appendChild(el("span", "report-row-num", number));
+    const what = el("span", "report-row-name");
+    const title = el(on ? "a" : "span", "report-row-title", spec.label);
+    what.appendChild(title);
+    what.appendChild(el("span", "report-row-says", spec.says));
+    row.appendChild(what);
+    const policy = el("span", "report-row-policy", "—");
+    row.appendChild(policy);
+    const count = el("span", "report-row-count", on ? "running" : "not selected");
+    row.appendChild(count);
+    const state = el("span", "stamp stamp-small stamp-pending", on ? "running" : "off");
+    row.appendChild(state);
+    board.appendChild(row);
+    if (!on) return;
+    title.href = "#report-" + name;
 
     const section = el("section", "report-check");
     section.id = "report-" + name;
-    const side = el("div", "report-side");
-    side.appendChild(el("h3", "report-check-name", spec.label));
-    side.appendChild(el("p", "report-check-says", spec.says));
+    const head = el("div", "report-check-head");
+    head.appendChild(el("span", "report-check-num", number));
+    head.appendChild(el("h3", "report-check-name", spec.label));
+    head.appendChild(el("p", "report-check-says", spec.says));
+    section.appendChild(head);
+    const top = el("div", "report-check-top");
+    section.appendChild(top);
     const body = el("div", "report-body");
     body.appendChild(el("p", "working", spec.working));
-    section.appendChild(side);
     section.appendChild(body);
     container.appendChild(section);
 
-    frame.entries.push({ name, spec, tile, state, count, side, body, done: false, verdict: null, open: 0 });
-  }
+    frame.entries.push({ name, spec, row, state, count, policy, head, top, body, done: false, verdict: null, open: 0 });
+  });
 
   reportTally(frame);
   return frame;
@@ -2050,7 +2078,7 @@ function reportProof() {
   return null;
 }
 
-// reportRun runs one check into its section, and says so on its tile.
+// reportRun runs one check into its section, and says so on its row.
 //
 // A check that could not run says so in its own section and stops nothing:
 // a domain with no mail policy, a host that refuses a handshake, a name this
@@ -2068,7 +2096,7 @@ async function reportRun(frame, entry, run) {
     clear(entry.body);
     entry.body.appendChild(failure(err.message || "The check did not complete.", hint));
     entry.state.textContent = "not run";
-    entry.state.className = "report-tile-state stamp-ungraded";
+    entry.state.className = "stamp stamp-small stamp-pending";
     entry.count.textContent = "did not run";
     entry.done = true;
     reportTally(frame);
@@ -2079,23 +2107,26 @@ async function reportRun(frame, entry, run) {
 function reportShow(frame, entry, data) {
   const verdict = verdictOf(data);
 
+  // The verdict and the name it is a verdict on, first, across the page; the
+  // evidence under it.
+  clear(entry.top);
+  entry.top.appendChild(summary(data));
   clear(entry.body);
   entry.body.appendChild(entry.spec.build(data));
 
-  // The verdict, what was asked and what graded it, beside the evidence.
-  entry.side.appendChild(summary(data));
   const how = link(entry.spec.methodPage, "How this check works");
   how.classList.add("report-how");
-  entry.side.appendChild(how);
+  entry.head.appendChild(how);
 
   entry.state.textContent = data.verdict ? verdict : "not graded";
-  entry.state.className = "report-tile-state " + verdictClass("stamp", verdict);
+  entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);
+  if (data.policy) entry.policy.textContent = data.policy;
 
   // A check that reached nothing broke no rule, and saying only that reads
   // as a pass. It is said under the verdict instead: there was nothing to
   // fall short of.
   if (verdict === "ungraded") {
-    entry.side.appendChild(el("p", "report-absent",
+    entry.top.appendChild(el("p", "report-absent",
       "Nothing was measured, so nothing could be graded. This is not a clean result; it is an absent one."));
   }
 
@@ -2148,6 +2179,8 @@ function reportTally(frame) {
   key(open, "report-key-open", "not established", "not established");
   if (unrun) key(unrun, "report-key-open", "check did not run", "checks did not run");
 
+  frame.found.textContent = done < total && !frame.items.length ? "" : String(frame.items.length);
+
   clear(frame.todo);
   const items = frame.items.slice().sort(
     (a, b) => (VERDICT_ORDER[b.f.verdict] || 0) - (VERDICT_ORDER[a.f.verdict] || 0)
@@ -2156,18 +2189,19 @@ function reportTally(frame) {
     frame.todo.appendChild(el("p", "report-todo-empty", done < total
       ? "Nothing yet. The list fills in as each check finishes."
       : (unrun || ungraded)
-        ? "Nothing in what was graded. A check that did not run or graded nothing is not a pass."
-        : "Nothing. No check found a rule broken."));
+        ? "None in what was graded. A check that did not run or graded nothing is not a pass."
+        : "None. No check found a rule broken."));
     return;
   }
   for (const item of items) frame.todo.appendChild(reportItem(item.f, item.entry));
 }
 
-// reportItem is one broken rule, in the list of what needs doing: what the
-// rule says, which check found it and the documents it rests on.
+// reportItem is one broken rule, in the list of what needs doing: its
+// severity, what the rule says, which check found it and the documents it
+// rests on.
 function reportItem(f, entry) {
   const item = el("article", "report-item " + verdictClass("report-item", f.verdict));
-  item.appendChild(el("span", "report-chip", f.verdict === "insecure" ? "Fix" : "Improve"));
+  item.appendChild(el("span", "stamp stamp-small " + verdictClass("stamp", f.verdict), f.verdict || "finding"));
 
   const main = el("div", "report-item-main");
   main.appendChild(el("h3", "report-item-title", f.title || "Untitled finding"));
@@ -2192,10 +2226,11 @@ function reportItem(f, entry) {
 /*
   The inventory, in the frame a report is drawn in.
 
-  It grades nothing, so the cover carries no verdict. It says how many names
-  were found, what the ones that were asked about are doing, and which source
-  answered with how many — a source that was not asked, or could not be read,
-  says that on its tile rather than reading as one that found nothing (R4).
+  It grades nothing, so the cover carries no verdict and no stamp. It says
+  how many names were found, what the ones that were asked about are doing,
+  and which source answered with how many — a source that was not asked, or
+  could not be read, says that on its row rather than reading as one that
+  found nothing (R4).
 
   One thing does go above the list: a name that is an alias to a name that
   does not exist. Whoever claims that target next answers for the name, which
@@ -2252,27 +2287,31 @@ function namesFrame(container, target, data, opts) {
   tally.appendChild(keys);
   cover.appendChild(tally);
 
-  const tiles = el("div", "report-tiles report-tiles-four");
-  for (const [label, field] of NAME_SOURCES) {
+  const board = el("ol", "report-board report-board-sources");
+  board.setAttribute("aria-label", "Sources read");
+  NAME_SOURCES.forEach(([label, field], i) => {
     const reading = data[field] || {};
-    const tile = el("span", "report-tile");
-    tile.appendChild(el("span", "report-tile-name", label));
+    const row = el("li", "report-row");
+    row.appendChild(el("span", "report-row-num", String(i + 1).padStart(2, "0")));
+    row.appendChild(el("span", "report-row-title", label));
     let state;
     if (reading.reason) state = "not established";
     else if (!reading.asked) state = "not asked";
     else state = (reading.named || 0) === 1 ? "1 name" : (reading.named || 0) + " names";
-    tile.appendChild(el("span", answered(reading) ? "report-tile-state" : "report-tile-state report-tile-quiet", state));
-    tiles.appendChild(tile);
-  }
-  cover.appendChild(tiles);
+    row.appendChild(el("span", answered(reading) ? "report-row-count" : "report-row-count report-row-quiet", state));
+    board.appendChild(row);
+  });
+  cover.appendChild(board);
   container.appendChild(cover);
 
   if (dangling.length) {
-    container.appendChild(el("h2", "report-heading", "What needs you"));
+    const heading = el("h2", "report-heading", "Findings");
+    heading.appendChild(el("span", "report-heading-count", String(dangling.length)));
+    container.appendChild(heading);
     const todo = el("div", "report-todo");
     for (const n of dangling) {
       const item = el("article", "report-item report-item-weak");
-      item.appendChild(el("span", "report-chip", "Look at"));
+      item.appendChild(el("span", "stamp stamp-small stamp-weak", "Review"));
       const main = el("div", "report-item-main");
       main.appendChild(el("h3", "report-item-title", n.name + " is an alias to a name that does not exist"));
       main.appendChild(el("p", "report-item-body",
