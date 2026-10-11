@@ -151,3 +151,16 @@ func TestEveryDeploymentAsksTheMonitorThatKeepsUp(t *testing.T) {
 		t.Error("an installation's TLS check does not ask Cert Spotter")
 	}
 }
+
+// The registry is asked wherever a scan may reach a name, and only there.
+//
+// Read from the source, because run() binds a port: the wiring is what is
+// being checked, and a test calling the setter itself would pass with main.go
+// calling nothing.
+func TestTheRegistryIsAskedWhereAScanMayReach(t *testing.T) {
+	source := repoFile(t, "cmd/porchd/main.go")
+	want := "if scope != nil || demo.Enabled {\n\t\tapi.ReadRegistrations(&rdap.Client{Timeout: *requestTimeout})\n\t}"
+	if !strings.Contains(source, want) {
+		t.Error("porchd does not ask the registry for proven domains and the demonstration's own")
+	}
+}

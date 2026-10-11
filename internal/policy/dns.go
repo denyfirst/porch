@@ -167,6 +167,13 @@ type DNSFacts struct {
 	// the answers belong to whichever zone contains it.
 	Apex bool `json:"apex"`
 
+	// Registration is what the registry holds for the domain the name
+	// belongs to, and RegistrationLine says it in one line, built once here
+	// so the page and the terminal read the same string (R16). Nil where no
+	// registry was asked.
+	Registration     *RegistrationFacts `json:"registration,omitempty"`
+	RegistrationLine string             `json:"registrationLine,omitempty"`
+
 	// IPv4 and IPv6 are what the name itself resolves to, kept apart because
 	// they are two questions: a name with an address of one kind and none of
 	// the other is ordinary, and a report that merged them could not say which

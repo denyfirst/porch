@@ -60,6 +60,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/exclusion"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/rdap"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -112,8 +113,18 @@ type Scanner struct {
 	// package's own.
 	Servers ServerAsker
 
+	// Registry reads the domain's registration from the registry that holds
+	// it. Nil asks none. Set wherever the zone is proven, or is the
+	// demonstration's own (internal/rdap).
+	Registry Registry
+
 	// Now is the clock, for a test that needs a fixed duration.
 	Now func() time.Time
+}
+
+// Registry is what reads a registration.
+type Registry interface {
+	Lookup(ctx context.Context, name string) rdap.Registration
 }
 
 // Result is one domain's DNS as it was read.
@@ -184,17 +195,48 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.askServers(ctx, domain, &facts)
 	s.askParent(ctx, resolver, domain, &facts)
 
+	s.readRegistration(ctx, domain, &facts)
+
 	graded := policy.GradeDNS(facts, s.now())
+	notes := graded.Notes
+	if facts.Registration != nil {
+		notes = append(notes, policy.DescribeRegistration(*facts.Registration, s.now())...)
+	}
 
 	return &Result{
 		Domain:   domain,
 		Policy:   policy.DNSVersion,
 		Verdict:  graded.Verdict,
 		Findings: graded.Findings,
-		Notes:    graded.Notes,
+		Notes:    notes,
 		Observed: &facts,
 		Duration: s.now().Sub(started),
 	}, nil
+}
+
+// readRegistration asks the registry what it holds for the domain this name
+// belongs to, which is the one thing about a domain its own DNS cannot say.
+func (s *Scanner) readRegistration(ctx context.Context, domain string, facts *policy.DNSFacts) {
+	if s.Registry == nil {
+		return
+	}
+	r := s.Registry.Lookup(ctx, domain)
+	f := policy.RegistrationFacts{
+		Asked:            r.Asked,
+		Domain:           r.Domain,
+		Registry:         r.Registry,
+		Registrar:        r.Registrar,
+		Created:          r.Created,
+		Expires:          r.Expires,
+		Changed:          r.Changed,
+		Statuses:         r.Statuses,
+		TransferLocked:   r.TransferLocked(),
+		RegistryLocked:   r.RegistryLocked(),
+		DelegationSigned: r.DelegationSigned,
+		Reason:           r.Reason,
+	}
+	facts.Registration = &f
+	facts.RegistrationLine = policy.RegistrationLine(f, s.now())
 }
 
 // readZone reads the record at the top of the zone and the text records, and

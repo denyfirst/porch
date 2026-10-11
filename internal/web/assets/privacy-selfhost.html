@@ -164,6 +164,9 @@
       <li><strong>The host itself</strong> may be asked for
         <code>/.well-known/porch-challenge</code> when its domain publishes no
         record.</li>
+      <li><strong>The registry</strong> that holds a domain is asked for its
+        registration, over RDAP; which registry that is comes from IANA's list,
+        read whole, so IANA learns no domain.</li>
       <li><strong>Cert Spotter</strong>, SSLMate's index of the public
         certificate transparency logs, is asked which certificates exist for
         each name the TLS check reads, and which names under a domain appear in

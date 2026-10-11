@@ -13,6 +13,7 @@ import (
 	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/rdap"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/verify"
 )
@@ -40,7 +41,7 @@ func runDNS(ctx context.Context, scope *verify.Scope, domains []string, timeout 
 	// operator's own machine, from their own address, under their
 	// responsibility — the argument -allow-private rests on for the other
 	// checks.
-	scanner := &dnsscan.Scanner{AskServers: true, Verify: scope}
+	scanner := &dnsscan.Scanner{AskServers: true, Verify: scope, Registry: &rdap.Client{Timeout: timeout}}
 	if resolver != "" {
 		scanner.Resolver = &dnsclient.Client{Server: resolver, Timeout: timeout}
 	}
@@ -131,6 +132,9 @@ func printDNS(w io.Writer, r dnsResult) {
 
 		printText(w, f.Text)
 		field(w, "DNSSEC (DS)", dnssecLine(*f))
+		if f.RegistrationLine != "" {
+			field(w, "Registration", f.RegistrationLine)
+		}
 
 		// The algorithm by the name an operator's own interface uses, and how
 		// absent names are proved: both facts about a signed zone, neither a

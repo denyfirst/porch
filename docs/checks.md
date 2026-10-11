@@ -129,6 +129,12 @@ algorithm and an open zone transfer are reported, not graded.
 If the name is an alias whose target no longer exists, whoever claims the
 target next can answer for your name. This is reported, not graded.
 
+**Also asks:** the registry that holds the domain, over RDAP (RFC 9083), for
+its registration: the registrar, when it runs out, and whether it is locked
+against transfer. Which registry that is comes from IANA's list, read whole,
+so IANA learns no domain. The registry is asked about the registered domain
+first and a longer name only if it holds no shorter one. Reported, not graded.
+
 ### Limits
 
 - **Everything here came from one resolver.** Most answers came from this installation's resolver. Four questions go directly to name servers over TCP port 53: whether each answers for the zone, whether each allows a zone transfer, whether a server inside the domain (never a provider's) answers for other domains, and which servers a parent server hands out. The transfer is closed before any record is read. The DNSSEC chain is checked by comparing key digests with the parent's; whether every signature verifies is the resolver's word.

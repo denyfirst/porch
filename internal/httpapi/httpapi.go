@@ -1182,6 +1182,15 @@ func (s *Server) SearchNames(searcher ctsearch.EstateSearcher) {
 	s.names = searcher
 }
 
+// ReadRegistrations gives the DNS check a registry client, so its report says
+// when the domain runs out and whether it is locked against transfer.
+//
+// Nil, the default, asks no registry. porchd sets it wherever a scan may reach
+// a name: a proven domain, or the demonstration's own.
+func (s *Server) ReadRegistrations(r dnsscan.Registry) {
+	s.dns.Registry = r
+}
+
 // KeepInventoryFor tells this service to produce an inventory for a domain at
 // most once in the interval given, and to hand the copy to everybody else.
 //

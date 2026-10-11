@@ -47,6 +47,7 @@ import (
 	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/rdap"
 	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/smtptls"
@@ -547,10 +548,14 @@ func run() int {
 	exposed := beyondLoopback(*listen)
 	api.ReachableByOthers(exposed)
 
-	// The monitor the inventory endpoint asks, on every installation. Every
-	// domain it is asked about is one this installation was shown control of.
+	// The monitor the inventory endpoint asks, and the registry the DNS check
+	// asks, on every installation. Every domain either is asked about is one
+	// this installation was shown control of, or the demonstration's own.
 	if scope != nil {
 		api.SearchNames(certSpotter(*requestTimeout))
+	}
+	if scope != nil || demo.Enabled {
+		api.ReadRegistrations(&rdap.Client{Timeout: *requestTimeout})
 	}
 
 	// The demonstration lists this project's own estate, and both halves of

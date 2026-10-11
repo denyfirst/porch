@@ -1377,6 +1377,11 @@ function published(facts) {
 
   row("DNSSEC (DS)", dnssecLine(facts), dnssecMark(facts));
 
+  // What the registry holds: when the domain runs out and whether it is
+  // locked against transfer. Built by the server, so both faces read the
+  // same line (R16).
+  if (facts.registrationLine) row("Registration", facts.registrationLine);
+
   // The algorithm by the name an operator's own interface uses, and how
   // absent names are proved — both facts about a signed zone, neither a
   // verdict about it.
