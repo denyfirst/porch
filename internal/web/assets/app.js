@@ -914,6 +914,23 @@ function certificate(cert, tls, issuance, stapling, report) {
   // the most useful sentence in the report — one DNS record, nothing to break
   // by adding it — and a sentence nobody opens is a sentence nobody reads.
   pair("Issuance", issuance && issuance.line, "not read");
+
+  // The accounts a bound authority is held to, one mark each, under the line
+  // that counts them. The note under the report names them in a sentence, as
+  // the terminal prints it (R16); here they are what a reader checks against
+  // their own, so each is set where it can be read whole.
+  for (const b of (issuance && issuance.bindings) || []) {
+    if (!Array.isArray(b.accounts) || !b.accounts.length) continue;
+    const held = el("dd", "report-held");
+    held.appendChild(el("span", "report-held-label",
+      (b.accounts.length === 1 ? "The account " : "The accounts ") + b.authority +
+      (b.wildcard ? " may use for wildcards" : " may use")));
+    const list = el("span", "report-list");
+    for (const account of b.accounts) list.appendChild(el("span", "report-list-item", account));
+    held.appendChild(list);
+    pairs.appendChild(el("dt", null, ""));
+    pairs.appendChild(held);
+  }
   pair("Transparency", report && report.transparencyLine, "not read");
 
   // What the public logs hold for this name, where a deployment searched them.
@@ -926,9 +943,32 @@ function certificate(cert, tls, issuance, stapling, report) {
   // And the certificates that line counts, one under another, because a count
   // asking the reader to check a list is no use without the list. Composed in
   // internal/policy, as the terminal prints them (R16).
+  //
+  // Each is set from the entry the sentence was written from, where the
+  // report carries it: the serial, the issuer and the dates on one line, the
+  // names it covers as marks under them. Written as one sentence each, three
+  // certificates were three lines of serials, distinguished names and comma
+  // lists, and the names a reader needed to check were the hardest part to
+  // find. A sentence with no entry behind it is shown as written.
+  const entries = (report && report.logged && Array.isArray(report.logged.entries)) ? report.logged.entries : [];
   for (const c of (report && report.loggedUnaccounted) || []) {
     pairs.appendChild(el("dt", null, ""));
-    pairs.appendChild(el("dd", null, "· " + c));
+    const entry = entries.find((e) => e && e.serial && c.startsWith("serial " + e.serial + ","));
+    if (!entry) {
+      pairs.appendChild(el("dd", null, "· " + c));
+      continue;
+    }
+    const dd = el("dd", "report-logged");
+    const head = el("span", "report-logged-head");
+    head.appendChild(el("span", "report-logged-serial", entry.serial));
+    head.appendChild(el("span", null, "issued by " + entry.issuer));
+    head.appendChild(el("span", null, "valid " + String(entry.notBefore || "").slice(0, 10) +
+      " to " + String(entry.notAfter || "").slice(0, 10)));
+    dd.appendChild(head);
+    const names = el("span", "report-list");
+    for (const name of entry.names || []) names.appendChild(el("span", "report-list-item", name));
+    dd.appendChild(names);
+    pairs.appendChild(dd);
   }
 
   pair("SHA-256", leaf.fingerprintSha256);
@@ -1623,10 +1663,12 @@ function zone(facts) {
   const table = el("table", "grid");
   const body = el("tbody");
 
-  const row = (name, value, mark) => {
+  // A record as the zone publishes it is text somebody copies, so it is set
+  // in the monospace, as a record is wherever else it is shown.
+  const row = (name, value, mark, record) => {
     const tr = el("tr");
     tr.appendChild(el("th", null, name));
-    const td = el("td", mark ? markClass(mark) : null, value);
+    const td = el("td", [mark ? markClass(mark) : "", record ? "dns-record" : ""].join(" ").trim() || null, value);
     tr.appendChild(td);
     body.appendChild(tr);
   };
@@ -1649,7 +1691,7 @@ function zone(facts) {
   // The record itself, where the report is read by the person the domain
   // belongs to. The service decides that and leaves the field empty otherwise,
   // and the terminal prints the same field under the same row (R16).
-  if (facts.spfRecord) row("Record", facts.spfRecord);
+  if (facts.spfRecord) row("Record", facts.spfRecord, null, true);
 
   if (facts.dmarcReason) {
     row("DMARC", "not read: " + facts.dmarcReason);
@@ -1662,7 +1704,7 @@ function zone(facts) {
   } else {
     row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%");
   }
-  if (facts.dmarcRecord) row("Record", facts.dmarcRecord);
+  if (facts.dmarcRecord) row("Record", facts.dmarcRecord, null, true);
 
   // Where the aggregate reports go, under the policy that asks for them.
   //
@@ -1674,7 +1716,7 @@ function zone(facts) {
   if (reportTo) row("Reports to", reportTo);
 
   row("TLS-RPT", facts.tlsReporting ? "yes" : "no");
-  if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord);
+  if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord, null, true);
 
   // Signing keys, and which names were looked under.
   //
@@ -1950,6 +1992,54 @@ if (form) form.addEventListener("submit", async event => {
 });
 // ── The report ──────────────────────────────────────────────────────────
 
+// A card's head held at the top of the window is drawn as a bar floating clear
+// of the window's edge. Held flush against it, the verdict's coloured edge ran
+// into the browser's own bar and read as part of it. Only an observer can tell
+// a held head from one at rest, so the class comes from one; without it the
+// head is still held, plainly. The 13px is the head's 12px offset and one
+// more: a held head sits a pixel above the line, and is then not wholly in.
+// Both thresholds, because a jump from far down the page lands a head held
+// without its ever having been wholly in view, and a lone threshold of 1 is
+// never crossed on the way.
+const heldHeads = "IntersectionObserver" in window
+  ? new IntersectionObserver((seen) => {
+      for (const s of seen) {
+        const held = s.rootBounds !== null && s.intersectionRatio < 1 &&
+          s.boundingClientRect.top < s.rootBounds.top;
+        s.target.classList.toggle("is-held", held);
+      }
+    }, { rootMargin: "-13px 0px 0px 0px", threshold: [0, 1] })
+  : null;
+
+// What one item of a list a builder wrote as "a, b, c" may be. Only a cell
+// holding nothing but such items is set as a list (reportLists).
+const LIST_ITEM = [
+  /^(?:\*\.)?(?:[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?\.)+[a-z0-9-]{2,63}\.?$/i, // a DNS name
+  /^\d{1,3}(?:\.\d{1,3}){3}$/,                                          // an IPv4 address
+  /^[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}$/i,                            // an IPv6 address
+  /^[a-z0-9_.-]+ \([^()]{1,40}\)$/i,                                    // a selector and its key
+];
+
+// reportLists sets a list of names, addresses or keys, which a builder writes
+// as one string with commas in it, as one mark per item. Written as a
+// sentence, "denyfirst.dev, mta-sts.denyfirst.dev, porch.denyfirst.dev" was
+// among the most important answers on the page and looked like the least.
+//
+// A cell is changed only when its one child is text and every item in it is
+// one of LIST_ITEM: a sentence with commas in it, or a cell a builder already
+// built, stays as it was. The items are the builder's own text, in its order.
+function reportLists(root) {
+  for (const cell of root.querySelectorAll("dd, td")) {
+    if (cell.childNodes.length !== 1 || cell.firstChild.nodeType !== Node.TEXT_NODE) continue;
+    const items = cell.textContent.split(", ");
+    if (items.length < 2 || !items.every((item) => LIST_ITEM.some((re) => re.test(item)))) continue;
+    clear(cell);
+    const list = el("span", "report-list");
+    for (const item of items) list.appendChild(el("span", "report-list-item", item));
+    cell.appendChild(list);
+  }
+}
+
 /*
   One frame for every report, whichever page draws it.
 
@@ -1977,6 +2067,8 @@ function reportFrame(container, target, names, chosen, opts) {
   container.hidden = false;
 
   const frame = { entries: [], items: [] };
+  // The heads of a report drawn before this one are gone with it.
+  if (heldHeads) heldHeads.disconnect();
 
   const cover = el("header", "report-cover");
   frame.cover = cover;
@@ -2063,6 +2155,7 @@ function reportFrame(container, target, names, chosen, opts) {
     const mark = el("span", "stamp stamp-pending", "running");
     head.appendChild(mark);
     section.appendChild(head);
+    if (heldHeads) heldHeads.observe(head);
     const top = el("div", "report-check-top");
     section.appendChild(top);
     const body = el("div", "report-body");
@@ -2165,6 +2258,7 @@ function reportShow(frame, entry, data) {
   clear(entry.body);
   entry.body.appendChild(entry.spec.build(data));
   for (const dl of entry.body.querySelectorAll("dl.pairs")) reportFacts(dl);
+  reportLists(entry.body);
 
   // The card's foot: where the check is explained, and where it ends.
   const foot = el("p", "report-check-foot");
@@ -2381,6 +2475,7 @@ function namesFrame(container, target, data, opts) {
   const body = el("div", "report-body report-names");
   body.appendChild(buildNames(data));
   for (const dl of body.querySelectorAll("dl.pairs")) reportFacts(dl);
+  reportLists(body);
   container.appendChild(body);
 }
 

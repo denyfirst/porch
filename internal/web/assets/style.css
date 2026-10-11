@@ -1515,7 +1515,7 @@ a.report-row-title:hover { color: var(--link); }
    rows under them are read. */
 .report-check-head {
   position: sticky;
-  top: 0;
+  top: 12px;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -1551,6 +1551,60 @@ a.report-row-title:hover { color: var(--link); }
 .report-check-says { margin: 0.1rem 0 0; font-size: 0.84rem; color: var(--ink-faint); }
 
 .report-check-head > .stamp { flex: 0 0 auto; }
+
+/* Held, the head floats clear of the window's edge: a band of the page's own
+   colour above it hides the rows passing under, and a soft shadow below says
+   it is lifted. The band is a shadow, so it costs no element and no layout;
+   the second hides the card's own edges beside the head, so the bar reads
+   as one piece. heldHeads sets the class. */
+.report-check-head.is-held {
+  border-radius: 12px;
+  border-bottom-color: transparent;
+  box-shadow:
+    inset 0 4px 0 var(--sev),
+    0 -13px 0 1px var(--paper),
+    0 0 0 1px var(--paper),
+    0 12px 24px -14px color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+/* A certificate the logs hold that this host did not present: serial, issuer
+   and dates on one line, the names it covers under them. */
+.report-logged {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem !important;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--rule);
+}
+.report-logged-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+}
+.report-logged-serial { font-family: var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+
+/* A record as the zone publishes it: text somebody copies. */
+td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: anywhere; }
+
+/* The accounts an authority is held to, under the issuance line. */
+.report-held { display: grid; gap: 0.3rem; margin-top: 0.6rem !important; }
+.report-held-label { font-size: 0.8rem; color: var(--ink-soft); }
+
+/* A list of names, addresses or keys: one mark each (reportLists). */
+.report-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.report-list-item {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--card);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
 
 .report-check-top,
 .report-body,
@@ -1800,6 +1854,7 @@ a.report-row-title:hover { color: var(--link); }
 @media print {
   .report-cover, .report-findings, .report-check, .report-names { box-shadow: none; }
   .report-check-head { position: static; break-inside: avoid; break-after: avoid; }
+  .report-check-head.is-held { border-radius: 14px 14px 0 0; box-shadow: inset 0 4px 0 var(--sev); }
   .report-check-top { break-before: avoid; }
   .report-check-top .summary,
   .report-row, .report-item, .report-fact, .report-body .notes-section { break-inside: avoid; }
