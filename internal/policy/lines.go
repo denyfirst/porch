@@ -400,6 +400,35 @@ func UnaccountedLine(serial, issuer string, names []string, from, until time.Tim
 	return b.String()
 }
 
+// NameLine says whether the certificate covers the name that was asked for,
+// by RFC 9525's rules, which certinfo applies.
+func NameLine(matches bool) string {
+	if matches {
+		return "covers the name asked for"
+	}
+	return "does not cover the name asked for"
+}
+
+// ChainLine describes one certificate above the leaf: whose it is, its key,
+// when it runs out, and what it is in the chain.
+func ChainLine(subject, keyAlgorithm string, keyBits int, notAfter time.Time, isCA, selfSigned bool) string {
+	key := keyAlgorithm
+	if keyBits > 0 {
+		key += " " + strconv.Itoa(keyBits)
+	}
+	role := "an authority"
+	switch {
+	case selfSigned:
+		role = "a root, signed by itself"
+	case !isCA:
+		role = "not an authority, so it should not be in the chain"
+	}
+	if strings.TrimSpace(subject) == "" {
+		subject = "a certificate with no subject"
+	}
+	return subject + ": " + key + ", runs out " + notAfter.UTC().Format("2006-01-02") + ", " + role
+}
+
 func orUnknown(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return "not given by the monitor"

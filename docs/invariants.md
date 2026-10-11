@@ -1411,6 +1411,11 @@ Every page that draws a report draws it in one frame (`reportFrame` in
 page and History, through the same builders, and the names inventory in the
 same cover (`namesFrame`). The builders draw evidence; the frame draws the
 verdict and the one list of rules found broken, so neither is drawn twice.
+What a check measured is said on both faces in the same words: a line the
+server composes (the zone's timers, its keys and digests, a chain
+certificate) is composed once in `internal/policy` and printed by both, and
+the limits every run of a check shares are named at its card's foot, beside
+the method, while a limit of this host stays in the report.
 Each check is a card whose head, held in view while the card is read, has
 the check's verdict stamped beside its name, above the evidence; a check with
 no verdict is marked in a dashed stamp that no verdict is drawn in.
@@ -1425,7 +1430,10 @@ no verdict is marked in a dashed stamp that no verdict is drawn in.
 `TestAHeldHeadFloatsClearOfTheWindow`, `TestAListOfNamesIsSetOneMarkEach`,
 `TestALoggedCertificateIsSetFromItsEntry`, `TestTheNamesAreDrawnInTheFrame`,
 `TestBothFacesOfTheReportShowTheSameFacts`,
-`TestAReportSaysWhatWasMeasured`, `TestThePageReadsTheLegacyFieldsTheAPISends`,
+`TestAReportSaysWhatWasMeasured`, `TestWhatWasMeasuredIsOnBothFaces`,
+`TestAMaxAgeReadsInItsOwnUnit`, `TestTheZonesOwnSettingsAreSaidInALineEach`,
+`TestTheChainIsSaidOneCertificateALine`,
+`TestThePageReadsTheLegacyFieldsTheAPISends`,
 `TestSSL3IsAVersionRowInTheSameWords`,
 `TestTheHandWrittenHellosArePrintedWithWhatTheyFound`,
 `TestSSL3HasOneRowAndItNamesTheSuite`,

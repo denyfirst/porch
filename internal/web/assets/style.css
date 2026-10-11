@@ -1619,11 +1619,26 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
 .report-absent { margin: 0 0 1.1rem; font-size: 0.9rem; color: var(--ink-soft); }
 
 .report-check-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1.5rem;
   margin: 1.6rem 0 0;
   padding-block: 0.85rem;
   border-top: 1px solid var(--rule);
   font-size: 0.84rem;
   font-weight: 600;
+}
+/* The limits every scan of this kind shares, beside the page that lists them. */
+.report-check-foot .notes-method {
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+  max-width: 34rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--ink-faint);
 }
 
 .report-body { min-width: 0; }
@@ -1858,7 +1873,9 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   .report-check-top { break-before: avoid; }
   .report-check-top .summary,
   .report-row, .report-item, .report-fact, .report-body .notes-section { break-inside: avoid; }
-  .report-check-foot { display: none; }
+  /* The link is the screen's; the limits are part of the report. */
+  .report-check-foot { border-top: 0; padding-block: 0.4rem 0; }
+  .report-check-foot > a { display: none; }
   .report-fact { border: 1px solid var(--rule); }
   .report-body .rows th { border-bottom: 1px solid var(--rule); }
   .report-body .suites { min-width: 0; }

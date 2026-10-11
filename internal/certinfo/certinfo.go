@@ -119,6 +119,14 @@ type Report struct {
 	HostnameMatches bool `json:"hostnameMatches"`
 	InDate          bool `json:"inDate"`
 
+	// NameLine says whether the certificate covers the name that was asked
+	// for, and ChainLines says each certificate above the leaf, in the words
+	// both faces print (R16). The chain was counted on the report and its
+	// certificates were in the JSON and nowhere a person reads: which
+	// authority issued, under which root, and when each runs out.
+	NameLine   string   `json:"nameLine,omitempty"`
+	ChainLines []string `json:"chainLines,omitempty"`
+
 	// VerifyError is the raw verification failure, kept because the reason
 	// matters more than the boolean.
 	VerifyError string `json:"verifyError,omitempty"`
@@ -637,6 +645,14 @@ func Analyse(chain []*x509.Certificate, hostname string, now time.Time, roots *x
 
 	report.HostnameMatches = hostnameMatches
 	report.InDate = !now.Before(leaf.NotBefore) && !now.After(leaf.NotAfter)
+	report.NameLine = policy.NameLine(hostnameMatches)
+	for i, c := range report.Chain {
+		if i == 0 {
+			continue
+		}
+		report.ChainLines = append(report.ChainLines,
+			policy.ChainLine(c.Subject, c.KeyAlgorithm, c.KeyBits, c.NotAfter, c.IsCA, c.SelfSigned))
+	}
 
 	facts.CommonName = leaf.Subject.CommonName
 	facts.DNSNames = leaf.DNSNames

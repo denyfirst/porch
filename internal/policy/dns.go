@@ -193,6 +193,15 @@ type DNSFacts struct {
 	// addresses (DNSIPv6Line). Reported, never graded.
 	IPv6Line string `json:"ipv6Line,omitempty"`
 
+	// TimersLine, KeysLine and DigestLine say the zone's own settings in a
+	// line each: its SOA timers, the keys it publishes, and the digests the
+	// parent holds for them (DNSTimersLine, DNSKeysLine, DNSDigestLine).
+	// Built here so both faces print the same words (R16). Reported, never
+	// graded: where a document grades one of these, a rule does.
+	TimersLine string `json:"timersLine,omitempty"`
+	KeysLine   string `json:"keysLine,omitempty"`
+	DigestLine string `json:"digestLine,omitempty"`
+
 	// NameServers are the servers the zone names, with what each resolves to.
 	NameServers []NameServer `json:"nameServers,omitempty"`
 

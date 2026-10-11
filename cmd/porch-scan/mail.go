@@ -152,6 +152,7 @@ func printMail(w io.Writer, r mailResult) {
 		default:
 			fmt.Fprintf(w, "    SPF        ends in %sall, %s%d of the ten lookups allowed\n",
 				allOrNone(f.SPFAll), lowerBound(f.SPFLookupsAtLeast), f.SPFLookups)
+			fmt.Fprintf(w, "    Void lookups %d of the two RFC 7208 allows\n", f.SPFVoidLookups)
 		}
 		printRecord(w, f.SPFRecord)
 
@@ -279,6 +280,25 @@ func printMailPath(w io.Writer, f *policy.MailFacts) {
 	printExchangers(w, f)
 }
 
+// maxAge writes an MTA-STS max_age in the unit it was most likely chosen in,
+// as the page's maxAge does (R16).
+func maxAge(seconds int) string {
+	unit := func(n int, one string) string {
+		if n == 1 {
+			return fmt.Sprintf("%d %s", n, one)
+		}
+		return fmt.Sprintf("%d %ss", n, one)
+	}
+	switch {
+	case seconds%86400 == 0:
+		return unit(seconds/86400, "day")
+	case seconds%3600 == 0:
+		return unit(seconds/3600, "hour")
+	default:
+		return unit(seconds, "second")
+	}
+}
+
 // stsLine writes the MTA-STS summary row.
 //
 // Four states and not two, because "announced" on its own is the sentence this
@@ -291,6 +311,9 @@ func stsLine(f *policy.MailFacts) string {
 		return "no"
 	case f.MTASTSPolicyRead && f.MTASTSMode != "":
 		out := "mode " + f.MTASTSMode
+		if f.MTASTSMaxAge > 0 {
+			out += ", max_age " + maxAge(f.MTASTSMaxAge)
+		}
 		if n := len(f.MTASTSUncovered); n > 0 {
 			// The count, on the same line as the mode, because the two together
 			// are the finding and a reader scanning the block sees one row.

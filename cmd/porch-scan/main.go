@@ -846,10 +846,15 @@ func printCertificate(w io.Writer, r result) {
 
 	fmt.Fprintf(w, "    Fingerprint  %s\n", leaf.FingerprintSHA256)
 
+	fmt.Fprintf(w, "    Name match   %s\n", orNone(c.NameLine, "not checked"))
 	if c.Trusted {
 		fmt.Fprintf(w, "    Chain        %d certificate(s), trusted\n", len(c.Chain))
 	} else {
 		fmt.Fprintf(w, "    Chain        %d certificate(s), not trusted: %s\n", len(c.Chain), c.VerifyError)
+	}
+	// Each certificate above the leaf, in the words the page prints (R16).
+	for _, line := range c.ChainLines {
+		fmt.Fprintf(w, "                 · %s\n", wrap(line, 58, "                   "))
 	}
 	if c.StoresLine != "" {
 		// The line certinfo writes, printed as it is, so the page and this
