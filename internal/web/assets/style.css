@@ -1322,12 +1322,15 @@ code.flag { white-space: nowrap; }
   color: var(--ink-faint);
 }
 .report-key { display: inline-flex; align-items: center; gap: 0.45rem; }
-.report-key::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 2px; background: var(--ink-faint); }
+/* The squares are borders rather than fills: a browser leaves backgrounds off
+   paper unless the reader asks for them, and a key without its colour on a
+   printed report is a number with nothing to say what it counts. */
+.report-key::before { content: ""; width: 0; height: 0; border: 0.275rem solid var(--ink-faint); border-radius: 2px; }
 .report-key b { color: var(--ink); font-weight: 700; }
-.report-key-insecure::before { background: var(--insecure); }
-.report-key-weak::before { background: var(--weak); }
-.report-key-live::before { background: var(--strong); }
-.report-key-open::before { background: transparent; border: 1.5px dashed var(--ink-faint); }
+.report-key-insecure::before { border-color: var(--insecure); }
+.report-key-weak::before { border-color: var(--weak); }
+.report-key-live::before { border-color: var(--strong); }
+.report-key-open::before { width: 0.55rem; height: 0.55rem; border: 1.5px dashed var(--ink-faint); }
 
 /* The board: a row per check. The verdict is in the same place on every row,
    at the right, as it is at the head of each check's card below. */
@@ -1635,11 +1638,11 @@ a.report-row-title:hover { color: var(--link); }
 .report-body :is(.mark-strong, .mark-weak, .mark-insecure)::before {
   content: "";
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0;
+  height: 0;
   margin-right: 0.45rem;
+  border: 0.25rem solid currentColor;
   border-radius: 50%;
-  background: currentColor;
   vertical-align: 0.06em;
 }
 
@@ -1770,7 +1773,10 @@ a.report-row-title:hover { color: var(--link); }
   .report-row-count { grid-area: found; font-size: 0.82rem; }
   .report-board-sources { grid-template-columns: minmax(0, 1fr); }
   .report-board-sources .report-row { grid-template-areas: none; }
-  .report-board-sources .report-row-count { grid-area: auto; }
+  /* Placed by order, not by the checks' areas: an area a grid does not
+     define is made up as a new line, and a source's number went to the
+     far right under its name. */
+  .report-board-sources .report-row > * { grid-area: auto; }
   .report-board-sources > .report-row:nth-last-child(2) { border-bottom: 1px solid var(--rule); }
 }
 
@@ -1784,10 +1790,34 @@ a.report-row-title:hover { color: var(--link); }
   .report-facts { grid-template-columns: minmax(0, 1fr); }
 }
 
+/*
+  On paper. A card's head is not held at the top of a window there, and it is
+  never left at the foot of a sheet with its verdict on the next; a row, a
+  finding or a cell is not split across two. The tints a browser does not
+  print are given a line instead, and the cipher tables share the sheet's
+  width rather than asking for the screen's.
+*/
 @media print {
   .report-cover, .report-findings, .report-check, .report-names { box-shadow: none; }
-  .report-check-head { position: static; }
+  .report-check-head { position: static; break-inside: avoid; break-after: avoid; }
+  .report-check-top { break-before: avoid; }
+  .report-check-top .summary,
+  .report-row, .report-item, .report-fact, .report-body .notes-section { break-inside: avoid; }
   .report-check-foot { display: none; }
+  .report-fact { border: 1px solid var(--rule); }
+  .report-body .rows th { border-bottom: 1px solid var(--rule); }
+  .report-body .suites { min-width: 0; }
+  .report-body .suites .col-grade  { width: 15%; }
+  .report-body .suites .col-kex    { width: 17%; }
+  .report-body .suites .col-cipher { width: 16%; }
+  /* At this size the longest suite name fits its column on one line. */
+  .report-body .suites td.identifier { font-size: 0.62rem; white-space: normal; overflow-wrap: anywhere; }
+  .report-body :is(.mark-strong, .mark-weak, .mark-insecure) { white-space: nowrap; }
+
+  /* A long table of names and values may run onto the next sheet, a row at
+     a time. Kept whole, a page of response headers left the sheet before it
+     blank under the check's verdict. */
+  .report-body .grid { break-inside: auto; }
 }
 
 /* ── The console ─────────────────────────────────────────────────────────
@@ -5349,11 +5379,16 @@ main > .band:last-child { border-bottom: 0; }
     and .report-actions were both in this list and neither exists, which is a
     rule that does nothing and reads as one that does.
   */
-  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading,
+  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .topbar,
   .summary-actions, .composer, .checks, .colophon-links,
   .ask > h1, .ask-form {
     display: none !important;
   }
+
+  /* The Porch page, once it shows a report, prints the report: its
+     introduction, its form and the bands under it are the page, not the
+     report somebody asked to keep. */
+  main:has(> .porch-report:not([hidden])) > :not(.porch-report) { display: none !important; }
 
   .workspace-main, .console, .console-results { padding: 0; margin: 0; max-width: none; }
 

@@ -1421,7 +1421,8 @@ no verdict is marked in a dashed stamp that no verdict is drawn in.
 
 *Guarded by:* `TestEachCheckHasARowAndAStateOfItsOwn`,
 `TestAnUnchosenCheckKeepsARowItCannotOpen`, `TestAVerdictIsStampedAtTheHeadOfItsCard`,
-`TestAnAbsentVerdictIsNeverDrawnAsOne`, `TestTheNamesAreDrawnInTheFrame`,
+`TestAnAbsentVerdictIsNeverDrawnAsOne`, `TestAReportOnPaperIsTheReport`,
+`TestTheNamesAreDrawnInTheFrame`,
 `TestBothFacesOfTheReportShowTheSameFacts`,
 `TestAReportSaysWhatWasMeasured`, `TestThePageReadsTheLegacyFieldsTheAPISends`,
 `TestSSL3IsAVersionRowInTheSameWords`,

@@ -192,3 +192,44 @@ func TestTheNamesAreDrawnInTheFrame(t *testing.T) {
 		}
 	}
 }
+
+// A report saved as a PDF is the report, in the same design, whole.
+//
+// Printed on 2026-10-11, the first card design left a check's name at the
+// foot of one sheet and its verdict at the head of the next; ran the cipher
+// tables past the card's edge, because the screen's minimum width applied on
+// paper; lost every grade's dot and every key's square, because a browser
+// leaves backgrounds off paper unless asked; printed the installation's own
+// path bar above the report; and printed the whole Porch page, introduction
+// and form and every band, around the report it was asked to keep.
+func TestAReportOnPaperIsTheReport(t *testing.T) {
+	css := stylesheet(t)
+	rule := func(selector string) string {
+		_, body, ok := strings.Cut(css, selector+" {")
+		if !ok {
+			t.Fatalf("the stylesheet has no rule for %s", selector)
+		}
+		body, _, _ = strings.Cut(body, "}")
+		return body
+	}
+	for _, want := range []string{
+		".report-check-head { position: static; break-inside: avoid; break-after: avoid; }",
+		".report-check-top { break-before: avoid; }",
+		".report-body .suites { min-width: 0; }",
+		"main:has(> .porch-report:not([hidden])) > :not(.porch-report) { display: none !important; }",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("the print rules no longer contain %q", want)
+		}
+	}
+	// Marks a printer prints: drawn with a border, never only a fill.
+	for _, selector := range []string{
+		".report-key::before",
+		".report-body :is(.mark-strong, .mark-weak, .mark-insecure)::before",
+	} {
+		body := rule(selector)
+		if !strings.Contains(body, "border:") || strings.Contains(body, "background:") {
+			t.Errorf("%s is drawn as a fill, which a browser leaves off paper: %s", selector, body)
+		}
+	}
+}

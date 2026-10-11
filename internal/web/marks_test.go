@@ -182,7 +182,7 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 	// The way around the installation and the things that are pressed do not
 	// belong to the document.
 	hidden := []string{
-		".rail", ".theme-toggle", ".work-heading",
+		".rail", ".theme-toggle", ".work-heading", ".topbar",
 		".summary-actions", ".composer", ".checks", ".colophon-links",
 		".ask > h1", ".ask-form",
 	}
