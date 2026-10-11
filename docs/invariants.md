@@ -1091,12 +1091,13 @@ listener
 `TestTheIssuerIsFoundWhereverItSitsInTheChain`,
 `TestTheRevocationLineSaysWhetherTheResponseWasVerified`, `FuzzCheck`
 
-### R3c — Transparency receipts are counted, and checked against a list that names its date
+### R3c — Transparency receipts are counted, checked against a list that names its date, and compared with Chrome's policy
 
 *Enforced in:* `internal/certinfo.embeddedSCTs` for the count,
 `internal/ctlogs.Parse` and `internal/ctlogs.CheckEmbedded` for the check,
-`internal/policy.DescribeTransparency` for what it means, joined in
-`internal/scan.checkReceipts`
+`internal/policy.DescribeTransparency` for what it means,
+`internal/policy.JudgeChromeCT` for whether Chrome would accept them, joined
+in `internal/scan.checkReceipts`
 
 *Guarded by:* `TestParseSCTListCountsTimestampsAndLogs`,
 `TestParseSCTListRefusesMalformedInput`, `FuzzParseSCTList`,
@@ -1120,7 +1121,10 @@ listener
 `TestAnUnreadableReceiptIsUnsettled`,
 `TestTheTransparencyLineSaysHowManySignaturesVerified`,
 `TestCoverageSaysVerifiedOnlyWhenEveryReceiptWas`,
-`TestTheReceiptsLimitNamesTheListAndNoPolicy`,
+`TestTheReceiptsLimitNamesTheListAndWhosePolicy`,
+`TestChromesPolicyIsAppliedAsItIsWritten`,
+`TestARetiredLogCountsOnlyForWhatItSignedBeforeRetiring`,
+`TestNothingToCompareIsNotAVerdict`, `TestTheLineSaysWhetherChromeWouldAccept`,
 `TestAScanChecksTheReceiptsItCounts`,
 `TestAChainWithoutItsIssuerVerifiesNothing`,
 `TestNoCertificateMeansNothingChecked`, `TestAHandshakeReceiptIsCheckedToo`,
@@ -1410,10 +1414,12 @@ listener
 ### R9a — A CAA value is an authority and its parameters, not one string
 
 *Enforced in:* `internal/policy.readable`, applied by
-`internal/policy.describeAuthorities`
+`internal/policy.describeAuthorities`; `internal/policy.bindings` for the
+RFC 8657 account and method limits
 
 *Guarded by:* `TestCAAParametersAreNotMistakenForAuthorities`,
-`TestAuthoritiesWithoutParametersAreUnchanged`
+`TestAuthoritiesWithoutParametersAreUnchanged`,
+`TestAnAuthorityIsBoundOnlyIfEveryPropertyBindsIt`
 
 ### R10 — A report cannot act on the display that shows it
 
@@ -1886,14 +1892,13 @@ step
 Listed rather than hidden. A gap closed in code stays here until somebody
 removes it, so a stale entry is a bug in this page.
 
-- **Transparency receipts are counted, not verified.** R3c. Verifying one
-  needs each log's public key, from a list browsers keep on their own
-  schedule.
+- **Transparency receipts are judged by one browser's policy.** R3c.
+  Chrome's, against the dated list this build carries. Other browsers count
+  by rules of their own.
 - **A stapled response's responder is not checked for revocation.** R3b.
-  That would mean fetching from an address the scanned party chooses, and
-  this scanner fetches nothing.
-- **Revocation is seen only where the server staples.** R3a. About a third of
-  hosts do. A report says so on its Revocation line.
+  RFC 6960 lets an issuer waive it, and most do.
+- **Revocation cannot be seen for a certificate that names neither a list nor
+  a responder.** R3a. Nobody can see it, and the report says so.
 - **The per-target limit still answers at its edge.** A9. A host checked many
   times in a window can be seen to be busy. That is a fact about load, not
   about a person.

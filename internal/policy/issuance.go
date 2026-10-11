@@ -109,6 +109,147 @@ type Issuance struct {
 	// Notes carries the detail: where the answer came from, how far the walk
 	// went, and what the answer does and does not establish.
 	Notes []Note `json:"notes,omitempty"`
+
+	// Bindings is each authority the record set allows, and how far it binds
+	// that authority (RFC 8657): to which accounts, and to which ways of
+	// proving control. Empty where nothing restricts issuance.
+	Bindings []Binding `json:"bindings,omitempty"`
+}
+
+// Binding is what the record set allows one authority.
+//
+// RFC 8657 adds two parameters to an issue property. accounturi names the
+// account at the authority that may ask for a certificate, and
+// validationmethods the ways that account may prove control of the name. An
+// authority named by several properties may issue under any of them, so it is
+// bound to accounts only if every property naming it names one, and to methods
+// only if every one names those.
+type Binding struct {
+	Authority string `json:"authority"`
+
+	// Wildcard is true for a binding read from issuewild properties, which
+	// govern wildcard certificates where any are present.
+	Wildcard bool `json:"wildcard,omitempty"`
+
+	// Accounts are the accounts named; empty when any account may ask.
+	Accounts []string `json:"accounts,omitempty"`
+
+	// Methods are the validation methods named; empty when any may be used.
+	Methods []string `json:"methods,omitempty"`
+}
+
+// Bound is whether only named accounts at this authority may ask.
+func (b Binding) Bound() bool { return len(b.Accounts) > 0 }
+
+// bindings reads each authority's limits from the values of one property.
+func bindings(values []string, wildcard bool) []Binding {
+	type limits struct {
+		accounts, methods  []string
+		unbound, anyMethod bool
+	}
+	order := []string{}
+	by := map[string]*limits{}
+	for _, value := range values {
+		domain, params, _ := strings.Cut(value, ";")
+		domain = strings.ToLower(strings.TrimSpace(domain))
+		if domain == "" {
+			// ";" alone permits nobody: no authority to bind.
+			continue
+		}
+		l, ok := by[domain]
+		if !ok {
+			l = &limits{}
+			by[domain] = l
+			order = append(order, domain)
+		}
+		var accounts, methods []string
+		for _, p := range strings.Split(params, ";") {
+			key, val, found := strings.Cut(strings.TrimSpace(p), "=")
+			if !found {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(key)) {
+			case "accounturi":
+				if v := strings.TrimSpace(val); v != "" {
+					accounts = append(accounts, v)
+				}
+			case "validationmethods":
+				for _, m := range strings.Split(val, ",") {
+					if m = strings.TrimSpace(m); m != "" {
+						methods = append(methods, m)
+					}
+				}
+			}
+		}
+		if len(accounts) == 0 {
+			l.unbound = true
+		}
+		if len(methods) == 0 {
+			l.anyMethod = true
+		}
+		l.accounts = append(l.accounts, accounts...)
+		l.methods = append(l.methods, methods...)
+	}
+
+	out := make([]Binding, 0, len(order))
+	for _, domain := range order {
+		l := by[domain]
+		b := Binding{Authority: domain, Wildcard: wildcard}
+		if !l.unbound {
+			b.Accounts = unique(l.accounts)
+		}
+		if !l.anyMethod {
+			b.Methods = unique(l.methods)
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+func unique(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, v := range in {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// describeBindings says, in one sentence, whether the authorities allowed are
+// held to the domain owner's own accounts.
+//
+// Not graded: RFC 8657 is an option an authority may support, and a record
+// set without it restricts issuance exactly as RFC 8659 says. But it is the
+// difference between "Let's Encrypt may issue" and "your Let's Encrypt account
+// may issue", which is the difference between any of its millions of
+// customers who can answer a challenge for this name and only you.
+func describeBindings(bs []Binding) []Note {
+	var unbound, bound []string
+	for _, b := range bs {
+		name := b.Authority
+		if b.Wildcard {
+			name += " (wildcards)"
+		}
+		if b.Bound() {
+			bound = append(bound, name)
+		} else {
+			unbound = append(unbound, name)
+		}
+	}
+	switch {
+	case len(bs) == 0:
+		return nil
+	case len(unbound) == 0:
+		return []Note{Observed("Only the accounts the record names may ask " + list(bound) +
+			" for a certificate for this name (RFC 8657 accounturi).")}
+	default:
+		return []Note{Observed("Any account at " + list(unbound) + " may ask for a certificate for " +
+			"this name. An accounturi parameter (RFC 8657) limits that to your own account, and " +
+			"validationmethods to the way you prove control.")}
+	}
 }
 
 // DescribeIssuance turns a resolver's answer into what a reader should see.
@@ -201,14 +342,17 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 		}
 	}
 
+	bound := append(bindings(f.Authorities, false), bindings(f.Wildcards, true)...)
+	notes := []Note{
+		Observed(fmt.Sprintf("Issuance for this name is restricted by the CAA record set at %s. %s",
+			f.FoundAt, pairing)),
+	}
+	notes = append(notes, describeBindings(bound)...)
 	return Issuance{
-		Facts: f,
-		Line:  describeAuthorities(f),
-		Notes: []Note{
-			Observed(fmt.Sprintf("Issuance for this name is restricted by the CAA record set at %s. %s",
-				f.FoundAt, pairing)),
-			provenance,
-		},
+		Facts:    f,
+		Line:     describeAuthorities(f),
+		Notes:    append(notes, provenance),
+		Bindings: bound,
 	}
 }
 
