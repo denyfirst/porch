@@ -32,6 +32,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -90,7 +91,7 @@ func main() {
 // added and did exactly that: -resolver was declared, documented in the usage
 // text, and never assigned, so the sabotage that removed the assignment changed
 // no test.
-func tlsScanner(timeout time.Duration, allowPrivate bool, resolver string, searchLogs, askResponder bool) *scan.Scanner {
+func tlsScanner(timeout time.Duration, allowPrivate bool, resolver string) *scan.Scanner {
 	scanner := &scan.Scanner{
 		Prober: &tlsprobe.Prober{TotalTimeout: timeout},
 
@@ -121,18 +122,13 @@ func tlsScanner(timeout time.Duration, allowPrivate bool, resolver string, searc
 		scanner.Resolver = &dnsclient.Client{Server: resolver}
 	}
 
-	if searchLogs {
-		// The operator asked for it, which is the only way this happens here.
-		// The monitor is behind an interface, so an operator running their own
-		// is a substitution rather than a rewrite.
-		scanner.Logs = &ctsearch.CRTSh{Timeout: timeout}
-	}
-
-	if askResponder {
-		// The operator asked, which is the only way this happens anywhere. The
-		// question names the certificate to the authority that issued it (R3a).
-		scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
-	}
+	// What a scan asks beyond the host itself, of the sources that hold the
+	// answer: the transparency monitor which certificates exist for the name,
+	// and the certificate's own authority whether it has been revoked. Every
+	// name this command checks is one the operator proved, so both are asked
+	// every time; until 2026-10-10 each waited for a flag (N12, R3a).
+	scanner.Logs = certSpotter(timeout)
+	scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
 
 	if allowPrivate {
 		// Deliberate opt-out of the SSRF guard. Reasonable for a local
@@ -174,34 +170,6 @@ func run() int {
 				"\tappear in publicly logged certificates and in the domain's own\n"+
 				"\trecords, each saying which of them named it. names grades\n"+
 				"\tnothing, and asks a monitor this project does not run (N12)")
-
-		// Which transparency monitor is asked. Empty uses the default.
-		//
-		// internal/ctsearch has said since it was written that the monitor is
-		// replaceable — "a monitor that goes away, changes its interface, or
-		// that an operator would rather not use is a substitution rather than a
-		// rewrite" — and until 2026-09-25 there was no way to substitute one
-		// from here. The promise was true of the package and not of the
-		// product.
-		//
-		// It is not hypothetical. crt.sh answered 502 to every request on the
-		// day the inventory mode was written, which is an ordinary state for a
-		// free service indexing billions of certificates, and an operator with
-		// their own index or a paid one should not have to rebuild this to use
-		// it.
-		monitor = flag.String("monitor", "",
-			"which certificate transparency monitor -check names asks: `crtsh` or\n"+
-				"\tcertspotter. They have different owners and different infrastructure,\n"+
-				"\tso one being down is not both")
-
-		// And where it is asked, separately from which one.
-		//
-		// An operator running their own index of either, or a paid one, should
-		// not have to say which answer format it speaks — they already said
-		// that by naming the monitor.
-		monitorURL = flag.String("monitor-url", "",
-			"the `address` of the monitor named by -monitor, if not its own. For crtsh\n"+
-				"\tthis is a template with %s where the name goes")
 
 		// The third source of names, and the only one that sees behind a
 		// wildcard certificate.
@@ -321,39 +289,6 @@ func run() int {
 			"`address` of the resolver to ask for CAA records, host:port; empty reads\n"+
 				"\tthis machine's own configuration")
 
-		// Whether to ask a public log what certificates exist for the name.
-		//
-		// Off by default, and it is the only check here that is. Everything
-		// else this tool does either reaches the server being scanned — which
-		// the operator chose — or reads something already in hand. This sends
-		// the name to a monitor this project does not run, and the question
-		// contains the name.
-		//
-		// On a service that required proof of control the name belongs to
-		// whoever asked and there is nothing to hide from themselves, so it
-		// simply runs there. Here it cannot: this command scans whatever it is
-		// pointed at, and the name may be somebody else's. Telling a third
-		// party which domain you are looking at is the operator's disclosure to
-		// make, not a default to inherit (N12).
-		searchLogs = flag.Bool("check-logs", false,
-			"ask a public certificate transparency monitor which certificates exist for\n"+
-				"\tthe name, to find any you did not order. Off by default: the question\n"+
-				"\tnames the domain to a service this project does not run")
-
-		// Whether to ask the certificate's own responder if it has been revoked.
-		//
-		// Off by default, and more of a disclosure than -check-logs. A log
-		// search names a domain whose certificates are already public; this
-		// names one certificate — its serial and its issuer — to the authority
-		// that issued it, from this address, at this moment. That is the query
-		// R3a says this project does not make, and it is made here only because
-		// an operator examining their own certificate may decide the authority
-		// learning it is no disclosure at all. The revocation list is still read
-		// either way; a list names no certificate.
-		askResponder = flag.Bool("ask-responder", false,
-			"ask the certificate's own OCSP responder whether it has been revoked. Off by\n"+
-				"\tdefault: the question tells the issuing authority which certificate is\n"+
-				"\tbeing examined")
 		// Where to keep the results, if anywhere.
 		//
 		// Empty keeps nothing, which is the default and the promise this
@@ -422,6 +357,10 @@ func run() int {
 		}
 		fmt.Fprintf(os.Stderr, "Usage:\n  %s [flags] host[:port] ...\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
+	}
+	if err := removedFlags(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	flag.Parse()
 
@@ -566,8 +505,6 @@ func run() int {
 			Ranges:           walk,
 			Known:            given,
 			Timeout:          *timeout,
-			Monitor:          *monitor,
-			MonitorURL:       *monitorURL,
 			Resolver:         *resolver,
 			Register:         *register,
 			RegisterURL:      *registerURL,
@@ -578,7 +515,7 @@ func run() int {
 		})
 	}
 
-	scanner := tlsScanner(*timeout, *allowPrivate, *resolver, *searchLogs, *askResponder)
+	scanner := tlsScanner(*timeout, *allowPrivate, *resolver)
 	scanner.Verify = scope
 
 	return runTLS(ctx, scanner, targets, *timeout, *asJSON, store)
@@ -1103,4 +1040,44 @@ func wrap(s string, width int, indent string) string {
 	}
 	b.WriteString(line)
 	return b.String()
+}
+
+// removedFlags refuses flags that no longer exist, and says why they went,
+// rather than letting the flag package answer that it never heard of them.
+//
+// They went on 2026-10-10, when asking the monitor and the authority stopped
+// being a choice made per run: every name this command checks is one its
+// operator proved, and the answer is held by those sources and nowhere else.
+func removedFlags(args []string) error {
+	for _, arg := range args {
+		if arg == "--" {
+			return nil
+		}
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		switch name {
+		case "check-logs":
+			return errors.New("-check-logs was removed: every scan asks Cert Spotter which " +
+				"certificates exist for the name")
+		case "ask-responder":
+			return errors.New("-ask-responder was removed: every scan asks a certificate's " +
+				"own authority whether it has been revoked")
+		case "monitor", "monitor-url":
+			return errors.New("-" + name + " was removed: the inventory asks Cert Spotter, " +
+				"with the key in CERTSPOTTER_TOKEN if there is one")
+		}
+	}
+	return nil
+}
+
+// certSpotter is the certificate transparency monitor this command asks, for
+// the TLS check and the inventory alike.
+//
+// The key is read from the environment rather than a flag: it identifies
+// whoever is running this to the monitor, and a credential on a command line
+// is a credential in a shell history and in every process listing.
+func certSpotter(timeout time.Duration) *ctsearch.CertSpotter {
+	return &ctsearch.CertSpotter{Timeout: timeout, Token: os.Getenv("CERTSPOTTER_TOKEN")}
 }

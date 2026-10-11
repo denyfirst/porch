@@ -4,6 +4,11 @@ Porch has four graded checks and one inventory. Each reads what a server already
 shows to anyone. Nothing is guessed, no exploit is sent, no login is tried, and
 private, loopback, link-local and reserved addresses are refused.
 
+Where an answer is held somewhere else, Porch asks the source that holds it,
+directly from the machine it runs on, and only about a domain it was shown
+control of: Cert Spotter for logged certificates, a certificate's own
+authority for revocation. No service in between learns what is checked.
+
 ## Reading a report
 
 - **Findings** are graded. Each names a rule and the standard behind it. The
@@ -21,10 +26,10 @@ private, loopback, link-local and reserved addresses are refused.
 **Sends:** TLS handshakes at each version and for each accepted cipher suite,
 each closed when the handshake ends. No HTTP request.
 
-**Also asks:** the certificate authority for its revocation list (it names no
-certificate), and crt.sh for the certificates logged for the name (only for a
-domain proven to the copy asking). The demonstration asks Cert Spotter instead,
-and crt.sh only when Cert Spotter does not answer.
+**Also asks:** the certificate authority for its revocation list, and its
+responder whether this certificate was revoked where the certificate names
+one; and Cert Spotter which certificates are logged for the name. Set
+`CERTSPOTTER_TOKEN` to an SSLMate API key for more than the anonymous rate.
 
 **Grades:** protocol versions, cipher suites, the certificate and its chain,
 revocation, and certificate transparency.
@@ -50,7 +55,7 @@ SSL 3.0 is asked the same way and shown in the version table.
 - **Only the suites this client can offer were offered.** Suites were enumerated among those Go's TLS stack implements. SSL 3.0 and the export-grade, NULL, finite-field DHE and anonymous families were asked with a hand-written hello, which shows whether any suite of a family is accepted, not every one. SSLv2 is not covered, and a refused version may only share no suite with this client.
 - **TLS 1.3 suites are asked from the registry.** Each TLS 1.3 suite in the IANA registry is asked with a hand-written hello, because Go cannot choose among them; suites outside the registry are not asked. Where that hello is answered differently, only the negotiated suite is listed and the report says so.
 - **The verdict rests on one root store.** Trust is checked against one root store, and the verdict rests on that store: on Linux and other unix systems, the store of the machine that ran this scan; on Windows and macOS, the copy of Microsoft's or Apple's store this build carries. Mozilla, Chrome, Microsoft and Apple are compared from dated copies of their stores: which roots they include and Mozilla's distrust dates are applied, and other conditions are named, not applied.
-- **No authority is asked about this certificate.** No certificate authority is asked about this certificate, because the question carries its serial number and tells the authority which certificate is being looked at. -ask-responder turns that on, only for a domain a service has been shown control of, and the report then says so. A stapled response is read and a revocation list is fetched, since one list names no single certificate. Without either, a trusted, in-date chain may still have been withdrawn.
+- **Revocation is what the authority publishes.** A stapled response is read, the authority's revocation list is fetched, and its responder is asked where the certificate names one. A certificate that names neither a list nor a responder cannot be checked for revocation by anyone.
 - **Transparency receipts are checked against one browser's log list.** Receipts are checked against Chrome's log list as of the date in the report. A receipt from a log the list does not name cannot be checked, and nothing here decides how many receipts a browser requires.
 
 ## Web
@@ -132,13 +137,12 @@ target next can answer for your name. This is reported, not graded.
 
 Lists the names under a domain and where each was found. Nothing is graded.
 
-**Sources:** public certificates (crt.sh or SSLMate), the domain's MX, SPF and
+**Sources:** public certificates (Cert Spotter), the domain's MX, SPF and
 NS records, and, if configured, a passive DNS register, the hosts' own
 certificates, the reverse DNS of address ranges you name (up to a /20 or /116,
 4,096 addresses in total), and names you already have (up to 1,000).
 
-The monitor learns that somebody is looking at the domain, so an inventory is
-made only for a domain proven to the copy asking.
+An inventory is made only for a domain proven to the copy asking.
 
 It cannot show hosts with no public certificate, hosts behind a wildcard
 certificate (unless a register was read), or hosts your DNS has no reason to

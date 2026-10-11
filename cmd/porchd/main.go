@@ -123,29 +123,28 @@ const demoKeep = 15 * time.Minute
 const demoAsk = 30 * time.Minute
 
 // demoMonitor is the transparency monitor the demonstration asks about its own
-// domain: Cert Spotter, and crt.sh only when Cert Spotter does not answer, each
-// answer kept for demoAsk.
+// domain, the one every installation asks, with each answer kept for demoAsk.
 //
-// crt.sh alone until 2026-10-09. That day it answered nothing for the
-// inventory and, for the transport check, listed one of the domain's four valid
-// certificates — the one issued in August — so the report told a visitor that
-// a certificate this server was not presenting existed for its name and left
-// out the three it had issued since. Cert Spotter listed all four within the
-// hour. A report that is wrong about its own domain is worse than one that
-// says it could not ask, so the monitor that keeps up is asked first, and the
-// answer says which monitor gave it and when.
-//
-// Only here. An installation someone runs for their own domains asks the
-// monitor its operator chose, and nothing in this build names their domains to
-// a company they did not pick.
+// Kept because a page anybody can refresh must not spend the monitor's
+// allowance for this address, and a question it refuses is answered from the
+// last one it took, with its time.
 func demoMonitor(timeout time.Duration) *ctsearch.Cached {
-	return &ctsearch.Cached{
-		Monitor: &ctsearch.Fallback{
-			First: &ctsearch.CertSpotter{Timeout: timeout},
-			Then:  &ctsearch.CRTSh{Timeout: timeout},
-		},
-		For: demoAsk,
-	}
+	return &ctsearch.Cached{Monitor: certSpotter(timeout), For: demoAsk}
+}
+
+// certSpotter is the certificate transparency monitor every deployment asks:
+// which certificates exist for a name, for the TLS check, and which names
+// under a domain they cover, for the inventory.
+//
+// One monitor, asked on every deployment about every name a scan may reach.
+// crt.sh was the other until 2026-10-10, when it was dropped for falling a day
+// behind the logs; see internal/ctsearch.
+//
+// The key is read from the environment rather than a flag: a credential on a
+// command line is a credential in the process list. Without one the monitor
+// answers anonymously, at a lower rate.
+func certSpotter(timeout time.Duration) *ctsearch.CertSpotter {
+	return &ctsearch.CertSpotter{Timeout: timeout, Token: os.Getenv("CERTSPOTTER_TOKEN")}
 }
 
 func main() {
@@ -207,26 +206,13 @@ func run() int {
 				"\tabsent; when set, only domains that have published the matching challenge\n"+
 				"\tare scanned, and the page shows the record to publish")
 
-		// Which transparency monitor the inventory endpoint asks, if any.
-		//
-		// Empty means none, and the endpoint then answers that this installation
-		// has no monitor. Off unless asked for, like every other question this
-		// service puts to a third party (N12).
-		namesMonitor = flag.String("names-monitor", "",
-			"the certificate transparency monitor the name inventory asks: `crtsh` or\n"+
-				"\tcertspotter. Empty offers no inventory. The question names a domain to a\n"+
-				"\tservice this project does not run")
-
-		namesMonitorURL = flag.String("names-monitor-url", "",
-			"the `address` of the monitor named by -names-monitor, if not its own")
-
 		// The register the inventory asks as well, if any.
 		//
-		// Off unless named, like the monitor, and for one more reason: the key
-		// is the operator's own account with a company they chose, and the
-		// question is billed to them. It is the only source that finds names a
-		// wildcard certificate hides, and the only one holding what somebody's
-		// resolver saw rather than what the domain published (N12).
+		// Off unless named, because the key is the operator's own account
+		// with a company they chose, and the question is billed to them. It is
+		// the only source that finds names a wildcard certificate hides, and
+		// the only one holding what somebody's resolver saw rather than what
+		// the domain published (N12).
 		namesPassive = flag.String("names-passive", "",
 			"a passive DNS register the name inventory asks as well: `securitytrails`\n"+
 				"\tor virustotal. Empty asks none. The key is read from\n"+
@@ -273,12 +259,6 @@ func run() int {
 			"ask each name that answers for the certificate it presents, and keep\n"+
 				"\tthe names on it. One handshake per host, nothing requested over it,\n"+
 				"\tand the certificate is read rather than judged")
-
-		askResponder = flag.Bool("ask-responder", false,
-			"ask each certificate's own authority whether it has been revoked. Needs\n"+
-				"\tproof of control, because the question tells that authority which\n"+
-				"\tcertificate is being looked at, from this address and when — so it is\n"+
-				"\tonly a disclosure to make about your own estate")
 
 		// Signed proof only, for an operator whose resolver is theirs. The
 		// record is read from the zone's own servers either way; this adds the
@@ -468,20 +448,6 @@ func run() int {
 		return 2
 	}
 
-	// A flag that would do nothing is refused rather than ignored.
-	//
-	// -ask-responder discloses a certificate to the authority that issued it,
-	// and that is a disclosure to make about your own estate: without a scope
-	// the names are not the operator's. Accepting it silently would be the
-	// failure the comment on -trusted-proxy-hops describes — a setting that
-	// looks applied and is not, which is worse than not offering it.
-	if *askResponder && scope == nil {
-		fmt.Fprintln(os.Stderr, "-ask-responder needs -verification-secret-file: "+
-			"the question names a certificate to its authority, which is a disclosure to make "+
-			"only about domains this installation has been shown control of")
-		return 2
-	}
-
 	// And a service beyond loopback has a password in front of it, always.
 	// Proof of control is about which domains may be checked, not who may ask:
 	// an example that dropped -access-file while adding a certificate (audit
@@ -564,7 +530,7 @@ func run() int {
 	// platform picks, which is the store this program did not check. Verify
 	// is the scope read before that: leaving it nil is a service that scans
 	// whatever it is asked to.
-	api := httpapi.New(serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout), limits, nil)
+	api := httpapi.New(serviceScanner(roots, scope, *resolver, *requestTimeout), limits, nil)
 
 	// Where results are kept, if anywhere. Before serving, like every other
 	// piece of configuration here: a service that could start keeping records
@@ -581,29 +547,16 @@ func run() int {
 	exposed := beyondLoopback(*listen)
 	api.ReachableByOthers(exposed)
 
-	// The monitor the inventory endpoint asks, if the operator named one.
-	//
-	// Off unless asked for, like every other question this service puts to a
-	// third party: the question names a domain to somebody this project does not
-	// run, and that is the operator's disclosure to enable rather than a default
-	// to inherit (N12). Nil leaves the endpoint answering that this installation
-	// has no monitor, which is true.
-	if *namesMonitor != "" {
-		searcher, err := namesSearcher(*namesMonitor, *namesMonitorURL, *requestTimeout)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 2
-		}
-		api.SearchNames(searcher)
+	// The monitor the inventory endpoint asks, on every installation. Every
+	// domain it is asked about is one this installation was shown control of.
+	if scope != nil {
+		api.SearchNames(certSpotter(*requestTimeout))
 	}
 
 	// The demonstration lists this project's own estate, and both halves of
 	// that are compiled in rather than flagged.
 	//
-	// A monitor, because the page promises what this build does and a unit
-	// file is not the build: a flag left out of it would leave the
-	// demonstration showing half an inventory while the privacy page described
-	// a whole one. See demoMonitor for which one, and how often it is asked.
+	// The monitor, kept for demoAsk: see demoMonitor.
 	//
 	// And a kept copy, for demoFresh: every visitor asks the same question, and
 	// a page anybody can refresh must not be a way to make this installation
@@ -629,10 +582,8 @@ func run() int {
 		api.KeepCheckFor("dns", demoKeep)
 	}
 
-	// The register, the same way: named or not asked. It is wired even where
-	// no monitor is, so that the endpoint's refusal stays the monitor's to
-	// decide — this adds a source to an inventory that is offered, and offers
-	// none of its own.
+	// The register: named or not asked. It adds a source to an inventory that
+	// is offered, and offers none of its own.
 	if *namesPassive != "" {
 		register, err := namesRegister(*namesPassive, *namesPassiveURL, *requestTimeout)
 		if err != nil {
@@ -716,10 +667,8 @@ func run() int {
 		Verified:          scope != nil,
 		Keeps:             *resultsDir != "" || gate != nil,
 		Guarded:           gate != nil,
-		Monitor:           *namesMonitor,
 		Register:          *namesPassive,
 		ReadsCertificates: *namesReadCertificates,
-		AsksResponder:     *askResponder,
 		OperatorOnly:      !exposed || gate != nil,
 	})
 	root.Handle("/", web.Handler())
@@ -1152,49 +1101,29 @@ func (r *certReloader) reload() error {
 // A function rather than a literal inside run(), so that what each flag
 // reaches can be asserted: run() parses flags and binds a port. porch-scan
 // learned this when its -resolver was parsed, documented and never assigned.
-func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, askResponder bool, timeout time.Duration) *scan.Scanner {
+func serviceScanner(roots *x509.CertPool, scope *verify.Scope, resolver string, timeout time.Duration) *scan.Scanner {
 	scanner := &scan.Scanner{Roots: roots, Verify: scope}
 
-	// What a service with proof of control may find out about the certificates
-	// it is shown.
+	// What a scan asks beyond the host itself, of the sources that hold the
+	// answer: the transparency monitor which certificates exist for the name,
+	// and the certificate's own authority whether it has been revoked.
 	//
-	// Both of these were decided on this page years before they were wired to
-	// anything. N12's table says a service that requires proof of control
-	// searches the transparency logs with no switch, because the certificates
-	// for a name are published to anyone who looks and the name belongs to
-	// whoever proved it; the switch was written for the command line, where
-	// the name may be somebody else's. The table said so and nothing in this
-	// program did it.
+	// On every deployment, because every name a scan here may reach is one
+	// its operator was shown control of — a proven domain on an installation,
+	// this project's own on the demonstration. Until 2026-10-10 the responder
+	// waited for a flag and the demonstration never asked it, which kept the
+	// authority that issued a certificate from learning that its owner was
+	// looking at it, and left a revoked certificate reported as unknown.
 	//
-	// The responder is the other half and needs the switch, because what it
-	// discloses is not public: the authority learns which certificate is being
-	// looked at, from which address and when. R3a refused it to a service on
-	// the ground that its operator had not chosen it scan by scan — and an
-	// operator who passes a flag at start has chosen it for every scan the
-	// installation will run, which is the same choice the command line makes
-	// one scan at a time. Off by default, and only alongside proof of control:
-	// without a scope the names are not the operator's to disclose.
+	// Whether the report names the addresses a certificate gives for checking
+	// its own revocation is decided elsewhere, in httpapi's operatorView.
 	if scope != nil {
-		scanner.Logs = &ctsearch.CRTSh{Timeout: timeout}
-		if askResponder {
-			scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
-		}
-
-		// Whether the report names the addresses a certificate gives for
-		// checking its own revocation is not decided here. It is decided with
-		// every other part of a report that is shown whole only to the person
-		// it is about, in httpapi's operatorView, which covers a scope and
-		// more: the demonstration's own estate, and a copy only its operator
-		// can call.
+		scanner.Logs = certSpotter(timeout)
+		scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
 	}
-
-	// And the demonstration searches the logs too, with no scope: its hosts are
-	// compiled in, so the name it asks about is only ever this project's own,
-	// and it asks the monitor demoMonitor names.
-	// The responder stays out, because it is asked only where an operator said
-	// so and nobody says so to the demonstration.
 	if demo.Enabled {
 		scanner.Logs = demoMonitor(timeout)
+		scanner.Responder = &ocspquery.Fetcher{Timeout: timeout}
 	}
 
 	// Always, and never nil. An empty Server already means this machine's own
@@ -1372,8 +1301,12 @@ func proofRequired(scoped bool) error {
 		"any host, from this machine's address. Add -verification-secret-file")
 }
 
-// removedFlags refuses the two flags that turned the rules above off, and
-// says why they went.
+// removedFlags refuses flags that no longer exist, and says why they went,
+// rather than letting the flag package answer that it never heard of them.
+//
+// -names-monitor, -names-monitor-url and -ask-responder went on 2026-10-10,
+// when asking the monitor and the authority stopped being a choice made per
+// installation: every name a scan here reaches is one its operator proved.
 //
 // -open served any name beyond loopback, and -without-password served anyone.
 // Each was a sentence in its help text — "only for a network nobody else can
@@ -1398,6 +1331,12 @@ func removedFlags(args []string) error {
 		case "without-password":
 			return errors.New("-without-password was removed: porchd beyond loopback always " +
 				"requires -access-file")
+		case "names-monitor", "names-monitor-url":
+			return errors.New("-" + name + " was removed: every installation asks Cert Spotter, " +
+				"with the key in CERTSPOTTER_TOKEN if there is one")
+		case "ask-responder":
+			return errors.New("-ask-responder was removed: every installation asks a " +
+				"certificate's own authority whether it has been revoked")
 		}
 	}
 	return nil
@@ -1523,34 +1462,6 @@ func passwordAllowed(listen string, guarded bool) error {
 		"can reach it could use it. Add -access-file")
 }
 
-// namesSearcher builds the transparency monitor the inventory endpoint asks.
-//
-// The same two this command line offers everywhere else, named rather than
-// described by an address, because which monitor is being asked decides how its
-// answer is read. crt.sh and SSLMate agree on nothing but the idea.
-func namesSearcher(name, address string, timeout time.Duration) (ctsearch.EstateSearcher, error) {
-	if err := httpsEndpoint(address); err != nil {
-		return nil, fmt.Errorf("-names-monitor-url: %w", err)
-	}
-	switch name {
-	case "crtsh":
-		if address != "" && !strings.Contains(address, "%s") {
-			return nil, fmt.Errorf("-names-monitor-url for crtsh needs %%s where the name goes")
-		}
-		return &ctsearch.CRTSh{Timeout: timeout, Endpoint: address}, nil
-	case "certspotter":
-		// From the environment rather than a flag: a credential on a command
-		// line is a credential in a process listing, and this one is read by
-		// the service as it starts.
-		return &ctsearch.CertSpotter{
-			Timeout:  timeout,
-			Endpoint: address,
-			Token:    os.Getenv("CERTSPOTTER_TOKEN"),
-		}, nil
-	}
-	return nil, fmt.Errorf("unknown -names-monitor %q: it is crtsh or certspotter", name)
-}
-
 // namesRegister builds the passive register the inventory asks, where one was
 // named.
 //
@@ -1580,10 +1491,10 @@ func namesRegister(name, address string, timeout time.Duration) (passivedns.Regi
 	return nil, fmt.Errorf("unknown -names-passive %q: it is securitytrails or virustotal", name)
 }
 
-// httpsEndpoint refuses a monitor or register address that is not HTTPS.
+// httpsEndpoint refuses a register address that is not HTTPS.
 //
-// Either is asked about a domain, and a register or CertSpotter is sent the
-// operator's key with the question. The dialler allows port 80 for both, so an
+// A register is asked about a domain and sent the operator's key with the
+// question. The dialler allows port 80, so an
 // http:// address given here sent the key and the domain across every network
 // on the way in the clear — a credential somebody pays for, and the disclosure
 // N12 is written about, handed to whoever is on the path. Empty is the
@@ -1595,9 +1506,7 @@ func httpsEndpoint(address string) error {
 	if address == "" {
 		return nil
 	}
-	// The monitor's address carries %s where the name goes, which is not a
-	// valid escape; it is read as the name it will become.
-	u, err := url.Parse(strings.ReplaceAll(address, "%s", "name"))
+	u, err := url.Parse(address)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 		return errors.New("the address must be an https:// URL with a host and no credentials in it, " +
 			"because the question names a domain and may carry this installation's key")

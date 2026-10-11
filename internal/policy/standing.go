@@ -97,18 +97,16 @@ var (
 	// scan, so a stale one is worse than a wrong finding: the finding is about
 	// a server and this is about us.
 	//
-	// One text true of both builds, rather than a version each. The difference
-	// between them belongs in it, because a reader arriving from a log line
-	// cannot tell which installation reached them.
-	LimitNoAuthorityAsked = StandingLimit{
-		ID:    "no-authority-asked",
-		Title: "No authority is asked about this certificate",
-		Text: "No certificate authority is asked about this certificate, because the question " +
-			"carries its serial number and tells the authority which certificate is being " +
-			"looked at. -ask-responder turns that on, only for a domain a service has been " +
-			"shown control of, and the report then says so. A stapled response is read and a " +
-			"revocation list is fetched, since one list names no single certificate. Without " +
-			"either, a trusted, in-date chain may still have been withdrawn.",
+	// And on 2026-10-10 it changed again, the other way: the responder is
+	// asked on every deployment, for every name a scan may reach, because the
+	// authority holds the answer and nobody else does. The limit that said no
+	// authority was asked about this certificate was then the stale sentence.
+	LimitRevocationPublished = StandingLimit{
+		ID:    "revocation-published",
+		Title: "Revocation is what the authority publishes",
+		Text: "A stapled response is read, the authority's revocation list is fetched, and its " +
+			"responder is asked where the certificate names one. A certificate that names " +
+			"neither a list nor a responder cannot be checked for revocation by anyone.",
 	}
 
 	// "Transparency receipts are counted and not verified ... this service
@@ -134,7 +132,7 @@ func StandingLimits() []StandingLimit {
 		LimitCipherSuitesOffered,
 		LimitTLS13Suites,
 		LimitOneTrustStore,
-		LimitNoAuthorityAsked,
+		LimitRevocationPublished,
 		LimitTransparencyReceipts,
 	}
 }

@@ -165,53 +165,56 @@ func privacyOf(t *testing.T, in Installation) string {
 	return flatten(get(t, "/privacy").Body.String())
 }
 
-// The page says which third parties this installation asks, and never claims
-// it asks none when it asks one.
+// The page says which sources this installation asks, and never claims it
+// asks none when it asks one.
 //
 // It claimed exactly that until 2026-09-27: "no certificate transparency log
 // and no revocation responder is asked by this service", printed whatever the
-// operator had configured. -names-monitor made the first half false in #259
-// and -ask-responder made the second half false before it, and the sentence
-// went on being served — on the page an operator would quote to the people
-// they scan. A page that tells somebody something untrue about their own
-// installation is worse than a page that says nothing (N14).
-func TestThePrivacyPageSaysWhichThirdPartiesAreAsked(t *testing.T) {
-	const none = "No certificate transparency log, no passive register and no revocation responder is asked"
+// operator had configured. A page that tells somebody something untrue about
+// their own installation is worse than a page that says nothing (N14).
+func TestThePrivacyPageSaysWhichSourcesAreAsked(t *testing.T) {
+	const none = "No certificate transparency monitor, no passive register and no revocation responder is asked"
 
 	// The installation that asks nobody: no scope, nothing configured.
 	plain := privacyOf(t, Installation{})
 	if !strings.Contains(plain, none) {
 		t.Errorf("an installation that asks nobody does not say so:\n%s", plain)
 	}
+	if strings.Contains(plain, "Cert Spotter") {
+		t.Errorf("an installation with no scope names a monitor it never asks:\n%s", plain)
+	}
 
-	// And a scope alone is not that installation. It turns on the TLS check's
-	// search of the transparency logs (N12), so every name a proven copy checks
-	// is named to crt.sh — and this test asserted the opposite sentence for a
-	// proven copy until 2026-09-28, because the list of third parties was
-	// written about the inventory's flags.
+	// A scope is what turns on the monitor and the authority's responder, on
+	// every installation, so a proven copy names both and never says it asks
+	// nobody.
 	proven := privacyOf(t, Installation{Verified: true})
 	if strings.Contains(proven, none) {
-		t.Errorf("a proven installation says no transparency log is asked, and the TLS check "+
-			"asks crt.sh about every name it reads:\n%s", proven)
+		t.Errorf("a proven installation says nobody is asked:\n%s", proven)
 	}
-	if !strings.Contains(proven, "crt.sh") {
-		t.Errorf("a proven installation does not say crt.sh is asked:\n%s", proven)
+	for _, want := range []string{
+		"Cert Spotter",
+		"which certificates exist for each name the TLS check reads",
+		"which names under a domain appear in public certificates",
+		"whether this certificate has been revoked",
+	} {
+		if !strings.Contains(proven, want) {
+			t.Errorf("a proven installation does not say %q:\n%s", want, proven)
+		}
+	}
+	if strings.Contains(proven, "crt.sh") || strings.Contains(proven, "-ask-responder") {
+		t.Errorf("the page names a monitor or a flag that no longer exists:\n%s", proven)
 	}
 
-	// And each thing an operator can turn on.
+	// And each further source an operator can turn on.
 	for _, tc := range []struct {
 		what string
 		in   Installation
 		says string
 	}{
-		{"a monitor", Installation{Verified: true, Monitor: "crtsh"},
-			"certificate transparency monitor"},
 		{"a register", Installation{Verified: true, Register: "securitytrails"},
 			"passive register"},
 		{"reading certificates", Installation{Verified: true, ReadsCertificates: true},
 			"asked for the certificate it presents"},
-		{"the responder", Installation{Verified: true, AsksResponder: true},
-			"whether a certificate has been revoked"},
 	} {
 		page := privacyOf(t, tc.in)
 		if strings.Contains(page, none) {
@@ -222,13 +225,11 @@ func TestThePrivacyPageSaysWhichThirdPartiesAreAsked(t *testing.T) {
 		}
 	}
 
-	// The monitor and the register are named, because which company was asked
-	// is the part an operator has to be able to check.
-	named := privacyOf(t, Installation{Verified: true, Monitor: "certspotter", Register: "virustotal"})
-	for _, want := range []string{"certspotter", "virustotal"} {
-		if !strings.Contains(named, want) {
-			t.Errorf("the page does not name %q:\n%s", want, named)
-		}
+	// The register is named, because which company was asked on the
+	// operator's own account is the part they have to be able to check.
+	named := privacyOf(t, Installation{Verified: true, Register: "virustotal"})
+	if !strings.Contains(named, "virustotal") {
+		t.Errorf("the page does not name the register:\n%s", named)
 	}
 }
 

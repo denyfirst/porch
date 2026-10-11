@@ -257,13 +257,15 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 	}
 }
 
-// The pages are told everything this installation asks of a third party.
+// The pages are told everything this installation asks of a source an
+// operator chooses.
 //
 // The privacy page names them, and it can only name what it is handed. A flag
 // wired into the scanner and not into web.Installation produces a page that
-// says this service asks nobody while it asks crt.sh on every inventory —
+// says this service asks nobody while it asks a register on every inventory —
 // which is the failure the page exists to prevent, arriving through the one
-// line nobody looks at (N14).
+// line nobody looks at (N14). The monitor and the authority are asked
+// wherever there is a scope, and Verified carries that.
 //
 // Read as text, like the gate above, because what is being checked is that the
 // wiring exists at all: a test that called Configure itself would pass with
@@ -271,10 +273,9 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 func TestThePagesAreToldWhatThisInstallationAsks(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
-		"Monitor:           *namesMonitor,",
+		"Verified:          scope != nil,",
 		"Register:          *namesPassive,",
 		"ReadsCertificates: *namesReadCertificates,",
-		"AsksResponder:     *askResponder,",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("main.go does not hand the pages %q", want)

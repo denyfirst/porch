@@ -19,7 +19,7 @@ import (
 func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 	const named = "192.0.2.53:53"
 
-	scanner := serviceScanner(nil, nil, named, false, time.Second)
+	scanner := serviceScanner(nil, nil, named, time.Second)
 	if scanner.Resolver == nil || scanner.Resolver.Server != named {
 		t.Errorf("the scanner asks %+v; -resolver named %s", scanner.Resolver, named)
 	}
@@ -39,7 +39,7 @@ func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 
 	// And run() passes the flag to both, rather than the empty string.
 	source := repoFile(t, "cmd/porchd/main.go")
-	for _, call := range []string{"serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout)", "verificationScope(*verifySecretFile, *resolver)"} {
+	for _, call := range []string{"serviceScanner(roots, scope, *resolver, *requestTimeout)", "verificationScope(*verifySecretFile, *resolver)"} {
 		if !strings.Contains(source, call) {
 			t.Errorf("run() does not call %s, so -resolver may not reach it", call)
 		}
@@ -60,7 +60,7 @@ func TestTheResolverFlagReachesEveryLookup(t *testing.T) {
 // An empty Server is this machine's own configuration, which is what the
 // default would have been. What matters is that it is a real client.
 func TestEveryInstallationHasAResolver(t *testing.T) {
-	r := serviceScanner(nil, nil, "", false, time.Second).Resolver
+	r := serviceScanner(nil, nil, "", time.Second).Resolver
 	if r == nil {
 		t.Fatal("with no -resolver the scanner holds nothing, so three of the inventory's four sources are off")
 	}
@@ -70,43 +70,32 @@ func TestEveryInstallationHasAResolver(t *testing.T) {
 
 	// And the flag still reaches it, so an operator who named one is asking
 	// the resolver they named.
-	named := serviceScanner(nil, nil, "192.0.2.53:53", false, time.Second).Resolver
+	named := serviceScanner(nil, nil, "192.0.2.53:53", time.Second).Resolver
 	if named == nil || named.Server != "192.0.2.53:53" {
 		t.Errorf("with -resolver the scanner holds %+v", named)
 	}
 }
 
-// What a service may find out about a certificate beyond the handshake, and
-// on what condition.
+// What a service asks beyond the handshake: the transparency monitor which
+// certificates exist for a name, and the certificate's own authority whether
+// it has been revoked.
 //
-// Both were settled in docs/invariants.md long before anything here did them:
-// N12's table gives the transparency logs to a service that requires proof of
-// control with no switch, because what is published is public and the name
-// belongs to whoever proved it. R3a refused the responder to a service on the
-// ground that its operator had not chosen it scan by scan — and a flag at start
-// is that choice, made once for every scan the installation will run.
-//
-// Without a scope, neither: the names are not the operator's to disclose.
+// Both, wherever a scan may reach a name at all: a proven domain on an
+// installation, and the demonstration's own. Neither without one, because a
+// service with no scope and no compiled-in estate scans nothing.
 func TestWhatAServiceAsksBeyondTheHandshake(t *testing.T) {
 	scope := testScope(t)
 
-	// The demonstration is the exception for the logs, and only for them: its
-	// hosts are compiled in, so the name it asks about is only ever ours.
-	if s := serviceScanner(nil, nil, "", false, time.Second); (s.Logs != nil && !demoBuild()) || s.Responder != nil {
+	if s := serviceScanner(nil, nil, "", time.Second); (s.Logs != nil) != demoBuild() || (s.Responder != nil) != demoBuild() {
 		t.Errorf("a service with no proof of control holds %+v / %+v", s.Logs, s.Responder)
 	}
-	if s := serviceScanner(nil, nil, "", true, time.Second); s.Responder != nil {
-		t.Errorf("a service with no proof of control was given a responder: %+v", s.Responder)
-	}
 
-	if s := serviceScanner(nil, scope, "", false, time.Second); s.Logs == nil {
-		t.Error("a service with proof of control does not search the logs, which N12 gives it")
-	} else if s.Responder != nil {
-		t.Errorf("a responder was asked without the operator saying so: %+v", s.Responder)
+	s := serviceScanner(nil, scope, "", time.Second)
+	if s.Logs == nil {
+		t.Error("a service with proof of control does not search the logs")
 	}
-
-	if s := serviceScanner(nil, scope, "", true, time.Second); s.Responder == nil {
-		t.Error("the operator asked for the responder and it was not wired")
+	if s.Responder == nil {
+		t.Error("a service with proof of control does not ask the certificate's authority")
 	}
 }
 
@@ -152,20 +141,27 @@ func TestAResolverThatIsNotAnAddressAndPortIsRefused(t *testing.T) {
 	}
 }
 
-// -ask-responder without proof of control is refused at start, not ignored.
+// A flag that was removed is refused at start, with the reason it went.
 //
-// A flag that looks applied and does nothing is the failure the comment on
-// -trusted-proxy-hops describes, and here it would be worse than useless: an
-// operator would believe revocation was being checked.
-func TestAskingTheResponderWithoutProofIsRefused(t *testing.T) {
-	source := repoFile(t, "cmd/porchd/main.go")
-
-	if !strings.Contains(source, "if *askResponder && scope == nil {") {
-		t.Error("run() accepts -ask-responder with no scope, where it can do nothing")
+// The flag package would refuse it too, saying only that it was never defined;
+// an operator upgrading with -ask-responder in a unit file deserves to learn
+// that the authority is now always asked, not to go looking for a typo.
+func TestARemovedFlagIsRefusedWithItsReason(t *testing.T) {
+	for flag, says := range map[string]string{
+		"-ask-responder":        "asks a certificate's own authority",
+		"-names-monitor=crtsh":  "every installation asks Cert Spotter",
+		"--names-monitor-url=x": "every installation asks Cert Spotter",
+	} {
+		err := removedFlags([]string{"-listen", "127.0.0.1:0", flag})
+		if err == nil {
+			t.Errorf("%s was accepted", flag)
+			continue
+		}
+		if !strings.Contains(err.Error(), says) {
+			t.Errorf("%s was refused as %q", flag, err)
+		}
 	}
-	// And the flag is read where the scanner is built, rather than parsed and
-	// left behind.
-	if !strings.Contains(source, "serviceScanner(roots, scope, *resolver, *askResponder, *requestTimeout)") {
-		t.Error("-ask-responder does not reach the scanner")
+	if err := removedFlags([]string{"--", "-ask-responder"}); err != nil {
+		t.Errorf("an argument after -- was read as a flag: %v", err)
 	}
 }

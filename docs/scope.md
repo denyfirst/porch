@@ -110,19 +110,26 @@ Completeness comes from more that can be read, not from pushing harder.
 
 ---
 
-## Disclosures, and whose they are
+## Sources, and who learns what
 
-Some questions tell a third party something. The test is: *whose is it, and
-what exactly does the other party learn?*
+Privacy here means one thing: **no service in between learns what you check.**
+An online scanner is that service — it sees every domain everyone checks, and
+keeps them. Porch runs on your own machine, so nobody does.
 
-- **A revocation list** tells an authority that somebody downloaded a list
-  covering thousands of certificates. It is read on every build, because a
-  switch to find first would be a gap in a report dressed as a choice.
-- **An OCSP question** names the certificate. It is asked only with
-  `-ask-responder`, only for a proven domain, and never by the demonstration.
-- **A certificate transparency search** names the domain to a monitor. A
-  service runs it for a proven domain, the command line only with
-  `-check-logs`, and the demonstration only for our own domains.
+Some answers are held somewhere else, and Porch asks the source that holds
+them, directly, and only about a domain it may scan. Avoiding those sources
+would make the report worse and protect nobody: they hold the answer whether
+or not anybody asks.
+
+- **A revocation list** covers thousands of certificates. It is read on every
+  build.
+- **The certificate's own responder** is asked whether this certificate was
+  revoked, where the certificate names one. The authority that issued it
+  learns its owner looked.
+- **Cert Spotter** is asked which certificates are logged for a name, and
+  which names under a domain they cover. It learns that somebody looked at a
+  domain whose certificates are already public. It was crt.sh until
+  2026-10-10, which fell a day behind the logs.
 - **The names inventory** reads registers that exist to be read: logs, the
   domain's own records, a zone that hands itself over, a passive register the
   operator names and pays for, and names the operator lists. It invents no

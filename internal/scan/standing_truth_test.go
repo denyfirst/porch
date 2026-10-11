@@ -29,62 +29,42 @@ import (
 func TestTheRevocationLimitDescribesThisBuild(t *testing.T) {
 	var limit policy.StandingLimit
 	for _, l := range policy.StandingLimits() {
-		if l.ID == "no-authority-asked" {
+		if l.ID == "revocation-published" {
 			limit = l
 		}
 	}
 	if limit.ID == "" {
-		t.Fatal("the revocation limit is no longer declared, so nothing on a report says what is " +
-			"asked of an authority")
+		t.Fatal("the revocation limit is no longer declared, so nothing on a report says what " +
+			"revocation is read from")
 	}
 
 	text := limit.Title + " " + limit.Text
 
-	// True of every build, and the whole point of the limit: the question that
-	// names a certificate is never put.
-	if !strings.Contains(text, "serial number") {
-		t.Error("the limit does not say why the question is refused, which is the part that " +
-			"makes it a decision rather than an omission")
-	}
-
-	// Every build fetches a revocation list when a certificate names one, the
-	// demonstration included since 2026-09-28. A limit claiming otherwise is a
-	// report contradicting itself, and one saying the demonstration compiles
-	// the fetch out would be the same sentence going stale the other way.
-	if strings.Contains(text, "compiled out") {
-		t.Error("the limit says a fetch is compiled out of some build, and every build fetches it")
-	}
-	if !strings.Contains(text, "revocation list") {
-		t.Error("this build fetches the authority's revocation list and the limit does not " +
-			"mention one, so a report says the list was fetched and also that nothing was asked")
-	}
-
-	for _, stale := range []string{
-		// The exact sentences that went stale, in the text.
-		"No certificate authority is asked anything",
-		"read only from a response the server stapled",
-		"has not been established here by any means",
-
-		// And in the title, which is the falsest part of all of it and the
-		// part a reader skimming a report actually reads. A sabotage putting
-		// only the old title back escaped the first version of this test,
-		// because the list above described the paragraph and the heading above
-		// it said something broader and simply untrue.
-		"is ever asked",
-	} {
-		if strings.Contains(text, stale) {
-			t.Errorf("the limit still says %q, which stopped being true when this build started "+
-				"fetching revocation lists", stale)
+	// Every build fetches a revocation list when a certificate names one, and
+	// asks the responder where a certificate names one and a scan may reach
+	// the name. A limit claiming otherwise is a report contradicting itself.
+	for _, want := range []string{"revocation list", "responder is asked"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the limit does not say %q, which this build does", want)
 		}
 	}
 
-	// The title claims something narrower than "nothing is ever asked",
-	// because something is. Asserted as a property rather than as a spelling:
-	// whatever it says, it has to be about this certificate rather than about
-	// authorities in general.
-	if !strings.Contains(limit.Title, "this certificate") {
-		t.Errorf("the title is %q. It has to name what is actually refused — a question about "+
-			"this certificate — rather than claim nothing is asked of anybody.", limit.Title)
+	for _, stale := range []string{
+		// The sentences that went stale, in the text and the title. A
+		// sabotage putting only the old title back escaped the first version
+		// of this test, because the list described the paragraph and the
+		// heading above it said something broader and untrue.
+		"No certificate authority is asked anything",
+		"read only from a response the server stapled",
+		"has not been established here by any means",
+		"is ever asked",
+		"No authority is asked about this certificate",
+		"-ask-responder",
+		"compiled out",
+	} {
+		if strings.Contains(text, stale) {
+			t.Errorf("the limit still says %q, which is not true of this build", stale)
+		}
 	}
 }
 

@@ -2,11 +2,6 @@ package ctsearch
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -120,75 +115,13 @@ const (
 	maxEstateEntryNames = 500
 )
 
-// SearchEstate asks the monitor which names under a domain appear in logged
-// certificates.
-//
-// One request. The identity searched is "%.domain", which is the monitor's
-// wildcard for anything under it, and the apex itself is kept when a
-// certificate names it.
-//
-// Every name the monitor returns is checked against the domain before it is
-// kept. A certificate may cover names in several estates at once — that is what
-// a shared certificate is — and reporting the others here would be this program
-// drawing an estate boundary the certificate does not draw.
-func (c *CRTSh) SearchEstate(ctx context.Context, domain string) Estate {
-	e := c.searchEstate(ctx, domain)
-	e.Monitor = crtshName
-	return e
-}
-
-func (c *CRTSh) searchEstate(ctx context.Context, domain string) Estate {
-	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
-	out := Estate{Asked: true, Domain: domain}
-	if domain == "" {
-		return Estate{Asked: true, Reason: "no domain was given to search under"}
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, c.timeout())
-	defer cancel()
-
-	address := fmt.Sprintf(c.endpoint(), url.QueryEscape("%."+domain))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-	if err != nil {
-		out.Reason = "the monitor's address could not be requested"
-		return out
-	}
-	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.client().Do(req)
-	if err != nil {
-		out.Reason = "the certificate transparency monitor could not be reached"
-		return out
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		out.Reason = "the certificate transparency monitor did not answer the search"
-		return out
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
-	if err != nil {
-		out.Reason = "the monitor's answer could not be read"
-		return out
-	}
-	if len(body) > maxBody {
-		// Refused rather than cut. A partial answer here is an inventory with
-		// names missing from it, and an inventory that is quietly short is the
-		// one thing this must never produce (R4).
-		out.Reason = "the monitor's answer is larger than this reads, so the inventory would be short"
-		return out
-	}
-
-	var raw []entry
-	if err := json.Unmarshal(body, &raw); err != nil {
-		out.Reason = "the monitor's answer was not in the form this reads"
-		return out
-	}
-
-	return collect(raw, domain)
+// entry is one certificate as the inventory reads it: an identity it is
+// counted once by, the names it covers, and when it was valid.
+type entry struct {
+	SerialNumber string
+	NameValue    string
+	NotBefore    string
+	NotAfter     string
 }
 
 // collect turns what the monitor said into the inventory.
@@ -273,14 +206,8 @@ func under(name, domain string) bool {
 }
 
 // EstateSearcher is a monitor that can be asked what a domain's certificates
-// name.
-//
-// An interface with two implementations rather than one, which is the whole
-// difference between saying a dependency is replaceable and having replaced it.
-// crt.sh and SSLMate have different owners, different infrastructure and
-// answers that agree on nothing but the idea; everything above this — the
-// filtering, the counting, the report and the sentence about what it cannot
-// show — is written once and works with either.
+// name. An interface, so that what reads an answer — the filtering, the
+// counting, the report — does not depend on whose answer it is.
 type EstateSearcher interface {
 	SearchEstate(ctx context.Context, domain string) Estate
 }

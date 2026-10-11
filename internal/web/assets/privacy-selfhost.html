@@ -144,12 +144,19 @@
 
     <h2 id="asked">Who else is asked</h2>
 
+    {{if .Verified}}<p>
+      Only the sources that hold the answer, asked directly from this machine,
+      and only about names it was shown control of. No service in between
+      learns what is checked.
+    </p>{{end}}
+
     <ul class="plain">
       <li><strong>The DNS resolver</strong> this machine uses sees every name
         checked.</li>
       <li><strong>The certificate authority</strong> of a certificate is
-        asked for its revocation list. One list covers thousands of
-        certificates, so it does not learn which one.</li>
+        asked for its revocation list, which covers thousands of certificates.{{if .Verified}}
+        Where the certificate names a responder, the authority is also asked
+        whether this certificate has been revoked.{{end}}</li>
       {{if .Verified}}<li><strong>The domain's own name servers</strong> are
         asked for its proof record, reached from the root. The root and
         top-level servers learn only the domain, and all of them see this
@@ -157,28 +164,23 @@
       <li><strong>The host itself</strong> may be asked for
         <code>/.well-known/porch-challenge</code> when its domain publishes no
         record.</li>
-      <li><strong>crt.sh</strong> is asked which certificates exist for each
-        name the TLS check reads. It learns that somebody is looking at that
-        name. Only for proven domains.</li>{{end}}
-      {{if .Monitor}}<li><strong>A certificate transparency monitor</strong>
-        (<code>{{.Monitor}}</code>) is asked which names under a domain appear
-        in public certificates. Only for proven domains.</li>{{end}}
+      <li><strong>Cert Spotter</strong>, SSLMate's index of the public
+        certificate transparency logs, is asked which certificates exist for
+        each name the TLS check reads, and which names under a domain appear in
+        public certificates.</li>{{end}}
       {{if .Register}}<li><strong>A passive register</strong>
         (<code>{{.Register}}</code>) is asked what it has seen under a domain,
         on this installation's own account. Only for proven domains.</li>{{end}}
       {{if .ReadsCertificates}}<li><strong>Each name that answers</strong> may
         be asked for the certificate it presents: one handshake, closed when
         the certificate is read. Only for proven domains.</li>{{end}}
-      {{if .AsksResponder}}<li><strong>The authority's responder</strong> is
-        asked whether a certificate has been revoked, because this installation
-        was started with <code class="flag">-ask-responder</code>. Only for
-        proven domains.</li>{{end}}
       {{if .WalksRanges}}<li><strong>Nothing, for an address range you name.</strong>
         Its reverse records are read through the resolver, and not one packet
         is sent to the addresses themselves. Ranges are read only for whoever
         runs this installation.</li>{{end}}
-      {{if .AsksNobodyElse}}<li>No certificate transparency log, no passive
-        register and no revocation responder is asked by this service.</li>{{end}}
+      {{if .AsksNobodyElse}}<li>No certificate transparency monitor, no
+        passive register and no revocation responder is asked by this
+        service.</li>{{end}}
     </ul>
 
     <h2 id="stopping">Stopping a scan</h2>

@@ -36,45 +36,6 @@ func (s *stubMonitor) SearchEstate(ctx context.Context, domain string) Estate {
 	return Estate{Asked: true, Domain: domain, Distinct: 1, Monitor: s.name}
 }
 
-// The second monitor is asked only when the first established nothing, and
-// the answer says whose it is.
-//
-// Asked every time, it would be told about the domain for no reason; never
-// asked, a day the first is down would be a day of reports with nothing in
-// them.
-func TestTheSecondMonitorIsAskedOnlyWhenTheFirstFails(t *testing.T) {
-	first, then := &stubMonitor{name: "first"}, &stubMonitor{name: "then"}
-	f := &Fallback{First: first, Then: then}
-
-	if got := f.Search(context.Background(), "example.com"); got.Monitor != "first" || got.Reason != "" {
-		t.Errorf("with the first answering: %+v", got)
-	}
-	if got := f.SearchEstate(context.Background(), "example.com"); got.Monitor != "first" {
-		t.Errorf("with the first answering, the estate: %+v", got)
-	}
-	if n := then.searches.Load() + then.estates.Load(); n != 0 {
-		t.Errorf("the second was asked %d times while the first answered", n)
-	}
-
-	first.fail = true
-	if got := f.Search(context.Background(), "example.com"); got.Monitor != "then" || got.Reason != "" {
-		t.Errorf("with the first failing: %+v", got)
-	}
-	if got := f.SearchEstate(context.Background(), "example.com"); got.Monitor != "then" || got.Reason != "" {
-		t.Errorf("with the first failing, the estate: %+v", got)
-	}
-
-	then.fail = true
-	got := f.Search(context.Background(), "example.com")
-	if got.Reason != neither || got.Monitor != "" || got.Distinct != 0 {
-		t.Errorf("with both failing: %+v", got)
-	}
-	estate := f.SearchEstate(context.Background(), "example.com")
-	if estate.Reason != neither || !estate.Asked || estate.Distinct != 0 {
-		t.Errorf("with both failing, the estate: %+v", estate)
-	}
-}
-
 // A kept answer is handed out until it is due, and then the monitor is asked
 // again.
 func TestAKeptAnswerIsHandedOutUntilItIsDue(t *testing.T) {
@@ -108,8 +69,7 @@ func TestAKeptAnswerIsHandedOutUntilItIsDue(t *testing.T) {
 // A monitor that stops answering is stood in for by its last good answer, for
 // a day, and the answer says how old it is.
 //
-// The alternative on the day of an outage is a report with nothing in it, or
-// the second monitor's answer, which may be a day behind the logs.
+// The alternative on the day of an outage is a report with nothing in it.
 func TestTheLastGoodAnswerStandsInForADayAndSaysItsAge(t *testing.T) {
 	start := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 	now := start

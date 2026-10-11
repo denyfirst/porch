@@ -392,8 +392,10 @@ func TestPrivacyPageAnswersEveryUrgentQuestion(t *testing.T) {
 		// and names its own domain to a monitor, because its hosts are ours.
 		// The three sentences that said otherwise are quoted on the page as
 		// retired, which a phrase match cannot tell from a claim — so what is
-		// required is what holds now.
-		"no certificate authority is asked about one certificate",
+		// required is what holds now. On 2026-10-10 it changed again: the
+		// responder is asked about our own certificate where it names one,
+		// as every installation asks about its operator's.
+		"its responder whether our certificate was revoked",
 		"scans only the hosts this project owns",
 		"at most once a minute for each host",
 		"the certificate transparency monitor is asked",
