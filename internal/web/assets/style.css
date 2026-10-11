@@ -203,6 +203,30 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+  The footer at the foot of the window, on a page shorter than the window.
+
+  The site's pages are a column: masthead, main, footer. A page whose main is
+  short — the names page before anything is listed, a sign-in, a refusal —
+  left the footer wherever main ended, which on a tall screen is the middle of
+  it, and it read as a page that had stopped loading. Main takes the space
+  that is left. The workspace does this already, in its own column.
+
+  Each child is given the full width back, because in a flex column an item
+  with auto margins is shrunk to its content rather than stretched, and the
+  masthead, main and footer all centre themselves with auto margins.
+*/
+body:not(.workspace) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+body:not(.workspace) > .masthead,
+body:not(.workspace) > main,
+body:not(.workspace) > .colophon { width: 100%; }
+body:not(.workspace) > main { flex: 1 0 auto; }
+
 a {
   color: var(--link);
   text-decoration-thickness: 1px;
@@ -5009,6 +5033,9 @@ main > .band:last-child { border-bottom: 0; }
     color: var(--ink);
     border-bottom: 1px solid var(--rule);
   }
+
+  /* Paper has no window to fill: the footer follows the report. */
+  body:not(.workspace) { display: block; min-height: 0; }
 
   @page { margin: 18mm 16mm; }
 }
