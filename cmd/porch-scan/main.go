@@ -49,7 +49,6 @@ import (
 	"github.com/denyfirst/porch/internal/exposure"
 	"github.com/denyfirst/porch/internal/ocspquery"
 	"github.com/denyfirst/porch/internal/policy"
-	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/smtptls"
 	"github.com/denyfirst/porch/internal/tlsprobe"
@@ -296,26 +295,6 @@ func run() int {
 			"`address` of the resolver to ask for CAA records, host:port; empty reads\n"+
 				"\tthis machine's own configuration")
 
-		// Where to keep the results, if anywhere.
-		//
-		// Empty keeps nothing, which is the default and the promise this
-		// project is built on. What changes on a machine somebody runs
-		// themselves is whose data it is: their scans of their own estate, on
-		// their own disk, because they asked. Nothing is kept unless this
-		// names a directory.
-		resultsDir = flag.String("results-dir", "",
-			"`directory` to keep results in, so -history can compare a target against\n"+
-				"\tearlier scans. Empty keeps nothing, which is the default")
-
-		// How many to hold per target and check. Zero keeps everything.
-		//
-		// No default number, because one this project chose would be a
-		// threshold nobody can argue with (R21) applied to somebody's disk. An
-		// operator who wants a bound says what it is.
-		resultsKeep = flag.Int("results-keep", 0,
-			"how many results to keep per target, oldest dropped first; 0 keeps all")
-
-		// Read what was kept, and scan nothing.
 		// Which selectors to look for DKIM keys under.
 		//
 		// Nothing is looked under by default, and that is not caution: DNS
@@ -336,10 +315,6 @@ func run() int {
 				"\tzone rather than the domain, so it costs nobody anything. Nothing\n"+
 				"\tfound under them means those names hold nothing, never that the\n"+
 				"\tdomain publishes no key")
-
-		showHistory = flag.Bool("history", false,
-			"print what -results-dir has kept for each target and exit; makes no\n"+
-				"\tconnection and resolves nothing")
 
 		// Every target is checked against it: see proof.go.
 		secretFile = flag.String("verification-secret-file", defaultSecretPath(),
@@ -434,15 +409,6 @@ func run() int {
 		return 2
 	}
 
-	store := &results.Store{Dir: *resultsDir, Keep: *resultsKeep}
-
-	// Before anything is resolved or dialled. -history is the operator reading
-	// their own notes, and a command that reached the network to answer it
-	// would be doing something they did not ask for.
-	if *showHistory {
-		return printHistory(os.Stdout, store, *check, targets)
-	}
-
 	// Ctrl-C cancels in flight rather than leaving half-open connections.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -469,16 +435,16 @@ func run() int {
 
 	switch *check {
 	case checkWeb:
-		return runWeb(ctx, scope, targets, *timeout, *allowPrivate, *asJSON, store)
+		return runWeb(ctx, scope, targets, *timeout, *allowPrivate, *asJSON)
 	case checkMail:
 		if err := checkSelectors(*dkimSelectors); err != nil {
 			fmt.Fprintln(os.Stderr, "-dkim-selector: "+err.Error())
 			return 2
 		}
-		return runMail(ctx, scope, targets, *timeout, *resolver, *asJSON, store,
+		return runMail(ctx, scope, targets, *timeout, *resolver, *asJSON,
 			selectorsFrom(*dkimSelectors, *dkimCommon), *heloName)
 	case checkDNS:
-		return runDNS(ctx, scope, targets, *timeout, *resolver, *asJSON, store)
+		return runDNS(ctx, scope, targets, *timeout, *resolver, *asJSON)
 	case checkNames:
 		// Not stored. The others keep a verdict per target so that a history
 		// can say when a grade moved; this produces no verdict, and filing an
@@ -525,7 +491,7 @@ func run() int {
 	scanner := tlsScanner(*timeout, *allowPrivate, *resolver)
 	scanner.Verify = scope
 
-	return runTLS(ctx, scanner, targets, *timeout, *asJSON, store)
+	return runTLS(ctx, scanner, targets, *timeout, *asJSON)
 }
 
 // runTLS measures each target's transport and certificates.
@@ -536,23 +502,12 @@ func run() int {
 // did not, and a sabotage that stopped the TLS path filing its results under a
 // name anything could read back escaped every test here on 2026-09-13 because
 // there was no way to call the code that did it.
-func runTLS(ctx context.Context, scanner *scan.Scanner, targets []string, timeout time.Duration, asJSON bool, store *results.Store) int {
-	// reports rather than results: internal/results is the store, and a local
-	// name shadowing a package is a name somebody later reads as the package.
+func runTLS(ctx context.Context, scanner *scan.Scanner, targets []string, timeout time.Duration, asJSON bool) int {
 	reports := make([]result, 0, len(targets))
 
 	for _, target := range targets {
 		r := runScan(ctx, scanner, target, timeout)
 		reports = append(reports, r)
-
-		// Filed under the name -history resolves the same target to, which is
-		// one function for both so the two cannot disagree. Only where
-		// something was measured: a scan that failed is not a verdict, and a
-		// history holding one would read as a server that was graded rather
-		// than one that was never reached (R4).
-		if r.Result != nil {
-			keep(store, checkTLS, historyName(checkTLS, r.Target), r.Verdict, r.Policy, r.Findings())
-		}
 
 		if !asJSON {
 			printReport(os.Stdout, r)
@@ -1060,9 +1015,12 @@ func wrap(s string, width int, indent string) string {
 // removedFlags refuses flags that no longer exist, and says why they went,
 // rather than letting the flag package answer that it never heard of them.
 //
-// They went on 2026-10-10, when asking the monitor and the authority stopped
-// being a choice made per run: every name this command checks is one its
-// operator proved, and the answer is held by those sources and nowhere else.
+// The first went on 2026-10-10, when asking the monitor and the authority
+// stopped being a choice made per run: every name this command checks is one
+// its operator proved, and the answer is held by those sources and nowhere
+// else. The plain results store went on 2026-10-11: it kept, in the clear,
+// under each checked name, an estate's weaknesses, and nothing this project
+// writes is kept that way any more.
 func removedFlags(args []string) error {
 	for _, arg := range args {
 		if arg == "--" {
@@ -1082,6 +1040,10 @@ func removedFlags(args []string) error {
 		case "monitor", "monitor-url":
 			return errors.New("-" + name + " was removed: the inventory asks Cert Spotter, " +
 				"with the key in CERTSPOTTER_TOKEN if there is one")
+		case "results-dir", "results-keep", "history":
+			return errors.New("-" + name + " was removed: porch-scan keeps nothing, and a " +
+				"copy kept in the clear was the one thing it wrote. porchd keeps every " +
+				"report encrypted under its password, under History")
 		}
 	}
 	return nil

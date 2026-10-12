@@ -15,7 +15,6 @@ import (
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/mtasts"
 	"github.com/denyfirst/porch/internal/policy"
-	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -71,7 +70,7 @@ type mailResult struct {
 // private address is not a case an operator is asking about in either: both
 // exist so that senders on the public internet can reach them, so one only this
 // machine can reach is one no sender ever would.
-func runMail(ctx context.Context, scope *verify.Scope, domains []string, timeout time.Duration, resolver string, asJSON bool, store *results.Store, selectors []dkim.Selector, heloName string) int {
+func runMail(ctx context.Context, scope *verify.Scope, domains []string, timeout time.Duration, resolver string, asJSON bool, selectors []dkim.Selector, heloName string) int {
 	scanner := mailScanner(timeout, selectors, heloName)
 	scanner.Verify = scope
 	if resolver != "" {
@@ -81,8 +80,6 @@ func runMail(ctx context.Context, scope *verify.Scope, domains []string, timeout
 		scanner.Resolver = &dnsclient.Client{Server: resolver}
 	}
 
-	// reports rather than results: internal/results is the store, and a local
-	// name shadowing a package is a name somebody later reads as the package.
 	reports := make([]mailResult, 0, len(domains))
 	for _, domain := range domains {
 		r := mailResult{Domain: domain}
@@ -94,14 +91,6 @@ func runMail(ctx context.Context, scope *verify.Scope, domains []string, timeout
 			r.Result = measured
 		}
 		reports = append(reports, r)
-
-		// Kept under the domain the scan reported rather than the string that
-		// was typed. An address may be given and its local part is discarded
-		// on arrival; keeping a history under what somebody pasted would put
-		// the part that was dropped into a filename.
-		if r.Result != nil {
-			keep(store, checkMail, r.Domain, r.Verdict, r.Policy, r.Findings)
-		}
 	}
 
 	if asJSON {

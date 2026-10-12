@@ -14,7 +14,6 @@ import (
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/rdap"
-	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/verify"
 )
@@ -37,7 +36,7 @@ type dnsResult struct {
 // operator can measure a server on their own network; this opens nothing. It
 // asks a resolver, and a resolver answers about a private name the same way it
 // answers about anything else.
-func runDNS(ctx context.Context, scope *verify.Scope, domains []string, timeout time.Duration, resolver string, asJSON bool, store *results.Store) int {
+func runDNS(ctx context.Context, scope *verify.Scope, domains []string, timeout time.Duration, resolver string, asJSON bool) int {
 	// The command line asks the delegation directly: the scan runs on the
 	// operator's own machine, from their own address, under their
 	// responsibility — the argument -allow-private rests on for the other
@@ -60,10 +59,6 @@ func runDNS(ctx context.Context, scope *verify.Scope, domains []string, timeout 
 			r.Domain = measured.Domain
 		}
 		reports = append(reports, r)
-
-		if r.Result != nil {
-			keep(store, checkDNS, r.Domain, r.Verdict, r.Policy, r.Findings)
-		}
 	}
 
 	if asJSON {

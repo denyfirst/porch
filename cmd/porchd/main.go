@@ -1306,8 +1306,8 @@ func removedFlags(args []string) error {
 				"-access-file, loopback included")
 		case "results-dir", "results-keep":
 			return errors.New("-" + name + " was removed: porchd always runs behind " +
-				"-access-file and keeps every report encrypted, under History. " +
-				"porch-scan -results-dir still keeps results on the machine it runs on")
+				"-access-file and keeps every report encrypted, under History. Nothing " +
+				"this project writes keeps a result in the clear")
 		case "names-monitor", "names-monitor-url":
 			return errors.New("-" + name + " was removed: every installation asks Cert Spotter, " +
 				"with the key in CERTSPOTTER_TOKEN if there is one")

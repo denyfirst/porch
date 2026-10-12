@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +108,31 @@ func TestARemovedFlagIsRefusedWithItsReason(t *testing.T) {
 	}
 	if err := removedFlags([]string{"-json", "--", "-check-logs"}); err != nil {
 		t.Errorf("an argument after -- was read as a flag: %v", err)
+	}
+}
+
+// The plain results store is gone, and asking for it says so and where the
+// reports are kept instead. It kept, in the clear, under each checked name,
+// an estate's weaknesses; nothing this project writes is kept that way.
+func TestThePlainResultsStoreIsGone(t *testing.T) {
+	for _, flag := range []string{"-results-dir=/tmp/r", "-results-keep=3", "-history", "--history=true"} {
+		err := removedFlags([]string{"-check", "tls", flag, "example.com"})
+		if err == nil || !strings.Contains(err.Error(), "was removed") || !strings.Contains(err.Error(), "History") {
+			t.Errorf("%s: %v", flag, err)
+		}
+	}
+	body, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(body)
+	for _, gone := range []string{`flag.String("results-dir"`, `flag.Int("results-keep"`, `flag.Bool("history"`, "internal/results"} {
+		if strings.Contains(src, gone) {
+			t.Errorf("main.go has %s again", gone)
+		}
+	}
+	if _, err := os.Stat(filepath.Join("..", "..", "internal", "results")); !os.IsNotExist(err) {
+		t.Error("internal/results is back, and nothing here keeps a result in the clear")
 	}
 }
 

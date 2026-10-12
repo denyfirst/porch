@@ -15,7 +15,6 @@ import (
 
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dnsclient"
-	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/verify"
 )
 
@@ -264,17 +263,16 @@ func TestEveryCheckAsksForProofWhereItConnects(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	target := []string{"unproven.test"}
-	store := &results.Store{}
 
 	runs := map[string]func(*verify.Scope) int{
 		checkWeb: func(s *verify.Scope) int {
-			return runWeb(ctx, s, target, time.Second, false, true, store)
+			return runWeb(ctx, s, target, time.Second, false, true)
 		},
 		checkMail: func(s *verify.Scope) int {
-			return runMail(ctx, s, target, time.Second, "", true, store, nil, "")
+			return runMail(ctx, s, target, time.Second, "", true, nil, "")
 		},
 		checkDNS: func(s *verify.Scope) int {
-			return runDNS(ctx, s, target, time.Second, "", true, store)
+			return runDNS(ctx, s, target, time.Second, "", true)
 		},
 		checkNames: func(s *verify.Scope) int {
 			return runNames(ctx, target, namesOptions{Proof: s, Timeout: time.Second})

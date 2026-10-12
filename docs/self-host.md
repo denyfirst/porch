@@ -299,25 +299,12 @@ host on a private address is checked with `-allow-private` under a proven
 domain. The exit status is the worst verdict: `0` strong, `1` weak, `2`
 insecure, `3` not completed. `-limits` prints what a check cannot establish.
 
-### Keeping results
+### Nothing is kept
 
-Nothing is kept unless you say where:
-
-```sh
-porch-scan -results-dir /var/lib/porch/results example.com
-porch-scan -results-dir /var/lib/porch/results -history example.com
-```
-
-A kept result holds only what the report carries: the date, the check, the
-rule set, the verdict and the rules raised. `-history` marks where the rule
-set changed, so a stricter rule is not mistaken for a changed server.
-`-results-keep N` keeps the newest N per target; there is no retention period
-of ours.
-
-The plain store is **never served over HTTP**: a browsable list of an estate's
-weaknesses is worth attacking. `porch-scan -history` reads it on the machine
-and connects to nothing. `porchd` has no plain store: it always runs behind a
-password, and **History** keeps every report, sealed under it.
+`porch-scan` writes nothing to disk but its own verification secret. A
+report is printed, or written as JSON with `-json`, and kept only if you keep
+it. `porchd` keeps every report under **History**, sealed under its
+password; nothing this project writes keeps a result in the clear.
 
 ---
 

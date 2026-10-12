@@ -959,10 +959,7 @@ top
 `TestTheTimerSweepsEvenJustAfterARequestDid`,
 `TestTheTargetTimerSweepsEvenJustAfterAScanDid`,
 `TestAResultNotKeptIsSaidWithoutTheTarget`, `TestNotKeptKeepsOnlyTheReason`,
-`TestConcurrentWritersKeepEveryRecord`, `TestALockIsWaitedForUnlessItIsStale`,
-`TestALargeHistoryIsReadFromItsNewestEnd`, `TestTrimmingLeavesNoTemporaryFile`,
-`TestATrimReplacesTheHistoryWhole`, `TestReadingAHistoryWritesNothing`,
-`TestAReadDoesNotWaitForAnotherProcess`, `TestASelfHostedCopySaysWhatItDoes`,
+`TestThePlainResultsStoreIsGone`, `TestASelfHostedCopySaysWhatItDoes`,
 `TestTheSelfHostedPrivacyPageFollowsTheConfiguration`,
 `TestTheSelfHostedPageStatesTheRealRetentionPeriod`,
 `TestTheDemonstrationKeepsItsOwnPrivacyPage`
