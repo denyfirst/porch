@@ -73,7 +73,6 @@ import (
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/ptrnames"
-	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
 	"github.com/denyfirst/porch/internal/webscan"
@@ -222,16 +221,9 @@ type Server struct {
 	// the reverse.
 	reads *limiter
 
-	// exposed is whether anybody but this machine's operator can reach this
-	// service. Set by whoever starts it, from the address it listens on.
-	//
-	// True by default, which is the safe direction: the one capability that
-	// reads it is offered without proof only where the caller can only be the
-	// operator, and a server that was never told is not a server that has
-	// established that.
-	exposed bool
-
-	// guarded says a password stands in front of this service.
+	// guarded says a password stands in front of this service. It is the one
+	// thing that makes a caller the operator: porchd does not start without
+	// one, loopback included, so "nobody else can reach it" is never assumed.
 	guarded bool
 
 	// names is the certificate transparency monitor the inventory endpoint
@@ -319,10 +311,6 @@ type Server struct {
 	// keeps its history. Nil keeps nothing. See KeepReports.
 	keeper Keeper
 
-	// store keeps results, where the operator asked for them to be kept. Nil
-	// keeps nothing, which is the default and what the demonstration gets.
-	store *results.Store
-
 	sem     semaphore
 	counts  *counters
 	targets *targetLimiter
@@ -365,8 +353,8 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		// service that requires proof of control is reading a page belonging to
 		// whoever asked about it; one configured without a scope is scanning
 		// names nobody proved anything about, and reads their pages only where
-		// the caller can be nobody but the operator — see operatorView, which
-		// ReachableByOthers and BehindPassword apply. The demonstration is
+		// the caller is the operator, behind their password — see
+		// operatorView, which BehindPassword applies. The demonstration is
 		// refused at the response in webprobe, so this line is not what
 		// protects it.
 		web: &webscan.Scanner{
@@ -431,7 +419,6 @@ func New(scanner *scan.Scanner, limits Limits, now func() time.Time) *Server {
 		limits:   limits,
 		rate:     newLimiter(limits.Burst, limits.Refill, limits.MaxTrackedIPs, now),
 		reads:    newLimiter(readBurst, readRefill, limits.MaxTrackedIPs, now),
-		exposed:  true,
 		proofs:   newLimiter(limits.ProofBurst, limits.ProofRefill, limits.MaxTrackedIPs, now),
 		proofSem: newSemaphore(limits.MaxConcurrentProofs),
 		sem:      newSemaphore(limits.MaxConcurrent),
@@ -1020,21 +1007,11 @@ func (s *Server) runCheck(ctx context.Context, w http.ResponseWriter, c check, t
 	// thing the moment a second check existed (R22).
 	s.counts.record(c.name, out.verdict)
 
-	// Kept, where the operator asked for results to be kept.
-	//
-	// This is the one place in this package that writes a target down, and it
-	// happens only because somebody named a directory. A failure is reported to
-	// the service's own error output and never to the caller: the scan ran, the
-	// report is about to be sent, and losing the copy is not the requester's
-	// problem to be told about.
-	if s.store.Enabled() {
-		if err := s.store.Put(c.name, t.historyName(), string(out.verdict), out.policy, out.findings); err != nil {
-			fmt.Fprintln(notKeptLog, notKept(err))
-		}
-	}
-	// And the whole report, sealed, where the installation keeps a history
-	// behind a password. The same rule: losing the copy is logged here and
-	// never the requester's problem.
+	// Kept whole and sealed, where the installation keeps a history behind its
+	// password. This is the one place in this package that writes a target
+	// down. A failure is reported to the service's own error output and never
+	// to the caller: the scan ran, the report is about to be sent, and losing
+	// the copy is not the requester's problem to be told about.
 	if s.keeper != nil {
 		if body, err := json.Marshal(out.body); err == nil {
 			if err := s.keeper.Keep(c.name, t.displayName(), string(out.verdict), out.policy, body); err != nil {
@@ -1157,20 +1134,6 @@ var _ http.Handler = (*Server)(nil)
 // test, and a leaked address cannot be taken back.
 func SilentErrorLog() *log.Logger {
 	return log.New(io.Discard, "", 0)
-}
-
-// KeepResults tells this service where to write what it measured.
-//
-// Nil or an unset store keeps nothing, which is the default. Called before
-// serving, like every other piece of configuration here: a service that could
-// start keeping records while running would be one whose promise depends on
-// when somebody looked.
-//
-// What is written is the report that was already produced. Nothing here is
-// served back — see internal/results for why a browsable history of an estate's
-// weaknesses is not something a service with no authentication should offer.
-func (s *Server) KeepResults(store *results.Store) {
-	s.store = store
 }
 
 // SearchNames gives the inventory endpoint a monitor to ask.
@@ -1310,7 +1273,7 @@ type Keeper interface {
 }
 
 // KeepReports tells this service to keep every report it answers with, whole,
-// in k. Called before serving, like KeepResults, and only where a password is
+// in k. Called before serving, and only where a password is
 // in front of the service: what is kept is read back over HTTP, and a history
 // of an estate's weaknesses is not something to serve to whoever asks (P6).
 func (s *Server) KeepReports(k Keeper) {
@@ -1390,17 +1353,6 @@ func notKept(err error) string {
 	return "a result was not kept: the results store refused it"
 }
 
-// ReachableByOthers says whether somebody other than this machine's operator
-// can reach this service.
-//
-// False is the narrower claim and is not the default: a server nobody told is
-// treated as reachable, because the capability this decides is one that assumes
-// the only caller is the person who started the process.
-func (s *Server) ReachableByOthers(reachable bool) {
-	s.exposed = reachable
-	s.applyView()
-}
-
 // BehindPassword says a password stands in front of this service, so the
 // callers are people the operator let in rather than whoever found the
 // address.
@@ -1412,21 +1364,26 @@ func (s *Server) BehindPassword(guarded bool) {
 	s.applyView()
 }
 
-// OperatorOnly reports that whoever is calling is the person who runs this
-// installation: nobody else can reach it, or a password they set stands in
-// front of it.
+// operatorOnly reports that whoever is calling is the person who runs this
+// installation, or somebody they let in: a password they set stands in front
+// of it.
 //
 // It decides the one capability that cannot be granted by proof of control. A
 // domain can be proven with a record in its zone; an address range cannot be
 // proven by anything this project can check, so a range is walked for the
 // operator and for nobody else (N12).
+//
+// Until 2026-10-11 a copy nobody but this machine could reach counted too. It
+// is not a boundary: another user on the machine, another container, or a web
+// application with an SSRF in it reaches loopback as well, and porchd no
+// longer starts without a password anywhere.
 func (s *Server) operatorOnly() bool {
-	return !s.exposed || s.guarded
+	return s.guarded
 }
 
 // operatorView reports that a report here is read by the person the estate
 // belongs to, or by the person running the machine it is read from: a scope
-// proved the domain is theirs, or nobody but the operator can call this copy.
+// proved the domain is theirs, or the operator's password stands in front.
 //
 // It decides what a report carries rather than what may be scanned. The page
 // itself, the addresses a security.txt names, the MTA-STS policy, what each
@@ -1434,12 +1391,12 @@ func (s *Server) operatorOnly() bool {
 // zone's own servers say, and the addresses a certificate gives for checking
 // its own revocation — the command line has always shown all of it to
 // the person who ran it, because the report goes to them. A copy of porchd
-// nobody else can reach, or one behind the operator's password, is that same
-// person with a browser in front of the command line, and it showed them less:
+// behind the operator's password is that same person with a browser in front
+// of the command line, and it showed them less:
 // every one of these followed the scope alone, a rule written when a service
 // without one answered strangers. A copy that answers strangers still shows
 // them only what any visitor sees; porchd no longer starts one, since -open
-// and -without-password went, and this does not assume it.
+// went and a password became required everywhere, and this does not assume it.
 //
 // The transparency logs and a certificate's own responder are not here. Both
 // name the domain to somebody else, and without a scope the domain may be

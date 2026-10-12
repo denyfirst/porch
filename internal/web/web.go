@@ -326,18 +326,6 @@ type consolePage struct {
 	Tool   string
 	Checks []consoleCheck
 
-	// Guarded says a password is in front of this installation.
-	Guarded bool
-
-	// Keeps says this installation writes results to disk.
-	//
-	// The console said "Not kept" unconditionally, which was true of every
-	// installation until one could be told to keep them. A page still saying it
-	// after an operator set -results-dir would be telling them their own
-	// configuration did not take — and the sentence it replaces is the one they
-	// would have read as a promise.
-	Keeps bool
-
 	// Verified says this installation was given a boundary, and ReadsPages
 	// follows from it: a page is read only where control was proven.
 	//
@@ -593,7 +581,7 @@ func init() {
 	// Rendered here at all so that every path in the table answers from the
 	// moment the package loads, including in a test that never calls Configure.
 	if !demo.Enabled {
-		renderWorkspace(false, false, Installation{})
+		renderWorkspace(false, Installation{})
 	}
 }
 
@@ -686,21 +674,15 @@ func render(p *page) ([]byte, error) {
 // log and no revocation responder is asked by this service" unconditionally
 // until 2026-09-27, while both were.
 type Installation struct {
-	// Verified says a boundary was configured, Keeps that results are written
-	// to disk, and Guarded that a password is in front of the service.
+	// Verified says a boundary was configured. A password is not on the
+	// list: porchd does not start without one, so every installation these
+	// pages describe has one, and a page that could say otherwise would be a
+	// sentence nothing can make true.
 	Verified bool
-	Keeps    bool
-	Guarded  bool
 
 	// Register names the passive register the inventory asks. Empty means
 	// none was configured.
 	Register string
-
-	// OperatorOnly says the only people who can call this installation are the
-	// one running it and whoever they let in: nobody else can reach it, or a
-	// password stands in front. It decides the one capability proof of control
-	// cannot grant — reading the reverse records of an address range.
-	OperatorOnly bool
 
 	// ReadsCertificates says each name that answers may be asked for the
 	// certificate it presents.
@@ -718,22 +700,14 @@ func (i Installation) AsksNobodyElse() bool {
 	return !i.Verified && i.Register == "" && !i.ReadsCertificates
 }
 
-// Whole reports that a report here is read by the person the estate belongs
-// to: a scope proved it, or nobody but the operator can call this copy. It is
-// httpapi's operatorView, told to the page, and it decides what the page says
-// a scan reads and shows.
-func (i Installation) Whole() bool {
-	return i.Verified || i.OperatorOnly
-}
-
 func Configure(in Installation) {
-	verified, keeps, guarded := in.Verified, in.Keeps, in.Guarded
+	verified := in.Verified
 	// The demonstration's root is its front page and its privacy page is its
 	// own; neither depends on how it was started.
 	if demo.Enabled {
 		return
 	}
-	signedIn = guarded
+	signedIn = true
 	for path, p := range pages {
 		body, err := render(p)
 		if err != nil {
@@ -741,16 +715,13 @@ func Configure(in Installation) {
 		}
 		rendered[path] = body
 	}
-	renderWorkspace(verified, keeps, in)
-	if guarded {
-		rendered["/login"] = renderSignIn()
-	} else {
-		delete(rendered, "/login")
-	}
+	renderWorkspace(verified, in)
+	rendered["/login"] = renderSignIn()
 }
 
-// signedIn is true where a password is in front of the installation: every
-// page past the gate is one somebody signed in to see, and offers a way out.
+// signedIn is true once an installation is configured, since every one has a
+// password in front of it: every page past the gate is one somebody signed in
+// to see, and offers a way out.
 var signedIn bool
 
 // PublicPaths are what anybody may reach on an installation behind a
@@ -792,20 +763,9 @@ var sectionHeadings = map[string]string{
 // renderWorkspace renders every page whose content depends on how this
 // installation was started: the four parts of the workspace, and the privacy
 // page, which says what this copy keeps.
-func renderWorkspace(verified, keeps bool, in Installation) {
-	rendered["/"] = renderConsole(verified, keeps)
-	rendered["/privacy"] = renderPrivacy(verified, keeps, in)
-
-	// The inventory page, because whether it offers a field for address ranges
-	// depends on who can call this installation.
-	if p, ok := pages["/names"]; ok && !demo.Enabled {
-		p.Data = namesPage{Ranges: in.OperatorOnly}
-		body, err := render(p)
-		if err != nil {
-			panic("rendering /names: " + err.Error())
-		}
-		rendered["/names"] = body
-	}
+func renderWorkspace(verified bool, in Installation) {
+	rendered["/"] = renderConsole(verified)
+	rendered["/privacy"] = renderPrivacy(verified, in)
 	for _, part := range []struct{ path, section, fragment, description string }{
 		{"/domains", "domains", "assets/domains.html",
 			"The domains this installation may check, and the record that shows each one is yours."},
@@ -820,7 +780,7 @@ func renderWorkspace(verified, keeps bool, in Installation) {
 			Fragment:    part.fragment,
 			Section:     part.section,
 			Script:      part.section == "domains" || (part.section == "history" && signedIn),
-			Data:        workspaceData(verified, keeps),
+			Data:        workspaceData(verified),
 		}
 		body, err := render(p)
 		if err != nil {
@@ -832,7 +792,7 @@ func renderWorkspace(verified, keeps bool, in Installation) {
 
 // workspaceData is what every part of the workspace is told about this
 // installation.
-func workspaceData(verified, keeps bool) consolePage {
+func workspaceData(verified bool) consolePage {
 	return consolePage{
 		Tool:   ToolName,
 		Checks: consoleChecks(),
@@ -844,19 +804,17 @@ func workspaceData(verified, keeps bool) consolePage {
 		// behind it.
 		Verified:   verified,
 		ReadsPages: verified,
-		Keeps:      keeps,
-		Guarded:    signedIn,
 	}
 }
 
-func renderConsole(verified, keeps bool) []byte {
+func renderConsole(verified bool) []byte {
 	p := &page{
 		Title:       ToolName,
 		Description: "Check a name: TLS, website, mail and DNS.",
 		Fragment:    "assets/console.html",
 		Script:      true,
 		Section:     "check",
-		Data:        workspaceData(verified, keeps),
+		Data:        workspaceData(verified),
 	}
 
 	body, err := render(p)
@@ -991,22 +949,8 @@ type privacyPage struct {
 	ReadsCertificates bool
 	AsksNobodyElse    bool
 
-	// WalksRanges says this installation will read the reverse records of an
-	// address range the person asking names, which it does only where that
-	// person is the one running it.
-	WalksRanges bool
-	Verified    bool
-	Keeps       bool
-	Threshold   int
-
-	// Whole says a report here shows the operator everything a scan read:
-	// the page, the security.txt contacts, the MTA-STS policy, the exchangers
-	// and the zone's own servers. See Installation.Whole.
-	Whole bool
-
-	// Guarded says a password is in front of the installation, which is when
-	// it sets its one cookie.
-	Guarded bool
+	Verified  bool
+	Threshold int
 }
 
 // renderPrivacy builds the privacy page of an installation somebody runs.
@@ -1015,7 +959,7 @@ type privacyPage struct {
 // read on a self-hosted copy it promised things that copy does differently.
 // This one is filled in from how the installation was started, like the
 // console, and the demonstration keeps its own (audit A21).
-func renderPrivacy(verified, keeps bool, in Installation) []byte {
+func renderPrivacy(verified bool, in Installation) []byte {
 	p := &page{
 		Title:       "Privacy — " + ToolName,
 		Description: "What this installation keeps, what a scan sends, and who else is asked.",
@@ -1026,12 +970,8 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 			Register:          in.Register,
 			ReadsCertificates: in.ReadsCertificates,
 			AsksNobodyElse:    in.AsksNobodyElse(),
-			WalksRanges:       in.OperatorOnly,
 			Verified:          verified,
-			Whole:             in.Whole(),
-			Keeps:             keeps,
 			Threshold:         httpapi.TargetThreshold(),
-			Guarded:           signedIn,
 		},
 	}
 
@@ -1049,13 +989,11 @@ func renderPrivacy(verified, keeps bool, in Installation) []byte {
 // they type, and the page says so in its own words.
 type namesPage struct {
 	Target string
-	Demo   bool
 
-	// Ranges says this installation will read the reverse records of an
-	// address range the person asking names, which it does only where that
-	// person is the one running it. The field is not drawn otherwise: an input
-	// that is always refused is worse than no input.
-	Ranges bool
+	// Demo draws the demonstration's page: its own estate, and no field for
+	// an address range, which is read only for the person running an
+	// installation, behind their password.
+	Demo bool
 }
 
 // demoDomain is the estate a demonstration build lists, which is the first

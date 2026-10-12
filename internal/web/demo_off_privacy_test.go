@@ -13,13 +13,9 @@ import (
 
 // privacyAs renders the served privacy page for one configuration and puts the
 // package back as it found it.
-func privacyAs(t *testing.T, verified, keeps bool) string {
+func privacyAs(t *testing.T, verified bool) string {
 	t.Helper()
-	before, beforeConsole := rendered["/privacy"], rendered["/"]
-	t.Cleanup(func() { rendered["/privacy"], rendered["/"] = before, beforeConsole })
-
-	Configure(Installation{Verified: verified, Keeps: keeps})
-	return flatten(get(t, "/privacy").Body.String())
+	return privacyOf(t, Installation{Verified: verified})
 }
 
 // An installation somebody runs says what that installation does.
@@ -29,7 +25,7 @@ func privacyAs(t *testing.T, verified, keeps bool) string {
 // and a scan that asks no authority anything — none of it true of a copy
 // somebody else runs, and the last untrue of every one of them.
 func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
-	for _, page := range []string{privacyAs(t, false, false), privacyAs(t, true, true)} {
+	for _, page := range []string{privacyAs(t, false), privacyAs(t, true)} {
 		// The one link to the maker's own promises names their site in its
 		// address, and the page names nothing about it.
 		shown := strings.ReplaceAll(page, `href="https://denyfirst.dev/privacy"`, "")
@@ -40,7 +36,7 @@ func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
 		}
 		for _, want := range []string{
 			"What this installation keeps", "three minutes", "revocation list",
-			"The DNS resolver", "No record of requests", "without warranty",
+			"The DNS resolver", "No log of requests", "without warranty",
 			"at least " + strconv.Itoa(httpapi.TargetThreshold()) + " scans",
 		} {
 			if !strings.Contains(page, want) {
@@ -57,18 +53,15 @@ func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
 
 // What it says follows how it was started, in both directions.
 func TestTheSelfHostedPrivacyPageFollowsTheConfiguration(t *testing.T) {
-	open := privacyAs(t, false, false)
-	bounded := privacyAs(t, true, true)
+	open := privacyAs(t, false)
+	bounded := privacyAs(t, true)
 
 	for name, c := range map[string]struct {
 		open, bounded string
 	}{
-		"results":   {"not kept. Close the page", "kept on this machine"},
-		"proof":     {"checks any public name it is given", "Only names whose domain publishes"},
-		"pages":     {"No page body is read", "The final page is read"},
-		"exchanger": {"No mail server is contacted", "asks each mail exchanger on port 25"},
-		"secret":    {"", "A verification secret"},
-		"file":      {"", "/.well-known/porch-challenge"},
+		"proof":  {"checks any public name it is given", "Only names whose domain publishes"},
+		"secret": {"", "A verification secret"},
+		"file":   {"", "/.well-known/porch-challenge"},
 	} {
 		if c.open != "" && (!strings.Contains(open, c.open) || strings.Contains(bounded, c.open)) {
 			t.Errorf("%s: an open installation does not say %q, or a bounded one does", name, c.open)
@@ -81,12 +74,12 @@ func TestTheSelfHostedPrivacyPageFollowsTheConfiguration(t *testing.T) {
 
 // The operator's own copy says it shows the operator the whole report.
 //
-// A copy only its operator can call — nobody else can reach it, or a password
-// stands in front — reads what the command line reads, with or without a
-// scope (httpapi's operatorView), and its page has to say so rather than
-// describe the stranger's report it no longer serves.
+// Every copy is behind its operator's password, so it reads what the command
+// line reads (httpapi's operatorView), and its page says so. The stranger's
+// report it once also described is not served by any installation porchd
+// starts.
 func TestTheOperatorsOwnCopySaysItShowsTheWholeReport(t *testing.T) {
-	own := privacyOf(t, Installation{OperatorOnly: true})
+	own := privacyOf(t, Installation{})
 	for _, want := range []string{
 		"The final page is read", "The contacts it names and its expiry date are shown to you",
 		"asks each mail exchanger on port 25", "The mailboxes DMARC reports are sent to are shown to you",
@@ -102,13 +95,6 @@ func TestTheOperatorsOwnCopySaysItShowsTheWholeReport(t *testing.T) {
 			t.Errorf("the operator's own copy says %q", never)
 		}
 	}
-
-	stranger := privacyOf(t, Installation{})
-	for _, want := range []string{"No page body is read", "never an address", "No mail server is contacted", "No name server is asked directly"} {
-		if !strings.Contains(stranger, want) {
-			t.Errorf("a copy that answers strangers does not say %q", want)
-		}
-	}
 }
 
 // The retention the page states is the one the code holds.
@@ -118,39 +104,26 @@ func TestTheSelfHostedPageStatesTheRealRetentionPeriod(t *testing.T) {
 	}
 }
 
-// Each mode says what it keeps (audit 2026-09-18, D11). Behind a password the
-// history keeps every report as it was drawn, which includes the time it was
-// measured, so that page does not say nothing records which name or when; a
-// results directory keeps the name and the date and says so; only a copy that
-// keeps nothing says it. Only the guarded page mentions sign-in addresses.
-func TestThePrivacyPageSaysWhatEachModeKeeps(t *testing.T) {
+// The page says what is kept (audit 2026-09-18, D11). The history keeps
+// every report as it was drawn, which includes the time it was measured, so
+// the page does not say nothing records which name or when; and it names the
+// addresses that try to sign in. Nothing is left of the two other modes it
+// once described — a results directory, and a copy that kept nothing — since
+// porchd starts neither.
+func TestThePrivacyPageSaysWhatIsKept(t *testing.T) {
 	guarded := flatten(guardedAs(t, "/privacy"))
-	keeps := privacyAs(t, true, true)
-	open := privacyAs(t, false, false)
-	const nothing = "Nothing writes down which name was checked, by whom, or when."
-
 	for _, want := range []string{"No log of requests.", "the time it was measured", "within six minutes of its last attempt", "What this page cannot speak for"} {
 		if !strings.Contains(guarded, want) {
-			t.Errorf("behind a password the page does not say %q", want)
+			t.Errorf("the page does not say %q", want)
 		}
 	}
-	for _, never := range []string{nothing, "dated but not timed"} {
+	for _, never := range []string{
+		"Nothing writes down which name was checked, by whom, or when.",
+		"dated but not timed", "Which name was checked, and on which date, is kept",
+		"kept on this machine", "not kept. Close the page", "No cookies",
+	} {
 		if strings.Contains(guarded, never) {
-			t.Errorf("behind a password the page still says %q", never)
-		}
-	}
-	if !strings.Contains(keeps, "Which name was checked, and on which date, is kept") || strings.Contains(keeps, nothing) {
-		t.Error("with a results directory the page does not say it keeps the name and the date")
-	}
-	if !strings.Contains(keeps, "What this page cannot speak for") {
-		t.Error("with a results directory the page does not say what it cannot speak for")
-	}
-	if !strings.Contains(open, nothing) || strings.Contains(open, "What this page cannot speak for") {
-		t.Error("a copy that keeps nothing does not say so plainly")
-	}
-	for name, page := range map[string]string{"a results directory": keeps, "nothing kept": open} {
-		if strings.Contains(page, "tries to sign in") {
-			t.Errorf("with %s the page talks about signing in", name)
+			t.Errorf("the page still says %q", never)
 		}
 	}
 }
@@ -240,7 +213,7 @@ func TestThePrivacyPageSaysWhichSourcesAreAsked(t *testing.T) {
 // that this copy will do it — for whoever runs it, because no record can prove
 // a range belongs to anybody the way one can prove a domain does.
 func TestThePrivacyPageSaysWhatAnAddressRangeSends(t *testing.T) {
-	page := privacyOf(t, Installation{Verified: true, OperatorOnly: true})
+	page := privacyOf(t, Installation{Verified: true})
 	for _, want := range []string{
 		"for an address range you name",
 		"not one packet is sent to the addresses themselves",
@@ -249,11 +222,5 @@ func TestThePrivacyPageSaysWhatAnAddressRangeSends(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Errorf("the page does not say %q:\n%s", want, page)
 		}
-	}
-
-	// And an installation that will refuse a range does not describe one.
-	reachable := privacyOf(t, Installation{Verified: true})
-	if strings.Contains(reachable, "for an address range you name") {
-		t.Errorf("a page that refuses ranges describes reading them:\n%s", reachable)
 	}
 }

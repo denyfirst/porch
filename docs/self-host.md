@@ -145,10 +145,10 @@ Porch.
 ```
 
 A `command` replaces the compose file's, so every argument has to be there.
-Without `-access-file` there is no password, and `porchd` refuses to start on
-a public address. The key has to be readable by user 65534. Nothing listens on
-port 80, so get the certificate with a DNS challenge, or with `certbot certonly
---standalone` while the service is stopped.
+Without `-access-file` there is no password, and `porchd` refuses to start, on
+loopback or anywhere else. The key has to be readable by user 65534. Nothing
+listens on port 80, so get the certificate with a DNS challenge, or with
+`certbot certonly --standalone` while the service is stopped.
 
 ---
 
@@ -316,9 +316,8 @@ of ours.
 
 The plain store is **never served over HTTP**: a browsable list of an estate's
 weaknesses is worth attacking. `porch-scan -history` reads it on the machine
-and connects to nothing. `porchd` takes the same flags for a loopback service
-with no password; behind a password, **History** is the store, and
-`-results-dir` is refused because it would keep a second copy in the clear.
+and connects to nothing. `porchd` has no plain store: it always runs behind a
+password, and **History** keeps every report, sealed under it.
 
 ---
 

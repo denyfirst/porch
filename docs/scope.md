@@ -17,7 +17,7 @@ how they fit together.
 | | who runs it | who chooses the target | what stops it |
 |---|---|---|---|
 | **the demonstration** | this project | a stranger | a list of our own hosts, compiled in (N6) |
-| **`porchd`** | an organisation | whoever holds its password | proof of control of each domain, and the password beyond loopback |
+| **`porchd`** | an organisation | whoever holds its password | proof of control of each domain, and its password, wherever it listens |
 | **`porch-scan`** | one person | that person | proof of control of each domain, from a secret of their own |
 
 Proof of control is on in every build and no flag turns it off. A default is

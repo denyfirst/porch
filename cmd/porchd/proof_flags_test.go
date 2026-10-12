@@ -40,8 +40,6 @@ var everyServiceFlag = map[string]string{
 	"names-walk-proofs":            "follows a proven zone's DNSSEC absence proofs",
 	"names-read-certificates":      "reads the certificate each name presents",
 	"stats-file":                   "where the aggregate counters are kept",
-	"results-dir":                  "where this installation keeps its own reports",
-	"results-keep":                 "how many reports to keep per target",
 	"helo":                         "the name the mail check gives with EHLO",
 	"resolver":                     "the resolver for lookups; never the one the proof is read through",
 	"access-file":                  "the password that closes the installation",

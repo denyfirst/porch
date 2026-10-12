@@ -29,24 +29,6 @@ func TestTheServiceVersionNamesEveryRuleSet(t *testing.T) {
 	}
 }
 
-// Whether a password is required and whether proof is required read an address
-// the same way.
-//
-// passwordAllowed had its own reading, and for an address it could not parse it
-// answered "loopback" where beyondLoopback answers "reachable". Nothing
-// reachable took that path today, because the listener refuses the same
-// strings; two readings of one decision are still one reading too many.
-func TestAPasswordIsAskedForOnTheSameReadingOfAnAddress(t *testing.T) {
-	for _, listen := range []string{
-		"0.0.0.0:8443", ":8443", "[::]:8443", "192.0.2.10:443", "scanner.example:443",
-		"", "not an address", "1.2.3.4",
-	} {
-		if (passwordAllowed(listen, false) == nil) != !beyondLoopback(listen) {
-			t.Errorf("%q: a password and the loopback reading disagree", listen)
-		}
-	}
-}
-
 // The host guard is in front of everything the service answers, the gate
 // included, and it is what the server is handed.
 //

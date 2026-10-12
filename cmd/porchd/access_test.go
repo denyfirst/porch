@@ -67,7 +67,7 @@ func TestTheGateIsInFrontOfEverything(t *testing.T) {
 		"Handler: handler,",
 		"web.Configure(web.Installation{",
 		"Verified:          scope != nil,",
-		"Guarded:           gate != nil,",
+		"passwordRequired(*accessFile != \"\" || demo.Enabled)",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("main.go no longer contains %q", want)

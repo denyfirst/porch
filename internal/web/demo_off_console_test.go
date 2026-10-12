@@ -18,17 +18,12 @@ import (
 // reads. Leaving it changed would make this file decide what those tests see.
 func consoleAs(t *testing.T, verified bool) string {
 	t.Helper()
-	return consoleWith(t, verified, false)
-}
-
-func consoleWith(t *testing.T, verified, keeps bool) string {
-	t.Helper()
-	return workspaceWith(t, "/", verified, keeps)
+	return workspaceWith(t, "/", verified)
 }
 
 // workspaceWith renders the workspace for one configuration, reads one of its
 // pages, and puts every page Configure replaces back as it was.
-func workspaceWith(t *testing.T, path string, verified, keeps bool) string {
+func workspaceWith(t *testing.T, path string, verified bool) string {
 	t.Helper()
 
 	before := map[string][]byte{}
@@ -39,9 +34,11 @@ func workspaceWith(t *testing.T, path string, verified, keeps bool) string {
 		for p, body := range before {
 			rendered[p] = body
 		}
+		delete(rendered, "/login")
+		signedIn = false
 	})
 
-	Configure(Installation{Verified: verified, Keeps: keeps})
+	Configure(Installation{Verified: verified})
 	return flatten(get(t, path).Body.String())
 }
 
@@ -78,12 +75,12 @@ func TestTheConsoleSaysWhetherABoundaryIsConfigured(t *testing.T) {
 // then read as a site that has none (R4).
 func TestTheConsoleSaysWhetherPagesAreRead(t *testing.T) {
 	// On the page that describes the installation, beside the scope it follows.
-	unbounded := workspaceWith(t, "/installation", false, false)
+	unbounded := workspaceWith(t, "/installation", false)
 	if !strings.Contains(unbounded, "Not read") {
 		t.Errorf("an installation that reads no page does not say so:\n%s", unbounded)
 	}
 
-	bounded := workspaceWith(t, "/installation", true, false)
+	bounded := workspaceWith(t, "/installation", true)
 	if strings.Contains(bounded, "Not read.") {
 		t.Errorf("an installation that reads pages where control was proven says it reads "+
 			"none:\n%s", bounded)
@@ -171,74 +168,41 @@ func TestTheConsoleDoesNotPromiseMoreThanItDoes(t *testing.T) {
 	}
 }
 
-// The console says whether this installation keeps results.
+// Every installation keeps its reports, sealed under its password, and says
+// so where the operator looks: on the page that describes it, and on History.
 //
-// It said "Not kept" unconditionally, which was true of every installation
-// until one could be told to keep them. A page still saying it after an
-// operator set -results-dir would be telling them their own configuration did
-// not take — and the sentence it replaces is the one they would have read as a
-// promise.
-func TestTheConsoleSaysWhetherResultsAreKept(t *testing.T) {
-	// Said on the page that describes the installation, and again on the
-	// history page, which is where somebody looks for them.
-	nothing := workspaceWith(t, "/installation", false, false)
-	if !strings.Contains(nothing, "Not kept") {
-		t.Errorf("an installation keeping nothing does not say so:\n%s", nothing)
+// It said "Not kept" unless started with -results-dir until 2026-10-11, when a
+// password became required everywhere and the plain store, which kept results
+// in the clear, went with the last installation that could have used it.
+func TestTheConsoleSaysResultsAreKeptSealed(t *testing.T) {
+	installation := workspaceWith(t, "/installation", true)
+	if !strings.Contains(installation, "Kept whole and encrypted") {
+		t.Errorf("the installation page does not say how results are kept:\n%s", installation)
 	}
-	if !strings.Contains(nothing, "-results-dir") {
-		t.Errorf("it does not say how to start keeping them:\n%s", nothing)
-	}
-
-	keeping := workspaceWith(t, "/installation", false, true)
-	if strings.Contains(keeping, "Not kept") {
-		t.Errorf("an installation that was told to keep results says it keeps none:\n%s", keeping)
-	}
-	if !strings.Contains(keeping, "Kept on this machine") {
-		t.Errorf("it does not say results are kept:\n%s", keeping)
-	}
-
-	// And it says what is kept and what is not, because "kept" without either
-	// is the sentence an operator has to guess at.
-	if history := workspaceWith(t, "/history", false, true); !strings.Contains(history, "porch-scan -history") {
-		t.Errorf("it does not say how to read them back:\n%s", keeping)
-	}
-	if !strings.Contains(keeping, "Nothing about who asked") {
-		t.Errorf("it does not say what is still not written down:\n%s", keeping)
+	history := workspaceWith(t, "/history", true)
+	if !strings.Contains(history, "Kept encrypted under a key your password seals") {
+		t.Errorf("History does not say how its reports are kept:\n%s", history)
 	}
 }
 
-// Keeping results does not make them readable over HTTP.
+// A kept result is served only through the gate.
 //
-// A service with a browsable history of an estate's weaknesses is a thing worth
-// attacking, and this one has no authentication at all. The store is written
-// and never served; reading it back is the command line's job, on the machine
-// itself. This asserts the shape rather than the prose: no route serves it.
-//
-// The workspace has a History page since 2026-09-18, and it serves no result:
-// it is rendered once, when the program starts and before any check has run,
-// so there is nothing in it to leak. What it says is where results are kept
-// and how to read them on the machine. Nothing else answers.
+// The History page is the bytes rendered at startup, before any check has
+// run, so there is nothing in it to leak. Its list is fetched by the page,
+// from an endpoint porchd puts behind the password; the web package serves
+// no result at any path.
 func TestAKeptResultIsNotServedOverHTTP(t *testing.T) {
-	consoleWith(t, false, true)
+	workspaceWith(t, "/", true)
 
 	for _, path := range []string{"/results", "/api/v1/results", "/api/v1/history"} {
 		if w := get(t, path); w.Code == http.StatusOK {
-			t.Errorf("%s is served, and a history of an estate's weaknesses is not something a "+
-				"service with no authentication should offer", path)
+			t.Errorf("%s is served by the pages, and a history of an estate's weaknesses is "+
+				"served only through the gate", path)
 		}
 	}
-
-	// The page is the bytes rendered at startup, and no handler writes
-	// anything else to that path.
 	w := get(t, "/history")
 	if w.Code != http.StatusOK || w.Body.String() != string(rendered["/history"]) {
 		t.Error("/history answers with something other than the page rendered when the program started")
-	}
-	if strings.Contains(w.Body.String(), "<script") && !strings.Contains(w.Body.String(), `<script src="/theme.js"></script>`) {
-		t.Error("/history loads a script, and a script is how a page would start fetching results")
-	}
-	if strings.Contains(w.Body.String(), `src="/app.js"`) {
-		t.Error("/history loads app.js, and a script is how a page would start fetching results")
 	}
 }
 

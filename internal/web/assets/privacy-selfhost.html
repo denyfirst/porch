@@ -38,22 +38,18 @@
     <h2 id="kept">What is kept</h2>
 
     <p>
-      {{if .Guarded}}<strong>No log of requests.</strong> Nothing writes down
-      who asked for a check. What was checked, and when, is kept only in the
-      encrypted history under Results.{{else if .Keeps}}<strong>No record of
-      requests.</strong> Nothing writes down who asked, or at what time.
-      Which name was checked, and on which date, is kept in the results
-      directory.{{else}}<strong>No record of requests.</strong> Nothing writes
-      down which name was checked, by whom, or when.{{end}}
+      <strong>No log of requests.</strong> Nothing writes down who asked for a
+      check. What was checked, and when, is kept only in the encrypted history
+      under History.
       The service logs only that it started, that it stopped, and a failure to
       keep a result, never the name.
     </p>
 
     <p>
       <strong>Your address</strong> is held in memory for the rate limit and
-      dropped about three minutes after your last request.{{if .Guarded}}
-      An address that tries to sign in is held the same way, to limit password
-      guesses, and dropped within six minutes of its last attempt.{{end}}
+      dropped about three minutes after your last request. An address that
+      tries to sign in is held the same way, to limit password guesses, and
+      dropped within six minutes of its last attempt.
     </p>
 
     <p>
@@ -70,29 +66,23 @@
 
     <p>
       <strong>Results</strong>:
-      {{if .Guarded}}every report, encrypted under a key the password seals,
-      so it can be opened or deleted under History. A report is kept as it was
-      drawn: the name checked, what was measured, and the time it was
-      measured. The newest thousand are kept.{{else if .Keeps}}kept on this machine, because it was started with a results
-      directory: per name and check, the date, the verdict and the rules
-      raised. No time of day and nothing about who asked. They are never
-      served over HTTP.{{else}}not kept. Close the page and the report is
-      gone, unless you saved its JSON.{{end}}
+      every report, encrypted under a key the password seals, so it can be
+      opened or deleted under History. A report is kept as it was drawn: the
+      name checked, what was measured, and the time it was measured. The
+      newest thousand are kept.
     </p>
 
-    {{if or .Guarded .Keeps}}
     <p>
       <strong>What this page cannot speak for</strong>: file timestamps,
       backups, and any proxy or container log in front of this machine.
     </p>
-    {{end}}
 
     {{if .Verified}}
     <p>
       <strong>A verification secret</strong> is kept in a file only its owner
       can read. Every proof record is derived from it. Proof is checked again
-      on every scan, so deleting the record ends it.{{if .Guarded}} The
-      domains you add under Domains are kept, sealed like the history.{{end}}
+      on every scan, so deleting the record ends it. The domains you add under
+      Domains are kept, sealed like the history.
     </p>
     {{end}}
 
@@ -119,13 +109,11 @@
         following a few redirects; <code>/.well-known/security.txt</code>
         (RFC 9116); <code>GET /</code> of the <code>www.</code> form of the
         name; and one TLS handshake to the site's IPv6 address, if it has one.
-        {{if .Whole}}The contacts it names and its expiry date are shown to
-        you. The final page is read once, up to one megabyte.{{else}}A
-        count of security.txt contacts and one date are kept, never an
-        address. No page body is read.{{end}}</li>
+        The contacts it names and its expiry date are shown to you. The final
+        page is read once, up to one megabyte.</li>
       <li><strong>Mail</strong>: DNS lookups for SPF, DMARC, TLS-RPT, MTA-STS,
         the mail servers, DANE and DKIM keys.
-        {{if .Whole}}It also fetches the MTA-STS policy and asks each mail
+        It also fetches the MTA-STS policy and asks each mail
         exchanger on port 25 whether it offers STARTTLS, and, where it
         negotiates TLS 1.2 or newer, once more whether it still accepts TLS 1.1
         or older: one hello, no handshake completed. A mail server inside
@@ -133,16 +121,14 @@
         not serve, using an address that cannot exist, and reset before any
         message. No message is ever composed. The mailboxes DMARC reports are
         sent to are shown to you, and so are the SPF, DMARC and TLS-RPT records
-        as the zone publishes them.{{else}}No mail server is contacted, and
-        DMARC report addresses are shown by domain only.{{end}}
+        as the zone publishes them.
         If a mail address is typed, the part before the <code>@</code> is
         dropped.</li>
       <li><strong>DNS</strong>: lookups for the domain's addresses, name
         servers, SOA and DNSSEC chain.
-        {{if .Whole}}Each of the zone's own name servers is also asked directly
-        whether it answers for the zone and whether it allows a zone transfer,
-        which is stopped before any record is read.{{else}}No name server is
-        asked directly.{{end}}</li>
+        Each of the zone's own name servers is also asked directly whether it
+        answers for the zone and whether it allows a zone transfer, which is
+        stopped before any record is read.</li>
     </ul>
 
     <p>
@@ -191,10 +177,10 @@
       {{if .ReadsCertificates}}<li><strong>Each name that answers</strong> may
         be asked for the certificate it presents: one handshake, closed when
         the certificate is read. Only for proven domains.</li>{{end}}
-      {{if .WalksRanges}}<li><strong>Nothing, for an address range you name.</strong>
+      <li><strong>Nothing, for an address range you name.</strong>
         Its reverse records are read through the resolver, and not one packet
         is sent to the addresses themselves. Ranges are read only for whoever
-        runs this installation.</li>{{end}}
+        runs this installation.</li>
       {{if .AsksNobodyElse}}<li>No certificate transparency monitor, no
         passive register and no revocation responder is asked by this
         service.</li>{{end}}
@@ -218,10 +204,9 @@
     <h2 id="browser">Your browser</h2>
 
     <p>
-      {{if .Guarded}}One cookie, set when you sign in: a random session token
-      that no script can read, sent to no other site. It ends when you sign
-      out, after twelve hours, or when the installation restarts.{{else}}No
-      cookies.{{end}} No analytics, and nothing loaded from elsewhere. Your
+      One cookie, set when you sign in: a random session token that no script
+      can read, sent to no other site. It ends when you sign out, after twelve
+      hours, or when the installation restarts. No analytics, and nothing loaded from elsewhere. Your
       browser stores only your colour scheme, if you chose one. The clipboard
       is written in one place: the Copy button next to a DNS record to
       publish. A report is never put there.

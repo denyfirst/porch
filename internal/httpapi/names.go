@@ -96,7 +96,8 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// 2026-09-29 both do: porchd does not start without a scope, and the
 	// command line proves every target before it checks one, so the last case
 	// below is reached only by a Server built with no Verify — a test, or a
-	// program that embeds this package — and it still refuses a stranger.
+	// program that embeds this package — and it refuses everybody. Loopback
+	// stopped counting as the operator on 2026-10-11.
 	// A service anybody else can reach is the case the rule is for: what this
 	// produces is the shape of an estate, the scanned party cannot see it
 	// happen, and answering it for strangers would make this an anonymous
@@ -130,12 +131,11 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-	case s.exposed:
+	default:
 		s.refuse(w, http.StatusForbidden, "proof_required",
 			"An inventory of a domain's names is only produced for domains this "+
 				"installation has been shown control of, and this installation has no "+
-				"verification configured. Add -verification-secret-file, or reach it "+
-				"from the machine it runs on.")
+				"verification configured. Add -verification-secret-file.")
 		return
 	}
 
@@ -173,11 +173,11 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 	// This is the one capability proof of control cannot grant. A domain is
 	// proven with a record in its zone; an address range cannot be proven by
 	// anything this project can check, so a service that walked one for
-	// whoever asked would be a reverse-scanner for whoever asked. Where
-	// nobody else can reach the installation, or a password the operator set
-	// stands in front of it, the caller is the operator — which is the same
-	// reasoning that decided proof for the inventory itself (A30, N12), and
-	// refusing them here would be friction bought with no safety.
+	// whoever asked would be a reverse-scanner for whoever asked. Where a
+	// password the operator set stands in front of the installation, the
+	// caller is the operator — which is the same reasoning that decided proof
+	// for the inventory itself (A30, N12), and refusing them here would be
+	// friction bought with no safety.
 	//
 	// Bounded before anything is asked, by the same reader the command line
 	// uses: nothing wider than /20, four thousand addresses across all of
@@ -187,8 +187,7 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 		if !s.operatorOnly() {
 			s.refuse(w, http.StatusForbidden, "not_your_range",
 				"An address range cannot be proven the way a domain can, so this "+
-					"installation reads one only for whoever runs it. Reach it from the "+
-					"machine it runs on, or put a password in front of it.")
+					"installation reads one only for whoever runs it, behind its password.")
 			return
 		}
 		if s.reverse == nil {

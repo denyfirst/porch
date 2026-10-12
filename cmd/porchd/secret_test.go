@@ -133,45 +133,23 @@ func TestAServiceWithoutProofDoesNotStart(t *testing.T) {
 	}
 }
 
-// What counts as an address somebody else could reach.
+// Only the password makes a caller the operator.
 //
-// Two things read it now — whether this service may start at all without proof,
-// and whether a capability meant for the operator's own machine is offered — so
-// it is one function and this says what it answers. An address that cannot be
-// parsed counts as reachable: guessing in the direction of "nobody else can see
-// this" is the guess that costs something, and the one that would be made
-// silently.
-func TestWhatCountsAsReachableByAnybodyElse(t *testing.T) {
-	for _, listen := range []string{"127.0.0.1:8080", "[::1]:8080", "localhost:8080", "127.1.2.3:9"} {
-		if beyondLoopback(listen) {
-			t.Errorf("%s was read as reachable by others", listen)
-		}
-	}
-	for _, listen := range []string{
-		"0.0.0.0:8443", ":8443", "[::]:8443", "192.0.2.10:443", "scanner.example:443",
-		// Unparseable, and therefore assumed reachable.
-		"", "not an address", "1.2.3.4",
-	} {
-		if !beyondLoopback(listen) {
-			t.Errorf("%s was read as reachable by nobody", listen)
-		}
-	}
-
-	// And the service tells the API the same answer it decided to start on,
-	// rather than working it out a second time somewhere else. One answer,
-	// read once: the API refuses an address range to a caller who is not the
-	// operator, and the page draws the field for one, and both of those follow
-	// from this line.
+// Until 2026-10-11 an address on loopback did too: a copy nobody else could
+// reach was offered an address range without a password, and told the pages
+// to draw the field for one. Loopback is reached by another user on the
+// machine, another container, and a web application with an SSRF in it, so it
+// says nothing about who is calling; porchd now refuses to start without a
+// password anywhere, and the one thing it tells the API is whether one is in
+// front.
+func TestOnlyThePasswordMakesACallerTheOperator(t *testing.T) {
 	source := repoFile(t, "cmd/porchd/main.go")
-	for _, want := range []string{
-		"exposed := beyondLoopback(*listen)\n",
-		"api.ReachableByOthers(exposed)",
-		"api.BehindPassword(gate != nil)",
-		"OperatorOnly:      !exposed || gate != nil,",
-	} {
-		if !strings.Contains(source, want) {
-			t.Errorf("the service does not tell the API and the pages %q, so whether "+
-				"anybody else can reach it is worked out somewhere else", want)
+	if !strings.Contains(source, "api.BehindPassword(gate != nil)") {
+		t.Error("the service does not tell the API whether a password is in front")
+	}
+	for _, gone := range []string{"beyondLoopback", "ReachableByOthers", "OperatorOnly", "passwordAllowed"} {
+		if strings.Contains(source, gone) {
+			t.Errorf("main.go still reads %s, and where it listens decides nothing about who calls", gone)
 		}
 	}
 }

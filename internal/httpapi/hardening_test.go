@@ -174,7 +174,6 @@ func TestASelectorIsADNSNameAndCountsAsOne(t *testing.T) {
 // other endpoint uses — before anything is asked about it.
 func TestAnInventoryIsNotOfAnAddress(t *testing.T) {
 	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
-	s.ReachableByOthers(false)
 	monitor := &stubMonitor{estate: ctsearch.Estate{Asked: true}}
 	s.SearchNames(monitor)
 
