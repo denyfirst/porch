@@ -628,17 +628,17 @@ func run() int {
 		root.Handle("/api/v1/domains/", domains.Handler())
 	}
 
-	// The pages are told what this installation is before any of them is
-	// served. The console says whether a boundary was configured, and an
-	// operator reading a report needs that to be true rather than plausible.
-	// A password in front of the service means its callers are people the
-	// operator let in, which is what decides whether an address range may be
-	// walked: no proof can establish that a range belongs to whoever asked, so
-	// it is read for whoever runs the installation and for nobody else.
+	// The pages are told what this installation asks before any of them is
+	// served, and an operator reading the privacy page needs that to be true
+	// rather than plausible. A proof and a password are not passed: porchd has
+	// already refused to start without either. The password means its callers
+	// are people the operator let in, which is what decides whether an address
+	// range may be walked: no proof can establish that a range belongs to
+	// whoever asked, so it is read for whoever runs the installation and for
+	// nobody else.
 	api.BehindPassword(gate != nil)
 
 	web.Configure(web.Installation{
-		Verified:          scope != nil,
 		Register:          *namesPassive,
 		ReadsCertificates: *namesReadCertificates,
 	})

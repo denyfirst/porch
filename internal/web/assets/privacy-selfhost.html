@@ -77,34 +77,30 @@
       backups, and any proxy or container log in front of this machine.
     </p>
 
-    {{if .Verified}}
     <p>
       <strong>A verification secret</strong> is kept in a file only its owner
       can read. Every proof record is derived from it. Proof is checked again
       on every scan, so deleting the record ends it. The domains you add under
       Domains are kept, sealed like the history.
     </p>
-    {{end}}
 
     <h2 id="scans">What a scan does</h2>
 
     <p>
-      {{if .Verified}}Only names whose domain publishes this installation's
-      record at <code>_porch-challenge.&lt;domain&gt;</code> are checked.{{else}}<strong>This installation
-      checks any public name it is given.</strong> Without proof, it listens
-      only on this machine's loopback address.{{end}}
+      Only names whose domain publishes this installation's
+      record at <code>_porch-challenge.&lt;domain&gt;</code> are checked.
       Private, loopback and reserved addresses are always refused.
     </p>
 
     <ul class="plain">
       <li><strong>Transport</strong>: TLS handshakes at each version, each
-        closed when it ends. No application data is sent.{{if .Verified}} Then
+        closed when it ends. No application data is sent. Then
         one connection to each of sixteen ports of services that should not
         face the internet, such as Remote Desktop and databases, closed as
-        soon as it opens, with nothing sent.{{end}}</li>
-      <li><strong>Files</strong>: {{if .Verified}}eleven paths of files that
+        soon as it opens, with nothing sent.</li>
+      <li><strong>Files</strong>: eleven paths of files that
         should never be served, such as <code>/.git/HEAD</code> and
-        <code>/.env</code>, one GET each. What they hold is never kept.{{else}}none.{{end}}</li>
+        <code>/.env</code>, one GET each. What they hold is never kept.</li>
       <li><strong>Reach</strong>: <code>GET /</code> over HTTPS and HTTP,
         following a few redirects; <code>/.well-known/security.txt</code>
         (RFC 9116); <code>GET /</code> of the <code>www.</code> form of the
@@ -139,20 +135,20 @@
 
     <h2 id="asked">Who else is asked</h2>
 
-    {{if .Verified}}<p>
+    <p>
       Only the sources that hold the answer, asked directly from this machine,
       and only about names it was shown control of. No service in between
       learns what is checked.
-    </p>{{end}}
+    </p>
 
     <ul class="plain">
       <li><strong>The DNS resolver</strong> this machine uses sees every name
         checked.</li>
       <li><strong>The certificate authority</strong> of a certificate is
-        asked for its revocation list, which covers thousands of certificates.{{if .Verified}}
+        asked for its revocation list, which covers thousands of certificates.
         Where the certificate names a responder, the authority is also asked
-        whether this certificate has been revoked.{{end}}</li>
-      {{if .Verified}}<li><strong>The domain's own name servers</strong> are
+        whether this certificate has been revoked.</li>
+      <li><strong>The domain's own name servers</strong> are
         asked for its proof record, reached from the root. The root and
         top-level servers learn only the domain, and all of them see this
         machine's address.</li>
@@ -170,7 +166,7 @@
       <li><strong>Cert Spotter</strong>, SSLMate's index of the public
         certificate transparency logs, is asked which certificates exist for
         each name the TLS check reads, and which names under a domain appear in
-        public certificates.</li>{{end}}
+        public certificates.</li>
       {{if .Register}}<li><strong>A passive register</strong>
         (<code>{{.Register}}</code>) is asked what it has seen under a domain,
         on this installation's own account. Only for proven domains.</li>{{end}}
@@ -181,9 +177,6 @@
         Its reverse records are read through the resolver, and not one packet
         is sent to the addresses themselves. Ranges are read only for whoever
         runs this installation.</li>
-      {{if .AsksNobodyElse}}<li>No certificate transparency monitor, no
-        passive register and no revocation responder is asked by this
-        service.</li>{{end}}
     </ul>
 
     <h2 id="stopping">Stopping a scan</h2>

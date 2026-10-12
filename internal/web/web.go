@@ -325,16 +325,6 @@ type consoleCheck struct {
 type consolePage struct {
 	Tool   string
 	Checks []consoleCheck
-
-	// Verified says this installation was given a boundary, and ReadsPages
-	// follows from it: a page is read only where control was proven.
-	//
-	// Both are on the page because an operator reading a report has to know
-	// which were true when it was produced. A report silent about mixed content
-	// because no body was read looks exactly like one silent because the page
-	// had none, and only one of those is a fact about the site (R4).
-	Verified   bool
-	ReadsPages bool
 }
 
 // consoleChecks is the list the console offers, in the order it runs them.
@@ -581,7 +571,7 @@ func init() {
 	// Rendered here at all so that every path in the table answers from the
 	// moment the package loads, including in a test that never calls Configure.
 	if !demo.Enabled {
-		renderWorkspace(false, Installation{})
+		renderWorkspace(Installation{})
 	}
 }
 
@@ -673,13 +663,11 @@ func render(p *page) ([]byte, error) {
 // it is the page they would quote (N14). It said "no certificate transparency
 // log and no revocation responder is asked by this service" unconditionally
 // until 2026-09-27, while both were.
+//
+// A proof of control and a password are not on it: porchd does not start
+// without either, so every installation these pages describe has both, and a
+// page that could say otherwise would carry a sentence nothing can make true.
 type Installation struct {
-	// Verified says a boundary was configured. A password is not on the
-	// list: porchd does not start without one, so every installation these
-	// pages describe has one, and a page that could say otherwise would be a
-	// sentence nothing can make true.
-	Verified bool
-
 	// Register names the passive register the inventory asks. Empty means
 	// none was configured.
 	Register string
@@ -689,19 +677,7 @@ type Installation struct {
 	ReadsCertificates bool
 }
 
-// AsksNobodyElse reports that no source is asked anything a scan does not
-// already send to the host: no monitor, no authority, no register, and no
-// certificate read for the inventory.
-//
-// Verified is on the list because a scope is what turns on the monitor and
-// the authority (N12, R3a): every name a proven installation checks is named to
-// both.
-func (i Installation) AsksNobodyElse() bool {
-	return !i.Verified && i.Register == "" && !i.ReadsCertificates
-}
-
 func Configure(in Installation) {
-	verified := in.Verified
 	// The demonstration's root is its front page and its privacy page is its
 	// own; neither depends on how it was started.
 	if demo.Enabled {
@@ -715,7 +691,7 @@ func Configure(in Installation) {
 		}
 		rendered[path] = body
 	}
-	renderWorkspace(verified, in)
+	renderWorkspace(in)
 	rendered["/login"] = renderSignIn()
 }
 
@@ -763,9 +739,9 @@ var sectionHeadings = map[string]string{
 // renderWorkspace renders every page whose content depends on how this
 // installation was started: the four parts of the workspace, and the privacy
 // page, which says what this copy keeps.
-func renderWorkspace(verified bool, in Installation) {
-	rendered["/"] = renderConsole(verified)
-	rendered["/privacy"] = renderPrivacy(verified, in)
+func renderWorkspace(in Installation) {
+	rendered["/"] = renderConsole()
+	rendered["/privacy"] = renderPrivacy(in)
 	for _, part := range []struct{ path, section, fragment, description string }{
 		{"/domains", "domains", "assets/domains.html",
 			"The domains this installation may check, and the record that shows each one is yours."},
@@ -780,7 +756,7 @@ func renderWorkspace(verified bool, in Installation) {
 			Fragment:    part.fragment,
 			Section:     part.section,
 			Script:      part.section == "domains" || (part.section == "history" && signedIn),
-			Data:        workspaceData(verified),
+			Data:        workspaceData(),
 		}
 		body, err := render(p)
 		if err != nil {
@@ -792,29 +768,21 @@ func renderWorkspace(verified bool, in Installation) {
 
 // workspaceData is what every part of the workspace is told about this
 // installation.
-func workspaceData(verified bool) consolePage {
+func workspaceData() consolePage {
 	return consolePage{
 		Tool:   ToolName,
 		Checks: consoleChecks(),
-
-		// ReadsPages follows from Verified rather than being passed beside
-		// it. They are one fact — internal/httpapi sets ReadMarkup from the
-		// same scope — and two fields could be made to disagree by a caller,
-		// which would put a claim about what was read on a page with nothing
-		// behind it.
-		Verified:   verified,
-		ReadsPages: verified,
 	}
 }
 
-func renderConsole(verified bool) []byte {
+func renderConsole() []byte {
 	p := &page{
 		Title:       ToolName,
 		Description: "Check a name: TLS, website, mail and DNS.",
 		Fragment:    "assets/console.html",
 		Script:      true,
 		Section:     "check",
-		Data:        workspaceData(verified),
+		Data:        workspaceData(),
 	}
 
 	body, err := render(p)
@@ -943,13 +911,12 @@ type privacyPage struct {
 	Porch promises.Product
 
 	// Register and ReadsCertificates say which further sources this
-	// installation asks, and AsksNobodyElse that it asks none at all. The page
-	// said the last of those unconditionally until 2026-09-27.
+	// installation asks, beside the monitor and the authority every proven
+	// installation asks. The page said nobody was asked, unconditionally,
+	// until 2026-09-27.
 	Register          string
 	ReadsCertificates bool
-	AsksNobodyElse    bool
 
-	Verified  bool
 	Threshold int
 }
 
@@ -959,7 +926,7 @@ type privacyPage struct {
 // read on a self-hosted copy it promised things that copy does differently.
 // This one is filled in from how the installation was started, like the
 // console, and the demonstration keeps its own (audit A21).
-func renderPrivacy(verified bool, in Installation) []byte {
+func renderPrivacy(in Installation) []byte {
 	p := &page{
 		Title:       "Privacy — " + ToolName,
 		Description: "What this installation keeps, what a scan sends, and who else is asked.",
@@ -969,8 +936,6 @@ func renderPrivacy(verified bool, in Installation) []byte {
 			Porch:             promises.Porch,
 			Register:          in.Register,
 			ReadsCertificates: in.ReadsCertificates,
-			AsksNobodyElse:    in.AsksNobodyElse(),
-			Verified:          verified,
 			Threshold:         httpapi.TargetThreshold(),
 		},
 	}

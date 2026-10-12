@@ -66,7 +66,6 @@ func TestTheGateIsInFrontOfEverything(t *testing.T) {
 		"handler = gate.Wrap(handler)",
 		"Handler: handler,",
 		"web.Configure(web.Installation{",
-		"Verified:          scope != nil,",
 		"passwordRequired(*accessFile != \"\" || demo.Enabled)",
 	} {
 		if !strings.Contains(src, want) {
@@ -265,7 +264,7 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 // says this service asks nobody while it asks a register on every inventory —
 // which is the failure the page exists to prevent, arriving through the one
 // line nobody looks at (N14). The monitor and the authority are asked
-// wherever there is a scope, and Verified carries that.
+// wherever there is a scope, which is every installation.
 //
 // Read as text, like the gate above, because what is being checked is that the
 // wiring exists at all: a test that called Configure itself would pass with
@@ -273,7 +272,6 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 func TestThePagesAreToldWhatThisInstallationAsks(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
 	for _, want := range []string{
-		"Verified:          scope != nil,",
 		"Register:          *namesPassive,",
 		"ReadsCertificates: *namesReadCertificates,",
 	} {

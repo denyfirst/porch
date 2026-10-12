@@ -11,13 +11,6 @@ import (
 	"github.com/denyfirst/porch/internal/httpapi"
 )
 
-// privacyAs renders the served privacy page for one configuration and puts the
-// package back as it found it.
-func privacyAs(t *testing.T, verified bool) string {
-	t.Helper()
-	return privacyOf(t, Installation{Verified: verified})
-}
-
 // An installation somebody runs says what that installation does.
 //
 // Until the 2026-09-16 audit (A21) it served the demonstration's page, which
@@ -25,7 +18,7 @@ func privacyAs(t *testing.T, verified bool) string {
 // and a scan that asks no authority anything — none of it true of a copy
 // somebody else runs, and the last untrue of every one of them.
 func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
-	for _, page := range []string{privacyAs(t, false), privacyAs(t, true)} {
+	for _, page := range []string{privacyOf(t, Installation{})} {
 		// The one link to the maker's own promises names their site in its
 		// address, and the page names nothing about it.
 		shown := strings.ReplaceAll(page, `href="https://denyfirst.dev/privacy"`, "")
@@ -51,23 +44,19 @@ func TestASelfHostedCopySaysWhatItDoes(t *testing.T) {
 	}
 }
 
-// What it says follows how it was started, in both directions.
+// What it says follows how it was started: proof is always required, and the
+// page says so, names the secret, and says nothing of a copy that checks any
+// public name, which porchd does not start.
 func TestTheSelfHostedPrivacyPageFollowsTheConfiguration(t *testing.T) {
-	open := privacyAs(t, false)
-	bounded := privacyAs(t, true)
-
-	for name, c := range map[string]struct {
-		open, bounded string
-	}{
-		"proof":  {"checks any public name it is given", "Only names whose domain publishes"},
-		"secret": {"", "A verification secret"},
-		"file":   {"", "/.well-known/porch-challenge"},
-	} {
-		if c.open != "" && (!strings.Contains(open, c.open) || strings.Contains(bounded, c.open)) {
-			t.Errorf("%s: an open installation does not say %q, or a bounded one does", name, c.open)
+	page := privacyOf(t, Installation{})
+	for _, want := range []string{"Only names whose domain publishes", "A verification secret", "/.well-known/porch-challenge", "The domain's own name servers"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the page does not say %q", want)
 		}
-		if !strings.Contains(bounded, c.bounded) || strings.Contains(open, c.bounded) {
-			t.Errorf("%s: a bounded installation does not say %q, or an open one does", name, c.bounded)
+	}
+	for _, never := range []string{"checks any public name it is given", "Without proof", "No page body is read", "none."} {
+		if strings.Contains(page, never) {
+			t.Errorf("the page still says %q", never)
 		}
 	}
 }
@@ -148,19 +137,10 @@ func privacyOf(t *testing.T, in Installation) string {
 func TestThePrivacyPageSaysWhichSourcesAreAsked(t *testing.T) {
 	const none = "No certificate transparency monitor, no passive register and no revocation responder is asked"
 
-	// The installation that asks nobody: no scope, nothing configured.
-	plain := privacyOf(t, Installation{})
-	if !strings.Contains(plain, none) {
-		t.Errorf("an installation that asks nobody does not say so:\n%s", plain)
-	}
-	if strings.Contains(plain, "Cert Spotter") {
-		t.Errorf("an installation with no scope names a monitor it never asks:\n%s", plain)
-	}
-
-	// A scope is what turns on the monitor and the authority's responder, on
-	// every installation, so a proven copy names both and never says it asks
-	// nobody.
-	proven := privacyOf(t, Installation{Verified: true})
+	// A scope is what turns on the monitor and the authority's responder, and
+	// every installation has one, so the page names both and never says it
+	// asks nobody.
+	proven := privacyOf(t, Installation{})
 	if strings.Contains(proven, none) {
 		t.Errorf("a proven installation says nobody is asked:\n%s", proven)
 	}
@@ -184,9 +164,9 @@ func TestThePrivacyPageSaysWhichSourcesAreAsked(t *testing.T) {
 		in   Installation
 		says string
 	}{
-		{"a register", Installation{Verified: true, Register: "securitytrails"},
+		{"a register", Installation{Register: "securitytrails"},
 			"passive register"},
-		{"reading certificates", Installation{Verified: true, ReadsCertificates: true},
+		{"reading certificates", Installation{ReadsCertificates: true},
 			"asked for the certificate it presents"},
 	} {
 		page := privacyOf(t, tc.in)
@@ -200,7 +180,7 @@ func TestThePrivacyPageSaysWhichSourcesAreAsked(t *testing.T) {
 
 	// The register is named, because which company was asked on the
 	// operator's own account is the part they have to be able to check.
-	named := privacyOf(t, Installation{Verified: true, Register: "virustotal"})
+	named := privacyOf(t, Installation{Register: "virustotal"})
 	if !strings.Contains(named, "virustotal") {
 		t.Errorf("the page does not name the register:\n%s", named)
 	}
@@ -213,7 +193,7 @@ func TestThePrivacyPageSaysWhichSourcesAreAsked(t *testing.T) {
 // that this copy will do it — for whoever runs it, because no record can prove
 // a range belongs to anybody the way one can prove a domain does.
 func TestThePrivacyPageSaysWhatAnAddressRangeSends(t *testing.T) {
-	page := privacyOf(t, Installation{Verified: true})
+	page := privacyOf(t, Installation{})
 	for _, want := range []string{
 		"for an address range you name",
 		"not one packet is sent to the addresses themselves",

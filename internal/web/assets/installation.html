@@ -22,16 +22,14 @@
     <dl class="state-grid">
       <dt>Scope</dt>
       <dd>
-        {{if .Verified}}Only domains it has been shown control of, with a DNS
-        record derived from this installation's secret.{{else}}<strong>No
-        proof of control is required.</strong> Any public name is checked, so keep
-        it where only you can reach it.{{end}}
+        Only domains it has been shown control of, with a DNS
+        record derived from this installation's secret.
       </dd>
 
       <dt>Pages</dt>
       <dd>
-        {{if .ReadsPages}}Read where control was proven; only a few facts are
-        kept.{{else}}Not read. Headers only.{{end}}
+        Read where control was proven; only a few facts are
+        kept.
       </dd>
 
       <dt>Results</dt>

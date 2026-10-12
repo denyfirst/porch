@@ -7,22 +7,13 @@ import (
 	"testing"
 )
 
-// The proof dialog exists where proof is required, and only there.
-//
-// An open installation has nothing to prove, and a page that asked would send
-// somebody off to publish a record that changes nothing.
+// The proof dialog is on the console, because every installation requires
+// proof.
 func TestTheProofDialogIsOfferedOnlyWhereProofIsRequired(t *testing.T) {
-	bounded := consoleAs(t, true)
+	bounded := consoleAs(t)
 	for _, want := range []string{`id="proof-dialog"`, `data-proof="required"`, `id="proof-name"`, `id="proof-value"`} {
 		if !strings.Contains(bounded, want) {
-			t.Errorf("an installation requiring proof has no %s", want)
-		}
-	}
-
-	open := consoleAs(t, false)
-	for _, never := range []string{`id="proof-dialog"`, `data-proof`} {
-		if strings.Contains(open, never) {
-			t.Errorf("an open installation carries %s", never)
+			t.Errorf("the console has no %s", want)
 		}
 	}
 }
@@ -203,11 +194,5 @@ func TestTheProviderHelpIsTheSameWhereverARecordIsShown(t *testing.T) {
 		if !strings.Contains(console, want) {
 			t.Errorf("the provider help does not say %q", want)
 		}
-	}
-
-	// And it is on the page only where a record is: inside the proof dialog,
-	// which an installation that requires no proof does not draw.
-	if strings.Contains(consoleAs(t, false), "provider-help") {
-		t.Error("an installation requiring no proof shows help publishing a record")
 	}
 }

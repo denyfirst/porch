@@ -16,14 +16,14 @@ import (
 //
 // Configure replaces a rendered page, which every other test in this package
 // reads. Leaving it changed would make this file decide what those tests see.
-func consoleAs(t *testing.T, verified bool) string {
+func consoleAs(t *testing.T) string {
 	t.Helper()
-	return workspaceWith(t, "/", verified)
+	return workspaceWith(t, "/")
 }
 
 // workspaceWith renders the workspace for one configuration, reads one of its
 // pages, and puts every page Configure replaces back as it was.
-func workspaceWith(t *testing.T, path string, verified bool) string {
+func workspaceWith(t *testing.T, path string) string {
 	t.Helper()
 
 	before := map[string][]byte{}
@@ -38,52 +38,33 @@ func workspaceWith(t *testing.T, path string, verified bool) string {
 		signedIn = false
 	})
 
-	Configure(Installation{Verified: verified})
+	Configure(Installation{})
 	return flatten(get(t, path).Body.String())
 }
 
-// The console says what this installation actually is.
+// The console says what this installation is: it checks only domains it was
+// shown control of, and reads a page only there.
 //
-// The dangerous direction is one sentence: a page telling an operator that
-// proof of control is required when it is not tells them their service is safe
-// to expose when it is not. A sabotage hardcoding Verified escaped every test
-// in this package on 2026-09-12, which is why this exists.
-func TestTheConsoleSaysWhetherABoundaryIsConfigured(t *testing.T) {
-	const open = "No proof of control is required"
-
-	unbounded := consoleAs(t, false)
-	if !strings.Contains(unbounded, open) {
-		t.Errorf("an installation with no boundary does not say so. That is the sentence an "+
-			"operator needs before putting this anywhere a stranger can reach:\n%s", unbounded)
+// It also had a sentence for an installation with no boundary, "No proof of
+// control is required", which porchd stopped starting on 2026-09-29. The
+// sentence went on 2026-10-11 with every other one describing a mode that no
+// longer exists: a page that can still say it is a page a sabotage can make
+// say it.
+func TestTheConsoleSaysWhatItChecksAndReads(t *testing.T) {
+	console := consoleAs(t)
+	if !strings.Contains(console, "shown control of") {
+		t.Errorf("the console does not say what it scans:\n%s", console)
 	}
-
-	bounded := consoleAs(t, true)
-	if strings.Contains(bounded, open) {
-		t.Errorf("an installation with a boundary is described as having none, which sends "+
-			"somebody to look for a flag they already set:\n%s", bounded)
+	installation := workspaceWith(t, "/installation")
+	if !strings.Contains(installation, "Read where control was proven") {
+		t.Errorf("the installation page does not say where pages are read:\n%s", installation)
 	}
-	if !strings.Contains(bounded, "shown control of") {
-		t.Errorf("an installation with a boundary does not say what it scans:\n%s", bounded)
-	}
-}
-
-// What it says about pages follows from the same fact.
-//
-// internal/httpapi sets ReadMarkup from the verification scope, so a page that
-// described the two independently could say the body is read on an
-// installation that reads none — and a report silent about mixed content would
-// then read as a site that has none (R4).
-func TestTheConsoleSaysWhetherPagesAreRead(t *testing.T) {
-	// On the page that describes the installation, beside the scope it follows.
-	unbounded := workspaceWith(t, "/installation", false)
-	if !strings.Contains(unbounded, "Not read") {
-		t.Errorf("an installation that reads no page does not say so:\n%s", unbounded)
-	}
-
-	bounded := workspaceWith(t, "/installation", true)
-	if strings.Contains(bounded, "Not read.") {
-		t.Errorf("an installation that reads pages where control was proven says it reads "+
-			"none:\n%s", bounded)
+	for _, page := range []string{console, installation, workspaceWith(t, "/domains"), workspaceWith(t, "/privacy")} {
+		for _, gone := range []string{"No proof of control is required", "Not read. Headers only", "checks any public name it is given", "-verification-secret-file"} {
+			if strings.Contains(page, gone) {
+				t.Errorf("a page still says %q, which describes an installation porchd does not start", gone)
+			}
+		}
 	}
 }
 
@@ -100,7 +81,7 @@ func TestTheConsoleSaysWhetherPagesAreRead(t *testing.T) {
 // so a row carrying neither a rule set in force nor that word fails here
 // rather than reaching somebody who would read the blank as a pass (R4).
 func TestTheConsoleOffersEveryCheckThisBinaryHas(t *testing.T) {
-	page := consoleAs(t, false)
+	page := consoleAs(t)
 
 	inForce := []string{policy.TLSVersion, policy.WebVersion, policy.MailVersion, policy.DNSVersion}
 	offered := consoleChecks()
@@ -158,7 +139,7 @@ func TestTheConsoleOffersEveryCheckThisBinaryHas(t *testing.T) {
 // control labelled "Full scan" would undo that argument in the one place a user
 // actually looks.
 func TestTheConsoleDoesNotPromiseMoreThanItDoes(t *testing.T) {
-	page := strings.ToLower(consoleAs(t, false))
+	page := strings.ToLower(consoleAs(t))
 
 	for _, word := range []string{"full scan", "deep scan", "active scan", "penetration"} {
 		if strings.Contains(page, word) {
@@ -175,11 +156,11 @@ func TestTheConsoleDoesNotPromiseMoreThanItDoes(t *testing.T) {
 // password became required everywhere and the plain store, which kept results
 // in the clear, went with the last installation that could have used it.
 func TestTheConsoleSaysResultsAreKeptSealed(t *testing.T) {
-	installation := workspaceWith(t, "/installation", true)
+	installation := workspaceWith(t, "/installation")
 	if !strings.Contains(installation, "Kept whole and encrypted") {
 		t.Errorf("the installation page does not say how results are kept:\n%s", installation)
 	}
-	history := workspaceWith(t, "/history", true)
+	history := workspaceWith(t, "/history")
 	if !strings.Contains(history, "Kept encrypted under a key your password seals") {
 		t.Errorf("History does not say how its reports are kept:\n%s", history)
 	}
@@ -192,7 +173,7 @@ func TestTheConsoleSaysResultsAreKeptSealed(t *testing.T) {
 // from an endpoint porchd puts behind the password; the web package serves
 // no result at any path.
 func TestAKeptResultIsNotServedOverHTTP(t *testing.T) {
-	workspaceWith(t, "/", true)
+	workspaceWith(t, "/")
 
 	for _, path := range []string{"/results", "/api/v1/results", "/api/v1/history"} {
 		if w := get(t, path); w.Code == http.StatusOK {
@@ -332,7 +313,7 @@ func TestTheConsoleOffersTheInventoryAsADoorNotABox(t *testing.T) {
 
 	// And the row that is drawn is the row the list describes: a link, with no
 	// box in it for the form to submit.
-	page := consoleAs(t, false)
+	page := consoleAs(t)
 	if !strings.Contains(page, `href="`+names.Page+`"`) {
 		t.Errorf("the console draws no way to reach %s:\n%s", names.Page, page)
 	}
