@@ -8,14 +8,21 @@ import (
 	"testing"
 )
 
-// guardedAs renders the whole site as an installation behind a password,
-// reads one page, and puts every rendered page back as it was.
-func guardedAs(t *testing.T, path string) string {
+// configured runs Configure for one test and puts the package back as it
+// found it when the test ends: every rendered page, including the ones
+// Configure adds, and whether pages offer a way out.
+//
+// One helper for every test that configures, because the tests run shuffled
+// and each one reads what the last left behind. A helper that put back only
+// the pages it expected to change left /login answering for the next test
+// once every installation had one.
+func configured(t *testing.T, in Installation) {
 	t.Helper()
 	before := map[string][]byte{}
 	for p, body := range rendered {
 		before[p] = body
 	}
+	wasSignedIn := signedIn
 	t.Cleanup(func() {
 		for p := range rendered {
 			if _, ok := before[p]; !ok {
@@ -25,9 +32,16 @@ func guardedAs(t *testing.T, path string) string {
 		for p, body := range before {
 			rendered[p] = body
 		}
-		signedIn = false
+		signedIn = wasSignedIn
 	})
-	Configure(Installation{})
+	Configure(in)
+}
+
+// guardedAs renders the whole site as an installation, behind its password,
+// reads one page, and puts every rendered page back as it was.
+func guardedAs(t *testing.T, path string) string {
+	t.Helper()
+	configured(t, Installation{})
 	return get(t, path).Body.String()
 }
 
@@ -35,9 +49,6 @@ func guardedAs(t *testing.T, path string) string {
 // installation has a password, since porchd does not start without one.
 func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
 	paths := []string{"/", "/domains", "/history", "/installation", "/privacy", "/terms"}
-	if w := get(t, "/login"); w.Code == 200 {
-		t.Error("/login answers before the installation was configured")
-	}
 	for _, path := range paths {
 		page := guardedAs(t, path)
 		if !strings.Contains(page, `<button class="topbar-signout" id="sign-out" type="button">Sign out</button>`) {

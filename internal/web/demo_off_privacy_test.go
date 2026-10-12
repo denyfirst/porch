@@ -120,10 +120,7 @@ func TestThePrivacyPageSaysWhatIsKept(t *testing.T) {
 // privacyOf renders the served privacy page for one whole installation.
 func privacyOf(t *testing.T, in Installation) string {
 	t.Helper()
-	before, beforeConsole := rendered["/privacy"], rendered["/"]
-	t.Cleanup(func() { rendered["/privacy"], rendered["/"] = before, beforeConsole })
-
-	Configure(in)
+	configured(t, in)
 	return flatten(get(t, "/privacy").Body.String())
 }
 

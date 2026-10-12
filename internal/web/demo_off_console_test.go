@@ -25,20 +25,7 @@ func consoleAs(t *testing.T) string {
 // pages, and puts every page Configure replaces back as it was.
 func workspaceWith(t *testing.T, path string) string {
 	t.Helper()
-
-	before := map[string][]byte{}
-	for _, p := range []string{"/", "/privacy", "/domains", "/history", "/installation"} {
-		before[p] = rendered[p]
-	}
-	t.Cleanup(func() {
-		for p, body := range before {
-			rendered[p] = body
-		}
-		delete(rendered, "/login")
-		signedIn = false
-	})
-
-	Configure(Installation{})
+	configured(t, Installation{})
 	return flatten(get(t, path).Body.String())
 }
 
