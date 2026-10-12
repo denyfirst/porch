@@ -51,7 +51,6 @@ import (
 	"github.com/denyfirst/porch/internal/passivedns"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/rdap"
-	"github.com/denyfirst/porch/internal/results"
 	"github.com/denyfirst/porch/internal/rpki"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/smtptls"
@@ -282,25 +281,6 @@ func run() int {
 			"path to a file holding the aggregate counters; empty keeps them in\n"+
 				"\tmemory only, so a restart resets the published total")
 
-		// Where to keep results, if anywhere.
-		//
-		// Empty keeps nothing, which is the default and the promise this
-		// project is built on. What changes on an installation somebody runs
-		// themselves is whose data it is: their scans of their own estate, on
-		// their own disk, because they asked.
-		//
-		// Written and never served. A browsable history of an estate's
-		// weaknesses is a thing worth attacking, so this plain store is read
-		// back by porch-scan on the machine itself; behind -access-file the
-		// history is the sealed one instead, and the two are refused together.
-		// See internal/results and internal/vault.
-		resultsDir = flag.String("results-dir", "",
-			"`directory` to keep results in, readable with porch-scan -history. Never\n"+
-				"\tserved over HTTP. Empty keeps nothing, which is the default")
-
-		resultsKeep = flag.Int("results-keep", 0,
-			"how many results to keep per target, oldest dropped first; 0 keeps all")
-
 		// The name the mail check gives each exchanger with EHLO. The default is
 		// this machine's own name or address, which an exchanger's operator then
 		// reads; behind NAT that is a private address. The same flag porch-scan
@@ -453,23 +433,18 @@ func run() int {
 		return 2
 	}
 
-	// And a service beyond loopback has a password in front of it, always.
+	// And a password in front of it, always, wherever it listens.
+	//
 	// Proof of control is about which domains may be checked, not who may ask:
 	// an example that dropped -access-file while adding a certificate (audit
 	// 2026-09-18, D01) made every proven domain scannable by anyone who could
-	// reach the address. The demonstration is public by design.
-	if err := passwordAllowed(*listen, *accessFile != "" || demo.Enabled); err != nil {
+	// reach the address. Loopback was let off until 2026-10-11, for the
+	// reason proof once was, and it falls for the same one: another user on
+	// the machine, another container, or a web application with an SSRF in it
+	// reaches loopback too. The command line is the tool for a quick look on
+	// one's own machine. The demonstration is public by design.
+	if err := passwordRequired(*accessFile != "" || demo.Enabled); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		return 2
-	}
-
-	// Behind a password the history is kept sealed. The results directory
-	// writes a plain copy beside it, under the checked name, and the two
-	// together kept in the clear what the password was there to seal (D02).
-	// Asked for together, they are refused rather than one quietly winning.
-	if *accessFile != "" && *resultsDir != "" {
-		fmt.Fprintln(os.Stderr, "-results-dir keeps results in the clear, and -access-file keeps them "+
-			"encrypted in History; use one. Existing files in the results directory are left as they are")
 		return 2
 	}
 
@@ -537,20 +512,7 @@ func run() int {
 	// whatever it is asked to.
 	api := httpapi.New(serviceScanner(roots, scope, *resolver, *requestTimeout), limits, nil)
 
-	// Where results are kept, if anywhere. Before serving, like every other
-	// piece of configuration here: a service that could start keeping records
-	// while running would be one whose promise depends on when somebody looked.
-	api.KeepResults(&results.Store{Dir: *resultsDir, Keep: *resultsKeep})
 	api.UseHeloName(*heloName)
-
-	// Whether anybody but this machine's operator can reach this service.
-	//
-	// It decides one thing: whether a capability meant for somebody looking at
-	// their own estate is offered without proof. A copy nobody else can reach is
-	// the command line with a browser in front of it, and the command line has
-	// never asked the operator to prove they own their own domain.
-	exposed := beyondLoopback(*listen)
-	api.ReachableByOthers(exposed)
 
 	// The monitor the inventory endpoint asks, and the registry the DNS check
 	// asks, on every installation. Every domain either is asked about is one
@@ -666,22 +628,19 @@ func run() int {
 		root.Handle("/api/v1/domains/", domains.Handler())
 	}
 
-	// The pages are told what this installation is before any of them is
-	// served. The console says whether a boundary was configured, and an
-	// operator reading a report needs that to be true rather than plausible.
-	// A password in front of the service means its callers are people the
-	// operator let in, which is what decides whether an address range may be
-	// walked: no proof can establish that a range belongs to whoever asked, so
-	// it is read for whoever runs the installation and for nobody else.
+	// The pages are told what this installation asks before any of them is
+	// served, and an operator reading the privacy page needs that to be true
+	// rather than plausible. A proof and a password are not passed: porchd has
+	// already refused to start without either. The password means its callers
+	// are people the operator let in, which is what decides whether an address
+	// range may be walked: no proof can establish that a range belongs to
+	// whoever asked, so it is read for whoever runs the installation and for
+	// nobody else.
 	api.BehindPassword(gate != nil)
 
 	web.Configure(web.Installation{
-		Verified:          scope != nil,
-		Keeps:             *resultsDir != "" || gate != nil,
-		Guarded:           gate != nil,
 		Register:          *namesPassive,
 		ReadsCertificates: *namesReadCertificates,
-		OperatorOnly:      !exposed || gate != nil,
 	})
 	root.Handle("/", web.Handler())
 
@@ -1343,8 +1302,12 @@ func removedFlags(args []string) error {
 			return errors.New("-open was removed: porchd always requires " +
 				"-verification-secret-file, loopback included, and so does porch-scan")
 		case "without-password":
-			return errors.New("-without-password was removed: porchd beyond loopback always " +
-				"requires -access-file")
+			return errors.New("-without-password was removed: porchd always requires " +
+				"-access-file, loopback included")
+		case "results-dir", "results-keep":
+			return errors.New("-" + name + " was removed: porchd always runs behind " +
+				"-access-file and keeps every report encrypted, under History. Nothing " +
+				"this project writes keeps a result in the clear")
 		case "names-monitor", "names-monitor-url":
 			return errors.New("-" + name + " was removed: every installation asks Cert Spotter, " +
 				"with the key in CERTSPOTTER_TOKEN if there is one")
@@ -1354,29 +1317,6 @@ func removedFlags(args []string) error {
 		}
 	}
 	return nil
-}
-
-// beyondLoopback reports whether an address somebody other than this machine's
-// operator could reach.
-//
-// One function, because two things now depend on the answer and a second
-// reading of it is a second thing to keep in step (N6): whether this service
-// may start at all without proof, and whether a capability meant for the
-// operator's own machine is offered.
-//
-// An address that cannot be parsed is treated as reachable. Guessing in the
-// direction of "nobody else can see this" is the guess that costs something,
-// and the one that would be made silently.
-func beyondLoopback(listen string) bool {
-	host, _, err := net.SplitHostPort(listen)
-	if err != nil {
-		return true
-	}
-	if host == "localhost" {
-		return false
-	}
-	ip, err := netip.ParseAddr(host)
-	return err != nil || !ip.IsLoopback()
 }
 
 // createAccess writes an access file with a new password if nothing is at
@@ -1460,20 +1400,14 @@ func retireSealed(dir, today string) (string, error) {
 	return to, nil
 }
 
-// passwordAllowed refuses a service without a password on an address other
-// than loopback. The same shape as openAllowed: loopback is reachable only
-// from this machine.
-//
-// It reads the address through beyondLoopback, as openAllowed does. It had a
-// reading of its own that answered the other way for an address it could not
-// parse — reachable to one, loopback to the other — which is the second copy
-// of one decision that beyondLoopback exists to prevent.
-func passwordAllowed(listen string, guarded bool) error {
-	if guarded || !beyondLoopback(listen) {
+// passwordRequired refuses a service with no password in front of it, on any
+// address. The same shape as proofRequired.
+func passwordRequired(guarded bool) error {
+	if guarded {
 		return nil
 	}
-	return errors.New("porchd will not listen beyond loopback without a password: anyone who " +
-		"can reach it could use it. Add -access-file")
+	return errors.New("porchd will not start without a password: anyone who can reach it, " +
+		"on this machine or beyond it, could use it. Add -access-file")
 }
 
 // namesRegister builds the passive register the inventory asks, where one was

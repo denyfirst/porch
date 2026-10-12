@@ -15,10 +15,10 @@
       <h1>New check</h1>
       <p>Check a name this installation may reach, with the checks you choose.</p>
     </div>
-    {{if .Verified}}<a class="button button-secondary" href="/domains">Domains</a>{{end}}
+    <a class="button button-secondary" href="/domains">Domains</a>
   </div>
 
-  <form class="composer" id="console-form" autocomplete="off"{{if .Verified}} data-proof="required"{{end}}>
+  <form class="composer" id="console-form" autocomplete="off" data-proof="required">
     <div class="composer-part">
       <label class="composer-step" for="console-target">01 / Domain</label>
       <input
@@ -33,10 +33,8 @@
         enterkeyhint="go"
         autofocus>
       <p class="composer-scope">
-        {{if .Verified}}<span class="scope-dot scope-dot-on" aria-hidden="true"></span>Only domains this installation
-        has been shown control of. A new one is asked for its record first.{{else}}<span class="scope-dot" aria-hidden="true"></span><strong>No
-        proof of control is required.</strong> Any public name is checked, so keep
-        this where only you can reach it.{{end}}
+        <span class="scope-dot scope-dot-on" aria-hidden="true"></span>Only domains this installation
+        has been shown control of. A new one is asked for its record first.
       </p>
     </div>
 
@@ -136,7 +134,7 @@
     whoever runs the zone can do. Another domain's token is a different value,
     and so is another installation's.
   -->
-  {{if .Verified}}
+
   <dialog class="proof" id="proof-dialog" aria-labelledby="proof-title">
     <h2 class="section-title" id="proof-title">Show this domain is yours</h2>
     <p class="proof-lede">
@@ -200,6 +198,5 @@
       <button class="proof-cancel" type="button" id="proof-cancel">Cancel</button>
     </div>
   </dialog>
-  {{end}}
 
 </section>

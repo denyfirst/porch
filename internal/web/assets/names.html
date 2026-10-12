@@ -36,20 +36,19 @@
       {{else}}
       <p class="field-help" id="field-help">
         A bare domain. No name is guessed and nothing is sent to your hosts.
-        If others can reach this installation, it lists only a domain you have
-        proven control of.
+        It lists only a domain you have proven control of.
         <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#names">How it works</a>.
       </p>
       {{end}}
 
-      {{if .Ranges}}
+      {{if not .Demo}}
       <!--
         The one source that starts from an address rather than from a name,
         and the one no proof of control can grant: a domain is proven with a
         record in its zone, an address range is not provable by anything this
-        program can check. So the field is here only where the person asking
-        is the person running this installation — nobody else can reach it, or
-        a password they set stands in front of it.
+        program can check. The person asking is the person running this
+        installation, behind the password they set; the demonstration has its
+        own page and no field.
       -->
       <div class="field-group">
         <label class="field-label" for="ranges">Address ranges you own</label>

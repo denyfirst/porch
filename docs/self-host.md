@@ -145,10 +145,10 @@ Porch.
 ```
 
 A `command` replaces the compose file's, so every argument has to be there.
-Without `-access-file` there is no password, and `porchd` refuses to start on
-a public address. The key has to be readable by user 65534. Nothing listens on
-port 80, so get the certificate with a DNS challenge, or with `certbot certonly
---standalone` while the service is stopped.
+Without `-access-file` there is no password, and `porchd` refuses to start, on
+loopback or anywhere else. The key has to be readable by user 65534. Nothing
+listens on port 80, so get the certificate with a DNS challenge, or with
+`certbot certonly --standalone` while the service is stopped.
 
 ---
 
@@ -299,26 +299,12 @@ host on a private address is checked with `-allow-private` under a proven
 domain. The exit status is the worst verdict: `0` strong, `1` weak, `2`
 insecure, `3` not completed. `-limits` prints what a check cannot establish.
 
-### Keeping results
+### Nothing is kept
 
-Nothing is kept unless you say where:
-
-```sh
-porch-scan -results-dir /var/lib/porch/results example.com
-porch-scan -results-dir /var/lib/porch/results -history example.com
-```
-
-A kept result holds only what the report carries: the date, the check, the
-rule set, the verdict and the rules raised. `-history` marks where the rule
-set changed, so a stricter rule is not mistaken for a changed server.
-`-results-keep N` keeps the newest N per target; there is no retention period
-of ours.
-
-The plain store is **never served over HTTP**: a browsable list of an estate's
-weaknesses is worth attacking. `porch-scan -history` reads it on the machine
-and connects to nothing. `porchd` takes the same flags for a loopback service
-with no password; behind a password, **History** is the store, and
-`-results-dir` is refused because it would keep a second copy in the clear.
+`porch-scan` writes nothing to disk but its own verification secret. A
+report is printed, or written as JSON with `-json`, and kept only if you keep
+it. `porchd` keeps every report under **History**, sealed under its
+password; nothing this project writes keeps a result in the clear.
 
 ---
 

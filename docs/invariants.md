@@ -457,9 +457,9 @@ name, never derived from anything the site said, and nothing they hold kept.
 `TestANameSaysWhatItIsDoingAndWhenItWasLastCovered`,
 `TestRateLimitingIsSaidPlainly`,
 `TestTheKeyIsSentAsACredentialAndNotWrittenDown`,
-`TestWhatCountsAsReachableByAnybodyElse`,
-`TestAnInstallationNobodyElseCanReachNeedsNoProof`,
-`TestVerificationConfiguredIsEnforcedEvenOnLoopback`,
+`TestOnlyThePasswordMakesACallerTheOperator`,
+`TestAnInstallationWithNoScopeGivesNoInventory`,
+`TestVerificationIsEnforcedForTheOperatorToo`,
 `TestTheMonitorIsNotDescribedToSomebodyWhoProvedNothing`,
 `TestAnInventoryIsOnlyProducedForAProvenDomain`,
 `TestAnInstallationWithNoVerificationProducesNoInventory`,
@@ -959,10 +959,7 @@ top
 `TestTheTimerSweepsEvenJustAfterARequestDid`,
 `TestTheTargetTimerSweepsEvenJustAfterAScanDid`,
 `TestAResultNotKeptIsSaidWithoutTheTarget`, `TestNotKeptKeepsOnlyTheReason`,
-`TestConcurrentWritersKeepEveryRecord`, `TestALockIsWaitedForUnlessItIsStale`,
-`TestALargeHistoryIsReadFromItsNewestEnd`, `TestTrimmingLeavesNoTemporaryFile`,
-`TestATrimReplacesTheHistoryWhole`, `TestReadingAHistoryWritesNothing`,
-`TestAReadDoesNotWaitForAnotherProcess`, `TestASelfHostedCopySaysWhatItDoes`,
+`TestThePlainResultsStoreIsGone`, `TestASelfHostedCopySaysWhatItDoes`,
 `TestTheSelfHostedPrivacyPageFollowsTheConfiguration`,
 `TestTheSelfHostedPageStatesTheRealRetentionPeriod`,
 `TestTheDemonstrationKeepsItsOwnPrivacyPage`
@@ -990,11 +987,18 @@ listener
 
 *Guarded by:* `TestHeadersOnEveryResponse`
 
-### P6 — An installation behind a password shows nothing to whoever cannot sign in, and what it keeps is sealed by the password
+### P6 — Every installation is behind a password, shows nothing to whoever cannot sign in, and what it keeps is sealed by the password
+
+`porchd` does not start without `-access-file`, on loopback or anywhere else:
+loopback is reached by another user on the machine, another container, or a
+web application with an SSRF in it, so where a service listens says nothing
+about who calls it. There is no plain store beside the sealed one. The
+demonstration is public by design and keeps nothing to seal.
 
 *Enforced in:* `internal/access`, `internal/vault`, `cmd/porchd.createAccess`,
-`cmd/porchd.retireSealed`, `cmd/porchd.run`, `internal/web.Configure`,
-`internal/web.PublicPaths`
+`cmd/porchd.retireSealed`, `cmd/porchd.run`, `cmd/porchd.passwordRequired`,
+`cmd/porchd.removedFlags`, `internal/httpapi.Server.operatorOnly`,
+`internal/web.Configure`, `internal/web.PublicPaths`
 
 *Guarded by:* `TestNothingIsReachableWithoutSigningIn`,
 `TestTheRightPasswordOpensASession`, `TestASessionEnds`,
@@ -1026,8 +1030,8 @@ listener
 `TestAReportNotKeptIsStillAnswered`,
 `TestAKeptReportIsListedUnderTheNameAsTyped`,
 `TestAPasswordIsTakenOnlyOverAPrivateTransport`,
-`TestAPublicServiceWithoutAPasswordIsRefused`,
-`TestAPasswordAndAPlainResultsDirectoryAreRefusedTogether`,
+`TestAServiceWithoutAPasswordIsRefusedWhereverItListens`,
+`TestThePlainResultsFlagsAreRefusedWithTheirReason`,
 `TestEveryShippedConfigurationCarriesAPassword`,
 `TestTheDomainListAddsListsAndRemoves`, `TestOnlyADomainIsAdded`,
 `TestTheDomainListIsSealed`, `TestTheDomainListIsBounded`,
@@ -1036,7 +1040,7 @@ listener
 `TestWhatTheListCannotShowIsCountedAndNeverTrimmed`,
 `TestTheSessionScriptRecoversAndSignsOutOnlyOnSuccess`,
 `TestASignInAddressIsForgottenOnceItsAllowanceRefills`,
-`TestThePrivacyPageSaysWhatEachModeKeeps`
+`TestThePrivacyPageSaysWhatIsKept`
 
 ## Correctness of the report
 

@@ -206,7 +206,6 @@ comm -23 /tmp/cited /tmp/defined     # must be empty
 | `internal/httpapi` | the service; the only package that sees untrusted input |
 | `internal/access` | closes an installation to whoever cannot sign in, and holds the key its kept data is encrypted with |
 | `internal/vault` | the reports an installation keeps, encrypted under the key that password seals |
-| `internal/results` | a deployment's own scans, kept only where it is told to, and never beside `-access-file` |
 | `internal/web` | the pages |
 | `internal/promises` | what denyfirst undertakes, and what each product adds (N14) |
 | `docs/invariants.md` | every guard above, where it is enforced, and its tests |

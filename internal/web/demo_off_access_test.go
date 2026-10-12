@@ -8,14 +8,21 @@ import (
 	"testing"
 )
 
-// guardedAs renders the whole site as an installation behind a password,
-// reads one page, and puts every rendered page back as it was.
-func guardedAs(t *testing.T, path string) string {
+// configured runs Configure for one test and puts the package back as it
+// found it when the test ends: every rendered page, including the ones
+// Configure adds, and whether pages offer a way out.
+//
+// One helper for every test that configures, because the tests run shuffled
+// and each one reads what the last left behind. A helper that put back only
+// the pages it expected to change left /login answering for the next test
+// once every installation had one.
+func configured(t *testing.T, in Installation) {
 	t.Helper()
 	before := map[string][]byte{}
 	for p, body := range rendered {
 		before[p] = body
 	}
+	wasSignedIn := signedIn
 	t.Cleanup(func() {
 		for p := range rendered {
 			if _, ok := before[p]; !ok {
@@ -25,29 +32,23 @@ func guardedAs(t *testing.T, path string) string {
 		for p, body := range before {
 			rendered[p] = body
 		}
-		signedIn = false
+		signedIn = wasSignedIn
 	})
-	Configure(Installation{Verified: true, Keeps: true, Guarded: true})
+	Configure(in)
+}
+
+// guardedAs renders the whole site as an installation, behind its password,
+// reads one page, and puts every rendered page back as it was.
+func guardedAs(t *testing.T, path string) string {
+	t.Helper()
+	configured(t, Installation{})
 	return get(t, path).Body.String()
 }
 
-// Behind a password every page offers a way out, and loads the one script
-// that signs out; without one, none does.
+// Every page offers a way out, and loads the one script that signs out: every
+// installation has a password, since porchd does not start without one.
 func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
 	paths := []string{"/", "/domains", "/history", "/installation", "/privacy", "/terms"}
-
-	// Without a password first: the guarded rendering is put back only when
-	// the test ends.
-	for _, path := range paths {
-		page := get(t, path).Body.String()
-		if strings.Contains(page, `id="sign-out"`) || strings.Contains(page, "/session.js") {
-			t.Errorf("%s: with no password, the page offers to sign out", path)
-		}
-	}
-	if w := get(t, "/login"); w.Code == 200 {
-		t.Error("/login answers on an installation with no password")
-	}
-
 	for _, path := range paths {
 		page := guardedAs(t, path)
 		if !strings.Contains(page, `<button class="topbar-signout" id="sign-out" type="button">Sign out</button>`) {
@@ -102,12 +103,15 @@ func TestThePagesSayWhetherAPasswordIsInFront(t *testing.T) {
 		t.Error("the privacy page behind a password does not describe its one cookie")
 	}
 
-	open := workspaceWith(t, "/installation", true, false)
-	if !strings.Contains(open, "No password.") || strings.Contains(open, `id="password-form"`) {
-		t.Error("the installation page with no password does not say so, or offers to change one")
-	}
-	if privacy := workspaceWith(t, "/privacy", true, false); !strings.Contains(privacy, "No cookies") {
-		t.Error("the privacy page with no password no longer says it sets no cookies")
+	// And no page has a sentence left for an installation without one: there
+	// is no such installation to describe.
+	for _, path := range []string{"/", "/installation", "/privacy", "/history", "/domains"} {
+		page := flatten(guardedAs(t, path))
+		for _, gone := range []string{"No password", "No cookies", "-results-dir", "porch-scan -history", "Not kept"} {
+			if strings.Contains(page, gone) {
+				t.Errorf("%s still says %q, which describes an installation porchd no longer starts", path, gone)
+			}
+		}
 	}
 }
 
@@ -133,13 +137,8 @@ func TestTheSessionScriptDoesOnlyThat(t *testing.T) {
 
 // Behind a password, History lists what is kept and opens it with the same
 // builders New check uses; the list is asked for after the page loads, and
-// nothing of it is in the page. Without a password History runs no script.
+// nothing of it is in the page.
 func TestHistoryBehindAPasswordListsOpensAndDeletes(t *testing.T) {
-	open := get(t, "/history").Body.String()
-	if strings.Contains(open, `src="/app.js"`) || strings.Contains(open, `id="history-table"`) {
-		t.Error("History without a password loads the script or draws the list")
-	}
-
 	page := guardedAs(t, "/history")
 	for _, want := range []string{`<script src="/app.js"></script>`, `id="history-table"`, `<tbody id="history-rows"></tbody>`, `id="history-report"`} {
 		if !strings.Contains(page, want) {
@@ -194,12 +193,8 @@ func TestTheSignInFooterSitsAtTheFootCentred(t *testing.T) {
 }
 
 // Behind a password, Domains keeps a list and asks DNS about each domain on
-// it, one after another, stopping when the budget says wait. Without one there
-// is no list.
+// it, one after another, stopping when the budget says wait.
 func TestDomainsBehindAPasswordKeepsAListAndAsksEachOne(t *testing.T) {
-	if open := workspaceWith(t, "/domains", true, false); strings.Contains(open, `id="domain-table"`) {
-		t.Error("Domains without a password draws a kept list")
-	}
 	page := guardedAs(t, "/domains")
 	for _, want := range []string{`id="domain-table"`, `<tbody id="domain-rows"></tbody>`, `<h2 class="work-section">Your domains</h2>`} {
 		if !strings.Contains(page, want) {

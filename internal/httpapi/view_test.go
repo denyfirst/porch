@@ -13,12 +13,11 @@ import (
 //
 // The command line shows the person who ran it the page, the security.txt
 // addresses, the MTA-STS policy, the exchangers, the DMARC mailboxes and what
-// the zone's own servers say. A porchd only its operator can call — nobody
-// else can reach it, or their password stands in front of it — is that person
-// with a browser in front of the command line, and every one of those followed
-// the scope alone: a rule from when a copy without one answered strangers. A
-// copy that still answers strangers — reachable, no password, no scope — still
-// shows only what any visitor sees.
+// the zone's own servers say. A porchd behind its operator's password is that
+// person with a browser in front of the command line, and every one of those
+// followed the scope alone: a rule from when a copy without one answered
+// strangers. A copy with no password and no scope — which porchd no longer
+// starts — still shows only what any visitor sees.
 func TestTheOperatorsOwnCopyShowsTheWholeReport(t *testing.T) {
 	view := func(s *Server) map[string]bool {
 		return map[string]bool{
@@ -46,23 +45,18 @@ func TestTheOperatorsOwnCopyShowsTheWholeReport(t *testing.T) {
 	stranger := New(offlineScanner(), Limits{}, nil)
 	want(t, stranger, demo.Enabled, "a copy anybody can reach, with no password and no scope")
 
-	loopback := New(offlineScanner(), Limits{}, nil)
-	loopback.ReachableByOthers(false)
-	want(t, loopback, true, "a copy nobody else can reach")
-
 	guarded := New(offlineScanner(), Limits{}, nil)
-	guarded.ReachableByOthers(true)
 	guarded.BehindPassword(true)
 	want(t, guarded, true, "a copy behind the operator's password")
 
-	// And back: a copy told it is reachable after all, with no password, goes
-	// back to what any visitor sees rather than keeping a wider view it was
-	// given for a different answer.
-	loopback.ReachableByOthers(true)
-	want(t, loopback, demo.Enabled, "a copy told it is reachable after all")
+	// And back: a copy told the password is gone goes back to what any visitor
+	// sees rather than keeping a wider view it was given for a different
+	// answer. Where it listens is not asked: loopback is reached by other
+	// users and other containers too, so it says nothing about who calls.
+	guarded.BehindPassword(false)
+	want(t, guarded, demo.Enabled, "a copy told it has no password after all")
 
 	proven := New(&scan.Scanner{Verify: &verify.Scope{Secret: verificationSecret}}, Limits{}, nil)
-	proven.ReachableByOthers(true)
 	proven.BehindPassword(false)
 	want(t, proven, true, "a copy with a scope")
 }

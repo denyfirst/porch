@@ -153,18 +153,16 @@ func TestTheInventoryEndpointTakesADomain(t *testing.T) {
 	}
 }
 
-// An installation nobody else can reach produces an inventory without proof.
+// An installation with no scope produces no inventory, for anybody.
 //
-// It is the command line with a browser in front of it. Asking the operator to
-// publish a DNS record proving to themselves that they own their own domain,
-// on a copy of the service that only they can reach, is friction bought with no
-// safety — and friction bought with no safety is how a rule comes to be turned
-// off altogether.
-//
-// What the rule is for is the other case, and that case is still refused: a
-// service somebody else can reach, answering for anybody, would be an anonymous
-// reconnaissance endpoint with this project's name on it.
-func TestAnInstallationNobodyElseCanReachNeedsNoProof(t *testing.T) {
+// A copy only its operator could reach once produced one without proof, as the
+// command line did. Both prove every target now, and loopback stopped counting
+// as "only the operator" on 2026-10-11: another user on the machine, another
+// container, or a web application with an SSRF in it reaches it too. A service
+// built with no scope — a test, or a program that embeds this package — would
+// otherwise be an anonymous reconnaissance endpoint with this project's name
+// on it, and a password in front of it does not prove a domain.
+func TestAnInstallationWithNoScopeGivesNoInventory(t *testing.T) {
 	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
 	monitor := &stubMonitor{estate: ctsearch.Estate{
 		Asked: true, Distinct: 1, Certificates: 1,
@@ -172,42 +170,39 @@ func TestAnInstallationNobodyElseCanReachNeedsNoProof(t *testing.T) {
 	}}
 	s.SearchNames(monitor)
 
-	// Reachable by others, which is what a server that was never told assumes.
 	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
 		`{"target":"example.test"}`, "203.0.113.50:5000")); got != "proof_required" {
-		t.Errorf("a reachable installation with no verification answered %q", got)
+		t.Errorf("an installation with no verification answered %q", got)
 	}
 
-	// And the same server, told that nobody else can reach it.
-	s.ReachableByOthers(false)
-	w := postTo(t, s, "/api/v1/names/scan", `{"target":"example.test"}`, "203.0.113.51:5000")
-	if w.Code != 200 {
-		t.Fatalf("an installation nobody else can reach answered %d: %s", w.Code, w.Body.String())
+	// The same server behind a password: the caller is the operator, and the
+	// domain is still not proven.
+	s.BehindPassword(true)
+	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
+		`{"target":"example.test"}`, "203.0.113.51:5000")); got != "proof_required" {
+		t.Errorf("an installation with no verification, behind a password, answered %q", got)
 	}
-	if monitor.was() != "example.test" {
-		t.Errorf("the monitor was asked about %q", monitor.was())
+	if was := monitor.was(); was != "" {
+		t.Errorf("the monitor was asked about %q with nothing proven", was)
 	}
 }
 
-// Configuring verification is opting into it, and it is then enforced wherever
-// the service listens.
-//
-// The loopback exception is about an installation that was never given a scope.
-// An operator who set one has said what they want, and a copy that quietly
-// stopped enforcing it because of the address it bound to would be answering a
-// question they had already answered.
-func TestVerificationConfiguredIsEnforcedEvenOnLoopback(t *testing.T) {
+// Verification is enforced for the operator too, behind their own password.
+// A password says who may ask; a proof says which domains may be checked, and
+// a copy that stopped asking for one because the caller signed in would be
+// answering a question its operator had already answered.
+func TestVerificationIsEnforcedForTheOperatorToo(t *testing.T) {
 	scope, _ := scopeProving("proven.example")
 	var a, b atomic.Bool
 	s := verifyingService(scope, &a, &b)
-	s.ReachableByOthers(false)
+	s.BehindPassword(true)
 
 	monitor := &stubMonitor{estate: ctsearch.Estate{Asked: true}}
 	s.SearchNames(monitor)
 
 	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan",
 		`{"target":"unproven.example"}`, "203.0.113.60:5000")); got != "proof_required" {
-		t.Errorf("an unproven domain on a loopback installation answered %q", got)
+		t.Errorf("an unproven domain behind the operator's password answered %q", got)
 	}
 	if was := monitor.was(); was != "" {
 		t.Errorf("the monitor was asked about %q for an unproven domain", was)
@@ -804,9 +799,8 @@ func TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse(t *testing.T) {
 
 	body := `{"target":"proven.example","ranges":["203.0.113.0/28"]}`
 
-	// Reachable by anybody, with proof configured: the domain is proven and
-	// the range still is not, so the range is refused and nothing is walked.
-	s.ReachableByOthers(true)
+	// No password, with proof configured: the domain is proven and the range
+	// still is not, so the range is refused and nothing is walked.
 	s.BehindPassword(false)
 	if got := errorCode(t, postTo(t, s, "/api/v1/names/scan", body, "203.0.113.120:5000")); got != "not_your_range" {
 		t.Errorf("a range on a reachable installation was answered %q", got)
@@ -815,11 +809,12 @@ func TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse(t *testing.T) {
 		t.Errorf("a range was walked for somebody who only proved a domain: %q", was)
 	}
 
-	// Nobody else can reach it: the caller is the operator.
-	s.ReachableByOthers(false)
+	// A password the operator set stands in front of it: the callers are
+	// people they let in.
+	s.BehindPassword(true)
 	w := postTo(t, s, "/api/v1/names/scan", body, "203.0.113.121:5000")
 	if w.Code != 200 {
-		t.Fatalf("a range on a loopback installation answered %d: %s", w.Code, w.Body.String())
+		t.Fatalf("a range behind a password answered %d: %s", w.Code, w.Body.String())
 	}
 	if walk.was() != "203.0.113.0/28" {
 		t.Errorf("the walk covered %q", walk.was())
@@ -832,21 +827,15 @@ func TestAnAddressRangeIsWalkedForTheOperatorAndNobodyElse(t *testing.T) {
 	if !got.Reverse.Established() || got.Reverse.Named != 1 {
 		t.Errorf("the walk's reading came back as %+v", got.Reverse)
 	}
-
-	// Or a password the operator set stands in front of it, which is the same
-	// answer to the same question: the callers are people they let in.
-	s.ReachableByOthers(true)
-	s.BehindPassword(true)
-	if w := postTo(t, s, "/api/v1/names/scan", body, "203.0.113.122:5000"); w.Code != 200 {
-		t.Errorf("a range behind a password answered %d: %s", w.Code, w.Body.String())
-	}
 }
 
 // A range too wide to read is refused before anything is asked, and the
 // refusal never repeats what was typed.
 func TestARangeTooWideIsRefusedByTheService(t *testing.T) {
-	s := New(offlineScanner(), Limits{Burst: 1000, Refill: time.Nanosecond}, nil)
-	s.ReachableByOthers(false)
+	scope, _ := scopeProving("example.test")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.BehindPassword(true)
 	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
 	walk := &stubReverse{}
 	s.reverse = walk

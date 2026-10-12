@@ -22,23 +22,20 @@
     <dl class="state-grid">
       <dt>Scope</dt>
       <dd>
-        {{if .Verified}}Only domains it has been shown control of, with a DNS
-        record derived from this installation's secret.{{else}}<strong>No
-        proof of control is required.</strong> Any public name is checked, so keep
-        it where only you can reach it.{{end}}
+        Only domains it has been shown control of, with a DNS
+        record derived from this installation's secret.
       </dd>
 
       <dt>Pages</dt>
       <dd>
-        {{if .ReadsPages}}Read where control was proven; only a few facts are
-        kept.{{else}}Not read. Headers only.{{end}}
+        Read where control was proven; only a few facts are
+        kept.
       </dd>
 
       <dt>Results</dt>
       <dd>
-        {{if .Guarded}}Kept whole and encrypted, to open again or delete under
-        <a href="/history">History</a>.{{else if .Keeps}}Kept on this machine. Nothing about who asked is written
-        down.{{else}}Not kept. Start with <code class="flag">-results-dir</code> to keep them.{{end}}
+        Kept whole and encrypted, to open again or delete under
+        <a href="/history">History</a>.
       </dd>
 
       <dt>Rule sets</dt>
@@ -48,10 +45,8 @@
 
       <dt>Access</dt>
       <dd>
-        {{if .Guarded}}Behind a password. What is kept is encrypted under a
-        key the password seals; a forgotten password cannot be recovered.{{else}}<strong>No
-        password.</strong> Anyone who can reach this installation can use it. Start
-        with <code class="flag">-access-file</code> to put one in front of it.{{end}}
+        Behind a password, always. What is kept is encrypted under a key the
+        password seals; a forgotten password cannot be recovered.
       </dd>
 
       <dt>Sent to us</dt>
@@ -59,7 +54,6 @@
     </dl>
   </div>
 
-  {{if .Guarded}}
   <!--
     Changing the password keeps the key what is kept is encrypted with, so
     nothing becomes unreadable, and ends every other session, so a password
@@ -76,7 +70,6 @@
     <button class="submit" type="submit" id="password-submit">Change the password</button>
     <p class="signin-status" id="password-status" role="status"></p>
   </form>
-  {{end}}
 
   <p class="work-help">
     Who else a check asks, and what each of them learns, is on the

@@ -482,27 +482,28 @@ func TestTheReleaseProcedureSaysToWaitForChecksToRegister(t *testing.T) {
 	}
 }
 
-// The self-hosting page says how to keep results, and what that does not mean.
+// The self-hosting page says nothing is kept in the clear, and that the volume
+// is owned before it is mounted.
 //
-// The sentence it replaces was a promise: "nothing about a scan is written to
-// disk". That is still the default and it is no longer the whole story, so the
-// page has to carry both halves — and the half a reader most needs is the one
-// about what keeping results does *not* turn on.
+// It explained a plain results directory until 2026-10-11, when that store
+// went from both programs: it kept an estate's weaknesses in the clear under
+// each checked name. The page now says where reports are kept instead.
 func TestTheSelfHostingPageExplainsKeepingResults(t *testing.T) {
 	page := repoFile(t, "docs/self-host.md")
 
 	for _, want := range []string{
-		"-results-dir",
-		"-results-keep",
-		"porch-scan -history",
-
-		// The three things that make it safe to offer at all.
-		"never served over HTTP",
+		"### Nothing is kept",
+		"sealed under its",
 		"65534:65534",
 		"read_only: true",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("docs/self-host.md does not mention %q", want)
+		}
+	}
+	for _, gone := range []string{"-results-dir", "-results-keep", "porch-scan -history", "plain store"} {
+		if strings.Contains(page, gone) {
+			t.Errorf("docs/self-host.md still describes %q, which no program here has", gone)
 		}
 	}
 

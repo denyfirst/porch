@@ -8,31 +8,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/denyfirst/porch/internal/results"
 )
 
 // A result that could not be kept is said without saying which.
 //
-// The history file is named after the target, so a file-system error carries
-// the target in its path. Before the 2026-09-16 audit (A23) that error was
-// logged whole, with a timestamp: a line saying who was scanned, and when, in
-// the one place the service writes that nobody set out to keep.
+// A kept report is filed under its target, so a file-system error carries the
+// target in its path. Before the 2026-09-16 audit (A23) that error was logged
+// whole, with a timestamp: a line saying who was scanned, and when, in the one
+// place the service writes that nobody set out to keep.
 func TestAResultNotKeptIsSaidWithoutTheTarget(t *testing.T) {
 	var said bytes.Buffer
 	previous := notKeptLog
 	notKeptLog = &said
 	t.Cleanup(func() { notKeptLog = previous })
 
-	// A file where the directory should be, so nothing can be written under
-	// it and the error names a path beneath it.
-	dir := filepath.Join(t.TempDir(), "private-results-dir")
-	if err := os.WriteFile(dir, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
 	s := webServer(t, offlineWebScanner())
-	s.KeepResults(&results.Store{Dir: dir})
+	s.KeepReports(refusingKeeper{path: filepath.Join(t.TempDir(), "private-results-dir")})
 
 	w := postWeb(t, s, `{"target":"secret-internal-name.test"}`)
 	if w.Code != http.StatusOK {
@@ -60,6 +51,14 @@ func TestAResultNotKeptIsSaidWithoutTheTarget(t *testing.T) {
 	if strings.Contains(w.Body.String(), "not kept") {
 		t.Error("the caller was told about the operator's store")
 	}
+}
+
+// refusingKeeper fails the way a full or read-only disk does, with the
+// target's name in the path of the error.
+type refusingKeeper struct{ path string }
+
+func (k refusingKeeper) Keep(check, target, verdict, policy string, report []byte) error {
+	return &os.PathError{Op: "open", Path: filepath.Join(k.path, check, target+".sealed"), Err: os.ErrPermission}
 }
 
 // What is kept of an error is its operation and the system's reason, and

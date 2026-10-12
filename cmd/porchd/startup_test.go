@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,21 +49,20 @@ func start(t *testing.T, args ...string) (int, string) {
 	return -1, ""
 }
 
-// Beyond loopback, porchd serves nobody without a password unless told so out
-// loud (audit 2026-09-18, D01): proof of control says which domains may be
-// checked, not who may ask.
-func TestAPublicServiceWithoutAPasswordIsRefused(t *testing.T) {
+// porchd serves nobody without a password, wherever it listens (audit
+// 2026-09-18, D01): proof of control says which domains may be checked, not
+// who may ask. Loopback was let off until 2026-10-11; another user on the
+// machine, another container, or a web application with an SSRF in it reaches
+// loopback too.
+func TestAServiceWithoutAPasswordIsRefusedWhereverItListens(t *testing.T) {
 	dir := t.TempDir()
-	code, said := start(t, "-listen", "0.0.0.0:0", "-verification-secret-file", filepath.Join(dir, "secret"))
-	if code != 2 || !strings.Contains(said, "without a password") {
-		t.Errorf("a public service with proof and no password: exit %d, %q", code, said)
-	}
-	for _, listen := range []string{"127.0.0.1:0", "localhost:0", "[::1]:0"} {
-		if err := passwordAllowed(listen, false); err != nil {
-			t.Errorf("%s is loopback and was refused: %v", listen, err)
+	for _, listen := range []string{"0.0.0.0:0", "127.0.0.1:0", "localhost:0", "[::1]:0"} {
+		code, said := start(t, "-listen", listen, "-verification-secret-file", filepath.Join(dir, "secret"))
+		if code != 2 || !strings.Contains(said, "will not start without a password") {
+			t.Errorf("%s with proof and no password: exit %d, %q", listen, code, said)
 		}
 	}
-	if err := passwordAllowed("0.0.0.0:8080", true); err != nil {
+	if err := passwordRequired(true); err != nil {
 		t.Errorf("a guarded service was refused: %v", err)
 	}
 }
@@ -102,27 +100,40 @@ func TestTheFlagsThatOpenedAServiceAreRefused(t *testing.T) {
 	}
 }
 
-// A password and a plain results directory together are refused, not one
-// quietly winning (D02): the directory would keep in the clear, under each
-// checked name, what the password is there to seal.
-func TestAPasswordAndAPlainResultsDirectoryAreRefusedTogether(t *testing.T) {
+// The plain results directory is gone from porchd, and an installation
+// started with it is told why rather than started. It kept in the clear,
+// under each checked name, what the password is there to seal (D02), and was
+// allowed only where there was no password — which porchd no longer starts.
+func TestThePlainResultsFlagsAreRefusedWithTheirReason(t *testing.T) {
 	dir := t.TempDir()
-	code, said := start(t, "-listen", "127.0.0.1:0",
-		"-verification-secret-file", filepath.Join(dir, "secret"),
-		"-access-file", filepath.Join(dir, "access"),
-		"-results-dir", filepath.Join(dir, "plain"))
-	if code != 2 || !strings.Contains(said, "-results-dir keeps results in the clear") {
-		t.Errorf("-access-file with -results-dir: exit %d, %q", code, said)
+	for _, flag := range []string{"-results-dir", "-results-keep"} {
+		value := filepath.Join(dir, "plain")
+		if flag == "-results-keep" {
+			value = "5"
+		}
+		code, said := start(t, "-listen", "127.0.0.1:0",
+			"-verification-secret-file", filepath.Join(dir, "secret"),
+			"-access-file", filepath.Join(dir, "access"),
+			flag, value)
+		if code != 2 || !strings.Contains(said, flag+" was removed") || !strings.Contains(said, "History") {
+			t.Errorf("%s: exit %d, %q", flag, code, said)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, "plain")); !os.IsNotExist(err) {
 		t.Error("the refused results directory was made")
 	}
+	src := repoFile(t, "cmd/porchd/main.go")
+	for _, gone := range []string{`flag.String("results-dir"`, `flag.Int("results-keep"`} {
+		if strings.Contains(src, gone) {
+			t.Errorf("main.go defines %s again", gone)
+		}
+	}
 }
 
-// Every configuration this project hands out that listens beyond loopback
-// carries a password: the compose file, the image, and every command block in
-// the self-hosting guide. The guide's certificate example dropped it once,
-// because a compose command replaces the default rather than adding to it.
+// Every configuration this project hands out carries a password, wherever it
+// listens: the compose file, the image, and every command block in the
+// self-hosting guide. The guide's certificate example dropped it once, because
+// a compose command replaces the default rather than adding to it.
 func TestEveryShippedConfigurationCarriesAPassword(t *testing.T) {
 	check := func(name, block string) {
 		// The value after -listen, in the three spellings the project uses:
@@ -131,11 +142,8 @@ func TestEveryShippedConfigurationCarriesAPassword(t *testing.T) {
 		if value == nil {
 			return
 		}
-		if host, _, err := net.SplitHostPort(value[1]); err == nil && (host == "localhost" || host == "127.0.0.1" || host == "::1") {
-			return
-		}
 		if !strings.Contains(block, `"-access-file"`) || !strings.Contains(block, `"/data/access"`) {
-			t.Errorf("%s listens beyond loopback without -access-file:\n%s", name, block)
+			t.Errorf("%s listens on %s without -access-file:\n%s", name, value[1], block)
 		}
 	}
 	check("docker-compose.yml", repoFile(t, "docker-compose.yml"))

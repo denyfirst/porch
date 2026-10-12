@@ -68,9 +68,8 @@ services:
     # store does not fail — it reports every certificate as untrusted, which
     # reads as a finding about the scanned server.
     #
-    # porch-data holds the verification secret, the sealed key, and results if
-    # you ask for them with -results-dir /data/results. It is the only thing
-    # written to.
+    # porch-data holds the verification secret, the sealed key, and the
+    # history and domain list sealed under it. It is the only thing written to.
     volumes:
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ./porch-data:/data

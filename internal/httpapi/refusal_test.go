@@ -241,8 +241,7 @@ func TestEveryRefusalCodeCanBeProduced(t *testing.T) {
 		s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
 		note(postTo(t, s, "/api/v1/names/scan", `{"target":"unproven.example"}`, "203.0.113.101:5000"), "proof_required")
 
-		// Reachable by others and no password: a range is not the caller's to name.
-		s.ReachableByOthers(true)
+		// No password: a range is not the caller's to name.
 		s.BehindPassword(false)
 		note(postTo(t, s, "/api/v1/names/scan",
 			`{"target":"proven.example","ranges":["203.0.113.0/28"]}`, "203.0.113.102:5000"), "not_your_range")
@@ -257,8 +256,9 @@ func TestEveryRefusalCodeCanBeProduced(t *testing.T) {
 		}
 		note(postTo(t, s, "/api/v1/names/scan", string(long), "203.0.113.103:5000"), "list_too_long")
 
-		// The operator's own copy, so the range is read, and it is too wide.
-		s.ReachableByOthers(false)
+		// The operator's own copy, behind their password, so the range is
+		// read, and it is too wide.
+		s.BehindPassword(true)
 		s.reverse = &stubReverse{}
 		note(postTo(t, s, "/api/v1/names/scan",
 			`{"target":"proven.example","ranges":["203.0.0.0/16"]}`, "203.0.113.104:5000"), "invalid_range")

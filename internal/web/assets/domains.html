@@ -17,7 +17,6 @@
     </div>
   </div>
 
-  {{if .Verified}}
   <form class="panel domain-form" id="domain-form" autocomplete="off">
     <label class="composer-step" for="domain-target">Add a domain</label>
     <div class="field-row">
@@ -95,7 +94,6 @@
     </div>
   </section>
 
-  {{if .Guarded}}
   <!--
     The domains added here, kept sealed like the history. Whether each is
     proven is not kept: it is asked of DNS each time the page opens, so a
@@ -112,20 +110,11 @@
       <tbody id="domain-rows"></tbody>
     </table>
   </div>
-  {{end}}
 
   <p class="work-help">
     A proven domain does not prove another one, a place it redirects to, or a
     mail server run by someone else. A new record can take a few minutes to be
     seen.
   </p>
-  {{else}}
-  <div class="panel">
-    <p><strong>No proof of control is required here</strong>, so there is
-    nothing to prove: any public name is checked. Start with
-    <code class="flag">-verification-secret-file</code> to check only domains shown to be
-    yours.</p>
-  </div>
-  {{end}}
 
 </section>

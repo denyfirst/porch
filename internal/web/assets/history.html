@@ -3,14 +3,11 @@
   <!--
     History: what this installation kept of the checks it ran.
 
-    Behind a password, every report is kept whole in a vault sealed by it, and
-    listed here to open again or delete for good. The list is fetched once
-    the page has loaded, through the gate, and nothing of it is in the page
-    itself: these bytes are rendered at startup, before any check has run.
-
-    Without a password nothing is shown in a browser at all. A page listing
-    every name this installation checked, served to whoever can reach it, is
-    the thing P6 exists to prevent.
+    Every report is kept whole in a vault sealed by the installation's
+    password, and listed here to open again or delete for good. The list is
+    fetched once the page has loaded, through the gate, and nothing of it is
+    in the page itself: these bytes are rendered at startup, before any check
+    has run.
   -->
   <div class="work-heading">
     <div>
@@ -19,7 +16,6 @@
     </div>
   </div>
 
-  {{if .Guarded}}
   <div class="panel history" id="history">
     <p class="history-status" id="history-status" role="status">Opening the history…</p>
     <p class="history-note" id="history-note" hidden></p>
@@ -39,24 +35,5 @@
     Kept encrypted under a key your password seals, newest first, at most a
     thousand that it opens. Deleting a report removes it for good; nobody can bring it back.
   </p>
-  {{else}}
-  <div class="panel">
-    {{if .Keeps}}
-    <p class="report-empty-title">Kept on this machine</p>
-    <p>Each check's report is kept, and nothing about who asked. Read them on
-    the server with:</p>
-    <pre class="work-code"><code>porch-scan -history -results-dir &lt;the same directory&gt;</code></pre>
-    {{else}}
-    <p class="report-empty-title">Nothing is kept</p>
-    <p>This installation keeps no results, and signing in does not change that:
-    what decides it is how <code>porchd</code> was started, not who is looking
-    at it.</p>
-    <p>Start it with <code class="flag">-access-file</code> and two things follow. Nothing is
-    served without signing in, and every check from then on is kept here,
-    sealed under a key that password opens — to read again, or to delete.
-    Checks run before that were never written down and cannot appear.</p>
-    {{end}}
-  </div>
-  {{end}}
 
 </section>
