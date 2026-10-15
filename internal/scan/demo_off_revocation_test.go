@@ -126,4 +126,11 @@ func TestTheCertificatesTheLoggedLineCountsAreListed(t *testing.T) {
 	if !strings.Contains(out.LoggedLine, "one of which is valid today") {
 		t.Errorf("the line and the list disagree: %q beside %v", out.LoggedLine, out.LoggedUnaccounted)
 	}
+
+	// Each says how it compares with the one presented, in the same order,
+	// and the sentence the terminal prints ends on the clause the page draws.
+	if len(out.LoggedResemblance) != len(out.LoggedUnaccounted) || out.LoggedResemblance[0] == "" ||
+		!strings.HasSuffix(got, "; "+out.LoggedResemblance[0]) {
+		t.Errorf("the comparison does not match the list: %v beside %v", out.LoggedResemblance, out.LoggedUnaccounted)
+	}
 }

@@ -162,6 +162,12 @@ type Result struct {
 	// counts them and tells the reader to check; this is what they check.
 	LoggedUnaccounted []string `json:"loggedUnaccounted,omitempty"`
 
+	// LoggedResemblance says, for each of those in the same order, how it
+	// compares with the certificate presented: the clause the sentence ends
+	// on, carried apart for the page, which draws the entry from its fields
+	// rather than printing the sentence (R16).
+	LoggedResemblance []string `json:"loggedResemblance,omitempty"`
+
 	// KeyExchangeLine is what the extra post-quantum handshake established,
 	// in the sentence both faces show.
 	KeyExchangeLine string `json:"keyExchangeLine,omitempty"`
@@ -577,7 +583,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		//
 		// Where a caller configured a searcher, which every deployment does.
 		if s.Logs != nil && len(tlsReport.Certificates) > 0 {
-			out.LoggedLine, out.Logged, out.LoggedUnaccounted = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
+			out.LoggedLine, out.Logged, out.LoggedUnaccounted, out.LoggedResemblance = s.searchLogs(ctx, host, tlsReport.Certificates[0], certReport)
 		}
 	}
 
@@ -1258,10 +1264,21 @@ func listStatus(s crl.Status) string {
 // The comparison against the certificate in hand is the point of it. A count of
 // certificates is a curiosity; a count of certificates that are valid today and
 // are not the one this server just presented is a list the operator can act on.
-func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certificate, report *certinfo.Report) (string, *ctsearch.Result, []string) {
+func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certificate, report *certinfo.Report) (string, *ctsearch.Result, []string, []string) {
 	found := s.Logs.Search(ctx, host)
 
-	var unaccounted []string
+	// What each logged certificate is compared with: the authority that
+	// issued the one presented, and the names it covers.
+	var presentedOrg string
+	var presentedNames []string
+	if leaf != nil {
+		if len(leaf.Issuer.Organization) > 0 {
+			presentedOrg = leaf.Issuer.Organization[0]
+		}
+		presentedNames = leaf.DNSNames
+	}
+
+	var unaccounted, resemblance []string
 	facts := policy.LogFacts{
 		Searched:  true,
 		Distinct:  found.Distinct,
@@ -1288,13 +1305,15 @@ func (s *Scanner) searchLogs(ctx context.Context, host string, leaf *x509.Certif
 			continue
 		}
 		facts.Unseen++
-		unaccounted = append(unaccounted, policy.UnaccountedLine(e.Serial, e.Issuer, e.Names, e.NotBefore, e.NotAfter))
+		r := policy.Resemblance(e.Issuer, e.Names, presentedOrg, presentedNames)
+		resemblance = append(resemblance, r)
+		unaccounted = append(unaccounted, policy.UnaccountedLine(e.Serial, e.Issuer, e.Names, e.NotBefore, e.NotAfter, r))
 	}
 
 	if report != nil {
 		report.Notes = append(report.Notes, policy.DescribeLogged(facts)...)
 	}
-	return policy.LoggedLine(facts), &found, unaccounted
+	return policy.LoggedLine(facts), &found, unaccounted, resemblance
 }
 
 // sameSerial reports whether a serial a monitor wrote as hexadecimal is the

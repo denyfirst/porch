@@ -387,7 +387,10 @@ type LogFacts struct {
 // a person reads. The serial and the dates are what a reader matches against
 // their own orders; the issuer and the names are what tells a stranger's
 // certificate from an early renewal.
-func UnaccountedLine(serial, issuer string, names []string, from, until time.Time) string {
+//
+// It ends on how the certificate compares with the one presented, from
+// Resemblance, when there is anything to compare.
+func UnaccountedLine(serial, issuer string, names []string, from, until time.Time, resemblance string) string {
 	var b strings.Builder
 	b.WriteString("serial " + orUnknown(serial))
 	b.WriteString(", issued by " + orUnknown(issuer))
@@ -397,7 +400,93 @@ func UnaccountedLine(serial, issuer string, names []string, from, until time.Tim
 	if len(names) > 0 {
 		b.WriteString(", for " + strings.Join(names, ", "))
 	}
+	if resemblance != "" {
+		b.WriteString("; " + resemblance)
+	}
 	return b.String()
+}
+
+// Resemblance says how a logged certificate compares with the one presented:
+// whether the same authority issued it, and whether it names the same names.
+//
+// Three logged certificates valid today, each one a serial, an issuer and a
+// list of names, left a reader to compare every field by eye, and the
+// question they were answering is a short one: which of these is mine? Both
+// halves are measured facts and nothing more (R17). A match is what an early
+// renewal looks like, and it is also what a certificate obtained by somebody
+// who controls the domain's DNS looks like, so the note under the list says
+// so, and nothing here calls a match safe.
+//
+// The authority is the issuer's organisation, not the certificate that
+// signed it: an authority signs from more than one intermediate and rotates
+// them, and a renewal from YE2 after one from YE1 is the same authority.
+// Where either side names no organisation, only the names are compared.
+func Resemblance(issuer string, names []string, presentedIssuerOrg string, presentedNames []string) string {
+	sameNames := sameNameSet(names, presentedNames)
+	org := organisationOf(issuer)
+	presented := strings.TrimSpace(presentedIssuerOrg)
+	if org == "" || presented == "" {
+		if sameNames {
+			return "the same names as the one presented"
+		}
+		return "other names than the one presented"
+	}
+	sameAuthority := strings.EqualFold(org, presented)
+	switch {
+	case sameAuthority && sameNames:
+		return "the same authority and names as the one presented"
+	case sameAuthority:
+		return "the same authority as the one presented, other names"
+	case sameNames:
+		return "another authority than the one presented, the same names"
+	default:
+		return "another authority and other names than the one presented"
+	}
+}
+
+// organisationOf reads the O= of a distinguished name a monitor wrote out,
+// "C=US, O=Let's Encrypt, CN=YE1". A value with a comma in it, as in
+// "O=DigiCert, Inc.", arrives split in two, so a part with no attribute name
+// belongs to the one before it.
+func organisationOf(dn string) string {
+	var parts []string
+	for _, p := range strings.Split(dn, ",") {
+		if i := strings.Index(p, "="); i > 0 && !strings.ContainsAny(strings.TrimSpace(p[:i]), " ") {
+			parts = append(parts, strings.TrimSpace(p))
+		} else if len(parts) > 0 {
+			parts[len(parts)-1] += "," + p
+		}
+	}
+	for _, p := range parts {
+		if k, v, ok := strings.Cut(p, "="); ok && strings.EqualFold(strings.TrimSpace(k), "O") {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// sameNameSet reports whether two lists name the same names, in any order and
+// case.
+func sameNameSet(a, b []string) bool {
+	set := func(list []string) map[string]bool {
+		m := map[string]bool{}
+		for _, n := range list {
+			if n = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(n), ".")); n != "" {
+				m[n] = true
+			}
+		}
+		return m
+	}
+	x, y := set(a), set(b)
+	if len(x) != len(y) || len(x) == 0 {
+		return false
+	}
+	for n := range x {
+		if !y[n] {
+			return false
+		}
+	}
+	return true
 }
 
 // NameLine says whether the certificate covers the name that was asked for,
@@ -489,7 +578,10 @@ func DescribeLogged(f LogFacts) []Note {
 		out = append(out, Observed("Certificate transparency logs record every publicly trusted certificate. They "+
 			"hold "+plural(f.Unseen, "certificate")+" valid today for this name besides the "+
 			"one this server presented: an early renewal, a CDN, a second server, or one "+
-			"somebody else obtained. Only you can tell which, so check the list."))
+			"somebody else obtained. Only you can tell which, so check the list. Each says "+
+			"whether its authority and names match the one presented. A match is what an "+
+			"early renewal looks like, and also what a certificate obtained by somebody who "+
+			"controls this domain's DNS looks like; another authority is the one to ask about first."))
 	}
 
 	if f.Truncated {

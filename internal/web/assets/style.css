@@ -1585,6 +1585,10 @@ a.report-row-title:hover { color: var(--link); }
 }
 .report-logged-serial { font-family: var(--mono); color: var(--ink); overflow-wrap: anywhere; }
 
+/* How it compares with the one presented: a fact under the names, in the
+   reading ink, and never in a verdict's colour. A match is not a pass. */
+.report-logged-resemblance { font-size: 0.84rem; color: var(--ink); }
+
 /* A record as the zone publishes it: text somebody copies. */
 td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: anywhere; }
 

@@ -555,6 +555,7 @@ name, never derived from anything the site said, and nothing they hold kept.
 `TestARegisterIsAskedOnlyOverHTTPS`,
 `TestTheCertificatesTheLoggedLineCountsAreListed`,
 `TestTheCertificatesTheLoggedLineCountsArePrinted`,
+`TestResemblanceSaysWhatMatches`, `TestAMatchIsNotCalledSafe`,
 `TestTheNameIsFoldedIntoTheQuery`,
 `TestAwkwardNamesDoNotEscapeTheQuery`,
 `TestNothingThatIsNotAnAnswerReadsAsNoneFound`,

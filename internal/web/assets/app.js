@@ -985,13 +985,18 @@ function certificate(cert, tls, issuance, stapling, report) {
   // certificates were three lines of serials, distinguished names and comma
   // lists, and the names a reader needed to check were the hardest part to
   // find. A sentence with no entry behind it is shown as written.
+  //
+  // Each ends on how it compares with the one presented, from the same
+  // policy clause the terminal prints at the end of the sentence, so the
+  // reader does not have to compare authorities and names by eye.
   const entries = (report && report.logged && Array.isArray(report.logged.entries)) ? report.logged.entries : [];
-  for (const c of (report && report.loggedUnaccounted) || []) {
+  const resemblance = (report && Array.isArray(report.loggedResemblance)) ? report.loggedResemblance : [];
+  ((report && report.loggedUnaccounted) || []).forEach((c, i) => {
     pairs.appendChild(el("dt", null, ""));
     const entry = entries.find((e) => e && e.serial && c.startsWith("serial " + e.serial + ","));
     if (!entry) {
       pairs.appendChild(el("dd", null, "· " + c));
-      continue;
+      return;
     }
     const dd = el("dd", "report-logged");
     const head = el("span", "report-logged-head");
@@ -1003,8 +1008,11 @@ function certificate(cert, tls, issuance, stapling, report) {
     const names = el("span", "report-list");
     for (const name of entry.names || []) names.appendChild(el("span", "report-list-item", name));
     dd.appendChild(names);
+    if (typeof resemblance[i] === "string" && resemblance[i]) {
+      dd.appendChild(el("span", "report-logged-resemblance", resemblance[i]));
+    }
     pairs.appendChild(dd);
-  }
+  });
 
   pair("SHA-256", leaf.fingerprintSha256);
 
