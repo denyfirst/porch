@@ -29,8 +29,8 @@ type Promise struct {
 var Organisation = []Promise{
 	{
 		ID:      "nothing-reaches-us",
-		Says:    "Nothing we publish reports back to us: no telemetry, no update checks, no crash reports, no licence checks.",
-		Checked: "The source is public. It contains no address of ours that a program connects to.",
+		Says:    "Nothing we publish reports back to us: no telemetry, no crash reports, no licence checks. A tool of ours looks for a newer release only when you ask it to, or turn that on, and then asks the public host the release is on, never us, sending nothing about you.",
+		Checked: "The source is public. It contains no address of ours that a program connects to; the only one it asks about releases is GitHub's, and the request carries no identifier and no version.",
 	},
 	{
 		ID:      "no-register-of-users",
@@ -81,9 +81,9 @@ var Porch = Product{
 	Adds: []Promise{
 		{
 			ID: "porch-keeps-no-record-of-a-scan",
-			Says: "Porch never records who asked for a scan. What was scanned is kept only where the person running it chooses: " +
-				"on their own disk, or sealed under their password. The demonstration keeps only the latest report " +
-				"of each check of its own hosts, in memory, for fifteen minutes.",
+			Says: "Porch never records who asked for a scan. What was scanned is kept only sealed under the password of " +
+				"the installation that ran it, and the command line keeps nothing. The demonstration keeps only the latest " +
+				"report of each check of its own hosts, in memory, for fifteen minutes.",
 			Checked: "No code can write down who asked, and a test fails if any appears. The public counter is only a number.",
 		},
 		{
@@ -100,6 +100,15 @@ var Porch = Product{
 			ID:      "porch-says-what-it-did-not-measure",
 			Says:    "A report says which questions got no answer, so silence never reads as a pass.",
 			Checked: "Every row is shown, answered or not, and says why it is empty.",
+		},
+		{
+			ID: "porch-installs-nothing-by-itself",
+			Says: "Porch asks GitHub for the latest release's signed list only when its operator presses Check now, or once " +
+				"a day if they turn that on. It believes the list only if the release key signed it, and installs nothing: " +
+				"updating is a command the operator runs.",
+			Checked: "Under This installation the daily check is off until it is turned on. internal/updates has no code that " +
+				"downloads a release or writes anywhere but its one settings file, and the commands it shows check the " +
+				"signature again before anything is replaced.",
 		},
 		{
 			ID:      "porch-refuses-to-be-pointed-inward",

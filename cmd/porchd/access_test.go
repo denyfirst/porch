@@ -124,6 +124,40 @@ func TestTheSignInPageCommandFindsThePassword(t *testing.T) {
 	t.Errorf("grep -A2 \"password is\" would not show the password in: %q", said.String())
 }
 
+// The update check exists only behind a password and never on the
+// demonstration: the service that asks GitHub, and the routes that start it,
+// are made in the one branch that has a gate and is not the demonstration,
+// and nowhere else.
+func TestTheUpdateCheckExistsOnlyBehindThePassword(t *testing.T) {
+	src := repoFile(t, "cmd/porchd/main.go")
+	const block = "\tvar releases *updates.Service\n" +
+		"\tif gate != nil && !demo.Enabled {\n" +
+		"\t\treleases = &updates.Service{\n"
+	start := strings.Index(src, block)
+	if start < 0 {
+		t.Fatal("the update service is no longer made in a branch that requires the gate")
+	}
+	end := strings.Index(src[start:], "\n\t}\n")
+	if end < 0 {
+		t.Fatal("the branch that makes the update service is not closed where expected")
+	}
+	branch := src[start : start+end]
+	for _, want := range []string{`root.Handle("/api/v1/updates", releases.Handler())`, `root.Handle("/api/v1/updates/", releases.Handler())`} {
+		if !strings.Contains(branch, want) {
+			t.Errorf("the branch does not register %s", want)
+		}
+	}
+	rest := src[:start] + src[start+end:]
+	for _, never := range []string{"updates.Service{", "releases.Handler()", "updates.Checker{", "/api/v1/updates"} {
+		if strings.Contains(rest, never) {
+			t.Errorf("main.go uses %q outside the branch that requires the gate", never)
+		}
+	}
+	if gate := strings.Index(src, "handler = gate.Wrap(handler)"); gate < start {
+		t.Error("the gate is not wrapped around the handler after the update routes are added")
+	}
+}
+
 // The history exists only behind a password: the vault, the reports kept in
 // it and the routes that read it are made inside the one branch that makes
 // the gate, and nowhere else.
