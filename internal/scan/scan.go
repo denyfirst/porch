@@ -172,6 +172,10 @@ type Result struct {
 	Exposure     *exposure.Result `json:"exposure,omitempty"`
 	ExposureLine string           `json:"exposureLine,omitempty"`
 
+	// ExposureChecked is each service asked, with what came back, so the
+	// line's count says what it counted (R4, R16).
+	ExposureChecked []policy.Checked `json:"exposureChecked,omitempty"`
+
 	// Stapling grades the status response against what the certificate asked
 	// for. It is neither a transport property nor a certificate property: the
 	// request is written in the certificate and the answer arrives in the
@@ -601,6 +605,9 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		}
 		out.Exposure = &found
 		out.ExposureLine = policy.ExposureLine(found.Asked, found.Ports, open, found.Reason)
+		if found.Asked && found.Reason == "" {
+			out.ExposureChecked = policy.ExposureChecked(exposureAsked(found))
+		}
 		tlsReport.Notes = append(tlsReport.Notes, policy.DescribeExposure(open)...)
 	}
 
@@ -1334,4 +1341,19 @@ func (s *Scanner) revocationFetched() bool {
 // — and a decision made twice is a decision that can be made differently.
 func (s *Scanner) certOptions() certinfo.Options {
 	return certinfo.Options{ShowRevocationURLs: s.ShowRevocationURLs}
+}
+
+// exposureAsked reads a probe's result against the list this build asks,
+// which is the list that produced it: every service, with the addresses it
+// answered at.
+func exposureAsked(found exposure.Result) []policy.ServiceAsked {
+	at := map[int][]string{}
+	for _, o := range found.Open {
+		at[o.Port] = append(at[o.Port], o.Address)
+	}
+	out := make([]policy.ServiceAsked, 0, len(exposure.Services))
+	for _, svc := range exposure.Services {
+		out = append(out, policy.ServiceAsked{Port: strconv.Itoa(svc.Port), Name: svc.Name, AnsweredAt: at[svc.Port]})
+	}
+	return out
 }

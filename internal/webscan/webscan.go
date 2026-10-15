@@ -288,8 +288,33 @@ func withLeaks(out *Result, r leaks.Result) {
 	out.Findings = append(out.Findings, graded.Findings...)
 	out.Verdict = policy.Worst(out.Verdict, graded.Verdict)
 	if line := policy.LeaksLine(r.Asked, r.Paths, r.Unanswered, served, r.Reason); line != "" {
-		out.Declared = append(out.Declared, policy.Declaration{Label: policy.LeaksLabel, Says: line})
+		row := policy.Declaration{Label: policy.LeaksLabel, Says: line}
+		// Each path asked, with what came back, so the count says what it
+		// counted. Not where nothing was established: there is no list to
+		// give, and a list of "no answer" would read as a measurement.
+		if r.Asked && r.Reason == "" {
+			row.Checked = policy.LeaksChecked(leaksAsked(r))
+		}
+		out.Declared = append(out.Declared, row)
 	}
+}
+
+// leaksAsked reads the result against the list this build asks, which is the
+// list that produced it.
+func leaksAsked(r leaks.Result) []policy.FileAsked {
+	served := map[string]bool{}
+	for _, e := range r.Exposed {
+		served[e.Path] = true
+	}
+	silent := map[string]bool{}
+	for _, p := range r.NoAnswer {
+		silent[p] = true
+	}
+	out := make([]policy.FileAsked, 0, len(leaks.Files))
+	for _, f := range leaks.Files {
+		out = append(out, policy.FileAsked{Path: f.Path, What: f.What, Answered: !silent[f.Path], Served: served[f.Path]})
+	}
+	return out
 }
 
 // withPreload puts the preload list's answer beside the header it is about,

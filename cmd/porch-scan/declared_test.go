@@ -75,7 +75,7 @@ func TestWhatTheSiteDeclaresIsDrawnInBothFaces(t *testing.T) {
 	for _, want := range []string{
 		`frag.appendChild(declared(data.declared));`,
 		`sectionTitle("What the site sends")`,
-		`tr.appendChild(el("td", null, row.says));`,
+		`const td = el("td", null, row.says);`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s, so the two faces disagree", want)

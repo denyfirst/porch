@@ -163,16 +163,22 @@ func TestTheReportIsOfferedInOneFormatOnly(t *testing.T) {
 		!strings.Contains(copier, "await navigator.clipboard.writeText(text);") {
 		t.Errorf("copyRecord writes something other than the record its button names:\n%s", copier)
 	}
-	if !strings.Contains(source, `for (const holder of [proofDialog, document.getElementById("domain-record"), document.querySelector("#start .steps")]) {`) {
-		t.Error("copyRecord is attached somewhere other than the two places a proof record is shown " +
-			"and the install steps on the Porch page")
+	if !strings.Contains(source, `for (const holder of [proofDialog, document.getElementById("domain-record"), document.querySelector("#start .steps"), document.getElementById("update-banner")]) {`) {
+		t.Error("copyRecord is attached somewhere other than the two places a proof record is shown, " +
+			"the install steps on the Porch page and the update commands on New check")
 	}
+	// The update commands are the install steps' case on New check: text
+	// written in app.js and a version read as a release name, naming no host
+	// and nothing found (TestTheBannerUsesOnlyAVersionThatIsAReleaseName).
 	for _, page := range []string{"assets/console.html", "assets/domains.html"} {
 		body, err := assets.ReadFile(page)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, id := range regexp.MustCompile(`data-copy="([^"]+)"`).FindAllStringSubmatch(string(body), -1) {
+			if id[1] == "update-commands" && page == "assets/console.html" {
+				continue
+			}
 			if !strings.HasPrefix(id[1], "proof-") && !strings.HasPrefix(id[1], "domain-") {
 				t.Errorf("%s offers %q to the clipboard, which is not a proof record", page, id[1])
 			}

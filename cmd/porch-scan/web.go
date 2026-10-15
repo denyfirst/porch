@@ -265,5 +265,31 @@ func printDeclared(w io.Writer, r webResult) {
 	}
 	for _, d := range r.Declared {
 		fmt.Fprintf(w, "    %-*s  %s\n", width, d.Label, d.Says)
+		printChecked(w, "      ", d.Checked, false)
+	}
+}
+
+// printChecked writes what a line counted, grouped by what came back, so the
+// terminal names every item the page lists (R16) in a few lines rather than
+// one per item. The groups are in the order their first item was asked, and
+// an item's own words come from internal/policy, as the page's do.
+//
+// withWhat adds what each item is, for a list whose items are numbers: "445"
+// says nothing to a reader, "445 SMB" does.
+func printChecked(w io.Writer, indent string, items []policy.Checked, withWhat bool) {
+	var order []string
+	groups := map[string][]string{}
+	for _, c := range items {
+		name := c.Item
+		if withWhat && c.What != "" {
+			name += " " + c.What
+		}
+		if _, seen := groups[c.State]; !seen {
+			order = append(order, c.State)
+		}
+		groups[c.State] = append(groups[c.State], name)
+	}
+	for _, state := range order {
+		fmt.Fprintf(w, "%s%s\n", indent, wrap(state+": "+strings.Join(groups[state], ", "), 72-len(indent), indent+"  "))
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -57,6 +58,20 @@ func TestAScanSaysWhichRiskyServicesAnswer(t *testing.T) {
 	notes := strings.Join(noteTexts(out), " ")
 	if !strings.Contains(notes, "Remote Desktop answers on port 3389") {
 		t.Errorf("the notes do not name it: %s", notes)
+	}
+
+	// And every port asked is listed, in the list's order, with what came back.
+	if len(out.ExposureChecked) != len(exposure.Services) {
+		t.Fatalf("%d ports listed, want the list", len(out.ExposureChecked))
+	}
+	for i, c := range out.ExposureChecked {
+		svc := exposure.Services[i]
+		if c.Item != strconv.Itoa(svc.Port) || c.What != svc.Name {
+			t.Errorf("item %d is %+v, want port %d %s", i, c, svc.Port, svc.Name)
+		}
+		if open := svc.Port == 3389; c.Found != open || (open && !strings.HasPrefix(c.State, "answers at ")) || (!open && c.State != "no answer from here") {
+			t.Errorf("port %d reads %+v", svc.Port, c)
+		}
 	}
 
 	s.Exposure = nil

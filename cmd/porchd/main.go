@@ -55,6 +55,7 @@ import (
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/smtptls"
 	"github.com/denyfirst/porch/internal/truststore"
+	"github.com/denyfirst/porch/internal/updates"
 	"github.com/denyfirst/porch/internal/vault"
 	"github.com/denyfirst/porch/internal/verify"
 	"github.com/denyfirst/porch/internal/web"
@@ -628,6 +629,26 @@ func run() int {
 		root.Handle("/api/v1/domains/", domains.Handler())
 	}
 
+	// Whether a newer signed release exists, asked of GitHub only when the
+	// operator presses Check now or turns the daily check on, and verified
+	// with the release key before its version is believed. It installs
+	// nothing (internal/updates). Behind the gate, like every route, and made
+	// only where there is one: never on the demonstration, which has none
+	// and connects only to its own hosts (N6).
+	var releases *updates.Service
+	if gate != nil && !demo.Enabled {
+		releases = &updates.Service{
+			Checker:  &updates.Checker{Roots: roots},
+			Settings: &updates.Settings{Path: filepath.Join(filepath.Dir(*accessFile), "updates.json")},
+			Running:  version,
+		}
+		if err := releases.Settings.Load(); err != nil {
+			fmt.Fprintln(os.Stderr, "porchd: "+err.Error()+"; the daily update check stays off")
+		}
+		root.Handle("/api/v1/updates", releases.Handler())
+		root.Handle("/api/v1/updates/", releases.Handler())
+	}
+
 	// The pages are told what this installation asks before any of them is
 	// served, and an operator reading the privacy page needs that to be true
 	// rather than plausible. A proof and a password are not passed: porchd has
@@ -772,6 +793,12 @@ func run() int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// The daily update check, which asks nothing until the operator turns it
+	// on, and stops with the service.
+	if releases != nil {
+		go releases.Run(ctx)
+	}
 
 	// Closed when the periodic writer has stopped, so the final write below is
 	// the only writer left. Without it the two overlap during shutdown, which

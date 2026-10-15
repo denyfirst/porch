@@ -140,8 +140,10 @@ type Result struct {
 	Exposed []Exposed `json:"exposed,omitempty"`
 
 	// Unanswered is how many paths got no answer at all, so a clean result
-	// says how much of the list it covers (R4).
-	Unanswered int `json:"unanswered,omitempty"`
+	// says how much of the list it covers (R4), and NoAnswer is which ones,
+	// in the order of the list.
+	Unanswered int      `json:"unanswered,omitempty"`
+	NoAnswer   []string `json:"noAnswer,omitempty"`
 
 	Reason string `json:"reason,omitempty"`
 }
@@ -169,6 +171,7 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 	client := p.client()
 	out := Result{Asked: true, Paths: len(Files)}
 	found := make([]bool, len(Files))
+	silent := make([]bool, len(Files))
 	var answered, untrusted bool
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -184,8 +187,10 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 			case errors.As(err, &unknown):
 				untrusted = true
 				out.Unanswered++
+				silent[i] = true
 			case err != nil:
 				out.Unanswered++
+				silent[i] = true
 			default:
 				answered = true
 				found[i] = served
@@ -203,6 +208,9 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 	for i, f := range Files {
 		if found[i] {
 			out.Exposed = append(out.Exposed, Exposed{Path: f.Path, What: f.What, Kind: f.Kind})
+		}
+		if silent[i] {
+			out.NoAnswer = append(out.NoAnswer, f.Path)
 		}
 	}
 	return out

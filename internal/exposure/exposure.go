@@ -8,8 +8,8 @@
 //
 // # What it does, and nothing else
 //
-// A fixed list of sixteen ports, at most two addresses of the host — the ones
-// the scan already reached — and for each, one TCP connection, closed the
+// A fixed list of twenty-one ports, at most two addresses of the host — the
+// ones the scan already reached — and for each, one TCP connection, closed the
 // moment it opens. Nothing is sent over it: no banner is read, no protocol is
 // spoken, no login is tried. A port that answers is open; one that refuses or
 // says nothing in time is not, and the two are not told apart, because a
@@ -50,16 +50,21 @@ var Services = []Service{
 	{23, "Telnet", "it sends passwords unencrypted"},
 	{139, "NetBIOS", "Windows file sharing is not meant for the internet"},
 	{445, "SMB", "Windows file sharing is not meant for the internet, and is how WannaCry spread"},
+	{873, "rsync", "an rsync daemon often serves whole directories to anybody who asks, with no password"},
 	{1433, "Microsoft SQL Server", "a database should be reached from the application, not the internet"},
 	{1521, "Oracle Database", "a database should be reached from the application, not the internet"},
+	{2049, "NFS", "a network file system hands out disks, and is not meant for the internet"},
 	{2375, "Docker API", "without TLS it hands control of the host to anybody who connects"},
+	{2379, "etcd", "it holds a cluster's configuration and secrets, and often answers without authentication"},
 	{3306, "MySQL", "a database should be reached from the application, not the internet"},
 	{3389, "Remote Desktop", "it is the most common way into a small organisation's network"},
 	{5432, "PostgreSQL", "a database should be reached from the application, not the internet"},
 	{5900, "VNC", "remote control of a desktop, often with a weak password or none"},
+	{5984, "CouchDB", "older versions have no password by default, and open ones are copied and wiped"},
 	{5985, "WinRM", "remote administration of Windows is not meant for the internet"},
 	{6379, "Redis", "it often has no password, and an open one is taken over in minutes"},
 	{9200, "Elasticsearch", "it often has no password, and open ones are copied and wiped"},
+	{10250, "Kubernetes kubelet", "with anonymous access left on, it runs commands in any container on the node"},
 	{11211, "Memcached", "it has no authentication and is used to amplify attacks"},
 	{27017, "MongoDB", "it often has no password, and open ones are copied and wiped"},
 }

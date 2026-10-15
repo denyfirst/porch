@@ -1606,6 +1606,74 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   overflow-wrap: anywhere;
 }
 
+/* What a line counted, item by item, folded under it (checkedList). The one
+   to act on is ringed in the insecure colour and says so in words, so the
+   state never rests on the colour alone. */
+.checked-list { margin-top: 0.55rem; }
+.checked-list > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.05rem 0.65rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+}
+.checked-list > summary::-webkit-details-marker { display: none; }
+.checked-list > summary::after {
+  content: "";
+  width: 0.36rem;
+  height: 0.36rem;
+  margin-top: -0.05rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+.checked-list[open] > summary::after { transform: rotate(45deg); margin-top: -0.2rem; }
+.checked-list > summary:hover,
+.checked-list > summary:focus-visible { border-color: var(--ink-faint); color: var(--ink); }
+.checked-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+.checked-item {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.1rem 0.75rem;
+  min-width: 0;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: 0.82rem;
+}
+/* The name takes the room; where the cell is narrow the state goes under it
+   rather than breaking a path in the middle of a word. */
+.checked-name { display: grid; flex: 1 1 9rem; min-width: 0; }
+.checked-name.is-inline { display: flex; flex: 0 0 auto; align-items: baseline; column-gap: 0.4rem; white-space: nowrap; }
+.checked-name.is-inline .checked-what { font-size: 0.82rem; color: var(--ink); }
+.checked-name code { font-family: var(--mono); font-size: 0.8rem; overflow-wrap: anywhere; }
+.checked-what { font-size: 0.74rem; color: var(--ink-faint); }
+.checked-state { font-size: 0.74rem; color: var(--ink-faint); white-space: nowrap; }
+.checked-item.is-found { border-color: var(--insecure); }
+.checked-item.is-found .checked-state { color: var(--insecure); font-weight: 600; }
+.checked-item.is-found .checked-state::before {
+  content: "";
+  display: inline-block;
+  margin-right: 0.35rem;
+  border: 0.22rem solid currentColor;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+
 .report-check-top,
 .report-body,
 .report-check-foot { padding-inline: clamp(1.1rem, 3vw, 1.9rem); }
@@ -1890,6 +1958,11 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
      a time. Kept whole, a page of response headers left the sheet before it
      blank under the check's verdict. */
   .report-body .grid { break-inside: auto; }
+
+  /* The lists print open (the beforeprint handler opens them), and the
+     control that folds them is the screen's. */
+  .checked-list > summary { display: none; }
+  .checked-item { break-inside: avoid; }
 }
 
 /* ── The console ─────────────────────────────────────────────────────────
@@ -3965,6 +4038,165 @@ main > .band:last-child { border-bottom: 0; }
 .command-copy:hover,
 .command-copy:focus-visible { border-color: var(--term-faint); }
 
+/*
+  A newer signed release, on New check, and the Updates part of This
+  installation.
+
+  In Porch's own colour and never a verdict's: an update is news about this
+  tool, not a finding about anybody's host, and a reader who has learned that
+  red means a host is exposed should not see it here. The buttons are drawn
+  in outline, which reads in both schemes; a light violet behind white text
+  does not.
+*/
+.update-banner {
+  margin: 0 0 1.4rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--tool);
+  border-radius: calc(var(--radius) + 4px);
+}
+
+.update-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.8rem;
+}
+
+.update-head p {
+  flex: 1 1 22rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.update-tag {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tool);
+  border: 1px solid var(--tool);
+  border-radius: 4px;
+  padding: 0 0.4rem;
+}
+
+.update-notes { font-size: 0.85rem; }
+
+.update-how { margin-top: 0.6rem; }
+
+.update-how > summary,
+.update-check {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.25rem 0.85rem;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--tool);
+  background: transparent;
+  border: 1px solid var(--tool);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.update-how > summary { list-style: none; }
+.update-how > summary::-webkit-details-marker { display: none; }
+
+.update-how > summary:hover,
+.update-how > summary:focus-visible,
+.update-check:hover:not(:disabled),
+.update-check:focus-visible { background: color-mix(in srgb, var(--tool) 10%, transparent); }
+
+.update-check:disabled {
+  cursor: progress;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+}
+
+.update-note {
+  max-width: 46rem;
+  margin: 0.7rem 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.update-note code { white-space: nowrap; }
+
+.update-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.update-line > span { flex: 1 1 20rem; min-width: 0; }
+.update-line .update-check { flex: none; }
+
+/* A fingerprint is one word as long as a phone is wide: it breaks anywhere
+   rather than pushing the panel past the screen. */
+.update-line .key-fingerprint { overflow-wrap: anywhere; }
+.update-toggle > span:last-child { min-width: 0; }
+
+.update-status {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.update-status:empty { display: none; }
+
+.update-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  cursor: pointer;
+}
+
+/* The box itself is kept for the keyboard and for screen readers, and drawn
+   as the switch beside it. */
+.update-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.update-switch {
+  position: relative;
+  flex: none;
+  width: 2.2rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.update-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.12rem;
+  left: 0.14rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.update-toggle input:checked + .update-switch { background: var(--tool); border-color: var(--tool); }
+.update-toggle input:checked + .update-switch::after { left: 1.1rem; background: var(--card); }
+.update-toggle input:focus-visible + .update-switch { outline: 2px solid var(--tool); outline-offset: 2px; }
+.update-toggle input:disabled + .update-switch { cursor: progress; border-style: dashed; }
+
 .steps .command {
   grid-column: 2;
   grid-row: 1 / 4;
@@ -5452,7 +5684,7 @@ main > .band:last-child { border-bottom: 0; }
     rule that does nothing and reads as one that does.
   */
   .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .topbar,
-  .summary-actions, .composer, .checks, .colophon-links,
+  .summary-actions, .composer, .checks, .colophon-links, .update-banner,
   .ask > h1, .ask-form {
     display: none !important;
   }

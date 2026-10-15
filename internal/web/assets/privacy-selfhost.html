@@ -95,7 +95,7 @@
     <ul class="plain">
       <li><strong>Transport</strong>: TLS handshakes at each version, each
         closed when it ends. No application data is sent. Then
-        one connection to each of sixteen ports of services that should not
+        one connection to each of twenty-one ports of services that should not
         face the internet, such as Remote Desktop and databases, closed as
         soon as it opens, with nothing sent.</li>
       <li><strong>Files</strong>: eleven paths of files that
@@ -136,8 +136,8 @@
     <h2 id="asked">Who else is asked</h2>
 
     <p>
-      Only the sources that hold the answer, asked directly from this machine,
-      and only about names it was shown control of. No service in between
+      For a check, only the sources that hold the answer, asked directly from
+      this machine, and only about names it was shown control of. No service in between
       learns what is checked.
     </p>
 
@@ -173,6 +173,11 @@
       {{if .ReadsCertificates}}<li><strong>Each name that answers</strong> may
         be asked for the certificate it presents: one handshake, closed when
         the certificate is read. Only for proven domains.</li>{{end}}
+      <li><strong>GitHub</strong>, where releases are published, is asked for
+        the latest release's signed list, only when you press Check now under
+        This installation or turn on the daily check. It is told nothing about
+        this installation or what it checks, and sees this machine's
+        address.</li>
       <li><strong>Nothing, for an address range you name.</strong>
         Its reverse records are read through the resolver, and not one packet
         is sent to the addresses themselves. Ranges are read only for whoever
@@ -201,8 +206,9 @@
       can read, sent to no other site. It ends when you sign out, after twelve
       hours, or when the installation restarts. No analytics, and nothing loaded from elsewhere. Your
       browser stores only your colour scheme, if you chose one. The clipboard
-      is written in one place: the Copy button next to a DNS record to
-      publish. A report is never put there.
+      is written by a Copy button and nothing else: next to a DNS record to
+      publish, and next to the commands for a newer release. A report is never
+      put there.
     </p>
 
 </article>

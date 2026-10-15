@@ -19,6 +19,11 @@ type Declaration struct {
 	// it, and a second meaning for the word would make the guard read as a false
 	// alarm on the day it fires for the right reason.
 	Says string `json:"says"`
+
+	// Checked is what the row counted, item by item, where it counted
+	// something: the files asked for under "Files that should not be
+	// public". Empty for a row that is one answer.
+	Checked []Checked `json:"checked,omitempty"`
 }
 
 // declaredHeaders are the headers a report lists, in the order a reader asks

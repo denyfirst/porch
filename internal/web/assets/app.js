@@ -417,6 +417,19 @@ function printButton() {
 window.addEventListener("beforeprint", () => {
   const stamp = document.getElementById("print-date");
   if (stamp) stamp.textContent = "Printed " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  // Every folded list is printed open, and folded again afterwards only if
+  // the reader had not opened it themselves.
+  for (const list of document.querySelectorAll("details.checked-list:not([open])")) {
+    list.open = true;
+    list.dataset.printOpened = "1";
+  }
+});
+
+window.addEventListener("afterprint", () => {
+  for (const list of document.querySelectorAll("details.checked-list[data-print-opened]")) {
+    list.open = false;
+    delete list.dataset.printOpened;
+  }
 });
 
 // reportFilename builds a name from the target.
@@ -791,10 +804,13 @@ function ciphers(tls, report) {
   const facts = el("dl", "pairs");
   let said = false;
 
-  function fact(label, value) {
+  function fact(label, value, checked) {
     if (!value) return;
     facts.appendChild(el("dt", null, label));
-    facts.appendChild(el("dd", null, value));
+    const dd = el("dd", null, value);
+    const list = checkedList(checked);
+    if (list) dd.appendChild(list);
+    facts.appendChild(dd);
     said = true;
   }
 
@@ -809,7 +825,7 @@ function ciphers(tls, report) {
   // Services on the host that should not face the internet. Built by the
   // server, so both faces read the same line (R16).
   if (report && report.exposureLine) {
-    fact("Exposed services", report.exposureLine);
+    fact("Exposed services", report.exposureLine, report.exposureChecked);
   }
   if (said) frag.appendChild(facts);
 
@@ -1534,12 +1550,46 @@ function declared(rows) {
   for (const row of rows) {
     const tr = el("tr");
     tr.appendChild(el("th", null, row.label));
-    tr.appendChild(el("td", null, row.says));
+    const td = el("td", null, row.says);
+    // A row that counted something carries what it counted (R4).
+    const list = checkedList(row.checked);
+    if (list) td.appendChild(list);
+    tr.appendChild(td);
     body.appendChild(tr);
   }
   table.appendChild(body);
   frag.appendChild(table);
   return frag;
+}
+
+// checkedList draws what a line counted, one item each, folded under the line
+// until asked for: the files a site was asked for, the ports a host was asked
+// on. The words are the server's (internal/policy.Checked), so the page and
+// the terminal say the same thing (R16); nothing is parsed as markup.
+//
+// Folded, because the line already answers the question and the list is
+// there for the reader who asks what it counted. On paper it is drawn open,
+// since nobody can unfold a sheet (see the print handlers below). A report
+// from before the list existed has none, and draws only the line.
+function checkedList(items) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const details = el("details", "checked-list");
+  details.appendChild(el("summary", null, items.length + " checked"));
+  const grid = el("div", "checked-grid");
+  for (const item of items) {
+    if (!item || typeof item.item !== "string") continue;
+    const cell = el("div", item.found ? "checked-item is-found" : "checked-item");
+    // A port reads with its service on one line, "445 SMB"; a path is long,
+    // so what it is goes under it, the same way in every cell.
+    const name = el("span", /^\d+$/.test(item.item) ? "checked-name is-inline" : "checked-name");
+    name.appendChild(el("code", null, item.item));
+    if (item.what) name.appendChild(el("span", "checked-what", item.what));
+    cell.appendChild(name);
+    cell.appendChild(el("span", "checked-state", item.state || ""));
+    grid.appendChild(cell);
+  }
+  details.appendChild(grid);
+  return details;
 }
 
 // delegation draws the servers the zone is answered by, one row each, so that a
@@ -2674,6 +2724,11 @@ function waitForProof(target, first) {
   copied is the text of the element on the screen, never a second string kept
   beside it — a page that copies something other than what it shows is how a
   command pasted into a terminal runs something its reader never saw.
+
+  The update commands on New check are that case too: text written in this
+  file, and a version number that came from a list the release key signed
+  and that is used only once it reads as a release name (updateCommands).
+  They name no host and nothing found; a version is public.
 */
 async function copyRecord(button) {
   const source = document.getElementById(button.dataset.copy);
@@ -2693,7 +2748,7 @@ async function copyRecord(button) {
   setTimeout(() => { button.textContent = "Copy"; }, 1500);
 }
 
-for (const holder of [proofDialog, document.getElementById("domain-record"), document.querySelector("#start .steps")]) {
+for (const holder of [proofDialog, document.getElementById("domain-record"), document.querySelector("#start .steps"), document.getElementById("update-banner")]) {
   if (!holder) continue;
   holder.addEventListener("click", event => {
     const button = event.target.closest("[data-copy]");
@@ -3918,4 +3973,257 @@ function namesLimits(data) {
 
   wrap.appendChild(list);
   return wrap;
+}
+
+/*
+  Updates: whether a newer signed release exists, and how to install it.
+
+  Nothing here asks GitHub. The page asks this installation, which answers
+  with what its last check found; only Check now and the daily switch under
+  This installation make it ask, and it believes the answer only if the
+  release key signed it (internal/updates). The version is the one thing
+  taken from that answer, and it is used only once it reads as a release
+  name: in the banner's words, in the link to the release's notes, and in
+  the commands. Every other character of the commands is written here.
+
+  The commands install nothing from the page. They run on the server, in
+  the operator's own terminal, and check the signature again there with the
+  key written below, so a page that was lied to can at worst show a banner.
+  Each line is safe on its own, because a pasted line runs whether or not
+  the one before it worked: the files go into a folder of their own named
+  for the version, the folder is made only where the compose file is, and
+  the compose file in use is replaced in the one line that first checks the
+  signature, that the signed list is this version's and not an older one's,
+  and the file's digest.
+*/
+const RELEASE_NAME = /^v\d{1,4}\.\d{1,4}\.\d{1,4}$/;
+const RELEASE_SIGNER = "releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR";
+const RELEASE_FINGERPRINT = "SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y";
+const RELEASE_PAGE = "https://github.com/denyfirst/porch/releases/";
+
+// The lines, as pieces a terminal would colour: [class, text], or text.
+function updateCommands(version) {
+  if (!RELEASE_NAME.test(version)) return null;
+  const dir = "update-" + version;
+  const C = t => ["t-c", t], F = t => ["t-f", t], S = t => ["t-s", t], O = t => ["t-o", t];
+  return [
+    [C("test"), " ", F("-f"), " docker-compose.yml ", O("&&"), " ", C("mkdir"), " ", F("-p"), " " + dir],
+    [C("for"), " f ", C("in"), " docker-compose.yml SHA256SUMS SHA256SUMS.sig", O(";"), " ", C("do"), " ",
+      C("curl"), " ", F("-fsSL"), " ", F("-o"), " ", S("\"" + dir + "/${f}\""), " ",
+      S("\"" + RELEASE_PAGE + "download/" + version + "/${f}\""), O(";"), " ", C("done")],
+    [C("echo"), " ", S("'" + RELEASE_SIGNER + "'"), " ", O(">"), " " + dir + "/allowed_signers"],
+    [C("if"), " ", C("ssh-keygen"), " ", F("-Y"), " verify ", F("-f"), " " + dir + "/allowed_signers ",
+      F("-I"), " releases@denyfirst.dev ", F("-n"), " file ", F("-s"), " " + dir + "/SHA256SUMS.sig ",
+      O("<"), " " + dir + "/SHA256SUMS ", O("&&"), " ",
+      C("grep"), " ", F("-qF"), " ", S("'_" + version + "_'"), " " + dir + "/SHA256SUMS ", O("&&"), " ",
+      O("("), C("cd"), " " + dir + " ", O("&&"), " ", C("sha256sum"), " ", F("--ignore-missing"), " ", F("-c"), " SHA256SUMS", O(")"),
+      O(";"), " ", C("then"), " ",
+      O("("), C("test"), " ", F("-e"), " docker-compose.yml.before-" + version + " ", O("||"), " ",
+      C("cp"), " docker-compose.yml docker-compose.yml.before-" + version, O(")"), " ", O("&&"), " ",
+      C("cp"), " " + dir + "/docker-compose.yml docker-compose.yml ", O("&&"), " ",
+      C("docker"), " compose up ", F("-d"), O(";"), " ",
+      C("else"), " ", C("echo"), " ", S("'STOP: " + version + " did not verify; nothing was changed'"), O(";"), " ", C("fi")],
+  ];
+}
+
+function drawCommands(code, lines) {
+  clear(code);
+  lines.forEach((line, i) => {
+    if (i > 0) code.appendChild(document.createTextNode("\n"));
+    const ln = el("span", "ln");
+    for (const piece of line) {
+      if (typeof piece === "string") ln.appendChild(document.createTextNode(piece));
+      else ln.appendChild(el("span", piece[0], piece[1]));
+    }
+    code.appendChild(ln);
+  });
+}
+
+// When a check ran, as the page says it: "2026-10-12 09:14 UTC".
+function checkedWhen(at) {
+  const m = typeof at === "string" && /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}Z$/.exec(at);
+  return m ? m[1] + " " + m[2] + " UTC" : null;
+}
+
+// The answer, read as this page needs it and nothing more: a version that is
+// not a release name is no version.
+function readUpdates(data) {
+  const d = data && typeof data === "object" ? data : {};
+  const latest = typeof d.latest === "string" && RELEASE_NAME.test(d.latest) ? d.latest : "";
+  return {
+    running: typeof d.running === "string" ? d.running.slice(0, 64) : "",
+    latest,
+    newer: d.newer === true && latest !== "",
+    daily: d.daily === true,
+    tampered: d.tampered === true,
+    error: typeof d.error === "string" ? d.error.slice(0, 300) : "",
+    checked: checkedWhen(d.checkedAt),
+  };
+}
+
+const UPDATES_WAIT = 30000;
+
+async function updatesRequest(method, path, body) {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), UPDATES_WAIT);
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: abort.signal,
+    });
+  } catch {
+    throw new Error("The installation could not be reached. Try again.");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (response.status === 401) {
+    window.location.assign("/login");
+    throw new Error("Sign in to use this installation.");
+  }
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("The installation sent something this page could not read.");
+  }
+  if (!response.ok) {
+    const error = data && data.error ? data.error : {};
+    throw new Error(typeof error.message === "string" ? error.message : "The installation did not answer as expected.");
+  }
+  return readUpdates(data);
+}
+
+// New check: the banner, when the last check found a newer release, or a
+// warning, when the list GitHub served did not verify. Nothing otherwise.
+function showUpdateBanner(state) {
+  const banner = document.getElementById("update-banner");
+  const text = document.getElementById("update-text");
+  const tag = document.getElementById("update-tag");
+  const notes = document.getElementById("update-notes");
+  const how = document.getElementById("update-how");
+  clear(text);
+
+  if (state.tampered) {
+    tag.textContent = "Warning";
+    text.appendChild(el("strong", null, "Do not update now."));
+    text.appendChild(document.createTextNode(
+      " The release list GitHub served" + (state.checked ? " at " + state.checked : "") +
+      " does not verify with the release key, so it may not be the project's. " +
+      "Check a release by hand as docs/verify.md says before installing anything."));
+    notes.hidden = true;
+    how.hidden = true;
+    banner.hidden = false;
+    return;
+  }
+
+  const lines = state.newer ? updateCommands(state.latest) : null;
+  if (!lines) {
+    banner.hidden = true;
+    return;
+  }
+  tag.textContent = "Update";
+  text.appendChild(el("strong", null, "Porch " + state.latest + " is available."));
+  text.appendChild(document.createTextNode(
+    " Its signed list verified with the release key; this installation runs " + state.running + "."));
+  notes.href = RELEASE_PAGE + "tag/" + state.latest;
+  notes.hidden = false;
+
+  const note = document.getElementById("update-note");
+  clear(note);
+  for (const piece of [
+    "Run them on the server, in the folder the compose file is in. They download " + state.latest +
+      "'s compose file and signed list into ", ["update-" + state.latest],
+    ", check the signature with the key written into this page and that the list is " + state.latest +
+      "'s, and only then keep the compose file in use as ", ["docker-compose.yml.before-" + state.latest],
+    ", put the new one in its place and restart. If anything does not verify they print STOP and change " +
+      "nothing. Changes of your own belong in ", ["docker-compose.override.yml"],
+    ", which Docker Compose reads beside it and an update leaves alone.",
+  ]) {
+    note.appendChild(typeof piece === "string" ? document.createTextNode(piece) : el("code", null, piece[0]));
+  }
+  drawCommands(document.getElementById("update-commands"), lines);
+  how.hidden = false;
+  banner.hidden = false;
+}
+
+const updateBanner = document.getElementById("update-banner");
+if (updateBanner && !DEMO_SITE) {
+  updatesRequest("GET", "/api/v1/updates").then(showUpdateBanner, () => {
+    // No answer is no banner: this page is for checking names, and whether
+    // the installation could say is shown under This installation.
+  });
+}
+
+// This installation: what runs, what the last check found, Check now, and
+// the daily check.
+function showUpdates(state) {
+  document.getElementById("updates-running").textContent = state.running || "Not known.";
+
+  const latest = document.getElementById("updates-latest");
+  clear(latest);
+  if (state.latest) {
+    latest.appendChild(el("strong", null, state.latest));
+    const said = state.latest === state.running ? ", the one this installation runs."
+      : state.newer ? ", newer than this one."
+        : RELEASE_NAME.test(state.running) ? ", not newer than this one."
+          : ". This build is not a release, so whether it is behind is not said.";
+    latest.appendChild(document.createTextNode(said + " Signed by the release key "));
+    latest.appendChild(el("code", "key-fingerprint", RELEASE_FINGERPRINT));
+    latest.appendChild(document.createTextNode(state.checked ? "; checked " + state.checked + "." : "."));
+  } else {
+    latest.textContent = state.checked ? "Not known: the last check found nothing it could believe." : "Not checked yet.";
+  }
+
+  // The reason a check failed is the installation's own sentence, from a
+  // fixed list (internal/updates); a tampered list is said first.
+  document.getElementById("updates-status").textContent = state.error
+    ? (state.checked ? "The check at " + state.checked + " failed: " : "The last check failed: ") + state.error + "."
+    : "";
+
+  const daily = document.getElementById("updates-daily");
+  daily.checked = state.daily;
+  daily.disabled = false;
+  document.getElementById("updates-daily-state").textContent = state.daily ? "On." : "Off.";
+  document.getElementById("updates-check").disabled = false;
+}
+
+const updatesCheck = document.getElementById("updates-check");
+if (updatesCheck && !DEMO_SITE) {
+  const status = document.getElementById("updates-status");
+  const daily = document.getElementById("updates-daily");
+
+  updatesRequest("GET", "/api/v1/updates").then(showUpdates, err => {
+    status.textContent = err.message;
+  });
+
+  updatesCheck.addEventListener("click", async () => {
+    updatesCheck.disabled = true;
+    status.textContent = "Checking with GitHub…";
+    try {
+      showUpdates(await updatesRequest("POST", "/api/v1/updates/check"));
+    } catch (err) {
+      status.textContent = err.message;
+    } finally {
+      updatesCheck.disabled = false;
+    }
+  });
+
+  daily.addEventListener("change", async () => {
+    const wanted = daily.checked;
+    daily.disabled = true;
+    try {
+      showUpdates(await updatesRequest("POST", "/api/v1/updates/daily", { daily: wanted }));
+    } catch (err) {
+      // Not kept is shown as not kept: the switch goes back to what is.
+      daily.checked = !wanted;
+      status.textContent = err.message;
+    } finally {
+      daily.disabled = false;
+    }
+  });
 }

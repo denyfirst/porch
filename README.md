@@ -29,9 +29,10 @@ connection a scan makes.
 
 ## Principles
 
-- **Your data stays with you.** There is no log of who checked what. Results
-  are kept only where you say: a directory, or a history encrypted under your
-  password.
+- **Your data stays with you.** There is no log of who checked what. The
+  service keeps results only encrypted under your password; the command line
+  keeps none. Nothing reports back: the one thing a copy asks about itself,
+  whether a newer signed release exists, it asks GitHub when you tell it to.
 - **Only your own domains.** A copy checks a domain only after the domain
   publishes a TXT record proving control.
 - **Nothing intrusive.** No exploits, no malformed packets, no port scanning,

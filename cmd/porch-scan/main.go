@@ -674,6 +674,7 @@ func printReport(w io.Writer, r result) {
 	}
 	if r.ExposureLine != "" {
 		fmt.Fprintf(w, "\n  Exposed       %s\n", wrap(r.ExposureLine, 60, "                "))
+		printChecked(w, "                ", r.ExposureChecked, true)
 	}
 
 	printCertificate(w, r)

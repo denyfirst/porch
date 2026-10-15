@@ -114,6 +114,11 @@ jobs:
             target: FuzzDKIMRecord
           - package: ./internal/dmarcreports
             target: FuzzReportDestinations
+          # Whatever GitHub serves as a release's signature is refused unless
+          # it is the release's: the one check between the network and the
+          # version an update banner names. Added on 2026-10-15.
+          - package: ./internal/sshsig
+            target: FuzzVerify
 
     steps:
       - name: Check out the commit under test
