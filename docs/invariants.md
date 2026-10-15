@@ -1979,9 +1979,14 @@ step
 ### S16 — What somebody runs is what they verified
 
 *Enforced in:* `Dockerfile`, `docker-compose.yml`, `docs/self-host.md`,
-`cmd/porchd.trustStoreUsable`
+`cmd/porchd.trustStoreUsable`, `scripts/build.sh` and
+`internal/web.pageRelease` (the install names its release, never GitHub's
+latest, and checks the signed list is that release's)
 
-*Guarded by:* `TestTheInstallNamesTheReleaseKeysFingerprint`,
+*Guarded by:* `TestTheInstallFetchesTheReleaseThatServesThePage`,
+`TestOnlyAReleaseNameIsWrittenIntoTheInstall`,
+`TestTheGuideNamesTheReleaseItInstalls`,
+`TestTheInstallNamesTheReleaseKeysFingerprint`,
 `TestTheInstallCarriesTheReleaseKeyAndFailsClosed`,
 `TestTheImageHasNoBaseSystem`, `TestTheComposeFileTakesAwayWhatItSays`,
 `TestAnEmptyTrustStoreStopsTheServiceStarting`,
@@ -2025,7 +2030,7 @@ demonstration), `internal/web/assets/app.js` (`updateCommands`,
 `TestTheUpdateCheckExistsOnlyBehindThePassword`,
 `TestTheUpdateCommandsCarryTheReleaseKey`,
 `TestTheBannerUsesOnlyAVersionThatIsAReleaseName`,
-`TestTheUpdatePartsAreOnTheirPages`
+`TestTheUpdatePartsAreOnTheirPages`, `TestTheBannerSaysWhenItsReleaseWasFound`
 
 ---
 

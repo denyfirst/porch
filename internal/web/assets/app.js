@@ -4130,6 +4130,17 @@ function showUpdateBanner(state) {
   text.appendChild(el("strong", null, "Porch " + state.latest + " is available."));
   text.appendChild(document.createTextNode(
     " Its signed list verified with the release key; this installation runs " + state.running + "."));
+
+  // What the last check found, and when: a banner is never refreshed by
+  // loading the page, which asks GitHub nothing, so a newer release than this
+  // one may exist since. The way to look again is named, not taken.
+  const again = document.createElement("a");
+  again.href = "/installation#updates";
+  again.textContent = "This installation";
+  text.appendChild(document.createTextNode(
+    " Found by the check" + (state.checked ? " at " + state.checked : "") + "; Check now under "));
+  text.appendChild(again);
+  text.appendChild(document.createTextNode(" looks for anything newer."));
   notes.href = RELEASE_PAGE + "tag/" + state.latest;
   notes.hidden = false;
 

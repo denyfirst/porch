@@ -53,10 +53,12 @@ func TestTheDemonstrationOffersNoDownloadAndNoCounter(t *testing.T) {
 // The guide is the reference and says why each step is there; a command on
 // the page that the guide no longer gives is one nobody is maintaining.
 func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
-	page, err := assets.ReadFile("assets/porch.html")
+	raw, err := assets.ReadFile("assets/porch.html")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The page names its release where the guide says ${V}.
+	page := []byte(asGuide(string(raw)))
 	guide, err := os.ReadFile("../../docs/self-host.md")
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +186,7 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 	// nobody goes looking for a second way that skips the signature.
 	said := strings.Join(strings.Fields(shownText(string(raw))), " ")
 	for _, sentence := range []string{
-		"Downloads the compose file shown below and checks its signature.",
+		"compose file, shown below, and checks its signature",
 		"Read it before you run it. Step 1 downloads and checks the real file.",
 	} {
 		if !strings.Contains(said, sentence) {
@@ -279,10 +281,12 @@ func TestEachDenyfirstPhraseIsSaidOnceWhereItBelongs(t *testing.T) {
 // stays public after everything else is gone and says the domain was checked
 // with Porch. Long explanations are the guide's; the page names the command.
 func TestThePorchPageSaysHowToRemoveIt(t *testing.T) {
-	page, err := assets.ReadFile("assets/porch.html")
+	raw, err := assets.ReadFile("assets/porch.html")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The page names its release where the guide says ${V}.
+	page := []byte(asGuide(string(raw)))
 	guide, err := os.ReadFile("../../docs/self-host.md")
 	if err != nil {
 		t.Fatal(err)

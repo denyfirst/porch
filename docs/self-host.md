@@ -19,13 +19,17 @@ release's two Linux binaries, built byte for byte the same wherever they are
 built. The release's `docker-compose.yml` names the image **by digest**, so
 the compose file is the only thing a server has to check.
 
-1. Get the compose file and the signed list that covers it, and check them:
+1. Get the compose file and the signed list that covers it, and check them.
+   Set `V` to the release to install: the one
+   [porch.denyfirst.dev](https://porch.denyfirst.dev) names, whose page shows
+   these lines with it filled in, or the newest on the releases page.
 
    ```sh
+   V=vX.Y.Z
    mkdir -p porch && cd porch
-   for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/latest/download/${f}"; done
+   for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
    echo 'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR' > allowed_signers
-   ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }
+   ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && grep -qF "_${V}_" SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }
    ```
 
    It has to print `Good "file" signature for releases@denyfirst.dev with
@@ -35,7 +39,11 @@ the compose file is the only thing a server has to check.
 
    The key is written out rather than fetched: a key fetched from GitHub comes
    from the same place as the release, and whoever could replace one could
-   replace the other. [`verify.md`](verify.md) says what each part proves.
+   replace the other. The release is named rather than taken from GitHub's
+   *latest* for the same reason: a signature says who made a release, not
+   that it is the newest, so a redirect moved to an older release would pass
+   it. The `grep` checks that the signed list is `V`'s.
+   [`verify.md`](verify.md) says what each part proves.
 
 2. Make the data directory for the user the container runs as, and start it.
    The image has no shell to do this from inside:
@@ -298,10 +306,13 @@ docker compose run --rm scan -check mail example.com
 ```
 
 Anywhere else, download `porch-scan` for your system with the list and its
-signature, check them as [`verify.md`](verify.md) says, then make it runnable:
+signature, check them as [`verify.md`](verify.md) says, then make it runnable.
+`V` is the release, named as in step 1 rather than read from GitHub's
+*latest*; the file's name carries it, so a list for another release does not
+cover it:
 
 ```sh
-V=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/denyfirst/porch/releases/latest)")
+V=vX.Y.Z
 OS=$(uname -s | tr '[:upper:]' '[:lower:]'); A=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
 for f in "porch-scan_${V}_${OS}_${A}" SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
 mv "porch-scan_${V}_${OS}_${A}" porch-scan && chmod +x porch-scan
