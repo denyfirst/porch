@@ -405,6 +405,13 @@ type ExchangerTLS struct {
 	LegacyAccepted bool   `json:"legacyAccepted,omitempty"`
 	LegacyVersion  string `json:"legacyVersion,omitempty"`
 	LegacyReason   string `json:"legacyReason,omitempty"`
+
+	// Software is which mail server the greeting named, from a fixed list,
+	// and whether a version came with it; never the version itself.
+	// SoftwareLine says it in the words both faces print (R16), and is empty
+	// where no greeting was read.
+	Software     []Software `json:"software,omitempty"`
+	SoftwareLine string     `json:"softwareLine,omitempty"`
 }
 
 // legacyVersion is a version RFC 8996 retired, or older, by the name
@@ -888,6 +895,9 @@ func describeMail(f MailFacts) []Note {
 
 	out = append(out, describeMailPath(f)...)
 	out = append(out, describeExchangers(f)...)
+	if n, ok := mailVersionNote(f.Exchangers); ok {
+		out = append(out, n)
+	}
 
 	// The limits of the method, from the one place that declares them. A
 	// report that wrote its own would drift from the page explaining them, and

@@ -11,6 +11,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -227,6 +228,21 @@ func TestAnExchangerOfferingSTARTTLSIsUpgradedAndJudged(t *testing.T) {
 	commands := s.commands()
 	if last := commands[len(commands)-1]; last != "QUIT" {
 		t.Errorf("the last thing heard was %q, want QUIT over TLS; heard %v", last, commands)
+	}
+}
+
+// Which mail server the greeting named is kept, and the greeting is not.
+func TestTheGreetingNamesTheServerAndIsNotKept(t *testing.T) {
+	cert, roots := certificateFor(t, exchanger)
+	s := offering(cert)
+	s.greeting = "220-mx.example.test ESMTP Exim 4.96 #2 Wed, 15 Oct 2026 09:48:35 +0000\r\n220 secret-banner-text\r\n"
+
+	got := probe(t, pipeProber(s, roots))
+	if len(got.Software) != 1 || got.Software[0].Name != "Exim" || !got.Software[0].Versioned {
+		t.Errorf("the greeting was read as %+v", got.Software)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", got), "secret-banner-text") || strings.Contains(fmt.Sprintf("%+v", got), "4.96") {
+		t.Errorf("the greeting's text reached the result: %+v", got)
 	}
 }
 

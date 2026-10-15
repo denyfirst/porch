@@ -7,6 +7,7 @@ import (
 	"github.com/denyfirst/porch/internal/challenge"
 	"github.com/denyfirst/porch/internal/crl"
 	"github.com/denyfirst/porch/internal/ctsearch"
+	"github.com/denyfirst/porch/internal/liveness"
 	"github.com/denyfirst/porch/internal/webprobe"
 )
 
@@ -34,6 +35,7 @@ func TestEveryRequestThisProjectMakesNamesTheTool(t *testing.T) {
 		{"the revocation list fetch", crl.UserAgent},
 		{"the transparency log search", ctsearch.UserAgent},
 		{"the verification file fetch", challenge.UserAgent},
+		{"the question to a name that points at a hosting service", liveness.UserAgent},
 	} {
 		if !strings.HasPrefix(tc.sent, ToolName+"/") {
 			t.Errorf("%s identifies itself as %q, which does not begin with %q. An administrator "+

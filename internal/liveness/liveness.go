@@ -20,9 +20,16 @@
 // # What is sent, and what is not
 //
 // One resolution per name, and at most one connection to each address that a
-// resolution produced — opened and closed, carrying nothing. No request is
-// made, no protocol is spoken, nothing is guessed: every name here came from a
-// record that named it.
+// resolution produced — opened and closed, carrying nothing. Nothing is
+// guessed: every name here came from a record that named it.
+//
+// One request is made, and only of a name that is an alias to a service on a
+// fixed list (see providers) and answered on port 80: GET / over plain HTTP,
+// to the address already resolved, nothing followed, at most 16 KiB of the
+// answer read and none of it kept. It asks the one question the connection
+// cannot: whether the service answers as it does for a name nobody has
+// claimed there. Plain HTTP because such a service presents no certificate for
+// a name it does not know, and checking one is never turned off here.
 //
 // An address nothing may dial is never dialled. That covers the private and
 // reserved ranges, and it is the case that matters most in practice: a resolver
@@ -35,6 +42,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -75,6 +83,15 @@ const (
 	// has not established and will not guess at (R17).
 	Dangling Status = "dangling"
 
+	// Unclaimed: it is an alias to a service on a fixed list, and that service
+	// answered it as it answers a name nobody has claimed there.
+	//
+	// What was measured is the answer, matched against what the service is
+	// known to say. Whether somebody else can then claim the name depends on
+	// that service's rules on the day, which this has not established; the
+	// report says "may" for that reason (R17).
+	Unclaimed Status = "unclaimed"
+
 	// Unchecked: nothing was established, and the reason says why.
 	Unchecked Status = "unchecked"
 )
@@ -99,6 +116,10 @@ type Name struct {
 
 	// Answered are the ports that accepted a connection.
 	Answered []string `json:"answered,omitempty"`
+
+	// Provider is the service an unclaimed name points at, by the name the
+	// list gives it.
+	Provider string `json:"provider,omitempty"`
 
 	// Reason says why nothing was established, where nothing was.
 	Reason string `json:"reason,omitempty"`
@@ -235,6 +256,7 @@ func (c *Checker) one(ctx context.Context, name string) Name {
 	if len(answer.Alias) > 0 {
 		out.Alias = strings.ToLower(strings.TrimSuffix(answer.Alias[0], "."))
 	}
+	host := providerOf(answer.Alias)
 
 	out.Addresses = addresses
 	if len(addresses) == 0 {
@@ -276,6 +298,10 @@ func (c *Checker) one(ctx context.Context, name string) Name {
 		out.Status = Live
 	} else {
 		out.Status = Silent
+	}
+
+	if host != nil && slices.Contains(out.Answered, "80") && c.unclaimed(ctx, name, reachable[0], host) {
+		out.Status, out.Provider = Unclaimed, host.name
 	}
 	return out
 }

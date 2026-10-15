@@ -53,6 +53,14 @@ func printExchangers(w io.Writer, f *policy.MailFacts) {
 	for _, b := range f.DANEBindings {
 		fmt.Fprintf(w, "    DANE       %s: %s\n", b.Host, daneLine(b))
 	}
+	for _, x := range f.Exchangers {
+		// Built by the rules, so both faces print the same line (R16), and
+		// only where a greeting was read.
+		if x.SoftwareLine == "" {
+			continue
+		}
+		fmt.Fprintf(w, "    SOFTWARE   %s: %s\n", x.Host, x.SoftwareLine)
+	}
 }
 
 // daneLine is what one exchanger's DANE records made of its certificate, in the

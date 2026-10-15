@@ -84,6 +84,10 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, se
 	// this is a row and not a rule. No document requires a version of HTTP.
 	out = append(out, Declaration{Label: "Served over", Says: cut(f.Protocol, maxDeclared)})
 
+	// What answered, by the names the response gave it, and whether a version
+	// came too. Never the version: see internal/announce.
+	out = append(out, Declaration{Label: "Software named", Says: webSoftwareLine(f.Software)})
+
 	for _, h := range declaredHeaders {
 		out = append(out, Declaration{Label: h.label, Says: cut(f.Values[h.header], maxDeclared)})
 	}
@@ -96,6 +100,11 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, se
 	out = append(out, Declaration{Label: "Cookies", Says: cookieLine(cookies)})
 	out = append(out, Declaration{Label: "The page", Says: pageLine(content)})
 
+	// The same page, asked again as though from a site it cannot know. After
+	// the rows read from the first answer, because it is a second request,
+	// and before the three about other addresses, because it is this page.
+	out = append(out, Declaration{Label: "Asked from another site", Says: corsLine(f.CORS)})
+
 	// Last, the three rows that are not about the response a visitor landed on:
 	// the other form of the name, the other protocol, and the file that says how
 	// to report a fault. Each cost this check its own connection, which is why
@@ -104,6 +113,26 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, se
 	out = append(out, Declaration{Label: "Over IPv6", Says: ipv6Line(v6)})
 	out = append(out, Declaration{Label: "Security contact", Says: securityTxtLine(sec, now)})
 	return out
+}
+
+// corsLine says whether the page named back a site it cannot know.
+//
+// The origin is in every answer, because it is what a reader checking this
+// by hand needs to send, and it is this program's own text rather than
+// anything the server wrote.
+func corsLine(c CORSAnswer) string {
+	switch {
+	case !c.Asked:
+		return "not asked"
+	case !c.Answered:
+		return c.Reason
+	case c.Reflected && c.Credentials:
+		return c.Origin + " was named back, with credentials allowed"
+	case c.Reflected:
+		return c.Origin + " was named back, without credentials, which shares what anyone can fetch"
+	default:
+		return c.Origin + " was not named back"
+	}
 }
 
 // contentPolicyLine says where a content policy was declared, and whether it

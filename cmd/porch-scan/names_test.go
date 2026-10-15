@@ -383,6 +383,7 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 			{Name: "old.example.test", LastSeen: day(2022, 6, 1)},
 			{Name: "inside.example.test", LastSeen: day(2026, 9, 1)},
 			{Name: "moved.example.test", LastSeen: day(2026, 9, 1)},
+			{Name: "docs.example.test", LastSeen: day(2026, 9, 1)},
 		},
 	}).WithLiveness([]liveness.Name{
 		{Name: "api.example.test", Status: liveness.Live,
@@ -391,6 +392,8 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 		{Name: "inside.example.test", Status: liveness.Internal,
 			Addresses: addrsFor(t, "172.23.0.11")},
 		{Name: "moved.example.test", Status: liveness.Dangling, Alias: "target.elsewhere.test"},
+		{Name: "docs.example.test", Status: liveness.Unclaimed, Alias: "someone.github.io",
+			Provider: "GitHub Pages", Addresses: addrsFor(t, "185.199.108.153"), Answered: []string{"80"}},
 	}))
 	out := buf.String()
 
@@ -400,6 +403,7 @@ func TestWhatEachNameIsDoingIsTheFirstThingOnTheLine(t *testing.T) {
 		"gone      old.example.test    certificate does not resolve",
 		"internal  inside.example.test certificate 172.23.0.11",
 		"dangling  moved.example.test  certificate an alias to target.elsewhere.test, which does not resolve",
+		"an alias to someone.github.io, which GitHub Pages answers as a name nobody has claimed there",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the report does not say %q:\n%s", want, out)

@@ -139,7 +139,11 @@ handshakes), `internal/mailscan.readExchangerTLS` and
 ### N7 — An HTTP request is one GET of the root, and no path is ever invented
 
 One `GET` of `/` over HTTPS and over plaintext; after that, only the addresses
-a `Location` header names. The only other paths ever asked for are files that
+a `Location` header names, and the last page reached over HTTPS once more with
+an `Origin` header naming a site that cannot exist, its answer not followed and
+its body not read. A name in an inventory that is an alias to a hosting service
+on a fixed list is asked `GET /` once, nothing followed and nothing kept. The
+only other paths ever asked for are files that
 exist to be read by strangers: `/.well-known/security.txt`,
 `/.well-known/mta-sts.txt` where a zone announces a policy, and
 `/.well-known/porch-challenge` for proof of control — and the fixed list in
@@ -147,11 +151,18 @@ exist to be read by strangers: `/.well-known/security.txt`,
 name, never derived from anything the site said, and nothing they hold kept.
 
 *Enforced in:* `internal/webprobe`, `internal/markup`,
-`internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
+`internal/webprobe.Prober.pageFacts`, `internal/webprobe.Prober.cors`,
+`internal/webscan.Scanner.Scan`,
 `internal/httpapi.Server.operatorView`, `internal/leaks.Files`,
 `internal/leaks.Prober.Probe`, `internal/webscan.withLeaks`
 
 *Guarded by:* `TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestANameTheServiceSaysNobodyClaimedIsSaid`,
+`TestOnlyTheServicesOwnAnswerCounts`, `TestNoRequestIsMadeOfANameOffTheList`,
+`TestWhichAliasesAreAServicesOwn`,
+`TestTheSecondRequestGoesToTheLandingPageWithOnlyTheOriginAdded`,
+`TestNoPageReachedOverTLSIsNotAskedWhomItTrusts`,
+`TestTheQuestionSaysTheScanRanOutRatherThanThatThePageWouldNotAnswer`,
 `TestASiteThatAnswersEverythingHasNothingExposed`,
 `TestEachFileIsRecognisedByWhatItIs`, `TestALookAlikeIsNotTheFile`,
 `TestASiteNotReachedIsNotASiteWithNothingExposed`,
@@ -399,7 +410,8 @@ name, never derived from anything the site said, and nothing they hold kept.
 `internal/hstspreload`, `internal/webscan.withPreload`,
 `internal/rpki`, `internal/dnsscan.Scanner.readRoutes`,
 `cmd/porch-scan.removedFlags`, `internal/liveness`,
-`internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
+`internal/liveness.Checker.one`, `internal/liveness.Checker.unclaimed`,
+`internal/dnsclient.withPort`,
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`, `internal/inventory`,
 `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
 `cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`,
@@ -555,6 +567,7 @@ name, never derived from anything the site said, and nothing they hold kept.
 `TestARegisterIsAskedOnlyOverHTTPS`,
 `TestTheCertificatesTheLoggedLineCountsAreListed`,
 `TestTheCertificatesTheLoggedLineCountsArePrinted`,
+`TestResemblanceSaysWhatMatches`, `TestAMatchIsNotCalledSafe`,
 `TestTheNameIsFoldedIntoTheQuery`,
 `TestAwkwardNamesDoNotEscapeTheQuery`,
 `TestNothingThatIsNotAnAnswerReadsAsNoneFound`,
@@ -1507,9 +1520,10 @@ RFC 8657 account and method limits
 `internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
 `internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
 `internal/markup`, `internal/spf`, `internal/dkim`,
-`internal/webprobe.recorded`, `internal/dnsscan`
+`internal/webprobe.recorded`, `internal/dnsscan`, `internal/announce`
 
 *Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`,
+`TestOnlyANameShapedTokenIsKept`, `TestAGreetingIsReadForTheListAndNothingElse`,
 `TestNothingCanActOnTheDisplay`, `TestAContactCannotActOnTheDisplay`,
 `TestAReportAddressCannotActOnTheDisplay`,
 `TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
@@ -1538,9 +1552,19 @@ RFC 8657 account and method limits
 *Enforced in:* `internal/policy/web.go`, `internal/policy/cookies.go`,
 `internal/policy/headers.go`, `internal/tlsprobe.Fallback` (whether a
 downgraded hello carrying `TLS_FALLBACK_SCSV` is refused: described, never
-graded, because what a downgrade costs is the grade of the version it lands on)
+graded, because what a downgrade costs is the grade of the version it lands on),
+`internal/policy/software.go` (the software a server names and whether with a
+version: reported, never graded, and the version itself never kept)
 
 *Guarded by:* `TestAShortMaxAgeIsDescribedAndNotGraded`,
+`TestSoftwareNamedIsReportedAndNeverGraded`,
+`TestWhatEachGreetingNamedIsOneRowAndOneSentence`,
+`TestTheNameIsKeptAndTheVersionIsNot`,
+`TestTheGreetingNamesTheServerAndIsNotKept`,
+`TestTheSoftwareNamedIsKeptWithoutItsVersion`,
+`TestWhatAGreetingNamedReachesTheReport`,
+`TestTheSoftwareTheResponseNamedReachesTheRow`,
+`TestWhatAGreetingNamedIsARow`,
 `TestTheFallbackSignalIsReadInAllThreeWays`,
 `TestTheFallbackIsNotAskedOfASingleVersion`,
 `TestAnExchangerWithoutSTARTTLSIsDescribedAndNotGraded`,
@@ -1561,6 +1585,12 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestACookieCarriesTheTransportItWasSetOn`,
 `TestCorsHeadersThatContradictEachOtherAreGraded`,
 `TestEitherHalfOfTheCorsPairAloneIsNotGraded`,
+`TestAPageThatTrustsAnyOriginWithCredentialsIsInsecure`,
+`TestOnlyBothHalvesOfTheReflectionAreGraded`,
+`TestThePageIsReadAsABrowserReadsIt`,
+`TestTheRowSaysWhetherAnotherSiteWasNamedBack`,
+`TestHowThePageAnsweredAnotherSiteReachesTheReport`,
+`TestTheOriginInTheSentenceIsTheOneThisProgramSends`,
 `TestTheRecommendedHeadersAreReportedAndNotGraded`,
 `TestNosniffIsReportedAndNotGraded`,
 `TestAContentSecurityPolicySupersedesTheOlderFramingHeader`,

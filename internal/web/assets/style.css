@@ -1585,6 +1585,10 @@ a.report-row-title:hover { color: var(--link); }
 }
 .report-logged-serial { font-family: var(--mono); color: var(--ink); overflow-wrap: anywhere; }
 
+/* How it compares with the one presented: a fact under the names, in the
+   reading ink, and never in a verdict's colour. A match is not a pass. */
+.report-logged-resemblance { font-size: 0.84rem; color: var(--ink); }
+
 /* A record as the zone publishes it: text somebody copies. */
 td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: anywhere; }
 
@@ -1885,6 +1889,26 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   border-radius: 14px;
 }
 .report-names .grid + .rows { margin-top: 1.8rem; }
+
+/* Four columns on a phone's width. At the report's own size and spacing the
+   table came out wider than the screen and the page scrolled sideways, with
+   the column saying when a name was last logged pushed off the right of it.
+   Smaller type and tighter gutters here, and nowhere else, keep every column
+   on the screen; the name still breaks where it has to (see .rows
+   td.hostname). */
+@media (max-width: 34rem) {
+  .report-names .rows { font-size: 0.8rem; }
+  .report-names .rows th { letter-spacing: 0.04em; }
+  .report-names .rows th,
+  .report-names .rows td { padding-right: 0.45rem; }
+  .report-names .rows th:first-child,
+  .report-names .rows td:first-child { padding-left: 0.5rem; }
+  .report-names .rows td.hostname { font-size: 0.76rem; }
+}
+@media (max-width: 23rem) {
+  .report-names .rows { font-size: 0.74rem; }
+  .report-names .rows td.hostname { font-size: 0.7rem; }
+}
 
 /* By the width the report has, not the window's: the same report sits beside
    a rail on an installation and across the page on the demonstration. */

@@ -11,7 +11,7 @@ it guards.
 
 A scanner that measures how a host is reached and grades what it finds, with
 four checks: TLS and certificates (`porch-tls-v7`), how a website is reached
-(`porch-web-v4`), what a domain's DNS says about its mail (`porch-mail-v4`),
+(`porch-web-v5`), what a domain's DNS says about its mail (`porch-mail-v4`),
 and how the domain itself is served (`porch-dns-v3`). Each rule set has its
 own version, and a report names the one that graded it.
 
@@ -161,12 +161,13 @@ comm -23 /tmp/cited /tmp/defined     # must be empty
 |---|---|
 | `internal/tlsprobe`, `internal/certinfo` | the TLS measurement |
 | `internal/rawhello` | a ClientHello Go cannot send: SSL 3.0, export and NULL suites, the downgrade probe |
-| `internal/webprobe` | the HTTP measurement: one `GET` of `/`, the other form of the name, IPv6 (N7) |
+| `internal/webprobe` | the HTTP measurement: one `GET` of `/`, the same page asked from an origin that cannot exist (CORS), the other form of the name, IPv6 (N7) |
 | `internal/markup` | reads a page; keeps hosts and booleans, never markup (N7) |
+| `internal/announce` | which software a response header or a mail greeting names; keeps the name and whether a version came, never the version (R21) |
 | `internal/securitytxt` | reads what a site publishes about reporting a fault in it, and keeps a count and a date (N7) |
 | `internal/wellknown` | every address under `/.well-known` this project asks for or serves, each beside its document (N7) |
 | `internal/dnsnames` | the names a domain's own MX, sender policy and delegation already name (N12) |
-| `internal/liveness` | whether a name answers now: resolves, answers, is internal, is gone, or dangles (N12) |
+| `internal/liveness` | whether a name answers now: resolves, answers, is internal, is gone, dangles, or is an alias a hosting service says nobody has claimed (N12) |
 | `internal/inventory` | one list of names out of every source that named them, each name carrying which ones did (N12) |
 | `internal/ptrnames` | the names the addresses in a range the operator names answer to; command line only, never a service (N12) |
 | `internal/certnames` | the names the hosts themselves present, read off the certificate each one serves; off unless asked for (N12) |

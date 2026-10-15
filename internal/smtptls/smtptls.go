@@ -70,6 +70,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/announce"
 	"github.com/denyfirst/porch/internal/rawhello"
 	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/truststore"
@@ -160,6 +161,10 @@ type Result struct {
 	// said when it refused — its reply code and nothing it wrote, because the
 	// text is the server's and a report's sentences are this program's.
 	RelayReason string
+
+	// Software is which mail server the greeting named, from a fixed list,
+	// and whether a version came with it. Never the version itself.
+	Software []announce.Software
 }
 
 // Prober asks exchangers. The zero value is usable.
@@ -247,12 +252,16 @@ func (p *Prober) Probe(ctx context.Context, host string) Result {
 
 	r := bufio.NewReaderSize(conn, maxLine)
 
-	code, _, err := readReply(r)
+	code, greeting, err := readReply(r)
 	if err != nil {
 		out.Reason = conversationReason(err, "the server sent no greeting that could be read")
 		return out
 	}
 	out.Connected = true
+
+	// Which mail server the greeting names, and whether with a version. The
+	// greeting itself is not kept: its text is the server's.
+	out.Software = announce.FromGreeting(greeting)
 	if code != 220 {
 		out.Reason = "the server answered the connection with a refusal instead of a greeting, so nothing was asked"
 		quit(conn)

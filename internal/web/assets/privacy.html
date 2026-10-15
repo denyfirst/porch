@@ -103,7 +103,8 @@
     <ul class="plain">
       <li><strong>Transport:</strong> TLS handshakes, each closed when the
         handshake ends.</li>
-      <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, and
+      <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, the
+        last HTTPS page once more from an origin that cannot exist, and
         <code>/.well-known/security.txt</code>.</li>
       <li><strong>Exposure:</strong> eleven paths of files that should never
         be served, such as <code>/.git/HEAD</code>, one GET each, and one
@@ -112,6 +113,9 @@
       <li><strong>Mail:</strong> DNS lookups, the MTA-STS policy file, and a
         STARTTLS check on port 25, with a second short one asking whether TLS
         1.1 or older is still accepted. No mail is sent.</li>
+      <li><strong>Names:</strong> one connection on 443 and one on 80 to each
+        name under our domain, closed as it opens, and one <code>GET /</code>
+        to a name that points at a hosting service on a fixed list.</li>
       <li><strong>DNS:</strong> lookups, and questions to our name servers.
         A zone transfer is asked for and not read.</li>
     </ul>

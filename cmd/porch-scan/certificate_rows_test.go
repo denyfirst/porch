@@ -85,8 +85,9 @@ func TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty(t *testing.T) {
 // The certificates the Logged line counts are printed under it, in the words
 // internal/policy wrote, and the page draws the same field (R16).
 func TestTheCertificatesTheLoggedLineCountsArePrinted(t *testing.T) {
+	resembles := policy.Resemblance("CN=Somebody Else", []string{"example.com"}, "Example CA", []string{"example.com", "www.example.com"})
 	stranger := policy.UnaccountedLine("0badc0de", "CN=Somebody Else", []string{"example.com"},
-		time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+		time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC), resembles)
 
 	var buf bytes.Buffer
 	printCertificate(&buf, result{Result: &scan.Result{
@@ -97,8 +98,10 @@ func TestTheCertificatesTheLoggedLineCountsArePrinted(t *testing.T) {
 		LoggedUnaccounted: []string{stranger},
 	}})
 	text := buf.String()
-	for _, want := range []string{"serial 0badc0de", "CN=Somebody Else", "2026-09-01 to 2026-12-01"} {
-		if !strings.Contains(text, want) {
+	// The terminal wraps the sentence, so it is read as words.
+	flat := strings.Join(strings.Fields(text), " ")
+	for _, want := range []string{"serial 0badc0de", "CN=Somebody Else", "2026-09-01 to 2026-12-01", "other names than the one presented"} {
+		if !strings.Contains(flat, want) {
 			t.Errorf("the terminal does not print %q under the Logged line:\n%s", want, text)
 		}
 	}
@@ -112,5 +115,8 @@ func TestTheCertificatesTheLoggedLineCountsArePrinted(t *testing.T) {
 	}
 	if !strings.Contains(string(page), "report.loggedUnaccounted") {
 		t.Error("the page does not draw the certificates the Logged line counts")
+	}
+	if !strings.Contains(string(page), "report.loggedResemblance") {
+		t.Error("the page does not say how each certificate compares with the one presented")
 	}
 }

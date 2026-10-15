@@ -429,6 +429,7 @@ func GradeAt(observed *webprobe.Report, now time.Time) *Result {
 		answered(observed.Secure))
 	cookieSet := cookieFacts(observed)
 	headerSet := headerFacts(observed.Secure)
+	headerSet.CORS = corsFacts(observed)
 	contentSet := contentFacts(observed.Secure)
 
 	cookies := policy.GradeCookies(cookieSet)
@@ -663,6 +664,9 @@ func headerFacts(c *webprobe.Chain) policy.HeaderFacts {
 			}
 		}
 		out.Protocol = h.Protocol
+		for _, sw := range h.Software {
+			out.Software = append(out.Software, policy.Software{Name: sw.Name, Where: sw.Where, Versioned: sw.Versioned})
+		}
 		out.ACAO = first(h.Headers["Access-Control-Allow-Origin"])
 		out.ACAC = first(h.Headers["Access-Control-Allow-Credentials"])
 		out.FrameAncestors = framesDeclared(h.Headers["Content-Security-Policy"])
@@ -680,6 +684,27 @@ func headerFacts(c *webprobe.Chain) policy.HeaderFacts {
 	}
 
 	return out
+}
+
+// corsFacts restates how the page answered when asked from an unrelated site.
+//
+// The origin is this program's constant rather than the one the report
+// records. It is the same text on every report this program made, and a
+// sentence built from the constant names what was sent, whatever a report
+// read back from somewhere else says was.
+func corsFacts(r *webprobe.Report) policy.CORSAnswer {
+	if r == nil || !r.CORS.Asked {
+		return policy.CORSAnswer{}
+	}
+	c := r.CORS
+	return policy.CORSAnswer{
+		Asked:       true,
+		Origin:      webprobe.CORSOrigin,
+		Answered:    c.Answered,
+		Reflected:   c.Reflected,
+		Credentials: c.Credentials,
+		Reason:      c.Reason,
+	}
 }
 
 // first returns the first value of a header, or empty.

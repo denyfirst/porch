@@ -99,6 +99,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/announce"
 	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/markup"
@@ -368,6 +369,12 @@ type Hop struct {
 	// Cookies are the Set-Cookie headers of this response, without values.
 	Cookies []Cookie `json:"cookies,omitempty"`
 
+	// Software is what this response named about the software that served
+	// it: names and whether a version came with them, never the version. The
+	// headers that carry them are not among those recorded (see recorded),
+	// for the reason the version is not kept.
+	Software []announce.Software `json:"software,omitempty"`
+
 	// Markup is what reading the page established, where the page was read.
 	//
 	// Nil means no body was read — a deployment that does not read them, a
@@ -379,6 +386,12 @@ type Hop struct {
 	// location is the Location header as sent, which the chain follows. The
 	// recorded one is redacted; see redactAddress.
 	location string
+
+	// target is the address this hop requested, unredacted, which URL is the
+	// display of. Kept for the one later question asked of the same page —
+	// whether it trusts an unrelated site — so that it goes to the address the
+	// chain reached rather than one rebuilt from a redacted copy.
+	target string
 
 	// Err is why this hop produced no response. Non-empty means Status and
 	// Headers are unset, which is different from a response with no headers.
@@ -469,6 +482,10 @@ type Report struct {
 	// for (R4).
 	SecurityTxt securitytxt.Facts `json:"securityTxt"`
 
+	// CORS is how the page a visitor lands on answered the same request from
+	// an unrelated site. A struct for the reason SecurityTxt is one.
+	CORS CORSFacts `json:"cors"`
+
 	// IPv6 is whether the site answered on an address it published for the
 	// newer protocol, measured separately because a dialler that tries
 	// addresses until one answers can never report on the one that did not.
@@ -549,7 +566,7 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	// declined is a destination this service will not go to.
 	report.BlockedDestination = blockedDestination(report.Secure, report.Plain)
 
-	// The three that follow end short of the deadline rather than at it.
+	// The four that follow end short of the deadline rather than at it.
 	// They already said when they ran out of time instead of what they saw,
 	// and nobody using the service could read it: run to the deadline itself,
 	// the check came back after it, and the service answered with a timeout
@@ -559,9 +576,15 @@ func (p *Prober) Probe(ctx context.Context, host string, reach Reach) (*Report, 
 	ctx, cancel = budget.ShortOf(ctx, budget.Reserve)
 	defer cancel()
 
-	// And the one other address this check asks for. It is second because it
-	// is the less important of the two: a deadline that runs out should run
-	// out here rather than on the page a visitor lands on.
+	// Whether the page a visitor lands on trusts any site that asks. First of
+	// the four because it is the only one of them that can be graded: a
+	// deadline that runs out should run out on a row that reports rather than
+	// on the one that decides a verdict.
+	report.CORS = p.cors(ctx, client, report.Secure)
+
+	// And the one other address this check asks for. It comes after the page
+	// a visitor lands on because it is the less important of the two: a
+	// deadline that runs out should run out here rather than there.
 	//
 	// Only where the secure chain answered. A host that did not answer at all
 	// has nothing to say about its security contact either, and asking twice
@@ -677,7 +700,7 @@ func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) 
 	// The address as a report shows it: redacted, and marked like the headers
 	// below, because after the first hop it is one the server chose. The
 	// request goes to target, unchanged.
-	hop := Hop{URL: display.Mark(redactAddress(target)), TLS: strings.HasPrefix(target, "https://")}
+	hop := Hop{URL: display.Mark(redactAddress(target)), TLS: strings.HasPrefix(target, "https://"), target: target}
 
 	ctx, cancel := context.WithTimeout(ctx, p.requestTimeout())
 	defer cancel()
@@ -714,6 +737,7 @@ func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) 
 	hop.Headers = recorded(resp.Header)
 	hop.location = resp.Header.Get("Location")
 	hop.Cookies = cookies(resp.Header.Values("Set-Cookie"))
+	hop.Software = announce.FromHeaders(resp.Header)
 	hop.Markup = p.pageFacts(resp, hostOf(target))
 	return hop
 }

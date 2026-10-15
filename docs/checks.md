@@ -78,6 +78,10 @@ Every request carries the user agent `porch/1 (+https://porch.denyfirst.dev/priv
 - `GET /` over HTTPS and over HTTP, following up to five redirects your server
   names. A redirect to another scheme, or to a host the copy may not reach, is
   not followed.
+- The last page reached over HTTPS once more, with
+  `Origin: https://porch-cors-check.invalid` and nothing else changed, to see
+  whether it trusts a site it cannot know (CORS). Its answer is not followed and
+  its body is not read.
 - `GET /.well-known/security.txt` (RFC 9116).
 - `GET /` on the other form of the name, with or without `www.`. Its answer is
   not followed.
@@ -102,10 +106,13 @@ that Chrome keeps and other browsers build from. Reported, not graded.
 operator), once, up to one megabyte. From it, only whether a content policy is
 declared and the host names of anything loaded over HTTP or from another site
 are kept. Only graded headers are kept. Cookies are kept by name and
-attributes, never by value.
+attributes, never by value. From `Server`, `X-Powered-By`, `X-AspNet-Version`
+and `X-AspNetMvc-Version`, only the software's name and whether a version came
+with it are kept, never the version; reported, not graded.
 
 **Grades:** how the site is reached over HTTPS, redirects, HSTS, cookies, mixed
-content, a few headers, and any of the files above that is served. The HSTS policy graded is the one from the last
+content, a few headers, a page that trusts any origin with credentials, and any
+of the files above that is served. The HSTS policy graded is the one from the last
 HTTPS hop.
 
 ### Limits
@@ -129,7 +136,9 @@ is reported and not graded.
 negotiates TLS 1.2 or 1.3 is asked once more, in a second short conversation,
 whether it still accepts TLS 1.1 or older: one hello offering nothing newer,
 the first record of the answer read, no handshake completed. Only for a domain
-proven to the copy asking, or where only its operator can use it.
+proven to the copy asking, or where only its operator can use it. From each
+greeting, only which mail server it names, from a fixed list, and whether a
+version came with it are kept; the greeting itself is not.
 
 **Grades** only what a standard calls an error: two SPF records, more than ten
 SPF lookups, `+all`, two DMARC records, an unusable MTA-STS policy, and a mail
@@ -187,6 +196,17 @@ certificates, the reverse DNS of address ranges you name (up to a /20 or /116,
 4,096 addresses in total), and names you already have (up to 1,000).
 
 An inventory is made only for a domain proven to the copy asking.
+
+**What each name is doing:** each name is looked up, and its address is sent
+one connection on 443 and one on 80, closed as it opens, with nothing sent. A
+name that is an alias to GitHub Pages, Amazon S3, Pantheon or Surge, and
+answers on 80, is asked `GET /` once over plain HTTP, nothing followed and at
+most 16 KB read, to see whether the service answers with the 404 it gives a
+name nobody has claimed there. Nothing it says is kept. Such a name, and an
+alias to a name that does not exist, is listed under Findings: whoever claims
+that name at the service may answer for yours. Plain HTTP because the service
+has no certificate for a name it does not know; certificate checks are never
+turned off.
 
 It cannot show hosts with no public certificate, hosts behind a wildcard
 certificate (unless a register was read), or hosts your DNS has no reason to

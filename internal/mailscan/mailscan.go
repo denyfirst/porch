@@ -1029,7 +1029,7 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 			facts.DANEBindings = append(facts.DANEBindings, daneBinding(hosts[i], answer, r, now))
 		}
 
-		facts.Exchangers = append(facts.Exchangers, policy.ExchangerTLS{
+		x := policy.ExchangerTLS{
 			Host:              r.Host,
 			Connected:         r.Connected,
 			Measured:          r.Measured,
@@ -1050,7 +1050,12 @@ func (s *Scanner) readExchangerTLS(ctx context.Context, domain string, facts *po
 			LegacyAccepted:    legacy[i].Accepted,
 			LegacyVersion:     legacy[i].Version,
 			LegacyReason:      legacy[i].Reason,
-		})
+		}
+		for _, sw := range r.Software {
+			x.Software = append(x.Software, policy.Software{Name: sw.Name, Where: sw.Where, Versioned: sw.Versioned})
+		}
+		x.SoftwareLine = policy.MailSoftwareLine(x)
+		facts.Exchangers = append(facts.Exchangers, x)
 	}
 }
 

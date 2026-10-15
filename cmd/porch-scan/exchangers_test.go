@@ -48,6 +48,25 @@ func TestEachExchangerIsARowInThePagesWords(t *testing.T) {
 	}
 }
 
+// What a greeting named is a row of its own, in the line the rules built, and
+// only where a greeting was read.
+func TestWhatAGreetingNamedIsARow(t *testing.T) {
+	var buf bytes.Buffer
+	printMailPath(&buf, &policy.MailFacts{
+		MXRead: true, MXHosts: []string{"mx1.example.net", "mx2.example.net"},
+		ExchangersContacted: true, Exchangers: []policy.ExchangerTLS{
+			{Host: "mx1.example.net", Connected: true, SoftwareLine: "names Exim, with its version"},
+			{Host: "mx2.example.net"},
+		},
+	})
+	if !strings.Contains(buf.String(), "SOFTWARE   mx1.example.net: names Exim, with its version") {
+		t.Errorf("the greeting's row is missing:\n%s", buf.String())
+	}
+	if strings.Contains(buf.String(), "SOFTWARE   mx2.example.net") {
+		t.Errorf("an exchanger whose greeting was not read has a row:\n%s", buf.String())
+	}
+}
+
 // Exchangers not contacted are a row saying so, with the reason.
 func TestExchangersNotContactedAreARowSayingWhy(t *testing.T) {
 	var buf bytes.Buffer
