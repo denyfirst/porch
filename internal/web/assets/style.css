@@ -1606,6 +1606,74 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   overflow-wrap: anywhere;
 }
 
+/* What a line counted, item by item, folded under it (checkedList). The one
+   to act on is ringed in the insecure colour and says so in words, so the
+   state never rests on the colour alone. */
+.checked-list { margin-top: 0.55rem; }
+.checked-list > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.05rem 0.65rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+}
+.checked-list > summary::-webkit-details-marker { display: none; }
+.checked-list > summary::after {
+  content: "";
+  width: 0.36rem;
+  height: 0.36rem;
+  margin-top: -0.05rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+.checked-list[open] > summary::after { transform: rotate(45deg); margin-top: -0.2rem; }
+.checked-list > summary:hover,
+.checked-list > summary:focus-visible { border-color: var(--ink-faint); color: var(--ink); }
+.checked-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+.checked-item {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.1rem 0.75rem;
+  min-width: 0;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: 0.82rem;
+}
+/* The name takes the room; where the cell is narrow the state goes under it
+   rather than breaking a path in the middle of a word. */
+.checked-name { display: grid; flex: 1 1 9rem; min-width: 0; }
+.checked-name.is-inline { display: flex; flex: 0 0 auto; align-items: baseline; column-gap: 0.4rem; white-space: nowrap; }
+.checked-name.is-inline .checked-what { font-size: 0.82rem; color: var(--ink); }
+.checked-name code { font-family: var(--mono); font-size: 0.8rem; overflow-wrap: anywhere; }
+.checked-what { font-size: 0.74rem; color: var(--ink-faint); }
+.checked-state { font-size: 0.74rem; color: var(--ink-faint); white-space: nowrap; }
+.checked-item.is-found { border-color: var(--insecure); }
+.checked-item.is-found .checked-state { color: var(--insecure); font-weight: 600; }
+.checked-item.is-found .checked-state::before {
+  content: "";
+  display: inline-block;
+  margin-right: 0.35rem;
+  border: 0.22rem solid currentColor;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+
 .report-check-top,
 .report-body,
 .report-check-foot { padding-inline: clamp(1.1rem, 3vw, 1.9rem); }
@@ -1890,6 +1958,11 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
      a time. Kept whole, a page of response headers left the sheet before it
      blank under the check's verdict. */
   .report-body .grid { break-inside: auto; }
+
+  /* The lists print open (the beforeprint handler opens them), and the
+     control that folds them is the screen's. */
+  .checked-list > summary { display: none; }
+  .checked-item { break-inside: avoid; }
 }
 
 /* ── The console ─────────────────────────────────────────────────────────

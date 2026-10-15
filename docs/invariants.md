@@ -1419,14 +1419,19 @@ What a check measured is said on both faces in the same words: a line the
 server composes (the zone's timers, its keys and digests, a chain
 certificate) is composed once in `internal/policy` and printed by both, and
 the limits every run of a check shares are named at its card's foot, beside
-the method, while a limit of this host stays in the report.
+the method, while a limit of this host stays in the report. A line that
+counts (the files asked for, the ports asked on) carries what it counted,
+item by item, folded under it on the page, printed open on paper, and
+grouped by what came back in the terminal; a silent port is "no answer from
+here", never closed.
 Each check is a card whose head, held in view while the card is read, has
 the check's verdict stamped beside its name, above the evidence; a check with
 no verdict is marked in a dashed stamp that no verdict is drawn in.
 
 *Enforced in:* `cmd/porch-scan.printReport`, `cmd/porch-scan.printCertificate`,
-`internal/scan.Result.Notes`, `internal/web/assets/app.js` (`reportFrame`,
-`reportShow`, `namesFrame`)
+`internal/scan.Result.Notes`, `internal/policy.LeaksChecked`,
+`internal/policy.ExposureChecked`, `internal/web/assets/app.js` (`reportFrame`,
+`reportShow`, `namesFrame`, `checkedList`)
 
 *Guarded by:* `TestEachCheckHasARowAndAStateOfItsOwn`,
 `TestAnUnchosenCheckKeepsARowItCannotOpen`, `TestAVerdictIsStampedAtTheHeadOfItsCard`,
@@ -1437,6 +1442,9 @@ no verdict is marked in a dashed stamp that no verdict is drawn in.
 `TestAReportSaysWhatWasMeasured`, `TestWhatWasMeasuredIsOnBothFaces`,
 `TestAMaxAgeReadsInItsOwnUnit`, `TestTheZonesOwnSettingsAreSaidInALineEach`,
 `TestTheChainIsSaidOneCertificateALine`,
+`TestWhatALineCountedIsOnBothFaces`,
+`TestEveryItemAskedIsNamedWithWhatCameBack`,
+`TestTheLeaksRowListsEveryPathAsked`, `TestAPathWithNoAnswerIsNamed`,
 `TestThePageReadsTheLegacyFieldsTheAPISends`,
 `TestSSL3IsAVersionRowInTheSameWords`,
 `TestTheHandWrittenHellosArePrintedWithWhatTheyFound`,

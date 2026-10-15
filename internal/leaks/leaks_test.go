@@ -129,6 +129,36 @@ func TestASiteNotReachedIsNotASiteWithNothingExposed(t *testing.T) {
 	}
 }
 
+// A path that got no answer is named, so a list of what was asked can say
+// which went unanswered rather than calling them absent.
+func TestAPathWithNoAnswerIsNamed(t *testing.T) {
+	p, _ := site(t, nil)
+	dial := p.Dial
+	var mu sync.Mutex
+	lost := false
+	p.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		mu.Lock()
+		first := !lost
+		lost = true
+		mu.Unlock()
+		if first {
+			return nil, net.UnknownNetworkError("this one is lost on the way")
+		}
+		return dial(ctx, network, address)
+	}
+	got := p.Probe(context.Background(), "example.com")
+	if got.Reason != "" || got.Unanswered != 1 || len(got.NoAnswer) != 1 {
+		t.Fatalf("read %+v", got)
+	}
+	known := false
+	for _, f := range Files {
+		known = known || f.Path == got.NoAnswer[0]
+	}
+	if !known {
+		t.Errorf("the unanswered path %q is not on the list", got.NoAnswer[0])
+	}
+}
+
 // The list is the list, and every entry can recognise its file.
 func TestTheListIsFixedAndEveryEntryRecognisesSomething(t *testing.T) {
 	if len(Files) != 11 {

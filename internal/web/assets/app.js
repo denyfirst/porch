@@ -417,6 +417,19 @@ function printButton() {
 window.addEventListener("beforeprint", () => {
   const stamp = document.getElementById("print-date");
   if (stamp) stamp.textContent = "Printed " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  // Every folded list is printed open, and folded again afterwards only if
+  // the reader had not opened it themselves.
+  for (const list of document.querySelectorAll("details.checked-list:not([open])")) {
+    list.open = true;
+    list.dataset.printOpened = "1";
+  }
+});
+
+window.addEventListener("afterprint", () => {
+  for (const list of document.querySelectorAll("details.checked-list[data-print-opened]")) {
+    list.open = false;
+    delete list.dataset.printOpened;
+  }
 });
 
 // reportFilename builds a name from the target.
@@ -791,10 +804,13 @@ function ciphers(tls, report) {
   const facts = el("dl", "pairs");
   let said = false;
 
-  function fact(label, value) {
+  function fact(label, value, checked) {
     if (!value) return;
     facts.appendChild(el("dt", null, label));
-    facts.appendChild(el("dd", null, value));
+    const dd = el("dd", null, value);
+    const list = checkedList(checked);
+    if (list) dd.appendChild(list);
+    facts.appendChild(dd);
     said = true;
   }
 
@@ -809,7 +825,7 @@ function ciphers(tls, report) {
   // Services on the host that should not face the internet. Built by the
   // server, so both faces read the same line (R16).
   if (report && report.exposureLine) {
-    fact("Exposed services", report.exposureLine);
+    fact("Exposed services", report.exposureLine, report.exposureChecked);
   }
   if (said) frag.appendChild(facts);
 
@@ -1534,12 +1550,46 @@ function declared(rows) {
   for (const row of rows) {
     const tr = el("tr");
     tr.appendChild(el("th", null, row.label));
-    tr.appendChild(el("td", null, row.says));
+    const td = el("td", null, row.says);
+    // A row that counted something carries what it counted (R4).
+    const list = checkedList(row.checked);
+    if (list) td.appendChild(list);
+    tr.appendChild(td);
     body.appendChild(tr);
   }
   table.appendChild(body);
   frag.appendChild(table);
   return frag;
+}
+
+// checkedList draws what a line counted, one item each, folded under the line
+// until asked for: the files a site was asked for, the ports a host was asked
+// on. The words are the server's (internal/policy.Checked), so the page and
+// the terminal say the same thing (R16); nothing is parsed as markup.
+//
+// Folded, because the line already answers the question and the list is
+// there for the reader who asks what it counted. On paper it is drawn open,
+// since nobody can unfold a sheet (see the print handlers below). A report
+// from before the list existed has none, and draws only the line.
+function checkedList(items) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const details = el("details", "checked-list");
+  details.appendChild(el("summary", null, items.length + " checked"));
+  const grid = el("div", "checked-grid");
+  for (const item of items) {
+    if (!item || typeof item.item !== "string") continue;
+    const cell = el("div", item.found ? "checked-item is-found" : "checked-item");
+    // A port reads with its service on one line, "445 SMB"; a path is long,
+    // so what it is goes under it, the same way in every cell.
+    const name = el("span", /^\d+$/.test(item.item) ? "checked-name is-inline" : "checked-name");
+    name.appendChild(el("code", null, item.item));
+    if (item.what) name.appendChild(el("span", "checked-what", item.what));
+    cell.appendChild(name);
+    cell.appendChild(el("span", "checked-state", item.state || ""));
+    grid.appendChild(cell);
+  }
+  details.appendChild(grid);
+  return details;
 }
 
 // delegation draws the servers the zone is answered by, one row each, so that a
