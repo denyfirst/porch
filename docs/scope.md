@@ -99,7 +99,7 @@ list, the rate and concurrency limits, the per-target budget, and N7.
 change, port sweeps, scanning at scale, or CVE guesses matched from a version
 string.** Nothing malformed is ever sent.
 
-One fixed list of ports is asked, and it is not a sweep: sixteen services that
+One fixed list of ports is asked, and it is not a sweep: twenty-one services that
 should never face the internet — remote desktop, file sharing, databases, a
 container engine's API — at no more than two addresses of a host a scan may
 already reach, one connection each, closed the moment it opens, nothing sent

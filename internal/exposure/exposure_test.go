@@ -109,18 +109,22 @@ func TestNoAddressIsNotAnAnswer(t *testing.T) {
 	}
 }
 
-// The list is the list: sixteen services, each with a reason, none of them a
-// port anything here serves on purpose.
+// The list is the list: twenty-one services, each with a reason, none of them
+// a port anything here serves on purpose, in the order of their ports so a
+// report lists them the way a reader looks one up.
 func TestTheListIsFixedAndEachEntrySaysWhy(t *testing.T) {
-	if len(Services) != 16 {
+	if len(Services) != 21 {
 		t.Errorf("%d services; the list changes in the open, with this test", len(Services))
 	}
 	seen := map[int]bool{}
-	for _, s := range Services {
+	for i, s := range Services {
 		if s.Why == "" || s.Name == "" || seen[s.Port] {
 			t.Errorf("entry %+v", s)
 		}
 		seen[s.Port] = true
+		if i > 0 && Services[i-1].Port >= s.Port {
+			t.Errorf("port %d is out of order", s.Port)
+		}
 		switch s.Port {
 		case 22, 25, 53, 80, 443, 465, 587, 993, 995:
 			t.Errorf("port %d is one a service is meant to answer on", s.Port)
