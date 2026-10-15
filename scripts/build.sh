@@ -84,10 +84,11 @@ digest="$(go run ./internal/ociimage/porch-image build -tag "${tag}" -dist "${ou
 # it is for the same reason.
 #
 # It carries the image's digest, so the compose file its Porch page shows is
-# the one this release ships.
+# the one this release ships, and its own tag, so the install commands there
+# fetch this release by name rather than whatever GitHub calls the latest.
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -buildvcs=false -tags demo \
-        -ldflags "-s -w -X main.version=${tag} -X github.com/denyfirst/porch/internal/web.imageDigest=${digest}" \
+        -ldflags "-s -w -X main.version=${tag} -X github.com/denyfirst/porch/internal/web.imageDigest=${digest} -X github.com/denyfirst/porch/internal/web.releaseTag=${tag}" \
         -o "${out}/porchd-demonstration_${tag}_linux_amd64" "./cmd/porchd"
 
 # A server needs nothing else from the release: the compose file above, which

@@ -132,8 +132,11 @@
   <ol class="steps">
     <li>
       <h3>Get it</h3>
-      <p>Downloads the compose file shown below and checks its signature. The
-      last line must print <code>Good "file" signature</code> with the key
+      <p>Downloads {{if .Release}}{{.Release}}'s{{else}}the latest release's{{end}}
+      compose file, shown below, and checks its signature{{if .Release}} and
+      that the signed list is {{.Release}}'s, so no older release can be
+      handed over in its place{{end}}. The last line must print
+      <code>Good "file" signature</code> with the key
       <code class="key-fingerprint">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code>
       and <code>docker-compose.yml: OK</code>. If not, the file is removed.
       <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">More on verifying</a>.</p>
@@ -144,9 +147,9 @@
           <button class="command-copy" type="button" data-copy="command-get" aria-label="Copy the commands to get it">Copy</button>
         </div>
         <pre><code id="command-get"><span class="ln"><span class="t-c">mkdir</span> <span class="t-f">-p</span> porch <span class="t-o">&amp;&amp;</span> <span class="t-c">cd</span> porch</span>
-<span class="ln"><span class="t-c">for</span> f <span class="t-c">in</span> docker-compose.yml SHA256SUMS SHA256SUMS.sig<span class="t-o">;</span> <span class="t-c">do</span> <span class="t-c">curl</span> <span class="t-f">-fsSLO</span> <span class="t-s">"https://github.com/denyfirst/porch/releases/latest/download/${f}"</span><span class="t-o">;</span> <span class="t-c">done</span></span>
+<span class="ln"><span class="t-c">for</span> f <span class="t-c">in</span> docker-compose.yml SHA256SUMS SHA256SUMS.sig<span class="t-o">;</span> <span class="t-c">do</span> <span class="t-c">curl</span> <span class="t-f">-fsSLO</span> <span class="t-s">"https://github.com/denyfirst/porch/releases/{{if .Release}}download/{{.Release}}{{else}}latest/download{{end}}/${f}"</span><span class="t-o">;</span> <span class="t-c">done</span></span>
 <span class="ln"><span class="t-c">echo</span> <span class="t-s">'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR'</span> <span class="t-o">&gt;</span> allowed_signers</span>
-<span class="ln"><span class="t-c">ssh-keygen</span> <span class="t-f">-Y</span> verify <span class="t-f">-f</span> allowed_signers <span class="t-f">-I</span> releases@denyfirst.dev <span class="t-f">-n</span> file <span class="t-f">-s</span> SHA256SUMS.sig &lt; SHA256SUMS <span class="t-o">&amp;&amp;</span> <span class="t-c">sha256sum</span> <span class="t-f">--ignore-missing</span> <span class="t-f">-c</span> SHA256SUMS <span class="t-o">||</span> { <span class="t-c">rm</span> <span class="t-f">-f</span> docker-compose.yml; <span class="t-c">echo</span> <span class="t-s">'STOP: docker-compose.yml did not verify and was removed'</span>; }</span></code></pre>
+<span class="ln"><span class="t-c">ssh-keygen</span> <span class="t-f">-Y</span> verify <span class="t-f">-f</span> allowed_signers <span class="t-f">-I</span> releases@denyfirst.dev <span class="t-f">-n</span> file <span class="t-f">-s</span> SHA256SUMS.sig &lt; SHA256SUMS <span class="t-o">&amp;&amp;</span> {{if .Release}}<span class="t-c">grep</span> <span class="t-f">-qF</span> <span class="t-s">"_{{.Release}}_"</span> SHA256SUMS <span class="t-o">&amp;&amp;</span> {{end}}<span class="t-c">sha256sum</span> <span class="t-f">--ignore-missing</span> <span class="t-f">-c</span> SHA256SUMS <span class="t-o">||</span> { <span class="t-c">rm</span> <span class="t-f">-f</span> docker-compose.yml; <span class="t-c">echo</span> <span class="t-s">'STOP: docker-compose.yml did not verify and was removed'</span>; }</span></code></pre>
       </div>
     </li>
     <li>

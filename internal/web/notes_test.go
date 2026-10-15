@@ -217,6 +217,12 @@ func TestTheReportIsOfferedInOneFormatOnly(t *testing.T) {
 		}
 		block := string(porch)[at:]
 		block = block[:strings.Index(block, "</code>")]
+		// One value is allowed in, and it is not a request's: the release
+		// this build is, compiled in and read as a release name or dropped
+		// (pageRelease), the same for every visitor. Nothing else.
+		for _, allowed := range []string{"{{if .Release}}", "{{.Release}}", "{{else}}", "{{end}}"} {
+			block = strings.ReplaceAll(block, allowed, "")
+		}
 		if strings.Contains(block, "{{") {
 			t.Errorf("the command %q is built from a template value, so what is copied is not fixed text", id[1])
 		}

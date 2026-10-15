@@ -634,17 +634,27 @@ func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
 	// The compose file and the signed list that covers it, checked before
 	// anything starts: the compose file names the image by digest, so it is
 	// the one file a server has to verify.
+	//
+	// Both name the release they install, the guide as ${V} and the page as
+	// the release it is served by, and both check the signed list is that
+	// release's: a signature says who made a release, not that it is the
+	// newest, so GitHub's latest is not taken.
 	fetch := []string{
-		`for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/latest/download/${f}"; done`,
-		`ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }`,
+		`for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done`,
+		`ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && grep -qF "_${V}_" SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }`,
 	}
 	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
 		// The page colours its commands with spans; what it says is the text.
 		// Whole lines, so that a line found inside a longer one does not
 		// stand in for it. Only the page is markup: in the guide a "<" is a
-		// shell redirect, and stripping from it would eat the line.
+		// shell redirect, and stripping from it would eat the line. The
+		// page's release is a template value, written here as the guide
+		// writes it.
 		body := repoFile(t, path)
 		if strings.HasSuffix(path, ".html") {
+			body = strings.ReplaceAll(body, "{{if .Release}}download/{{.Release}}{{else}}latest/download{{end}}", "download/${V}")
+			body = strings.ReplaceAll(body, `{{if .Release}}<span class="t-c">grep</span> <span class="t-f">-qF</span> <span class="t-s">"_{{.Release}}_"</span> SHA256SUMS <span class="t-o">&amp;&amp;</span> {{end}}`,
+				`grep -qF "_${V}_" SHA256SUMS &amp;&amp; `)
 			body = html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(body, ""))
 		}
 		lines := map[string]bool{}
@@ -881,6 +891,25 @@ func TestTheInstallCarriesTheReleaseKeyAndFailsClosed(t *testing.T) {
 		}
 		if !strings.Contains(body, "|| { rm -f docker-compose.yml; echo 'STOP:") {
 			t.Errorf("%s leaves the compose file in place when a check fails", path)
+		}
+	}
+}
+
+// The guide installs and upgrades a release it names, and checks that the
+// signed list is that release's, rather than taking GitHub's latest: a
+// signature says who made a release, not that it is the newest.
+func TestTheGuideNamesTheReleaseItInstalls(t *testing.T) {
+	doc := repoFile(t, "docs/self-host.md")
+	if strings.Contains(doc, "releases/latest") {
+		t.Error("docs/self-host.md still fetches GitHub's latest release")
+	}
+	for _, want := range []string{
+		`curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"`,
+		`< SHA256SUMS && grep -qF "_${V}_" SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml;`,
+		`grep -qF "_${V}_" "update-${V}/SHA256SUMS"`,
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("docs/self-host.md does not carry %q", want)
 		}
 	}
 }

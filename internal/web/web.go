@@ -23,6 +23,7 @@ import (
 	"encoding/xml"
 	"html/template"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -547,7 +548,7 @@ func init() {
 			Description: "Porch checks what your servers show the outside world: TLS, website, mail and DNS. Self-hosted. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
 			Script:      true,
-			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest()},
+			Data:        porchPage{Hosts: demo.Hosts(), Checks: consoleChecks(), ImageDigest: pageImageDigest(), Release: pageRelease()},
 		}
 	}
 
@@ -981,6 +982,11 @@ type porchPage struct {
 
 	// ImageDigest is the release's image, as its compose file pins it.
 	ImageDigest string
+
+	// Release is the release this build is, when it is one: the install
+	// commands fetch it by name and check that the signed list is its own.
+	// Empty on any other build, where they fetch GitHub's latest.
+	Release string
 }
 
 // imageDigest is set by scripts/build.sh on the demonstration build, from the
@@ -995,6 +1001,28 @@ func pageImageDigest() string {
 		return ociimage.Placeholder
 	}
 	return imageDigest
+}
+
+// releaseTag is set by scripts/build.sh on the demonstration build, to the tag
+// it was built from.
+//
+// The install commands on the Porch page used to fetch whatever GitHub calls
+// the latest release. A signature says who made a release, not that it is the
+// newest, so whoever could move that redirect could hand a new installation
+// an older signed release with its holes in it, and the signature would pass.
+// The page is served by the release itself, from denyfirst.dev, which GitHub
+// does not run: naming the release here, and having the commands check that
+// the signed list is that release's, takes the choice of version away from
+// the redirect. Read as a release name or not at all.
+var releaseTag string
+
+var releaseName = regexp.MustCompile(`^v\d{1,4}\.\d{1,4}\.\d{1,4}$`)
+
+func pageRelease() string {
+	if releaseName.MatchString(releaseTag) {
+		return releaseTag
+	}
+	return ""
 }
 
 // plainFile is a file a crawler reads.
