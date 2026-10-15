@@ -664,6 +664,9 @@ func headerFacts(c *webprobe.Chain) policy.HeaderFacts {
 			}
 		}
 		out.Protocol = h.Protocol
+		for _, sw := range h.Software {
+			out.Software = append(out.Software, policy.Software{Name: sw.Name, Where: sw.Where, Versioned: sw.Versioned})
+		}
 		out.ACAO = first(h.Headers["Access-Control-Allow-Origin"])
 		out.ACAC = first(h.Headers["Access-Control-Allow-Credentials"])
 		out.FrameAncestors = framesDeclared(h.Headers["Content-Security-Policy"])

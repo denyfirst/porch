@@ -108,6 +108,10 @@ type HeaderFacts struct {
 	// CORS is how the same page answered when asked from an unrelated site.
 	CORS CORSAnswer
 
+	// Software is what the same response named about the software that
+	// served it, without versions.
+	Software []Software
+
 	// MetaCSP and MetaCSPReportOnly record a Content-Security-Policy declared
 	// in the page's markup rather than in a header.
 	//
@@ -276,6 +280,12 @@ func GradeHeaders(f HeaderFacts) WebResult {
 	// The contrast that settles it is hsts.absent, which is graded: there the
 	// consequence follows from the scan alone, because the scan established
 	// that the plaintext address is reachable.
+	if n, ok := versionNote("The response names", f.Software, func(s Software) string {
+		return s.Name + " (" + s.Where + ")"
+	}); ok {
+		out.Notes = append(out.Notes, n)
+	}
+
 	if !f.Present["X-Content-Type-Options"] {
 		out.observe("X-Content-Type-Options: nosniff was not sent, so a browser may ignore the " +
 			"declared Content-Type and treat a mistyped file as script or markup. It changes " +

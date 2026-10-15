@@ -1892,6 +1892,11 @@ function zone(facts) {
       for (const b of facts.daneBindings || []) {
         row("DANE", b.host + ": " + daneSays(b));
       }
+      // Built by the server, so both faces read the same line (R16), and
+      // only where a greeting was read.
+      for (const x of facts.exchangers || []) {
+        if (x.softwareLine) row("SOFTWARE", x.host + ": " + x.softwareLine);
+      }
     } else {
       row("STARTTLS", "not measured: " + (facts.exchangersReason || "this scan did not contact them"));
     }

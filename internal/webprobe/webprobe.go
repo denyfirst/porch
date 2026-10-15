@@ -99,6 +99,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denyfirst/porch/internal/announce"
 	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/display"
 	"github.com/denyfirst/porch/internal/markup"
@@ -367,6 +368,12 @@ type Hop struct {
 
 	// Cookies are the Set-Cookie headers of this response, without values.
 	Cookies []Cookie `json:"cookies,omitempty"`
+
+	// Software is what this response named about the software that served
+	// it: names and whether a version came with them, never the version. The
+	// headers that carry them are not among those recorded (see recorded),
+	// for the reason the version is not kept.
+	Software []announce.Software `json:"software,omitempty"`
 
 	// Markup is what reading the page established, where the page was read.
 	//
@@ -730,6 +737,7 @@ func (p *Prober) fetch(ctx context.Context, client *http.Client, target string) 
 	hop.Headers = recorded(resp.Header)
 	hop.location = resp.Header.Get("Location")
 	hop.Cookies = cookies(resp.Header.Values("Set-Cookie"))
+	hop.Software = announce.FromHeaders(resp.Header)
 	hop.Markup = p.pageFacts(resp, hostOf(target))
 	return hop
 }

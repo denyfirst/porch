@@ -23,6 +23,7 @@ func TestThePageReadsTheExchangerFieldsTheAPISends(t *testing.T) {
 			Host: "mx1.example.net", Connected: true, Measured: true, Offered: true, Upgraded: true,
 			Version: "TLS 1.3", Suite: "TLS_AES_128_GCM_SHA256", Trusted: true, NameMatches: true,
 			CertificateReason: "a reason", Reason: "a reason", ConnectTimedOut: true,
+			SoftwareLine: "names Exim",
 		}},
 	})
 	if err != nil {
@@ -50,7 +51,7 @@ func TestThePageReadsTheExchangerFieldsTheAPISends(t *testing.T) {
 	}
 	one, _ := list[0].(map[string]any)
 	for _, field := range []string{"host", "measured", "offered", "upgraded", "version", "suite",
-		"trusted", "nameMatches", "certificateReason", "reason", "connectTimedOut"} {
+		"trusted", "nameMatches", "certificateReason", "reason", "connectTimedOut", "softwareLine"} {
 		if _, ok := one[field]; !ok {
 			t.Errorf("the API sends no %s on an exchanger", field)
 		}

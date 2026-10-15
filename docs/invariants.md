@@ -1514,9 +1514,10 @@ RFC 8657 account and method limits
 `internal/certinfo.distinguishedName`, `internal/ctsearch.clean`,
 `internal/display.Mark`, `internal/dmarcreports`, `internal/securitytxt`,
 `internal/markup`, `internal/spf`, `internal/dkim`,
-`internal/webprobe.recorded`, `internal/dnsscan`
+`internal/webprobe.recorded`, `internal/dnsscan`, `internal/announce`
 
 *Guarded by:* `TestAMonitorsAnswerCannotActOnTheDisplay`,
+`TestOnlyANameShapedTokenIsKept`, `TestAGreetingIsReadForTheListAndNothingElse`,
 `TestNothingCanActOnTheDisplay`, `TestAContactCannotActOnTheDisplay`,
 `TestAReportAddressCannotActOnTheDisplay`,
 `TestAHostAPageNamesCannotActOnTheDisplay`, `TestARecordCannotActOnTheDisplay`,
@@ -1545,9 +1546,19 @@ RFC 8657 account and method limits
 *Enforced in:* `internal/policy/web.go`, `internal/policy/cookies.go`,
 `internal/policy/headers.go`, `internal/tlsprobe.Fallback` (whether a
 downgraded hello carrying `TLS_FALLBACK_SCSV` is refused: described, never
-graded, because what a downgrade costs is the grade of the version it lands on)
+graded, because what a downgrade costs is the grade of the version it lands on),
+`internal/policy/software.go` (the software a server names and whether with a
+version: reported, never graded, and the version itself never kept)
 
 *Guarded by:* `TestAShortMaxAgeIsDescribedAndNotGraded`,
+`TestSoftwareNamedIsReportedAndNeverGraded`,
+`TestWhatEachGreetingNamedIsOneRowAndOneSentence`,
+`TestTheNameIsKeptAndTheVersionIsNot`,
+`TestTheGreetingNamesTheServerAndIsNotKept`,
+`TestTheSoftwareNamedIsKeptWithoutItsVersion`,
+`TestWhatAGreetingNamedReachesTheReport`,
+`TestTheSoftwareTheResponseNamedReachesTheRow`,
+`TestWhatAGreetingNamedIsARow`,
 `TestTheFallbackSignalIsReadInAllThreeWays`,
 `TestTheFallbackIsNotAskedOfASingleVersion`,
 `TestAnExchangerWithoutSTARTTLSIsDescribedAndNotGraded`,

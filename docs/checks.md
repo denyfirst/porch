@@ -106,7 +106,9 @@ that Chrome keeps and other browsers build from. Reported, not graded.
 operator), once, up to one megabyte. From it, only whether a content policy is
 declared and the host names of anything loaded over HTTP or from another site
 are kept. Only graded headers are kept. Cookies are kept by name and
-attributes, never by value.
+attributes, never by value. From `Server`, `X-Powered-By`, `X-AspNet-Version`
+and `X-AspNetMvc-Version`, only the software's name and whether a version came
+with it are kept, never the version; reported, not graded.
 
 **Grades:** how the site is reached over HTTPS, redirects, HSTS, cookies, mixed
 content, a few headers, a page that trusts any origin with credentials, and any
@@ -134,7 +136,9 @@ is reported and not graded.
 negotiates TLS 1.2 or 1.3 is asked once more, in a second short conversation,
 whether it still accepts TLS 1.1 or older: one hello offering nothing newer,
 the first record of the answer read, no handshake completed. Only for a domain
-proven to the copy asking, or where only its operator can use it.
+proven to the copy asking, or where only its operator can use it. From each
+greeting, only which mail server it names, from a fixed list, and whether a
+version came with it are kept; the greeting itself is not.
 
 **Grades** only what a standard calls an error: two SPF records, more than ten
 SPF lookups, `+all`, two DMARC records, an unusable MTA-STS policy, and a mail

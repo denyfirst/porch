@@ -84,6 +84,10 @@ func Declarations(f HeaderFacts, content ContentFacts, cookies []CookieFacts, se
 	// this is a row and not a rule. No document requires a version of HTTP.
 	out = append(out, Declaration{Label: "Served over", Says: cut(f.Protocol, maxDeclared)})
 
+	// What answered, by the names the response gave it, and whether a version
+	// came too. Never the version: see internal/announce.
+	out = append(out, Declaration{Label: "Software named", Says: webSoftwareLine(f.Software)})
+
 	for _, h := range declaredHeaders {
 		out = append(out, Declaration{Label: h.label, Says: cut(f.Values[h.header], maxDeclared)})
 	}

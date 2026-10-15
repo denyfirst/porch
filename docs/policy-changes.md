@@ -33,6 +33,11 @@ Unreleased.
   not kept.
 - **Reported, not graded:** the origin named back without credentials, which
   shares only what anyone can fetch.
+- **Reported, not graded:** the software the response names in `Server`,
+  `X-Powered-By`, `X-AspNet-Version` or `X-AspNetMvc-Version`, and whether a
+  version came with it, with the setting that turns the version off. The
+  version itself is not kept. The mail report says the same of each
+  exchanger's greeting, from a fixed list of mail servers.
 
 ---
 
