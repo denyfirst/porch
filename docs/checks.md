@@ -78,6 +78,10 @@ Every request carries the user agent `porch/1 (+https://porch.denyfirst.dev/priv
 - `GET /` over HTTPS and over HTTP, following up to five redirects your server
   names. A redirect to another scheme, or to a host the copy may not reach, is
   not followed.
+- The last page reached over HTTPS once more, with
+  `Origin: https://porch-cors-check.invalid` and nothing else changed, to see
+  whether it trusts a site it cannot know (CORS). Its answer is not followed and
+  its body is not read.
 - `GET /.well-known/security.txt` (RFC 9116).
 - `GET /` on the other form of the name, with or without `www.`. Its answer is
   not followed.
@@ -105,7 +109,8 @@ are kept. Only graded headers are kept. Cookies are kept by name and
 attributes, never by value.
 
 **Grades:** how the site is reached over HTTPS, redirects, HSTS, cookies, mixed
-content, a few headers, and any of the files above that is served. The HSTS policy graded is the one from the last
+content, a few headers, a page that trusts any origin with credentials, and any
+of the files above that is served. The HSTS policy graded is the one from the last
 HTTPS hop.
 
 ### Limits

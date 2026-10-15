@@ -35,7 +35,37 @@ var (
 		"OWASP — HTTP Security Response Headers Cheat Sheet",
 		"https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
 	}
+	owaspCORS = Reference{
+		"OWASP WSTG — Testing Cross Origin Resource Sharing",
+		"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing",
+	}
 )
+
+// CORSAnswer is how the page answered a second request saying it came from a
+// site that cannot exist.
+//
+// The half of the CORS question one response cannot settle. A server that
+// copies the origin it is sent says nothing about it until it is sent one,
+// so the response a visitor lands on carries no Access-Control-Allow-Origin
+// at all, and the headers above read as a site that shares with nobody.
+type CORSAnswer struct {
+	// Asked reports that the second request was made.
+	Asked bool
+
+	// Origin is the site the request said it came from.
+	Origin string
+
+	// Answered reports that it came back.
+	Answered bool
+
+	// Reflected and Credentials are the two answers, each as a browser reads
+	// it: the origin named back exactly, and credentials allowed exactly.
+	Reflected   bool
+	Credentials bool
+
+	// Reason says why there is no answer, where there is none.
+	Reason string
+}
 
 // HeaderFacts is one response, reduced to what the rules read.
 //
@@ -74,6 +104,9 @@ type HeaderFacts struct {
 	// they say that decides it.
 	ACAO string
 	ACAC string
+
+	// CORS is how the same page answered when asked from an unrelated site.
+	CORS CORSAnswer
 
 	// MetaCSP and MetaCSPReportOnly record a Content-Security-Policy declared
 	// in the page's markup rather than in a header.
@@ -154,6 +187,28 @@ func GradeHeaders(f HeaderFacts) WebResult {
 				"Name the origins to share with credentials, or drop the credentials header to " +
 				"share publicly.",
 			References: []Reference{fetchSpec, owaspHeaders},
+		})
+	}
+
+	// Any site at all trusted with the visitor's credentials. Asked from a
+	// name that cannot exist, the page named it back and allowed credentials,
+	// so a browser lets whatever site a visitor has open read this page as
+	// that visitor. Nothing a site intends produces it: an origin worth
+	// trusting is one somebody named, and this one nobody could have.
+	//
+	// Graded on the two answers together and on nothing else. The origin
+	// named back without credentials shares what any stranger can already
+	// fetch, which is what * says, and the row reports it.
+	if f.CORS.Answered && f.CORS.Reflected && f.CORS.Credentials {
+		out.add(Finding{
+			RuleID:  "headers.cors-trusts-any-origin",
+			Verdict: Insecure,
+			Title:   "Any site can read this page as its visitor",
+			Rationale: fmt.Sprintf("Asked from %s, a name that cannot exist, the page named it back in "+
+				"Access-Control-Allow-Origin and allowed credentials. A browser therefore lets any site a "+
+				"visitor has open read this page with that visitor's cookies. Name the origins to trust "+
+				"rather than copying the one in the request.", f.CORS.Origin),
+			References: []Reference{fetchSpec, owaspCORS},
 		})
 	}
 

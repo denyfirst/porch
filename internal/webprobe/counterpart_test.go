@@ -104,17 +104,17 @@ func TestTheOtherFormIsAskedOnceAndNotFollowed(t *testing.T) {
 		t.Errorf("the other form was asked %d times, want once: %v", times, asked)
 	}
 
-	// And the whole scan is exactly three requests of this listener: the root
-	// of the scanned name, its security.txt, and the root of the other form. The
-	// plaintext chain reaches a TLS listener and is refused below the handler,
-	// and no IPv6 handshake is made because this package's tests resolve
-	// nothing.
+	// And the whole scan is exactly four requests of this listener: the root
+	// of the scanned name, the same root again from an unrelated origin, its
+	// security.txt, and the root of the other form. The plaintext chain
+	// reaches a TLS listener and is refused below the handler, and no IPv6
+	// handshake is made because this package's tests resolve nothing.
 	//
 	// Counted as a whole rather than per name, because the sabotage this catches
 	// followed the redirect the other form returned — which adds a request to a
 	// different name and leaves every per-name count as it was.
-	if len(asked) != 3 {
-		t.Errorf("the scan made %d requests, want three: %v", len(asked), asked)
+	if len(asked) != 4 {
+		t.Errorf("the scan made %d requests, want four: %v", len(asked), asked)
 	}
 }
 

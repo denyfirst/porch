@@ -103,7 +103,8 @@
     <ul class="plain">
       <li><strong>Transport:</strong> TLS handshakes, each closed when the
         handshake ends.</li>
-      <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, and
+      <li><strong>Reach:</strong> <code>GET /</code> over HTTPS and HTTP, the
+        last HTTPS page once more from an origin that cannot exist, and
         <code>/.well-known/security.txt</code>.</li>
       <li><strong>Exposure:</strong> eleven paths of files that should never
         be served, such as <code>/.git/HEAD</code>, one GET each, and one

@@ -139,7 +139,9 @@ handshakes), `internal/mailscan.readExchangerTLS` and
 ### N7 — An HTTP request is one GET of the root, and no path is ever invented
 
 One `GET` of `/` over HTTPS and over plaintext; after that, only the addresses
-a `Location` header names. The only other paths ever asked for are files that
+a `Location` header names, and the last page reached over HTTPS once more with
+an `Origin` header naming a site that cannot exist, its answer not followed and
+its body not read. The only other paths ever asked for are files that
 exist to be read by strangers: `/.well-known/security.txt`,
 `/.well-known/mta-sts.txt` where a zone announces a policy, and
 `/.well-known/porch-challenge` for proof of control — and the fixed list in
@@ -147,11 +149,15 @@ exist to be read by strangers: `/.well-known/security.txt`,
 name, never derived from anything the site said, and nothing they hold kept.
 
 *Enforced in:* `internal/webprobe`, `internal/markup`,
-`internal/webprobe.Prober.pageFacts`, `internal/webscan.Scanner.Scan`,
+`internal/webprobe.Prober.pageFacts`, `internal/webprobe.Prober.cors`,
+`internal/webscan.Scanner.Scan`,
 `internal/httpapi.Server.operatorView`, `internal/leaks.Files`,
 `internal/leaks.Prober.Probe`, `internal/webscan.withLeaks`
 
 *Guarded by:* `TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestTheSecondRequestGoesToTheLandingPageWithOnlyTheOriginAdded`,
+`TestNoPageReachedOverTLSIsNotAskedWhomItTrusts`,
+`TestTheQuestionSaysTheScanRanOutRatherThanThatThePageWouldNotAnswer`,
 `TestASiteThatAnswersEverythingHasNothingExposed`,
 `TestEachFileIsRecognisedByWhatItIs`, `TestALookAlikeIsNotTheFile`,
 `TestASiteNotReachedIsNotASiteWithNothingExposed`,
@@ -1562,6 +1568,12 @@ graded, because what a downgrade costs is the grade of the version it lands on)
 `TestACookieCarriesTheTransportItWasSetOn`,
 `TestCorsHeadersThatContradictEachOtherAreGraded`,
 `TestEitherHalfOfTheCorsPairAloneIsNotGraded`,
+`TestAPageThatTrustsAnyOriginWithCredentialsIsInsecure`,
+`TestOnlyBothHalvesOfTheReflectionAreGraded`,
+`TestThePageIsReadAsABrowserReadsIt`,
+`TestTheRowSaysWhetherAnotherSiteWasNamedBack`,
+`TestHowThePageAnsweredAnotherSiteReachesTheReport`,
+`TestTheOriginInTheSentenceIsTheOneThisProgramSends`,
 `TestTheRecommendedHeadersAreReportedAndNotGraded`,
 `TestNosniffIsReportedAndNotGraded`,
 `TestAContentSecurityPolicySupersedesTheOlderFramingHeader`,

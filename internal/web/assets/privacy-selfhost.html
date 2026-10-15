@@ -102,7 +102,10 @@
         should never be served, such as <code>/.git/HEAD</code> and
         <code>/.env</code>, one GET each. What they hold is never kept.</li>
       <li><strong>Reach</strong>: <code>GET /</code> over HTTPS and HTTP,
-        following a few redirects; <code>/.well-known/security.txt</code>
+        following a few redirects; the last HTTPS page once more with
+        <code>Origin: https://porch-cors-check.invalid</code>, a name that
+        cannot exist, to see whether it trusts any site;
+        <code>/.well-known/security.txt</code>
         (RFC 9116); <code>GET /</code> of the <code>www.</code> form of the
         name; and one TLS handshake to the site's IPv6 address, if it has one.
         The contacts it names and its expiry date are shown to you. The final

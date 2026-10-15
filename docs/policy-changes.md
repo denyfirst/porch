@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v7`, `porch-web-v4`, `porch-mail-v4` and `porch-dns-v3`. Reports
+`porch-tls-v7`, `porch-web-v5`, `porch-mail-v4` and `porch-dns-v3`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,24 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-web-v4` → `porch-web-v5`
+
+Unreleased.
+
+- **Added `headers.cors-trusts-any-origin`, insecure.** Asked from
+  `https://porch-cors-check.invalid`, a name that cannot exist (RFC 6761), the
+  page a visitor lands on named it back in `Access-Control-Allow-Origin` and
+  allowed credentials. A browser then lets any site read that page with the
+  visitor's cookies.
+- It is asked in one more `GET` of that same page, with an `Origin` header and
+  nothing else changed. The answer is not followed and its body is not read.
+  The header values are compared exactly, as a browser compares them, and are
+  not kept.
+- **Reported, not graded:** the origin named back without credentials, which
+  shares only what anyone can fetch.
 
 ---
 
