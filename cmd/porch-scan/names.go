@@ -671,7 +671,8 @@ func printNamesLimits(w io.Writer, inv inventory.Inventory, probed bool) {
 		// connected to.
 		fmt.Fprintf(w, "    What each name is doing now was established by resolving it and\n")
 		fmt.Fprintf(w, "    opening a connection to each address it gave. Nothing was sent over\n")
-		fmt.Fprintf(w, "    that connection and no request was made.\n")
+		fmt.Fprintf(w, "    that connection, except to a name that points at a hosting service on\n")
+		fmt.Fprintf(w, "    a fixed list, which was asked for its front page once.\n")
 	}
 
 	fmt.Fprintf(w, "    This is an inventory, not a verdict: nothing above is graded, because\n")
@@ -873,6 +874,8 @@ func says(n liveness.Name) string {
 		return n.Reason
 	case n.Status == liveness.Dangling:
 		return "an alias to " + n.Alias + ", which does not resolve"
+	case n.Status == liveness.Unclaimed:
+		return "an alias to " + n.Alias + ", which " + n.Provider + " answers as a name nobody has claimed there"
 	case n.Status == liveness.Gone:
 		return "does not resolve"
 	case n.Status == liveness.Internal:

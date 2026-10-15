@@ -141,7 +141,9 @@ handshakes), `internal/mailscan.readExchangerTLS` and
 One `GET` of `/` over HTTPS and over plaintext; after that, only the addresses
 a `Location` header names, and the last page reached over HTTPS once more with
 an `Origin` header naming a site that cannot exist, its answer not followed and
-its body not read. The only other paths ever asked for are files that
+its body not read. A name in an inventory that is an alias to a hosting service
+on a fixed list is asked `GET /` once, nothing followed and nothing kept. The
+only other paths ever asked for are files that
 exist to be read by strangers: `/.well-known/security.txt`,
 `/.well-known/mta-sts.txt` where a zone announces a policy, and
 `/.well-known/porch-challenge` for proof of control — and the fixed list in
@@ -155,6 +157,9 @@ name, never derived from anything the site said, and nothing they hold kept.
 `internal/leaks.Prober.Probe`, `internal/webscan.withLeaks`
 
 *Guarded by:* `TestTheAddressesAreKeptOnlyWhereTheCallerAsked`,
+`TestANameTheServiceSaysNobodyClaimedIsSaid`,
+`TestOnlyTheServicesOwnAnswerCounts`, `TestNoRequestIsMadeOfANameOffTheList`,
+`TestWhichAliasesAreAServicesOwn`,
 `TestTheSecondRequestGoesToTheLandingPageWithOnlyTheOriginAdded`,
 `TestNoPageReachedOverTLSIsNotAskedWhomItTrusts`,
 `TestTheQuestionSaysTheScanRanOutRatherThanThatThePageWouldNotAnswer`,
@@ -405,7 +410,8 @@ name, never derived from anything the site said, and nothing they hold kept.
 `internal/hstspreload`, `internal/webscan.withPreload`,
 `internal/rpki`, `internal/dnsscan.Scanner.readRoutes`,
 `cmd/porch-scan.removedFlags`, `internal/liveness`,
-`internal/liveness.Checker.one`, `internal/dnsclient.withPort`,
+`internal/liveness.Checker.one`, `internal/liveness.Checker.unclaimed`,
+`internal/dnsclient.withPort`,
 `internal/dnsnames`, `internal/dnsnames.Reader.Under`, `internal/inventory`,
 `internal/inventory.Merge`, `internal/inventory.Inventory.Hosts`,
 `cmd/porch-scan.printNamesNow`, `cmd/porch-scan.saysLogs`,

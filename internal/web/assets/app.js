@@ -2537,6 +2537,7 @@ function namesFrame(container, target, data, opts) {
   const live = hosts.filter((n) => status(n) === "live").length;
   const elsewhere = hosts.filter((n) => status(n) && status(n) !== "live").length;
   const dangling = hosts.filter((n) => status(n) === "dangling");
+  const unclaimed = hosts.filter((n) => status(n) === "unclaimed");
   const distinct = data.distinct || 0;
 
   const tally = el("div", "report-tally");
@@ -2575,22 +2576,33 @@ function namesFrame(container, target, data, opts) {
   cover.appendChild(board);
   container.appendChild(cover);
 
-  if (dangling.length) {
+  if (dangling.length || unclaimed.length) {
     const findings = el("section", "report-findings");
     const heading = el("h2", "report-heading", "Findings");
-    heading.appendChild(el("span", "report-heading-count", String(dangling.length)));
+    heading.appendChild(el("span", "report-heading-count", String(dangling.length + unclaimed.length)));
     findings.appendChild(heading);
     const todo = el("div", "report-todo");
-    for (const n of dangling) {
+    const finding = (title, body) => {
       const item = el("article", "report-item report-item-weak");
       item.appendChild(el("span", "stamp stamp-small stamp-weak", "Review"));
       const main = el("div", "report-item-main");
-      main.appendChild(el("h3", "report-item-title", n.name + " is an alias to a name that does not exist"));
-      main.appendChild(el("p", "report-item-body",
-        "It points at " + n.now.alias + ", which does not resolve. Whoever claims that name next " +
-        "answers for " + n.name + ". Remove the alias, or point it at something you control."));
+      main.appendChild(el("h3", "report-item-title", title));
+      main.appendChild(el("p", "report-item-body", body));
       item.appendChild(main);
       todo.appendChild(item);
+    };
+    for (const n of dangling) {
+      finding(n.name + " is an alias to a name that does not exist",
+        "It points at " + n.now.alias + ", which does not resolve. Whoever claims that name next " +
+        "answers for " + n.name + ". Remove the alias, or point it at something you control.");
+    }
+    // What the service said is the measurement; whether it lets somebody
+    // else claim the name today is its rule, not something this asked (R17).
+    for (const n of unclaimed) {
+      finding(n.name + " points at " + n.now.provider + ", which says nobody has claimed it",
+        "It is an alias to " + n.now.alias + ", and " + n.now.provider + " answered it as it answers a " +
+        "name nobody has claimed there. Whoever claims it there may answer for " + n.name +
+        ". Remove the alias, or claim the name again.");
     }
     findings.appendChild(todo);
     container.appendChild(findings);
@@ -3828,6 +3840,8 @@ function doingWhy(now) {
       return now.reason;
     case now.status === "dangling":
       return "an alias to " + now.alias + ", which does not resolve";
+    case now.status === "unclaimed":
+      return "an alias to " + now.alias + ", which " + now.provider + " answers as a name nobody has claimed there";
     case now.status === "gone":
       return "does not resolve";
     case now.status === "internal":
@@ -3942,7 +3956,8 @@ function namesLimits(data) {
   if (data.probed) {
     item(
       "What each name is doing now was established by resolving it and opening a connection to each address it gave. " +
-        "Nothing was sent over that connection and no request was made."
+        "Nothing was sent over that connection, except to a name that points at a hosting service on a " +
+        "fixed list, which was asked for its front page once."
     );
   }
   if (data.wildcards) {

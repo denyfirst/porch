@@ -197,6 +197,17 @@ certificates, the reverse DNS of address ranges you name (up to a /20 or /116,
 
 An inventory is made only for a domain proven to the copy asking.
 
+**What each name is doing:** each name is looked up, and its address is sent
+one connection on 443 and one on 80, closed as it opens, with nothing sent. A
+name that is an alias to GitHub Pages, Amazon S3, Pantheon or Surge, and
+answers on 80, is asked `GET /` once over plain HTTP, nothing followed and at
+most 16 KB read, to see whether the service answers with the 404 it gives a
+name nobody has claimed there. Nothing it says is kept. Such a name, and an
+alias to a name that does not exist, is listed under Findings: whoever claims
+that name at the service may answer for yours. Plain HTTP because the service
+has no certificate for a name it does not know; certificate checks are never
+turned off.
+
 It cannot show hosts with no public certificate, hosts behind a wildcard
 certificate (unless a register was read), or hosts your DNS has no reason to
 name.

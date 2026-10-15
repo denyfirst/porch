@@ -123,6 +123,12 @@
         as the zone publishes them.
         If a mail address is typed, the part before the <code>@</code> is
         dropped.</li>
+      <li><strong>Names</strong>: each name found is looked up, and its
+        address is sent one connection on 443 and one on 80, closed as it opens,
+        with nothing sent. A name that is an alias to GitHub Pages, Amazon S3,
+        Pantheon or Surge and answers on 80 is asked <code>GET /</code> once
+        over HTTP, to see whether that service says nobody has claimed it; at
+        most 16 KB is read and nothing is kept.</li>
       <li><strong>DNS</strong>: lookups for the domain's addresses, name
         servers, SOA and DNSSEC chain.
         Each of the zone's own name servers is also asked directly whether it
