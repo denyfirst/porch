@@ -18,6 +18,34 @@
     <a class="button button-secondary" href="/domains">Domains</a>
   </div>
 
+  <!--
+    A newer signed release, when the last check under This installation found
+    one; nothing is asked of GitHub to draw this. Every word is written here
+    or in app.js, and the one thing taken from the answer, the version, is
+    used only once it reads as a release name. The commands check the
+    signature again on the server before anything is replaced, so this banner
+    can at worst say there is an update; it cannot install one.
+  -->
+  <div class="update-banner" id="update-banner" role="status" hidden>
+    <div class="update-head">
+      <span class="update-tag" id="update-tag">Update</span>
+      <p id="update-text"></p>
+      <a class="update-notes" id="update-notes" href="https://github.com/denyfirst/porch/releases" rel="noopener noreferrer" target="_blank" hidden>What changed</a>
+    </div>
+    <details class="update-how" id="update-how" hidden>
+      <summary>Show the commands</summary>
+      <p class="update-note" id="update-note"></p>
+      <div class="command terminal">
+        <div class="terminal-bar">
+          <span class="terminal-dots" aria-hidden="true"></span>
+          <span class="terminal-where">on the server, in the folder the compose file is in</span>
+          <button class="command-copy" type="button" data-copy="update-commands">Copy</button>
+        </div>
+        <pre><code id="update-commands"></code></pre>
+      </div>
+    </details>
+  </div>
+
   <form class="composer" id="console-form" autocomplete="off" data-proof="required">
     <div class="composer-part">
       <label class="composer-step" for="console-target">01 / Domain</label>

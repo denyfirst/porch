@@ -133,7 +133,8 @@ handshakes), `internal/mailscan.readExchangerTLS` and
 `TestTheWebEndpointDoesNotAnswerAGet`,
 `TestAVersionSaysWhichHostsTheBinaryWillReach`,
 `TestTheVersionOutputCarriesTheReachLine`,
-`TestTheDemonstrationBuildIsReleasedAndDeployed`
+`TestTheDemonstrationBuildIsReleasedAndDeployed`,
+`TestTheDemonstrationDoesNotCheck`
 
 ### N7 — An HTTP request is one GET of the root, and no path is ever invented
 
@@ -2005,6 +2006,26 @@ step
 `TestAPushWithoutCredentialsIsRefused`,
 `TestThePorchPageShowsTheComposeFileThatShips`,
 `TestALayoutIsReadBackAndATamperedOneIsRefused`
+
+### S18 — A newer release is believed only signed, and installed only by its operator
+
+*Enforced in:* `internal/sshsig.Verify`, `internal/updates` (`Checker.Check`,
+`checkRedirect`, `LatestVersion`, `Settings`, `Service.Handler`),
+`cmd/porchd` (the update service is made only where there is a gate and no
+demonstration), `internal/web/assets/app.js` (`updateCommands`,
+`readUpdates`), `docs/self-host.md`
+
+*Guarded by:* `TestAReleaseSignatureVerifies`, `TestEverythingElseIsRefused`,
+`TestOnlyAnEd25519KeyIsAKey`, `FuzzVerify`,
+`TestTheCompiledKeyIsTheReleaseKey`, `TestOnlyASignedListIsRead`,
+`TestTheVersionIsTheOneEveryNameAgreesOn`, `TestNewerComparesReleases`,
+`TestARedirectStaysOnGitHub`, `TestCheckingNowIsSpacedAndKeepsWhatVerified`,
+`TestTheDailyChoiceIsKeptAndOffByDefault`,
+`TestTheHandlerAnswersOnlyItsOwnPages`, `TestTheDemonstrationDoesNotCheck`,
+`TestTheUpdateCheckExistsOnlyBehindThePassword`,
+`TestTheUpdateCommandsCarryTheReleaseKey`,
+`TestTheBannerUsesOnlyAVersionThatIsAReleaseName`,
+`TestTheUpdatePartsAreOnTheirPages`
 
 ---
 

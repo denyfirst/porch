@@ -755,7 +755,7 @@ func renderWorkspace(in Installation) {
 			Description: part.description,
 			Fragment:    part.fragment,
 			Section:     part.section,
-			Script:      part.section == "domains" || (part.section == "history" && signedIn),
+			Script:      part.section == "domains" || part.section == "installation" || (part.section == "history" && signedIn),
 			Data:        workspaceData(),
 		}
 		body, err := render(p)

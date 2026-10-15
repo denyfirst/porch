@@ -4,8 +4,10 @@ Porch runs on your machine, from your address. The public site at
 [porch.denyfirst.dev](https://porch.denyfirst.dev) is a demonstration that
 scans only hosts this project owns; this page is the tool.
 
-Nothing here is sent to this project. There is no account, no telemetry and no
-update check: *we don't have the data to begin with*.
+Nothing here is sent to this project. There is no account, no telemetry,
+nothing that reports back: *we don't have the data to begin with*. The one thing a copy asks about
+itself, whether a newer signed release exists, it asks GitHub, and only when
+you tell it to ([Upgrading](#upgrading)).
 
 ---
 
@@ -93,8 +95,37 @@ from whichever servers the zone names.
 
 ### Upgrading
 
-Step 1 again in the same directory, then `docker compose up -d`. The data
-directory, the password and every published record stay.
+Under **This installation**, **Check now** asks GitHub for the latest
+release's signed list and checks it with the release key built into this
+copy; the daily check, off until you turn it on, asks once a day. The request
+carries no cookie, no version and nothing about the installation; GitHub sees
+the server's address. The choice is kept in `porch-data/updates.json`, not
+sealed: it says only whether the daily check is on. Nothing is installed:
+when a newer release verifies, **New check** shows the commands for it, with
+a Copy button.
+
+By hand, with `V` set to the release you are moving to:
+
+```sh
+V=vX.Y.Z
+test -f docker-compose.yml && mkdir -p "update-${V}"
+for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSL -o "update-${V}/${f}" "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
+echo 'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR' > "update-${V}/allowed_signers"
+if ssh-keygen -Y verify -f "update-${V}/allowed_signers" -I releases@denyfirst.dev -n file -s "update-${V}/SHA256SUMS.sig" < "update-${V}/SHA256SUMS" && grep -qF "_${V}_" "update-${V}/SHA256SUMS" && (cd "update-${V}" && sha256sum --ignore-missing -c SHA256SUMS); then (test -e "docker-compose.yml.before-${V}" || cp docker-compose.yml "docker-compose.yml.before-${V}") && cp "update-${V}/docker-compose.yml" docker-compose.yml && docker compose up -d; else echo "STOP: ${V} did not verify; nothing was changed"; fi
+```
+
+Run in the installation's directory, they fetch into a folder of their own,
+check the signature, that the signed list is `V`'s and not an older release's,
+and the compose file's digest. Only then is the compose file in use kept as
+`docker-compose.yml.before-V` and the new one put in its place. Each line is
+safe on its own: a pasted line runs whether or not the one before it worked,
+and nothing beside the compose file in use is written until the last one has
+verified. The data directory, the password and every published record stay.
+To go back, copy `docker-compose.yml.before-V` over `docker-compose.yml` and
+run `docker compose up -d`.
+
+Changes of your own belong in `docker-compose.override.yml`, which Docker
+Compose reads beside the compose file and an update leaves alone.
 
 An installation from v0.25.1 or before built its image on the server, and the
 build cache could hold a copy of `porch-data`. Remove both:
@@ -122,9 +153,12 @@ Porch.
 
 ### A public address, with a certificate
 
-`porchd` reads a certificate from disk and reloads it when it is renewed:
+`porchd` reads a certificate from disk and reloads it when it is renewed. Put
+this in `docker-compose.override.yml`, beside the compose file:
 
 ```yaml
+services:
+  porch:
     command:
       - "-listen"
       - "0.0.0.0:8443"
@@ -139,16 +173,16 @@ Porch.
     ports:
       - "443:8443"
     volumes:
-      - /etc/ssl/certs:/etc/ssl/certs:ro
-      - ./porch-data:/data
       - /etc/letsencrypt:/certs:ro
 ```
 
-A `command` replaces the compose file's, so every argument has to be there.
-Without `-access-file` there is no password, and `porchd` refuses to start, on
-loopback or anywhere else. The key has to be readable by user 65534. Nothing
-listens on port 80, so get the certificate with a DNS challenge, or with
-`certbot certonly --standalone` while the service is stopped.
+A `command` there replaces the compose file's, so every argument has to be
+there. Ports and volumes are added to the compose file's: its loopback port
+stays published, with nothing listening behind it. Without `-access-file`
+there is no password, and `porchd` refuses to start, on loopback or anywhere
+else. The key has to be readable by user 65534. Nothing listens on port 80,
+so get the certificate with a DNS challenge, or with `certbot certonly
+--standalone` while the service is stopped.
 
 ---
 

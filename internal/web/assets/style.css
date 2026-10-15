@@ -4038,6 +4038,165 @@ main > .band:last-child { border-bottom: 0; }
 .command-copy:hover,
 .command-copy:focus-visible { border-color: var(--term-faint); }
 
+/*
+  A newer signed release, on New check, and the Updates part of This
+  installation.
+
+  In Porch's own colour and never a verdict's: an update is news about this
+  tool, not a finding about anybody's host, and a reader who has learned that
+  red means a host is exposed should not see it here. The buttons are drawn
+  in outline, which reads in both schemes; a light violet behind white text
+  does not.
+*/
+.update-banner {
+  margin: 0 0 1.4rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--tool);
+  border-radius: calc(var(--radius) + 4px);
+}
+
+.update-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.8rem;
+}
+
+.update-head p {
+  flex: 1 1 22rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.update-tag {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tool);
+  border: 1px solid var(--tool);
+  border-radius: 4px;
+  padding: 0 0.4rem;
+}
+
+.update-notes { font-size: 0.85rem; }
+
+.update-how { margin-top: 0.6rem; }
+
+.update-how > summary,
+.update-check {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.25rem 0.85rem;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--tool);
+  background: transparent;
+  border: 1px solid var(--tool);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.update-how > summary { list-style: none; }
+.update-how > summary::-webkit-details-marker { display: none; }
+
+.update-how > summary:hover,
+.update-how > summary:focus-visible,
+.update-check:hover:not(:disabled),
+.update-check:focus-visible { background: color-mix(in srgb, var(--tool) 10%, transparent); }
+
+.update-check:disabled {
+  cursor: progress;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+}
+
+.update-note {
+  max-width: 46rem;
+  margin: 0.7rem 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.update-note code { white-space: nowrap; }
+
+.update-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.update-line > span { flex: 1 1 20rem; min-width: 0; }
+.update-line .update-check { flex: none; }
+
+/* A fingerprint is one word as long as a phone is wide: it breaks anywhere
+   rather than pushing the panel past the screen. */
+.update-line .key-fingerprint { overflow-wrap: anywhere; }
+.update-toggle > span:last-child { min-width: 0; }
+
+.update-status {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.update-status:empty { display: none; }
+
+.update-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  cursor: pointer;
+}
+
+/* The box itself is kept for the keyboard and for screen readers, and drawn
+   as the switch beside it. */
+.update-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.update-switch {
+  position: relative;
+  flex: none;
+  width: 2.2rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.update-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.12rem;
+  left: 0.14rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.update-toggle input:checked + .update-switch { background: var(--tool); border-color: var(--tool); }
+.update-toggle input:checked + .update-switch::after { left: 1.1rem; background: var(--card); }
+.update-toggle input:focus-visible + .update-switch { outline: 2px solid var(--tool); outline-offset: 2px; }
+.update-toggle input:disabled + .update-switch { cursor: progress; border-style: dashed; }
+
 .steps .command {
   grid-column: 2;
   grid-row: 1 / 4;
@@ -5525,7 +5684,7 @@ main > .band:last-child { border-bottom: 0; }
     rule that does nothing and reads as one that does.
   */
   .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .topbar,
-  .summary-actions, .composer, .checks, .colophon-links,
+  .summary-actions, .composer, .checks, .colophon-links, .update-banner,
   .ask > h1, .ask-form {
     display: none !important;
   }

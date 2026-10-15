@@ -51,6 +51,51 @@
 
       <dt>Sent to us</dt>
       <dd>Nothing. This copy reports to no one.</dd>
+
+      <dt>Asked of GitHub</dt>
+      <dd>
+        The latest release's signed list, only when you press Check now below
+        or turn on the daily check. Nothing about this installation or its
+        scans goes with it.
+      </dd>
+    </dl>
+  </div>
+
+  <!--
+    Whether a newer signed release exists. The page asks this installation,
+    which asks GitHub only on Check now or, when it is on, once a day, and
+    believes the list only if the release key compiled into it signed it.
+    Nothing is installed from here: when there is a newer release, New check
+    shows the commands to run on the server, which check the signature again
+    themselves. Off by default, because the one question GitHub learns
+    anything from is the one the operator chose to ask.
+  -->
+  <h2 class="work-section" id="updates">Updates</h2>
+  <div class="panel">
+    <dl class="state-grid">
+      <dt>Running</dt>
+      <dd><span id="updates-running">Not known until the page has asked this installation.</span></dd>
+
+      <dt>Latest</dt>
+      <dd>
+        <span class="update-line">
+          <span id="updates-latest">Not checked yet.</span>
+          <button class="update-check" type="button" id="updates-check" disabled>Check now</button>
+        </span>
+        <span class="update-status" id="updates-status" role="status"></span>
+      </dd>
+
+      <dt>Daily check</dt>
+      <dd>
+        <label class="update-toggle">
+          <input type="checkbox" role="switch" id="updates-daily" disabled>
+          <span class="update-switch" aria-hidden="true"></span>
+          <span><strong id="updates-daily-state">Off.</strong> When on, this copy
+          asks github.com once a day for the latest release's signed list.
+          Nothing about this installation or its scans is sent; GitHub sees
+          this server's address.</span>
+        </label>
+      </dd>
     </dl>
   </div>
 

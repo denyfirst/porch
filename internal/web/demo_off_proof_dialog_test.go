@@ -169,7 +169,12 @@ func TestTheProviderHelpIsTheSameWhereverARecordIsShown(t *testing.T) {
 	block := func(page string) string {
 		src := asset(t, page)
 		start := strings.Index(src, `<details class="provider-help">`)
-		end := strings.Index(src, "</details>")
+		end := -1
+		if start >= 0 {
+			if n := strings.Index(src[start:], "</details>"); n >= 0 {
+				end = start + n
+			}
+		}
 		if start < 0 || end < start {
 			t.Fatalf("%s has no provider help beside its record", page)
 		}
