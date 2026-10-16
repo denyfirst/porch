@@ -63,7 +63,7 @@ func classifyProbeError(err error) (text string, blocked bool) {
 	case strings.Contains(msg, "no such host"),
 		strings.Contains(msg, "server misbehaving"),
 		strings.Contains(msg, "no addresses"):
-		return "the name did not resolve", false
+		return errNoAddress, false
 
 	case errors.Is(err, context.DeadlineExceeded),
 		strings.Contains(msg, "i/o timeout"),
@@ -173,3 +173,8 @@ func unwrapURLError(err error) string {
 	}
 	return err.Error()
 }
+
+// errNoAddress is what a hop says when its name has no address. A constant
+// because the row about the other form of a name tells it apart from every
+// other failure.
+const errNoAddress = "the name did not resolve"

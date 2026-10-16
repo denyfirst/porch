@@ -184,6 +184,7 @@ name, never derived from anything the site said, and nothing they hold kept.
 `TestTheOtherFormOfANameIsDerivedAndNotSearchedFor`,
 `TestTheOtherFormGoesThroughWhateverDecidesWhatMayBeReached`,
 `TestTheOtherFormOfTheNameRowSaysHowTheTwoAgree`,
+`TestTheOtherFormWithNoAddressIsSaidToNotResolve`,
 `TestWhereThisNameLandsReachesTheRowAboutTheOtherForm`,
 `TestWhichPublishedAddressesCanBeTried`,
 `TestWhatAnIPv6HandshakeSaysAboutTheCertificate`,

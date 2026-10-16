@@ -2,6 +2,7 @@ package webprobe
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -223,5 +224,41 @@ func TestTheOtherFormBeingUnreachableIsNotAgreement(t *testing.T) {
 	// said (I6). The row adds the name itself, once, where it belongs.
 	if strings.Contains(got.Reason, "www.example.com") || strings.Contains(got.Reason, "no such host") {
 		t.Errorf("the reason echoes the input or the library: %q", got.Reason)
+	}
+}
+
+// The other form with no address is said as that, and not as a name that could
+// not be reached.
+//
+// Most sites publish one form only, on purpose. "Could not be reached" read
+// that as something broken an operator ought to mend; "does not resolve" is
+// what was measured. Every other failure keeps the one phrase.
+func TestTheOtherFormWithNoAddressIsSaidToNotResolve(t *testing.T) {
+	p, addr := twoNameServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	for _, c := range []struct {
+		name string
+		fail error
+		want string
+	}{
+		{"no address", &net.DNSError{Err: "no such host", Name: "www.example.com", IsNotFound: true}, "does not resolve"},
+		{"refused", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: connection refused")}, "could not be reached"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+				if strings.HasPrefix(address, "www.") {
+					return nil, c.fail
+				}
+				return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+			}
+			report, err := p.Probe(context.Background(), "example.com", func(context.Context, string) string { return "" })
+			if err != nil {
+				t.Fatalf("probing: %v", err)
+			}
+			if got := report.Counterpart.Reason; got != c.want {
+				t.Errorf("the other form reads %q, want %q", got, c.want)
+			}
+		})
 	}
 }

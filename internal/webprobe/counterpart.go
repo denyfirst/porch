@@ -103,13 +103,18 @@ func (p *Prober) counterpart(ctx context.Context, client *http.Client, host stri
 
 	hop := p.fetch(ctx, client, "https://"+net.JoinHostPort(name, securePort)+"/")
 	if hop.Err != "" {
-		// Every cause gets one phrase. A name that does not exist, a
-		// certificate that did not verify and a connection refused are all
-		// "the other form of the name could not be reached" here, because the
-		// row is about whether the two forms agree and the operator's next
-		// step is to look at that name properly.
 		if ranOut(ctx) {
 			out.Reason = outOfTimeForName
+			return out
+		}
+		// A name with no address apart from every other failure. It is the
+		// commonest answer — plenty of sites publish one form only, on
+		// purpose — and "could not be reached" read it as something broken
+		// that an operator ought to go and mend. The causes after that keep
+		// one phrase: a certificate that did not verify and a connection
+		// refused both send the operator to look at that name properly.
+		if hop.Err == errNoAddress {
+			out.Reason = "does not resolve"
 			return out
 		}
 		out.Reason = "could not be reached"
