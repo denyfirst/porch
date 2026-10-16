@@ -112,6 +112,11 @@ sealed: it says only whether the daily check is on. Nothing is installed:
 when a newer release verifies, **New check** shows the commands for it, with
 a Copy button.
 
+A signature says who made the list, not that it is the newest. Whoever could
+change what GitHub serves could keep a newer release from being shown, but not
+make an older one install: the commands check that the signed list is the
+named release's.
+
 By hand, with `V` set to the release you are moving to:
 
 ```sh
