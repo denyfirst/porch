@@ -20,7 +20,7 @@ Newest first.
 
 ## `porch-web-v4` → `porch-web-v5`
 
-Unreleased.
+Released in v0.29.0, 2026-10.
 
 - **Added `headers.cors-trusts-any-origin`, insecure.** Asked from
   `https://porch-cors-check.invalid`, a name that cannot exist (RFC 6761), the
