@@ -77,6 +77,20 @@ func TestTheReleaseProcedureIsWrittenDown(t *testing.T) {
 	if notes < 0 || publish < 0 || notes > publish {
 		t.Error("docs/releasing.md publishes the release before its notes replace the draft's")
 	}
+
+	// And it is published only from inside one statement that has seen the
+	// signature on the release. On 2026-10-16 the publish was a line of its
+	// own: release.ps1 had signed nothing, the upload failed, and the next
+	// line put v0.29.1 out unsigned.
+	signed := strings.Index(page, "if (Test-Path $sig) {")
+	download := strings.Index(page, "gh release download v0.2.0 --pattern SHA256SUMS.sig")
+	gate := strings.Index(page, "if ($ok) {")
+	if signed < 0 || download < 0 || gate < 0 || !(signed < download && download < gate && gate < publish) {
+		t.Error("docs/releasing.md publishes without first downloading the signature back from the release and comparing it")
+	}
+	if n := strings.Count(page, "--draft=false"); n != 1 {
+		t.Errorf("docs/releasing.md publishes in %d places; the one inside the check is the only one there should be", n)
+	}
 }
 
 // A procedure's first instruction has to work.
