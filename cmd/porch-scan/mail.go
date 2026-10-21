@@ -377,13 +377,19 @@ func daneSummary(f *policy.MailFacts) string {
 		return "not checked: the exchangers are not known"
 	case len(f.MXHosts) == 0:
 		return "not checked: the domain publishes no exchanger"
+	// The count names what it counts: "none of the 2" left a reader to work
+	// out that the 2 were the exchangers (live test, 2026-10-20).
+	case len(f.MXHosts) == 1 && len(f.DANEHosts) == 0:
+		return "none at the one exchanger"
+	case len(f.MXHosts) == 1:
+		return "at the one exchanger"
 	case len(f.DANEHosts) == 0:
-		return "none of the " + strconv.Itoa(len(f.MXHosts))
+		return "none at the " + strconv.Itoa(len(f.MXHosts)) + " exchangers"
 	case len(f.DANEHosts) == len(f.MXHosts):
-		return "all " + strconv.Itoa(len(f.MXHosts))
+		return "at all " + strconv.Itoa(len(f.MXHosts)) + " exchangers"
 	default:
-		return strconv.Itoa(len(f.DANEHosts)) + " of the " + strconv.Itoa(len(f.MXHosts)) +
-			": " + strings.Join(f.DANEHosts, ", ")
+		return "at " + strconv.Itoa(len(f.DANEHosts)) + " of the " + strconv.Itoa(len(f.MXHosts)) +
+			" exchangers: " + strings.Join(f.DANEHosts, ", ")
 	}
 }
 

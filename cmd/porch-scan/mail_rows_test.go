@@ -53,8 +53,13 @@ func TestTheMailPathDrawsItsRowsWhateverTheMXSays(t *testing.T) {
 		MXRead: true, MXHosts: []string{"a.example.net", "b.example.net"},
 		DANEHosts: []string{"a.example.net"},
 	})
-	if !strings.Contains(counted, "DANE       1 of the 2: a.example.net") {
+	if !strings.Contains(counted, "DANE       at 1 of the 2 exchangers: a.example.net") {
 		t.Errorf("the count is wrong:\n%s", counted)
+	}
+	// And names what it counts where it counts nothing.
+	none := draw(policy.MailFacts{MXRead: true, MXHosts: []string{"a.example.net", "b.example.net"}})
+	if !strings.Contains(none, "DANE       none at the 2 exchangers") {
+		t.Errorf("the count does not say what it counted:\n%s", none)
 	}
 
 	// An exchanger nobody spoke to says so, even where the reason was not

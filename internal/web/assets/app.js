@@ -3449,9 +3449,11 @@ function daneSummary(facts) {
   if (facts.nullMX) return "not checked: the domain accepts no mail";
   if (facts.mxReason || !facts.mxRead) return "not checked: the exchangers are not known";
   if (hosts.length === 0) return "not checked: the domain publishes no exchanger";
-  if (dane.length === 0) return "none of the " + hosts.length;
-  if (dane.length === hosts.length) return "all " + hosts.length;
-  return dane.length + " of the " + hosts.length + ": " + dane.join(", ");
+  if (hosts.length === 1 && dane.length === 0) return "none at the one exchanger";
+  if (hosts.length === 1) return "at the one exchanger";
+  if (dane.length === 0) return "none at the " + hosts.length + " exchangers";
+  if (dane.length === hosts.length) return "at all " + hosts.length + " exchangers";
+  return "at " + dane.length + " of the " + hosts.length + " exchangers: " + dane.join(", ");
 }
 
 // ── The name inventory ──────────────────────────────────────────────────
