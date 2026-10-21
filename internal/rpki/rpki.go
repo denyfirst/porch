@@ -252,6 +252,11 @@ func (c *Client) get(ctx context.Context, call string, q url.Values, v any) stri
 
 	resp, err := c.client().Do(req)
 	if err != nil {
+		// The scan's own clock running out is not RIPEstat being down, and
+		// a reader who is told the second goes looking for a network fault.
+		if ctx.Err() != nil {
+			return "RIPEstat did not answer in the time the scan allows"
+		}
 		return "RIPEstat could not be reached"
 	}
 	defer resp.Body.Close()

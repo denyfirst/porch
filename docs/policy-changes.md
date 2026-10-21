@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v7`, `porch-web-v5`, `porch-mail-v4` and `porch-dns-v3`. Reports
+`porch-tls-v8`, `porch-web-v5`, `porch-mail-v4` and `porch-dns-v3`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,20 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-tls-v7` → `porch-tls-v8`
+
+Released in v0.30.0, 2026-10.
+
+- **`cert.validity-too-long` counts the last second.** A certificate's lifetime
+  runs from `notBefore` through `notAfter` inclusive (RFC 5280, 4.1.2.5), as the
+  Baseline Requirements count it. Before, the seconds were dropped, so a
+  certificate issued one second past its limit read as exactly the limit and
+  passed; it is now weak.
+- The lifetime both faces print moves with it: a Let's Encrypt certificate,
+  written as 90 days less a second, now reads 90 days rather than 89.
 
 ---
 

@@ -1,11 +1,21 @@
-<section class="ask">
+<section class="ask{{if not .Demo}} ask-work{{end}}">
     <!--
       What this page is for, said in the line people read. It is the only part
       of this installation that produces a list of hosts rather than a verdict
       about one, and the difference is worth stating before anybody types a
       name.
+
+      On an installation it is headed as New check, Domains and History are:
+      the display heading read as a page of a website inside a workspace
+      (live test, 2026-10-20). The demonstration is that website, and keeps it.
     -->
-    {{if .Demo}}<h1>Every name<br>under our own<br>domain.</h1>{{else}}<h1>The names<br>your certificates<br>have already published.</h1>{{end}}
+    {{if .Demo}}<h1>Every name<br>under our own<br>domain.</h1>{{else}}
+    <div class="work-heading">
+      <div>
+        <h1>Names</h1>
+        <p>The names under a domain you have proven, from public certificates and its own records.</p>
+      </div>
+    </div>{{end}}
 
     <form class="ask-form" id="scan-form" autocomplete="off" data-check="names">
       <label class="field-label" for="target">Domain</label>

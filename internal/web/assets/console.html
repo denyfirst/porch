@@ -172,6 +172,7 @@
 
     <label class="field-label" for="proof-level">Publish under</label>
     <select class="proof-level" id="proof-level"></select>
+    <p class="proof-single" id="proof-single" hidden></p>
     <p class="proof-hint">The name itself unless you choose otherwise. A record on a domain above it covers that domain and every name beneath it: choose one only if you run its DNS.</p>
 
     <dl class="proof-record">
@@ -182,6 +183,7 @@
       <dt>Value</dt>
       <dd><code id="proof-value"></code> <button class="proof-copy" type="button" data-copy="proof-value">Copy</button></dd>
     </dl>
+    <p class="proof-hint proof-short">Most providers add your domain to the name themselves: type only the part before it. For a record on the domain they manage, that is <code id="proof-label">_porch-challenge</code> <button class="proof-copy" type="button" data-copy="proof-label">Copy</button></p>
     <!--
       Where the name goes at the providers most people use. Help with a form
       and nothing more: the record is read from whichever servers the zone
@@ -206,6 +208,7 @@
           <tr><td>GoDaddy</td><td>Name</td></tr>
           <tr><td>Namecheap</td><td>Host</td></tr>
           <tr><td>Hetzner</td><td>Name</td></tr>
+          <tr><td>deSEC</td><td>Subname</td></tr>
           <tr><td>DigitalOcean</td><td>Hostname</td></tr>
           <tr><td>A zone file</td><td>The whole name with a final dot, the value inside double quotes, then a reload</td></tr>
         </tbody>

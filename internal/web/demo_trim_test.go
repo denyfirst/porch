@@ -48,7 +48,7 @@ func TestTheDemonstrationOffersNoDownloadAndNoCounter(t *testing.T) {
 	}
 }
 
-// The three steps on the Porch page are the guide's own commands.
+// The steps on the Porch page are the guide's own commands.
 //
 // The guide is the reference and says why each step is there; a command on
 // the page that the guide no longer gives is one nobody is maintaining.
@@ -72,8 +72,8 @@ func TestThePorchStepsAreTheGuidesCommands(t *testing.T) {
 	// Each carries the id its Copy button names, so the id is allowed and
 	// nothing else is.
 	blocks := regexp.MustCompile(`(?s)<pre><code(?: id="command-[a-z]+")?>(.*?)</code></pre>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 3 {
-		t.Fatalf("the Porch page has %d command blocks, want 3", len(blocks))
+	if len(blocks) != 4 {
+		t.Fatalf("the Porch page has %d command blocks, want 4", len(blocks))
 	}
 	for _, b := range blocks {
 		// The text a reader sees and Copy writes: the colours are spans, and
@@ -101,8 +101,8 @@ func TestThePorchCommandsAreATerminalWhosePromptIsNotCopied(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocks := regexp.MustCompile(`(?s)<code id="command-[a-z]+">(.*?)</code>`).FindAllStringSubmatch(string(page), -1)
-	if len(blocks) != 3 {
-		t.Fatalf("%d command blocks, want 3", len(blocks))
+	if len(blocks) != 4 {
+		t.Fatalf("%d command blocks, want 4", len(blocks))
 	}
 	for _, b := range blocks {
 		text := shownText(b[1])
@@ -187,7 +187,7 @@ func TestThePorchPageShowsTheComposeFileThatShips(t *testing.T) {
 	said := strings.Join(strings.Fields(shownText(string(raw))), " ")
 	for _, sentence := range []string{
 		"compose file, shown below, and checks its signature",
-		"Read it before you run it. Step 1 downloads and checks the real file.",
+		"Read it before you run it. Step 2 downloads and checks the real file.",
 	} {
 		if !strings.Contains(said, sentence) {
 			t.Errorf("the Porch page no longer says %q", sentence)
@@ -292,16 +292,77 @@ func TestThePorchPageSaysHowToRemoveIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	said := strings.Join(strings.Fields(shownText(string(page))), " ")
-	if !strings.Contains(said, "To remove it, docker compose down --rmi all, then delete the directory and the DNS record.") {
+	if !strings.Contains(said, "To remove it, sudo docker compose down --rmi all, then delete the directory and the DNS record.") {
 		t.Error("the Porch page no longer says how to remove an installation")
 	}
 	removing := regexp.MustCompile(`(?s)### Removing it\n(.*?)\n### `).FindStringSubmatch(string(guide))
 	if removing == nil {
 		t.Fatal("docs/self-host.md has no section on removing an installation")
 	}
-	for _, step := range []string{"docker compose down --rmi all", "sudo rm -rf porch", "_porch-challenge", "porch-data"} {
+	for _, step := range []string{"sudo docker compose down --rmi all", "sudo rm -rf porch", "_porch-challenge", "porch-data"} {
 		if !strings.Contains(removing[1], step) {
 			t.Errorf("removing an installation no longer covers %q", step)
 		}
+	}
+}
+
+// Every docker command a reader is handed runs with sudo.
+//
+// Without it the Docker socket refuses an ordinary account, and the way past
+// that a reader finds first is joining the docker group, which is root
+// without a password. On 2026-10-20 the page's own "docker compose up -d",
+// followed on a fresh Debian 13 server, answered "permission denied while
+// trying to connect to the Docker daemon socket".
+func TestEveryDockerCommandRunsWithSudo(t *testing.T) {
+	// A command is "docker" at the start of a line or after a shell operator;
+	// "sudo docker" is neither.
+	bare := regexp.MustCompile(`(?:^|[;&|(]\s*)docker\s`)
+	check := func(where, text string) {
+		for n, line := range strings.Split(text, "\n") {
+			if bare.MatchString(strings.TrimSpace(line)) {
+				t.Errorf("%s:%d hands out docker without sudo:\n  %s", where, n+1, strings.TrimSpace(line))
+			}
+		}
+	}
+
+	for _, name := range []string{"assets/porch.html", "assets/login.html"} {
+		raw, err := assets.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, block := range regexp.MustCompile(`(?s)<code[^>]*>(.*?)</code>`).FindAllStringSubmatch(string(raw), -1) {
+			check(name, shownText(block[1]))
+		}
+	}
+
+	guide, err := os.ReadFile("../../docs/self-host.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := regexp.MustCompile("(?s)```sh\n(.*?)```").FindAllStringSubmatch(string(guide), -1)
+	if len(blocks) == 0 {
+		t.Fatal("docs/self-host.md has no shell blocks, so this test checks nothing there")
+	}
+	for _, block := range blocks {
+		check("docs/self-host.md", block[1])
+	}
+
+	compose, err := os.ReadFile("../../docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(compose), "\n") {
+		if comment, ok := strings.CutPrefix(strings.TrimSpace(line), "#"); ok {
+			check("docker-compose.yml", comment)
+		}
+	}
+
+	// The upgrade New check draws, piece by piece.
+	app, err := assets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, sudo := strings.Count(string(app), `C("docker")`), strings.Count(string(app), `C("sudo"), " ", C("docker")`); n == 0 || n != sudo {
+		t.Errorf("app.js draws docker %d times, %d of them with sudo", n, sudo)
 	}
 }

@@ -51,6 +51,7 @@ func TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty(t *testing.T) {
 		"Issuance     not read",
 		"Transparency not read",
 		"Logged       not searched",
+		"Serial       not recorded",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the report does not say %q:\n%s", want, text)
@@ -75,6 +76,7 @@ func TestNothingIsLeftOutOfTheCertificateBlockBecauseItIsEmpty(t *testing.T) {
 		`pair("Revocation", report && report.revocationLine, "not checked");`,
 		`pair("Issuance", issuance && issuance.line, "not read");`,
 		`pair("Transparency", report && report.transparencyLine, "not read");`,
+		`pair("Serial", leaf.serialHex, "not recorded in this report");`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s, so the two faces disagree", want)

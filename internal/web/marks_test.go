@@ -98,6 +98,15 @@ func TestTheProofCardIsShownOnlyWhenThereIsARecord(t *testing.T) {
 	if !strings.Contains(markup, `<p class="proof-single" id="domain-single" hidden></p>`) {
 		t.Error("there is nowhere to write a single choice as text")
 	}
+	// And the dialog New check opens for the same record says it the same
+	// way: on 2026-10-20 it still offered a menu of one.
+	dialog, err := assets.ReadFile("assets/console.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dialog), `<p class="proof-single" id="proof-single" hidden></p>`) {
+		t.Error("the proof dialog has nowhere to write a single choice as text")
+	}
 
 	src := script(t)
 	for _, want := range []string{
@@ -105,6 +114,7 @@ func TestTheProofCardIsShownOnlyWhenThereIsARecord(t *testing.T) {
 		`if (records.length === 0) return;`,
 		`document.getElementById("domain-proof").hidden = true;`,
 		`level.hidden = only;`,
+		`level.hidden = alone;`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("app.js does not carry %s", want)

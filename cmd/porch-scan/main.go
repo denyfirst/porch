@@ -787,7 +787,7 @@ func printCertificate(w io.Writer, r result) {
 		fmt.Fprintf(w, "  (expired %d days ago)\n", -c.Grade.DaysRemaining)
 	}
 
-	fmt.Fprintf(w, "    Lifetime     %d days, limit at issuance %d\n",
+	fmt.Fprintf(w, "    Lifetime     %d days, limit at issuance %d days\n",
 		c.Grade.ValidityDays, c.Grade.MaxValidityDays)
 
 	if leaf.KeyBits > 0 {
@@ -800,6 +800,7 @@ func printCertificate(w io.Writer, r result) {
 	fmt.Fprintf(w, "    Names        %s\n", orNone(strings.Join(leaf.DNSNames, ", "), "none"))
 	fmt.Fprintf(w, "    Addresses    %s\n", orNone(strings.Join(leaf.IPAddresses, ", "), "none"))
 
+	fmt.Fprintf(w, "    Serial       %s\n", orNone(leaf.SerialHex, "not recorded"))
 	fmt.Fprintf(w, "    Fingerprint  %s\n", leaf.FingerprintSHA256)
 
 	fmt.Fprintf(w, "    Name match   %s\n", orNone(c.NameLine, "not checked"))

@@ -1,5 +1,6 @@
 /*
-  Signing in, signing out and changing the password, and nothing else.
+  Signing in, signing out and changing the password, and the Copy beside
+  the sign-in page's one command. Nothing else.
 
   A file of its own because the pages that need it are every page behind a
   password, and most of them load no other script: History in particular
@@ -49,6 +50,28 @@
       // Not JSON; the generic sentence stands.
     }
     return message;
+  }
+
+  // The sign-in page's command, copied as it reads. Where the clipboard is
+  // refused the text is selected instead, for the reader to copy.
+  const copy = document.querySelector(".signin-first [data-copy]");
+  if (copy) {
+    copy.addEventListener("click", async () => {
+      const source = document.getElementById(copy.dataset.copy);
+      if (!source) return;
+      try {
+        await navigator.clipboard.writeText(source.textContent);
+        copy.textContent = "Copied";
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copy.textContent = "Selected";
+      }
+      setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+    });
   }
 
   const signinForm = document.getElementById("signin-form");

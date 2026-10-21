@@ -266,6 +266,13 @@ type Certificate struct {
 	// taken over the whole certificate, before anything above was shortened,
 	// so it still identifies what the server actually sent.
 	FingerprintSHA256 string `json:"fingerprintSha256"`
+
+	// SerialHex is the serial in lowercase hexadecimal without leading zeros,
+	// the form the logged certificates are listed in. A report that names the
+	// logged ones by serial and the presented one only by hash leaves a reader
+	// unable to tell whether a logged certificate is the one in hand, which is
+	// the question that list exists to answer (live test, 2026-10-20).
+	SerialHex string `json:"serialHex,omitempty"`
 }
 
 // trimmer applies the bounds and remembers whether it had to.
@@ -987,6 +994,9 @@ func describe(c *x509.Certificate, trim *trimmer) Certificate {
 		KeyUsage:           keyUsages(c.KeyUsage),
 		ExtKeyUsage:        trim.list(extKeyUsages(c.ExtKeyUsage, c.UnknownExtKeyUsage), maxUsageEntries),
 		FingerprintSHA256:  hex.EncodeToString(sum[:]),
+	}
+	if c.SerialNumber != nil {
+		out.SerialHex = trim.text(c.SerialNumber.Text(16))
 	}
 
 	addresses := make([]string, 0, len(c.IPAddresses))

@@ -1285,7 +1285,7 @@ func createSecret(path string) error {
 		return err
 	}
 	if created {
-		fmt.Fprintln(secretOut, "a new verification secret was written; every domain has to publish its record again")
+		fmt.Fprintln(secretOut, "a new verification secret was written; a domain proven under an earlier one has to publish its record again")
 	}
 	return nil
 }

@@ -230,3 +230,26 @@ func TestARegistryLockIsAllThreeServerProhibitions(t *testing.T) {
 		t.Error("all three prohibitions are not a registry lock")
 	}
 }
+
+// The scan's own clock running out is said as that, not as the registry being
+// unreachable.
+func TestAnAnswerTooLateSaysSo(t *testing.T) {
+	slow := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		<-req.Context().Done()
+	}))
+	t.Cleanup(slow.Close)
+	pool := x509.NewCertPool()
+	pool.AddCert(slow.Certificate())
+	addr := slow.Listener.Addr().String()
+	c := &Client{Bootstrap: slow.URL + "/dns.json", Roots: pool, Timeout: 200 * time.Millisecond,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+		}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := c.get(ctx, slow.URL+"/dns.json", maxBootstrap, "application/json")
+	if err == nil || err.Error() != "the registry did not answer in the time the scan allows" {
+		t.Errorf("read %v", err)
+	}
+}

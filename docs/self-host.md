@@ -19,7 +19,29 @@ release's two Linux binaries, built byte for byte the same wherever they are
 built. The release's `docker-compose.yml` names the image **by digest**, so
 the compose file is the only thing a server has to check.
 
-1. Get the compose file and the signed list that covers it, and check them.
+1. Install Docker. On Debian 13, from Debian's own packages: the engine, the
+   `docker` command and Compose, updated with the rest of the system:
+
+   ```sh
+   sudo apt-get update
+   sudo apt-get install -y docker.io docker-cli docker-compose
+   sudo docker compose version
+   ```
+
+   The last line has to print a version. `docker-cli` is named because
+   `docker.io` holds only the engine, and a system set not to install
+   recommended packages, as many cloud images are, otherwise has a running
+   engine and no `docker` command (seen on a cloud provider's Debian 13
+   image on 2026-10-20). On another system, follow
+   [Docker's guide](https://docs.docker.com/engine/install/).
+
+   Every `docker` command in this guide runs with `sudo`. Without it the
+   socket refuses (`permission denied while trying to connect to the Docker
+   daemon socket`), and the other way past that, adding yourself to the
+   `docker` group, is root without a password: anyone with your login could
+   start a container that mounts `/`.
+
+2. Get the compose file and the signed list that covers it, and check them.
    Set `V` to the release to install: the one
    [porch.denyfirst.dev](https://porch.denyfirst.dev) names, whose page shows
    these lines with it filled in, or the newest on the releases page.
@@ -45,25 +67,30 @@ the compose file is the only thing a server has to check.
    it. The `grep` checks that the signed list is `V`'s.
    [`verify.md`](verify.md) says what each part proves.
 
-2. Make the data directory for the user the container runs as, and start it.
+3. Make the data directory for the user the container runs as, and start it.
    The image has no shell to do this from inside:
 
    ```sh
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
-   docker compose up -d
-   docker compose logs
+   sudo docker compose up -d
+   sudo docker compose logs porch 2>&1 | grep -A2 "password is"
    ```
 
-   The pull from `ghcr.io` is anonymous unless this machine ran `docker login`
-   there; then GitHub learns which account installed it. `docker logout
-   ghcr.io` first if that matters.
+   The pull from `ghcr.io` is anonymous unless root on this machine ran
+   `sudo docker login` there; then GitHub learns which account installed it.
+   `sudo docker logout ghcr.io` first if that matters.
 
    The first start writes the verification secret to `porch-data/secret`.
    Keep it: every domain's record is derived from it. It also prints the
    installation's password once, in the log. Docker keeps that log until the
    container is recreated, so change the password straight away.
 
-3. Open it. The compose file publishes the service on the server's own
+   The password is on standard error, which Docker keeps apart from standard
+   output: without `2>&1`, `grep` sees nothing and the whole log goes past it
+   to the screen. If the last line prints nothing, the service is still
+   starting; run it again a moment later.
+
+4. Open it. The compose file publishes the service on the server's own
    loopback only. From your computer:
 
    ```sh
@@ -72,10 +99,20 @@ the compose file is the only thing a server has to check.
 
    and open `http://localhost:8080`.
 
-4. Sign in with the password from the log and change it under **This
+   A server whose SSH refuses forwarding (`AllowTcpForwarding no`) answers
+   `administratively prohibited`. Allow this one address and nothing else, in
+   a file read before the one that forbids it, since the first value read is
+   the one used:
+
+   ```sh
+   printf 'AllowTcpForwarding local\nPermitOpen 127.0.0.1:8080\n' | sudo tee /etc/ssh/sshd_config.d/00-0-porch.conf
+   sudo sshd -t && sudo systemctl reload ssh
+   ```
+
+5. Sign in with the password from the log and change it under **This
    installation**. Every page and the API are behind it.
 
-5. Add a domain. The page shows a TXT record, `_porch-challenge.<domain>`, to
+6. Add a domain. The page shows a TXT record, `_porch-challenge.<domain>`, to
    publish at your DNS provider. Once it is there, every name under that
    domain can be checked. Delete the record and the domain is refused again.
 
@@ -124,7 +161,7 @@ V=vX.Y.Z
 test -f docker-compose.yml && mkdir -p "update-${V}"
 for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSL -o "update-${V}/${f}" "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
 echo 'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR' > "update-${V}/allowed_signers"
-if ssh-keygen -Y verify -f "update-${V}/allowed_signers" -I releases@denyfirst.dev -n file -s "update-${V}/SHA256SUMS.sig" < "update-${V}/SHA256SUMS" && grep -qF "_${V}_" "update-${V}/SHA256SUMS" && (cd "update-${V}" && sha256sum --ignore-missing -c SHA256SUMS); then (test -e "docker-compose.yml.before-${V}" || cp docker-compose.yml "docker-compose.yml.before-${V}") && cp "update-${V}/docker-compose.yml" docker-compose.yml && docker compose up -d; else echo "STOP: ${V} did not verify; nothing was changed"; fi
+if ssh-keygen -Y verify -f "update-${V}/allowed_signers" -I releases@denyfirst.dev -n file -s "update-${V}/SHA256SUMS.sig" < "update-${V}/SHA256SUMS" && grep -qF "_${V}_" "update-${V}/SHA256SUMS" && (cd "update-${V}" && sha256sum --ignore-missing -c SHA256SUMS); then (test -e "docker-compose.yml.before-${V}" || cp docker-compose.yml "docker-compose.yml.before-${V}") && cp "update-${V}/docker-compose.yml" docker-compose.yml && sudo docker compose up -d; else echo "STOP: ${V} did not verify; nothing was changed"; fi
 ```
 
 Run in the installation's directory, they fetch into a folder of their own,
@@ -135,7 +172,7 @@ safe on its own: a pasted line runs whether or not the one before it worked,
 and nothing beside the compose file in use is written until the last one has
 verified. The data directory, the password and every published record stay.
 To go back, copy `docker-compose.yml.before-V` over `docker-compose.yml` and
-run `docker compose up -d`.
+run `sudo docker compose up -d`.
 
 Changes of your own belong in `docker-compose.override.yml`, which Docker
 Compose reads beside the compose file and an update leaves alone.
@@ -144,7 +181,7 @@ An installation from v0.25.1 or before built its image on the server, and the
 build cache could hold a copy of `porch-data`. Remove both:
 
 ```sh
-docker image rm porch
+sudo docker image rm porch
 sudo docker builder prune -a -f
 ```
 
@@ -153,7 +190,7 @@ sudo docker builder prune -a -f
 In the installation's directory:
 
 ```sh
-docker compose down --rmi all
+sudo docker compose down --rmi all
 cd .. && sudo rm -rf porch
 ```
 
@@ -296,6 +333,20 @@ place of the `ghcr.io` line, with `pull_policy: never`.
 - **Your own exchangers are asked whether they relay** — three commands that
   cannot deliver anything, to a recipient at a name that cannot exist. An
   exchanger run by a provider is never asked.
+- **The container reaches the internet through the host's forward chain.** A
+  firewall that drops forwarded traffic, as hardening guides set it
+  (`policy drop` on an nftables `forward` chain), drops everything the
+  container sends: every proof says the record could not be looked up, and
+  every check waits and fails. Accept what leaves Docker's bridges and the
+  replies to it, in that chain:
+
+  ```
+  iifname "br-*" accept
+  oifname "br-*" ct state established,related accept
+  ```
+
+  `br-*` is the network Compose makes for the installation; `docker0` is the
+  one plain `docker run` uses.
 
 ---
 
@@ -306,13 +357,13 @@ installation's secret, so the same record proves a domain to both, and it sees
 the data directory read-only:
 
 ```sh
-docker compose run --rm scan example.com
-docker compose run --rm scan -check mail example.com
+sudo docker compose run --rm scan example.com
+sudo docker compose run --rm scan -check mail example.com
 ```
 
 Anywhere else, download `porch-scan` for your system with the list and its
 signature, check them as [`verify.md`](verify.md) says, then make it runnable.
-`V` is the release, named as in step 1 rather than read from GitHub's
+`V` is the release, named as in step 2 rather than read from GitHub's
 *latest*; the file's name carries it, so a list for another release does not
 cover it:
 

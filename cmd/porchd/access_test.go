@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"html"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -94,8 +95,8 @@ func TestTheGateIsInFrontOfEverything(t *testing.T) {
 func TestTheSignInPageCommandFindsThePassword(t *testing.T) {
 	// Read as text: the command is coloured with spans, and what matters is
 	// what a person copies.
-	page := regexp.MustCompile(`<[^>]+>`).ReplaceAllString(repoFile(t, "internal/web/assets/login.html"), "")
-	const command = `docker compose logs porch | grep -A2 "password is"`
+	page := html.UnescapeString(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(repoFile(t, "internal/web/assets/login.html"), ""))
+	const command = `sudo docker compose logs porch 2>&1 | grep -A2 "password is"`
 	if !strings.Contains(page, command) {
 		t.Fatalf("the sign-in page no longer gives %q", command)
 	}

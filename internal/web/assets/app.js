@@ -896,7 +896,7 @@ function certificate(cert, tls, issuance, stapling, report) {
   }
 
   if (grade.validityDays) {
-    pair("Lifetime", grade.validityDays + " days, limit at issuance " + grade.maxValidityDays);
+    pair("Lifetime", grade.validityDays + " days, limit at issuance " + grade.maxValidityDays + " days");
   }
 
   pair("Key", leaf.keyBits ? leaf.keyAlgorithm + " " + leaf.keyBits : leaf.keyAlgorithm);
@@ -1014,6 +1014,9 @@ function certificate(cert, tls, issuance, stapling, report) {
     pairs.appendChild(dd);
   });
 
+  // The serial in the form the logged certificates above are listed in, so a
+  // reader can tell whether one of them is this one.
+  pair("Serial", leaf.serialHex, "not recorded in this report");
   pair("SHA-256", leaf.fingerprintSha256);
 
   frag.appendChild(pairs);
@@ -2667,6 +2670,14 @@ const VERIFY = { endpoint: "/api/v1/verify" };
 
 function fillProof(records) {
   const level = document.getElementById("proof-level");
+  // One choice is not a choice, here as on the Domains page: for
+  // example.com there is no domain above it to offer, and a menu holding one
+  // item asks a question with one answer (live test 2026-10-20).
+  const single = document.getElementById("proof-single");
+  const alone = records.length === 1;
+  level.hidden = alone;
+  single.hidden = !alone;
+  if (alone) single.textContent = records[0].domain;
   clear(level);
   records.forEach((r, i) => {
     const option = el("option", null, r.domain);
@@ -3438,9 +3449,11 @@ function daneSummary(facts) {
   if (facts.nullMX) return "not checked: the domain accepts no mail";
   if (facts.mxReason || !facts.mxRead) return "not checked: the exchangers are not known";
   if (hosts.length === 0) return "not checked: the domain publishes no exchanger";
-  if (dane.length === 0) return "none of the " + hosts.length;
-  if (dane.length === hosts.length) return "all " + hosts.length;
-  return dane.length + " of the " + hosts.length + ": " + dane.join(", ");
+  if (hosts.length === 1 && dane.length === 0) return "none at the one exchanger";
+  if (hosts.length === 1) return "at the one exchanger";
+  if (dane.length === 0) return "none at the " + hosts.length + " exchangers";
+  if (dane.length === hosts.length) return "at all " + hosts.length + " exchangers";
+  return "at " + dane.length + " of the " + hosts.length + " exchangers: " + dane.join(", ");
 }
 
 // ── The name inventory ──────────────────────────────────────────────────
@@ -3728,14 +3741,18 @@ function saysKnown(data) {
 
   if (!r.asked) return "not given: no names were typed or loaded";
   if (r.reason) return "Not established: " + r.reason;
+  // Names under another domain are left out, and said to be, as on the
+  // command line.
+  if (!r.named && r.foreign) return "none under this domain: " + r.foreign + " under other domains, left out";
   if (!r.named) return "named none of them";
 
   const alone = (data.names || []).filter(
     (n) => (n.sources || []).length === 1 && n.sources[0] === "operator"
   ).length;
-  return alone
+  const foreign = r.foreign ? "; " + r.foreign + " under other domains, left out" : "";
+  return (alone
     ? r.named + " given, " + alone + " of them named by nothing else"
-    : r.named + " given, every one of them named by something else as well";
+    : r.named + " given, every one of them named by something else as well") + foreign;
 }
 
 // saysReverse is what the addresses in the ranges somebody named answered to.
@@ -4049,7 +4066,7 @@ function updateCommands(version) {
       O("("), C("test"), " ", F("-e"), " docker-compose.yml.before-" + version + " ", O("||"), " ",
       C("cp"), " docker-compose.yml docker-compose.yml.before-" + version, O(")"), " ", O("&&"), " ",
       C("cp"), " " + dir + "/docker-compose.yml docker-compose.yml ", O("&&"), " ",
-      C("docker"), " compose up ", F("-d"), O(";"), " ",
+      C("sudo"), " ", C("docker"), " compose up ", F("-d"), O(";"), " ",
       C("else"), " ", C("echo"), " ", S("'STOP: " + version + " did not verify; nothing was changed'"), O(";"), " ", C("fi")],
   ];
 }
@@ -4215,7 +4232,13 @@ function showUpdates(state) {
     latest.appendChild(el("code", "key-fingerprint", RELEASE_FINGERPRINT));
     latest.appendChild(document.createTextNode(state.checked ? "; checked " + state.checked + "." : "."));
   } else {
-    latest.textContent = state.checked ? "Not known: the last check found nothing it could believe." : "Not checked yet.";
+    // A check that failed is said as failed, with its reason on the line below.
+    // "Found nothing it could believe" was printed for GitHub being out of
+    // reach as well, which is no statement about the list (live test,
+    // 2026-10-20).
+    latest.textContent = !state.checked ? "Not checked yet."
+      : state.error ? "Not known: the last check failed."
+        : "Not known: the last check found nothing it could believe.";
   }
 
   // The reason a check failed is the installation's own sentence, from a

@@ -64,7 +64,11 @@ import (
 // moved — but a certificate whose revocation was previously unknowable can now
 // come back insecure, and that is a verdict change on an unchanged server,
 // which is a version change.
-const TLSVersion = "porch-tls-v7"
+// v8, 2026-10-20. A certificate's lifetime is counted as RFC 5280 counts it,
+// notBefore through notAfter inclusive. cert.validity-too-long now fires for
+// a certificate one second past its limit, which read as exactly the limit and
+// passed: a verdict change on an unchanged server, so a version change.
+const TLSVersion = "porch-tls-v8"
 
 // Informational is what the name inventory carries where a check carries a
 // rule-set name, and it is a word rather than a version deliberately.

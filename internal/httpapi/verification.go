@@ -105,7 +105,7 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		// published would send them to the wrong place. The error can name
 		// resolver internals, so only its shape is returned.
 		s.refuse(w, http.StatusBadGateway, "scan_failed",
-			"The challenge record could not be looked up. Try again shortly.")
+			"The challenge record could not be looked up. If this lasts, this installation may not reach the internet: see Network in docs/self-host.md.")
 		return
 	}
 
