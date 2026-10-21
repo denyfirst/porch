@@ -232,6 +232,35 @@ func TestValidityIsJudgedAtIssuance(t *testing.T) {
 	}
 }
 
+// The lifetime is counted as RFC 5280 counts it, notBefore through notAfter
+// inclusive. Let's Encrypt writes a 90-day certificate as 90 days less a
+// second, and that is 90 days, not 89; a certificate a second past its limit
+// is past it.
+func TestLifetimeCountsTheLastSecond(t *testing.T) {
+	issued := now.AddDate(0, 0, -10)
+
+	letsEncrypt := healthy()
+	letsEncrypt.NotBefore = issued
+	letsEncrypt.NotAfter = issued.Add(90*24*time.Hour - time.Second)
+	if got := GradeLeaf(letsEncrypt, now); got.ValidityDays != 90 {
+		t.Errorf("a 90-day certificate read as %d days", got.ValidityDays)
+	}
+
+	atLimit := healthy()
+	atLimit.NotBefore = issued
+	atLimit.NotAfter = issued.Add(200*24*time.Hour - time.Second)
+	if got := GradeLeaf(atLimit, now); got.ValidityDays != 200 || slices.Contains(ruleIDs(got), "cert.validity-too-long") {
+		t.Errorf("a certificate of exactly 200 days read as %d days, findings %v", got.ValidityDays, ruleIDs(got))
+	}
+
+	pastLimit := healthy()
+	pastLimit.NotBefore = issued
+	pastLimit.NotAfter = issued.Add(200 * 24 * time.Hour)
+	if got := GradeLeaf(pastLimit, now); !slices.Contains(ruleIDs(got), "cert.validity-too-long") {
+		t.Errorf("a certificate one second past 200 days was not flagged; read as %d days", got.ValidityDays)
+	}
+}
+
 // One insecure problem outranks any number of weak ones.
 func TestWorstCaseWins(t *testing.T) {
 	f := healthy()

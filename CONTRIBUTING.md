@@ -10,7 +10,7 @@ it guards.
 ## What this is
 
 A scanner that measures how a host is reached and grades what it finds, with
-four checks: TLS and certificates (`porch-tls-v7`), how a website is reached
+four checks: TLS and certificates (`porch-tls-v8`), how a website is reached
 (`porch-web-v5`), what a domain's DNS says about its mail (`porch-mail-v4`),
 and how the domain itself is served (`porch-dns-v3`). Each rule set has its
 own version, and a report names the one that graded it.

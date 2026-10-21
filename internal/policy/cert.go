@@ -184,6 +184,27 @@ func MaxValidityDays(issued time.Time) int {
 	}
 }
 
+// lifetimeDays is a certificate's validity period in days, counted the way
+// RFC 5280 (4.1.2.5) and the Baseline Requirements count it: notBefore through
+// notAfter inclusive, so the last second is added, and part of a day is a day.
+//
+// Truncated, as it was until 2026-10-20, a 90-day certificate written as
+// notBefore plus 90 days less a second — which is how Let's Encrypt writes
+// one — read as 89, and one written a second past a limit read as the limit
+// and passed it.
+func lifetimeDays(notBefore, notAfter time.Time) int {
+	const day = 24 * time.Hour
+	d := notAfter.Sub(notBefore) + time.Second
+	if d <= 0 {
+		return 0
+	}
+	days := int(d / day)
+	if d%day != 0 {
+		days++
+	}
+	return days
+}
+
 // LeafFinding is a graded server certificate.
 type LeafFinding struct {
 	Verdict  Verdict   `json:"verdict"`
@@ -204,7 +225,7 @@ func GradeLeaf(f LeafFacts, now time.Time) LeafFinding {
 	out := LeafFinding{
 		Verdict:         Strong,
 		DaysRemaining:   int(f.NotAfter.Sub(now).Hours() / 24),
-		ValidityDays:    int(f.NotAfter.Sub(f.NotBefore).Hours() / 24),
+		ValidityDays:    lifetimeDays(f.NotBefore, f.NotAfter),
 		MaxValidityDays: MaxValidityDays(f.NotBefore),
 	}
 

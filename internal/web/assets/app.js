@@ -896,7 +896,7 @@ function certificate(cert, tls, issuance, stapling, report) {
   }
 
   if (grade.validityDays) {
-    pair("Lifetime", grade.validityDays + " days, limit at issuance " + grade.maxValidityDays);
+    pair("Lifetime", grade.validityDays + " days, limit at issuance " + grade.maxValidityDays + " days");
   }
 
   pair("Key", leaf.keyBits ? leaf.keyAlgorithm + " " + leaf.keyBits : leaf.keyAlgorithm);

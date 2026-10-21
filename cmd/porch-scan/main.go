@@ -787,7 +787,7 @@ func printCertificate(w io.Writer, r result) {
 		fmt.Fprintf(w, "  (expired %d days ago)\n", -c.Grade.DaysRemaining)
 	}
 
-	fmt.Fprintf(w, "    Lifetime     %d days, limit at issuance %d\n",
+	fmt.Fprintf(w, "    Lifetime     %d days, limit at issuance %d days\n",
 		c.Grade.ValidityDays, c.Grade.MaxValidityDays)
 
 	if leaf.KeyBits > 0 {

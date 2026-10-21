@@ -244,8 +244,8 @@ or not anyone runs it by hand.
 ```
 
 ```
-porch-scan v0.20.0
-policy porch-tls-v7
+porch-scan v0.30.0
+policy porch-tls-v8
 policy porch-web-v5
 policy porch-mail-v4
 policy porch-dns-v3
