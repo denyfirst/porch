@@ -2667,6 +2667,14 @@ const VERIFY = { endpoint: "/api/v1/verify" };
 
 function fillProof(records) {
   const level = document.getElementById("proof-level");
+  // One choice is not a choice, here as on the Domains page: for
+  // example.com there is no domain above it to offer, and a menu holding one
+  // item asks a question with one answer (live test 2026-10-20).
+  const single = document.getElementById("proof-single");
+  const alone = records.length === 1;
+  level.hidden = alone;
+  single.hidden = !alone;
+  if (alone) single.textContent = records[0].domain;
   clear(level);
   records.forEach((r, i) => {
     const option = el("option", null, r.domain);
