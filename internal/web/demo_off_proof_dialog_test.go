@@ -5,6 +5,8 @@ package web
 import (
 	"strings"
 	"testing"
+
+	"github.com/denyfirst/porch/internal/verify"
 )
 
 // The proof dialog is on the console, because every installation requires
@@ -188,16 +190,20 @@ func TestTheProviderHelpIsTheSameWhereverARecordIsShown(t *testing.T) {
 	console, domains := block("assets/console.html"), block("assets/domains.html")
 
 	// The one rule nearly every provider needs is also said outside the fold,
-	// under the record. On 2026-10-20 a record added at deSEC an hour earlier
-	// was not served at the name the page gave, and the help that says what
-	// most often causes that was closed.
-	for _, page := range []string{"assets/console.html", "assets/domains.html"} {
+	// under the record, with the short name ready to copy. On 2026-10-20 the
+	// full name typed into deSEC's Subname was served as
+	// _porch-challenge.denyfirst.dev.denyfirst.dev, the help that says so was
+	// closed, and the name typed again by hand came back misspelt.
+	for page, id := range map[string]string{"assets/console.html": "proof-label", "assets/domains.html": "domain-label"} {
 		src := asset(t, page)
 		record := strings.Index(src, `<dl class="proof-record">`)
-		short := strings.Index(src, `<p class="proof-hint proof-short">Most providers add your domain to the name themselves: type only the part before it.</p>`)
+		short := strings.Index(src, `<p class="proof-hint proof-short">Most providers add your domain to the name themselves: type only the part before it.`)
 		help := strings.Index(src, `<details class="provider-help">`)
 		if record < 0 || short < record || help < short {
 			t.Errorf("%s does not say under the record, outside the fold, to type only the part before the domain", page)
+		}
+		if !strings.Contains(src, `<code id="`+id+`">`+verify.Label+`</code> <button class="proof-copy" type="button" data-copy="`+id+`">Copy</button>`) {
+			t.Errorf("%s does not offer %s to copy", page, verify.Label)
 		}
 	}
 	if console != domains {
