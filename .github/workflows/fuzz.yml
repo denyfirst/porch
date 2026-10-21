@@ -195,7 +195,14 @@ jobs:
           # because the log is the only copy and it expires in ninety days.
           # Nothing here uploads an artifact: no third-party action is allowed
           # in this organisation, and that is not a rule to work around.
-          if [ -d "${crashers}" ] || grep -q 'Failing input written to ' "${out}"; then
+          #
+          # Only what this run wrote, which is what git does not track. A file
+          # already committed there is a regression case kept on purpose, and
+          # Go reads it as part of the seed corpus. Reading its directory as a
+          # finding made every run of a target that has one red:
+          # FuzzReportDestinations passed eight million inputs on 2026-10-21
+          # and was reported as having found the case committed on 2026-10-05.
+          if [ -n "$(git ls-files --others --exclude-standard -- "${crashers}")" ] || grep -q 'Failing input written to ' "${out}"; then
             echo "::error::${TARGET} found a failing input. The reproducer is in this job's summary."
             {
               echo "## ${TARGET} found a failing input"
@@ -204,19 +211,17 @@ jobs:
               echo "seed corpus and cannot come back unnoticed."
             } >> "${GITHUB_STEP_SUMMARY}"
 
-            if [ -d "${crashers}" ]; then
-              find "${crashers}" -type f -print0 | while IFS= read -r -d '' f; do
-                echo "--- ${f}"
+            git ls-files -z --others --exclude-standard -- "${crashers}" | while IFS= read -r -d '' f; do
+              echo "--- ${f}"
+              cat "${f}"
+              {
+                echo
+                echo "### \`${f}\`"
+                echo '```'
                 cat "${f}"
-                {
-                  echo
-                  echo "### \`${f}\`"
-                  echo '```'
-                  cat "${f}"
-                  echo '```'
-                } >> "${GITHUB_STEP_SUMMARY}"
-              done
-            fi
+                echo '```'
+              } >> "${GITHUB_STEP_SUMMARY}"
+            done
 
             exit 1
           fi
