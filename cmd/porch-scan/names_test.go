@@ -981,6 +981,31 @@ func TestTheReportSaysWhatTheListContributed(t *testing.T) {
 	if !strings.Contains(buf.String(), "Your list    not given: -names or -names-file was not used") {
 		t.Errorf("the report does not say no list was given:\n%s", buf.String())
 	}
+
+	// Names under another domain are left out, and the line says so instead
+	// of reading "named none of them" (live test, 2026-10-20).
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Known: knownnames.From("example.test", []string{"emanat.example", "mpay.example"}),
+	}))
+	if !strings.Contains(buf.String(), "Your list    none under this domain: 2 under other domains, left out") {
+		t.Errorf("names under other domains were dropped in silence:\n%s", buf.String())
+	}
+	buf.Reset()
+	printNames(&buf, inventory.Merge("example.test", inventory.Sources{
+		Known: knownnames.From("example.test", []string{"vpn.example.test", "other.example"}),
+	}))
+	if !strings.Contains(buf.String(), "1 given, 1 of them named by nothing else; 1 under other domains, left out") {
+		t.Errorf("a name under another domain was dropped in silence:\n%s", buf.String())
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+	if !strings.Contains(string(page), `" under other domains, left out"`) {
+		t.Error("the page does not say a name under another domain was left out")
+	}
 }
 
 // The names an operator hands over arrive from the flag and from the file, and

@@ -355,6 +355,12 @@ func saysKnown(inv inventory.Inventory) string {
 		return "not given: -names or -names-file was not used"
 	case r.Reason != "":
 		return "Not established: " + r.Reason
+	// A name under another domain is left out, because the list is held to the
+	// domain proven. Said, not dropped in silence: a list of two such names read
+	// "named none of them", and the person who gave it saw nothing happen (live
+	// test, 2026-10-20).
+	case r.Named == 0 && r.Foreign > 0:
+		return fmt.Sprintf("none under this domain: %d under other domains, left out", r.Foreign)
 	case r.Named == 0:
 		return "named none of them"
 	default:
@@ -363,6 +369,9 @@ func saysKnown(inv inventory.Inventory) string {
 			line += fmt.Sprintf(", %d of them named by nothing else", alone)
 		} else {
 			line += ", every one of them named by something else as well"
+		}
+		if r.Foreign > 0 {
+			line += fmt.Sprintf("; %d under other domains, left out", r.Foreign)
 		}
 		return line
 	}

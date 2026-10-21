@@ -3741,14 +3741,18 @@ function saysKnown(data) {
 
   if (!r.asked) return "not given: no names were typed or loaded";
   if (r.reason) return "Not established: " + r.reason;
+  // Names under another domain are left out, and said to be, as on the
+  // command line.
+  if (!r.named && r.foreign) return "none under this domain: " + r.foreign + " under other domains, left out";
   if (!r.named) return "named none of them";
 
   const alone = (data.names || []).filter(
     (n) => (n.sources || []).length === 1 && n.sources[0] === "operator"
   ).length;
-  return alone
+  const foreign = r.foreign ? "; " + r.foreign + " under other domains, left out" : "";
+  return (alone
     ? r.named + " given, " + alone + " of them named by nothing else"
-    : r.named + " given, every one of them named by something else as well";
+    : r.named + " given, every one of them named by something else as well") + foreign;
 }
 
 // saysReverse is what the addresses in the ranges somebody named answered to.
@@ -4228,7 +4232,13 @@ function showUpdates(state) {
     latest.appendChild(el("code", "key-fingerprint", RELEASE_FINGERPRINT));
     latest.appendChild(document.createTextNode(state.checked ? "; checked " + state.checked + "." : "."));
   } else {
-    latest.textContent = state.checked ? "Not known: the last check found nothing it could believe." : "Not checked yet.";
+    // A check that failed is said as failed, with its reason on the line below.
+    // "Found nothing it could believe" was printed for GitHub being out of
+    // reach as well, which is no statement about the list (live test,
+    // 2026-10-20).
+    latest.textContent = !state.checked ? "Not checked yet."
+      : state.error ? "Not known: the last check failed."
+        : "Not known: the last check found nothing it could believe.";
   }
 
   // The reason a check failed is the installation's own sentence, from a
