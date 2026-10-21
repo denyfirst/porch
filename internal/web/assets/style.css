@@ -405,6 +405,10 @@ main {
 
 .ask { padding: 3.6rem 0 2.4rem; }
 
+/* The names page on an installation starts where the workspace's other pages
+   do, under its own work heading, rather than below a display one's space. */
+.ask.ask-work { padding-top: 0; }
+
 h1 {
   margin: 0 0 1.1rem;
   font-size: clamp(2.2rem, 5.5vw, 3.6rem);
