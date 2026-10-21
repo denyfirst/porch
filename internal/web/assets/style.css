@@ -4996,9 +4996,11 @@ main > .band:last-child { border-bottom: 0; }
   border-right: 1px solid var(--rule);
 }
 
+/* The tag sits on the wordmark's middle, not its baseline: boxed, a
+   baseline put it above the letters' centre (live test 2026-10-20). */
 .rail-identity {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
   margin: 0 0.6rem 2.2rem;
