@@ -380,6 +380,10 @@ func (c *Client) get(ctx context.Context, address string, limit int64, accept st
 
 	resp, err := c.client().Do(req)
 	if err != nil {
+		// The scan's own clock running out is not the registry being down.
+		if ctx.Err() != nil {
+			return nil, errors.New("the registry did not answer in the time the scan allows")
+		}
 		return nil, errors.New("the registry could not be reached")
 	}
 	defer resp.Body.Close()

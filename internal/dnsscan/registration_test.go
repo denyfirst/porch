@@ -105,3 +105,49 @@ func TestTheRoutesReachTheReport(t *testing.T) {
 		t.Error("a scan with no route checker reported routes")
 	}
 }
+
+// hangingRegistry and hangingRoutes answer only once they are given up on.
+type hangingRegistry struct{}
+
+func (hangingRegistry) Lookup(ctx context.Context, _ string) rdap.Registration {
+	<-ctx.Done()
+	return rdap.Registration{Asked: true, Reason: "the registry did not answer in the time the scan allows"}
+}
+
+type hangingRoutes struct{}
+
+func (hangingRoutes) Check(ctx context.Context, addresses []string) []rpki.Route {
+	<-ctx.Done()
+	var out []rpki.Route
+	for _, a := range addresses {
+		out = append(out, rpki.Route{Address: a, Reason: "RIPEstat did not answer in the time the scan allows"})
+	}
+	return out
+}
+
+// A registry and a route service that never answer cost the report two lines,
+// not the report. The scan comes back before its caller's deadline, so the
+// handler does not throw away the zone's own answers, and both lines say what
+// was not established (live test, 2026-10-20).
+func TestSlowOutsideServicesDoNotSpendTheScan(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), outsideReserve+time.Second)
+	defer cancel()
+
+	got, err := (&Scanner{Resolver: served(t), Registry: hangingRegistry{}, Routes: hangingRoutes{}}).
+		Scan(ctx, "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("the scan ran into its caller's deadline, so the handler would discard the report")
+	}
+	if line := got.Observed.RegistrationLine; !strings.HasPrefix(line, "not established: ") {
+		t.Errorf("the registration line reads %q", line)
+	}
+	if line := got.Observed.RoutesLine; !strings.Contains(line, "not established") {
+		t.Errorf("the routes line reads %q", line)
+	}
+	if got.Verdict != policy.Strong {
+		t.Errorf("services that did not answer moved the verdict to %q", got.Verdict)
+	}
+}

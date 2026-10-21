@@ -210,8 +210,24 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	s.askServers(ctx, domain, &facts)
 	s.askParent(ctx, resolver, domain, &facts)
 
-	s.readRegistration(ctx, domain, &facts)
-	s.readRoutes(ctx, &facts)
+	// The registry and RIPEstat last, at the same time, and inside a share of
+	// the time that ends before the scan's own. Both are somebody else's
+	// service, and each was handed the whole request budget: whichever was
+	// slow that minute could spend what was left, and the handler then threw
+	// away a report whose own questions had all been answered to say only
+	// that the scan did not finish. A self-hosted copy answered that on
+	// 2026-10-20, and the same scan from its command line minutes later took
+	// four seconds.
+	// Neither moves the verdict (R21), so one cut short is a line saying
+	// "not established" and nothing worse.
+	outside, cancel := shareBefore(ctx, outsideReserve)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); s.readRegistration(outside, domain, &facts) }()
+	go func() { defer wg.Done(); s.readRoutes(outside, &facts) }()
+	wg.Wait()
+	cancel()
+
 	facts.IPv6Line = policy.DNSIPv6Line(facts)
 	facts.TimersLine = policy.DNSTimersLine(facts)
 	facts.KeysLine = policy.DNSKeysLine(facts.Keys)
@@ -233,6 +249,21 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 		Observed: &facts,
 		Duration: s.now().Sub(started),
 	}, nil
+}
+
+// outsideReserve is the time kept back from the services asked last, so that
+// the scan returns inside its caller's deadline with what it has. Grading and
+// writing the report take microseconds; the rest is margin.
+var outsideReserve = 2 * time.Second
+
+// shareBefore is ctx ending reserve before ctx's own deadline. Without a
+// deadline, as on the command line, there is nothing to keep back.
+func shareBefore(ctx context.Context, reserve time.Duration) (context.Context, context.CancelFunc) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return context.WithCancel(ctx)
+	}
+	return context.WithDeadline(ctx, deadline.Add(-reserve))
 }
 
 // readRegistration asks the registry what it holds for the domain this name

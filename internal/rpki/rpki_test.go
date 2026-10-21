@@ -152,3 +152,23 @@ func TestAServiceThatCannotBeReachedSaysSo(t *testing.T) {
 		t.Errorf("read %+v", got)
 	}
 }
+
+// The scan's own clock running out is said as that, not as RIPEstat being
+// unreachable.
+func TestAnAnswerTooLateSaysSo(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	addr := srv.Listener.Addr().String()
+	c := &Client{Endpoint: srv.URL + "/data/", Roots: pool, Timeout: 200 * time.Millisecond,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+		}}
+	got := c.Check(context.Background(), []string{"192.0.2.10"})
+	if len(got) != 1 || got[0].Reason != "RIPEstat did not answer in the time the scan allows" {
+		t.Errorf("read %+v", got)
+	}
+}
