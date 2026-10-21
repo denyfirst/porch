@@ -125,11 +125,30 @@
   <div class="band-head">
     <div>
       <p class="eyebrow">Run it yourself</p>
-      <h2 class="band-title">Three steps.</h2>
+      <h2 class="band-title">Four steps.</h2>
     </div>
-    <p class="band-note">You need a Linux server with Docker.</p>
+    <p class="band-note">You need a Linux server and an account that can use <code>sudo</code>.</p>
   </div>
   <ol class="steps">
+    <li>
+      <h3>Install Docker</h3>
+      <p>On Debian 13, Debian's own packages: the engine, the <code>docker</code>
+      command and Compose. A system set not to install recommended packages,
+      as many cloud images are, otherwise gets the engine without the command.
+      Elsewhere, <a href="https://docs.docker.com/engine/install/">Docker's guide</a>.
+      Every <code>docker</code> command here runs with <code>sudo</code>:
+      the <code>docker</code> group is root without a password.</p>
+      <div class="command terminal">
+        <div class="terminal-bar">
+          <span class="terminal-dots" aria-hidden="true"></span>
+          <span class="terminal-where">on the server</span>
+          <button class="command-copy" type="button" data-copy="command-docker" aria-label="Copy the commands to install Docker">Copy</button>
+        </div>
+        <pre><code id="command-docker"><span class="ln"><span class="t-c">sudo</span> <span class="t-c">apt-get</span> update</span>
+<span class="ln"><span class="t-c">sudo</span> <span class="t-c">apt-get</span> install <span class="t-f">-y</span> docker.io docker-cli docker-compose</span>
+<span class="ln"><span class="t-c">sudo</span> <span class="t-c">docker</span> compose version</span></code></pre>
+      </div>
+    </li>
     <li>
       <h3>Get it</h3>
       <p>Downloads {{if .Release}}{{.Release}}'s{{else}}the latest release's{{end}}
@@ -155,7 +174,8 @@
     <li>
       <h3>Start it</h3>
       <p>Create the data folder and start Porch. The first start prints a
-      password in <code>docker compose logs</code>.</p>
+      password to the log, once: the last line shows it. Keep it, and change
+      it after you sign in.</p>
       <div class="command terminal">
         <div class="terminal-bar">
           <span class="terminal-dots" aria-hidden="true"></span>
@@ -163,7 +183,8 @@
           <button class="command-copy" type="button" data-copy="command-start" aria-label="Copy the commands to start it">Copy</button>
         </div>
         <pre><code id="command-start"><span class="ln"><span class="t-c">mkdir</span> <span class="t-f">-p</span> porch-data <span class="t-o">&amp;&amp;</span> <span class="t-c">sudo</span> <span class="t-c">chown</span> 65534:65534 porch-data</span>
-<span class="ln"><span class="t-c">docker</span> compose up <span class="t-f">-d</span></span></code></pre>
+<span class="ln"><span class="t-c">sudo</span> <span class="t-c">docker</span> compose up <span class="t-f">-d</span></span>
+<span class="ln"><span class="t-c">sudo</span> <span class="t-c">docker</span> compose logs porch <span class="t-o">|</span> <span class="t-c">grep</span> <span class="t-f">-A2</span> <span class="t-s">"password is"</span></span></code></pre>
       </div>
     </li>
     <li>
@@ -181,10 +202,10 @@
     </li>
   </ol>
 
-  <!-- Shown to read, not to copy: the copy that runs is the one step 1 checked. -->
+  <!-- Shown to read, not to copy: the copy that runs is the one step 2 checked. -->
   <section class="compose-view" aria-labelledby="compose-title">
     <h3 id="compose-title">What you are about to run: <code>docker-compose.yml</code></h3>
-    <p>Read it before you run it. Step 1 downloads and checks the real file.</p>
+    <p>Read it before you run it. Step 2 downloads and checks the real file.</p>
     <div class="terminal compose-terminal">
       <div class="terminal-bar">
         <span class="terminal-dots" aria-hidden="true"></span>
@@ -234,9 +255,9 @@
       <summary><span class="compose-more-closed">Show the whole file</span><span class="compose-more-open">Show less</span></summary>
     </details>
   </section>
-  <p class="band-footnote">To upgrade, run step 1 again in the same directory,
-  then <code>docker compose up -d</code>. To remove it,
-  <code>docker compose down --rmi all</code>, then delete the directory and the
+  <p class="band-footnote">To upgrade, run step 2 again in the same directory,
+  then <code>sudo docker compose up -d</code>. To remove it,
+  <code>sudo docker compose down --rmi all</code>, then delete the directory and the
   DNS record. Full guide:
   <a class="arrow-ne" href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md">self-hosting</a></p>
 </section>
@@ -278,7 +299,7 @@
     <article class="answer">
       <h3>How do I know the download is yours?</h3>
       <p class="answer-short">Signed.</p>
-      <p>Every release is signed and rebuilds byte for byte. Step 1 above checks the signature with this key:</p>
+      <p>Every release is signed and rebuilds byte for byte. Step 2 above checks the signature with this key:</p>
       <code class="answer-key">SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y</code>
       <p class="answer-source"><span>Source</span> <a href="https://github.com/denyfirst/porch/blob/main/docs/verify.md">verify.md</a></p>
     </article>

@@ -536,7 +536,7 @@ func TestPorchsComparisonAndAnswersHold(t *testing.T) {
 		}
 	}
 	if !strings.Contains(page, `<code class="key-fingerprint">`+key+`</code>`) {
-		t.Error("the key in the answers is not the one step 1 checks the signature with")
+		t.Error("the key in the answers is not the one step 2 checks the signature with")
 	}
 
 	_, disclosure, _ := strings.Cut(questions, `<div class="disclosure">`)

@@ -4049,7 +4049,7 @@ function updateCommands(version) {
       O("("), C("test"), " ", F("-e"), " docker-compose.yml.before-" + version + " ", O("||"), " ",
       C("cp"), " docker-compose.yml docker-compose.yml.before-" + version, O(")"), " ", O("&&"), " ",
       C("cp"), " " + dir + "/docker-compose.yml docker-compose.yml ", O("&&"), " ",
-      C("docker"), " compose up ", F("-d"), O(";"), " ",
+      C("sudo"), " ", C("docker"), " compose up ", F("-d"), O(";"), " ",
       C("else"), " ", C("echo"), " ", S("'STOP: " + version + " did not verify; nothing was changed'"), O(";"), " ", C("fi")],
   ];
 }

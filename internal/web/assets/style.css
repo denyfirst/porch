@@ -3919,7 +3919,7 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 /*
-  Three numbered steps, one row each: what the step is for on the left, the
+  Four numbered steps, one row each: what the step is for on the left, the
   commands on the right, wide enough to read without scrolling.
 */
 .steps {

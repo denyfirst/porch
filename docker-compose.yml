@@ -32,7 +32,7 @@ services:
     # inside a container every address is beyond loopback.
     #
     # A password is in front of it. The first start prints one to the log,
-    # once — read it with "docker compose logs" — and writes only a sealed key
+    # once — read it with "sudo docker compose logs porch" — and writes only a sealed key
     # to /data/access. Docker keeps that log, so sign in and change it under
     # This installation straight away. What
     # is kept is encrypted under that key, so a lost password is lost history:
@@ -101,8 +101,8 @@ services:
   # record that proves a domain to the page proves it here, and nothing else
   # does. Run it when you want it; it checks, prints and exits:
   #
-  #   docker compose run --rm scan example.com
-  #   docker compose run --rm scan -check mail example.com
+  #   sudo docker compose run --rm scan example.com
+  #   sudo docker compose run --rm scan -check mail example.com
   #
   # The same image and the same sandbox as the service. The data directory is
   # mounted read-only, so the command line can read the secret and change
