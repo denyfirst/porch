@@ -186,12 +186,27 @@ func TestTheProviderHelpIsTheSameWhereverARecordIsShown(t *testing.T) {
 	}
 
 	console, domains := block("assets/console.html"), block("assets/domains.html")
+
+	// The one rule nearly every provider needs is also said outside the fold,
+	// under the record. On 2026-10-20 a record added at deSEC an hour earlier
+	// was not served at the name the page gave, and the help that says what
+	// most often causes that was closed.
+	for _, page := range []string{"assets/console.html", "assets/domains.html"} {
+		src := asset(t, page)
+		record := strings.Index(src, `<dl class="proof-record">`)
+		short := strings.Index(src, `<p class="proof-hint proof-short">Most providers add your domain to the name themselves: type only the part before it.</p>`)
+		help := strings.Index(src, `<details class="provider-help">`)
+		if record < 0 || short < record || help < short {
+			t.Errorf("%s does not say under the record, outside the fold, to type only the part before the domain", page)
+		}
+	}
 	if console != domains {
 		t.Error("the provider help differs between the console and the Domains page")
 	}
 	for _, want := range []string{
 		"type only the part before it",
 		"<td>Cloudflare</td>",
+		"<td>deSEC</td><td>Subname</td>",
 		"<td>Amazon Route 53</td><td>Record name, with the value inside double quotes</td>",
 		"not part of the proof",
 		"whichever servers your zone names",
