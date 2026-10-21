@@ -214,6 +214,11 @@ func TestDescribesTheLeaf(t *testing.T) {
 	if len(got.FingerprintSHA256) != 64 {
 		t.Errorf("FingerprintSHA256 has %d characters, want 64", len(got.FingerprintSHA256))
 	}
+	// In the form the logged certificates are listed in, so a reader can match
+	// one against the other.
+	if got.SerialHex != leaf.SerialNumber.Text(16) {
+		t.Errorf("SerialHex = %q, want %q", got.SerialHex, leaf.SerialNumber.Text(16))
+	}
 	if !slices.Contains(got.ExtKeyUsage, "serverAuth") {
 		t.Errorf("ExtKeyUsage = %v, want it to include serverAuth", got.ExtKeyUsage)
 	}

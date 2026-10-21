@@ -1014,6 +1014,9 @@ function certificate(cert, tls, issuance, stapling, report) {
     pairs.appendChild(dd);
   });
 
+  // The serial in the form the logged certificates above are listed in, so a
+  // reader can tell whether one of them is this one.
+  pair("Serial", leaf.serialHex, "not recorded in this report");
   pair("SHA-256", leaf.fingerprintSha256);
 
   frag.appendChild(pairs);
