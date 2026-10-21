@@ -47,6 +47,13 @@ git status --short
 attribution trailers, no session, tool or account identifiers, no link a
 reader of this repository cannot follow. A message is public and permanent.
 
+**So are a branch's name and a pull request's description.** Name the branch
+for the change and its date, as `$branch` above; the name is written into the
+merge commit for ever. A description carries no session link and no link a
+reader cannot follow. Forty-six merges before 2026-10-21 name a tool's working
+branch, and 38 commits from 2026-10-02 to 2026-10-07 carry attribution
+trailers. They are in signed releases, so they stay.
+
 **Write diagnostic output outside the repository:**
 
 ```powershell
