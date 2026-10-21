@@ -189,16 +189,20 @@ yet" text goes public. Write them to `NOTES.md` outside the commit, then:
 
 ```powershell
 $sig = 'dist\v0.2.0\SHA256SUMS.sig'; $got = Join-Path $env:TEMP ('sig-' + [guid]::NewGuid())
-if (Test-Path $sig) {
+if (-not (Test-Path NOTES.md)) { Write-Host 'STOP: NOTES.md does not exist; nothing was uploaded' }
+elseif (Test-Path $sig) {
 gh release upload v0.2.0 dist\v0.2.0\SHA256SUMS.sig --clobber
 gh release edit v0.2.0 --notes-file NOTES.md
+$body = (gh release view v0.2.0 --json body --jq .body) -join "`n"
+$noted = ($body.Length -gt 0) -and ($body -notmatch 'no signature yet')
 gh release download v0.2.0 --pattern SHA256SUMS.sig --dir $got
 $ok = (Test-Path "$got\SHA256SUMS.sig") -and ((Get-FileHash "$got\SHA256SUMS.sig").Hash -eq (Get-FileHash $sig).Hash)
 Remove-Item -Recurse -Force $got -ErrorAction SilentlyContinue
-if ($ok) {
+if ($ok -and $noted) {
 gh release edit v0.2.0 --draft=false
 Remove-Item NOTES.md
-} else { Write-Host 'STOP: the release does not carry the signature release.ps1 made; it stays a draft' }
+} elseif (-not $noted) { Write-Host 'STOP: the notes are not on the release; it stays a draft' }
+else { Write-Host 'STOP: the release does not carry the signature release.ps1 made; it stays a draft' }
 } else { Write-Host "STOP: $sig does not exist, so release.ps1 signed nothing; nothing was uploaded" }
 ```
 
@@ -212,6 +216,11 @@ one `release.ps1` wrote. On 2026-10-16 these were four lines: `release.ps1`
 had signed nothing, the upload failed, and the next lines published v0.29.1
 unsigned. `reproduce.yml` failed within minutes, and the release went back to
 draft until it was signed.
+
+It is published only once the notes read back from it are not the draft's
+either. On 2026-10-21 `NOTES.md` had not been written, `gh release edit` said
+so, and the block went on to publish v0.30.0, signed, under "This draft has no
+signature yet". The notes went on afterwards.
 
 Publication starts `reproduce.yml`: it verifies the signature, checks the tag
 and the default branch trust the same keys, rebuilds on a runner and compares.
