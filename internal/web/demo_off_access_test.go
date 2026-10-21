@@ -74,6 +74,19 @@ func TestTheSignInPageShowsNothingBehindTheGate(t *testing.T) {
 			t.Errorf("the sign-in page lacks %q", want)
 		}
 	}
+
+	// The one command on it is copied as it reads, by session.js: app.js is
+	// behind the gate, so the Copy the other pages use is not here.
+	if !strings.Contains(page, `<code id="signin-command">`) || !strings.Contains(page, `data-copy="signin-command">Copy</button>`) {
+		t.Error("the sign-in page's command has no Copy beside it")
+	}
+	src, err := assets.ReadFile("assets/session.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `document.querySelector(".signin-first [data-copy]")`) || !strings.Contains(string(src), "navigator.clipboard.writeText(source.textContent)") {
+		t.Error("session.js does not copy the sign-in page's command")
+	}
 }
 
 // What anybody may reach is the sign-in page and what it draws and runs

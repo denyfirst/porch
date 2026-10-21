@@ -127,7 +127,7 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 			// Telling somebody to publish a record they have already published
 			// would send them to the wrong place.
 			s.refuse(w, http.StatusBadGateway, "scan_failed",
-				"The proof record could not be looked up. Try again shortly.")
+				"The proof record could not be looked up. If this lasts, this installation may not reach the internet: see Network in docs/self-host.md.")
 			return
 		}
 

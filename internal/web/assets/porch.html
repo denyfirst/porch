@@ -184,7 +184,7 @@
         </div>
         <pre><code id="command-start"><span class="ln"><span class="t-c">mkdir</span> <span class="t-f">-p</span> porch-data <span class="t-o">&amp;&amp;</span> <span class="t-c">sudo</span> <span class="t-c">chown</span> 65534:65534 porch-data</span>
 <span class="ln"><span class="t-c">sudo</span> <span class="t-c">docker</span> compose up <span class="t-f">-d</span></span>
-<span class="ln"><span class="t-c">sudo</span> <span class="t-c">docker</span> compose logs porch <span class="t-o">|</span> <span class="t-c">grep</span> <span class="t-f">-A2</span> <span class="t-s">"password is"</span></span></code></pre>
+<span class="ln"><span class="t-c">sudo</span> <span class="t-c">docker</span> compose logs porch <span class="t-o">2&gt;&amp;1</span> <span class="t-o">|</span> <span class="t-c">grep</span> <span class="t-f">-A2</span> <span class="t-s">"password is"</span></span></code></pre>
       </div>
     </li>
     <li>

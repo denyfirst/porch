@@ -73,7 +73,7 @@ the compose file is the only thing a server has to check.
    ```sh
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
    sudo docker compose up -d
-   sudo docker compose logs porch | grep -A2 "password is"
+   sudo docker compose logs porch 2>&1 | grep -A2 "password is"
    ```
 
    The pull from `ghcr.io` is anonymous unless root on this machine ran
@@ -85,6 +85,11 @@ the compose file is the only thing a server has to check.
    installation's password once, in the log. Docker keeps that log until the
    container is recreated, so change the password straight away.
 
+   The password is on standard error, which Docker keeps apart from standard
+   output: without `2>&1`, `grep` sees nothing and the whole log goes past it
+   to the screen. If the last line prints nothing, the service is still
+   starting; run it again a moment later.
+
 4. Open it. The compose file publishes the service on the server's own
    loopback only. From your computer:
 
@@ -93,6 +98,16 @@ the compose file is the only thing a server has to check.
    ```
 
    and open `http://localhost:8080`.
+
+   A server whose SSH refuses forwarding (`AllowTcpForwarding no`) answers
+   `administratively prohibited`. Allow this one address and nothing else, in
+   a file read before the one that forbids it, since the first value read is
+   the one used:
+
+   ```sh
+   printf 'AllowTcpForwarding local\nPermitOpen 127.0.0.1:8080\n' | sudo tee /etc/ssh/sshd_config.d/00-0-porch.conf
+   sudo sshd -t && sudo systemctl reload ssh
+   ```
 
 5. Sign in with the password from the log and change it under **This
    installation**. Every page and the API are behind it.
@@ -318,6 +333,20 @@ place of the `ghcr.io` line, with `pull_policy: never`.
 - **Your own exchangers are asked whether they relay** — three commands that
   cannot deliver anything, to a recipient at a name that cannot exist. An
   exchanger run by a provider is never asked.
+- **The container reaches the internet through the host's forward chain.** A
+  firewall that drops forwarded traffic, as hardening guides set it
+  (`policy drop` on an nftables `forward` chain), drops everything the
+  container sends: every proof says the record could not be looked up, and
+  every check waits and fails. Accept what leaves Docker's bridges and the
+  replies to it, in that chain:
+
+  ```
+  iifname "br-*" accept
+  oifname "br-*" ct state established,related accept
+  ```
+
+  `br-*` is the network Compose makes for the installation; `docker0` is the
+  one plain `docker run` uses.
 
 ---
 

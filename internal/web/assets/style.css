@@ -5563,10 +5563,11 @@ main > .band:last-child { border-bottom: 0; }
 .workspace-signin .workspace-main { min-height: 100vh; }
 .workspace-signin .colophon-row { justify-content: center; }
 
-/* On a phone the command wraps rather than scrolling out of sight. */
-@media (max-width: 46rem) {
-  .signin-first .work-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
-}
+/* The command wraps rather than running out of sight under the card's edge,
+   at any width: with sudo and 2>&1 it is wider than the card. What Copy
+   writes is the text, so a wrapped line is still one command. */
+.signin-first .work-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.signin-first .history-open { margin: 0 0 0.9rem; }
 
 /* A shell command, coloured the way a terminal would: the program, its
    flags, a quoted string and the pipe each told apart. Colour only; the
