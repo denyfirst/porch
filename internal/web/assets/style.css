@@ -2203,6 +2203,25 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
 }
 
 /*
+  The one rule nearly every provider needs, set apart from the faint hints
+  around it: in ink, larger, on the sunk paper with the tool's colour beside
+  it. Read past in the faint grey in the live test of 2026-10-23. Not red: in
+  Porch red says a host is insecure, and here it would read as a failed proof.
+*/
+.proof-hint.proof-short {
+  margin: 0.8rem 0 0.9rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper-sunk);
+  border-left: 3px solid var(--accent);
+}
+
+.proof-hint.proof-short strong { font-weight: 650; }
+.proof-hint.proof-short code { white-space: nowrap; }
+
+/*
   Where the name goes at the common DNS providers. Folded, because most
   people know their own provider's form and the record above is what matters.
 */

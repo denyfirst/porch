@@ -193,11 +193,13 @@ func TestTheProviderHelpIsTheSameWhereverARecordIsShown(t *testing.T) {
 	// under the record, with the short name ready to copy. On 2026-10-20 the
 	// full name typed into deSEC's Subname was served as
 	// _porch-challenge.denyfirst.dev.denyfirst.dev, the help that says so was
-	// closed, and the name typed again by hand came back misspelt.
+	// closed, and the name typed again by hand came back misspelt. On
+	// 2026-10-23 the line itself was read past in the faint grey of the hints
+	// around it, so its rule is in bold and the style sets it apart.
 	for page, id := range map[string]string{"assets/console.html": "proof-label", "assets/domains.html": "domain-label"} {
 		src := asset(t, page)
 		record := strings.Index(src, `<dl class="proof-record">`)
-		short := strings.Index(src, `<p class="proof-hint proof-short">Most providers add your domain to the name themselves: type only the part before it.`)
+		short := strings.Index(src, `<p class="proof-hint proof-short"><strong>Most providers add your domain to the name themselves: type only the part before it.</strong>`)
 		help := strings.Index(src, `<details class="provider-help">`)
 		if record < 0 || short < record || help < short {
 			t.Errorf("%s does not say under the record, outside the fold, to type only the part before the domain", page)
