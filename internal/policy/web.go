@@ -31,7 +31,11 @@ import (
 //
 // v1, 2026-09-04. The first rule set for this check: how a name answers on
 // each scheme, and what it says about coming back over TLS.
-const WebVersion = "porch-web-v5"
+//
+// v6, 2026-10-23. hsts.short-max-age: a policy lasting less than six months
+// is weak, after Mozilla's published minimum. A verdict change on an
+// unchanged site, so a version change. docs/policy-changes.md has v3 to v5.
+const WebVersion = "porch-web-v6"
 
 // WebReviewBy is when these rules are read against their references again.
 //
@@ -54,17 +58,34 @@ var (
 
 	owaspHSTS = Reference{"OWASP — HTTP Strict Transport Security Cheat Sheet",
 		"https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html"}
+
+	mozillaWebSecurity = Reference{"Mozilla Web Security Guidelines — HTTP Strict Transport Security",
+		"https://infosec.mozilla.org/guidelines/web_security#http-strict-transport-security"}
 )
 
 // preloadMinAge is the max-age the preload list requires: one year.
 //
-// It is used to describe a header, never to grade one. OWASP's cheat sheet
-// recommends a short max-age during a rollout and publishes no minimum, and
-// no standards body publishes one either — so a rule failing anything under a
-// year would be this project inventing a threshold and then penalising a
-// deliberate, correct choice, which R6 forbids. The number appears in a note
-// that says what it is: the bar for one browser programme.
+// It is used to describe a header, never to grade one. The preload list is
+// one browser programme's entry bar, and a site can be correctly configured
+// and deliberately outside it. The number appears in a note that says what it
+// is.
 const preloadMinAge = 31536000
+
+// hstsMinAge is the shortest max-age graded as a working policy: six months,
+// 15768000 seconds.
+//
+// Until porch-web-v6 nothing was graded here, on the reading that no
+// document sets a floor (R21). One does: Mozilla's web security guidelines
+// say max-age must be at least six months, and recommend two years. Not a
+// standards body, and labelled as what it is — but a published threshold
+// from a browser maker, which is what R21 asks for and not a number this
+// project chose.
+//
+// A short max-age is the right way to begin a rollout, as OWASP says, and the
+// finding says so. It is still graded: until it is raised, a visitor away for
+// longer than it lasts arrives unprotected, and that is true of the host
+// whatever the intention.
+const hstsMinAge = 15768000
 
 // WebHop is one request in a chain, reduced to what these rules read.
 //
@@ -398,10 +419,19 @@ func GradeHSTS(secure, plain []string, secureAnswered bool) WebResult {
 		return out
 	}
 
-	// Everything below describes a working policy rather than grading it.
-	// There is no published minimum max-age: OWASP recommends a short one
-	// during a rollout, and no standards body sets a floor. A rule inventing
-	// one would fail a site for a deliberate and correct choice.
+	if p.MaxAge < hstsMinAge {
+		out.add(Finding{
+			RuleID:  "hsts.short-max-age",
+			Verdict: Weak,
+			Title:   "The policy lapses in less than six months",
+			Rationale: "A browser forgets the policy once max-age has passed, and its next first request can " +
+				"be kept in the clear. Mozilla's guidelines set six months as the minimum and recommend two " +
+				"years. A short max-age is the right way to begin a rollout; raise it once the site works over TLS.",
+			References: []Reference{mozillaWebSecurity, rfc6797, owaspHSTS},
+		})
+	}
+
+	// Everything below describes the policy rather than grading it.
 	out.observe(fmt.Sprintf("The policy lasts %s. A browser that has not visited within that time "+
 		"has forgotten it, and its next first request is unprotected again.", humanAge(p.MaxAge)))
 

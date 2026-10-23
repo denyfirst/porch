@@ -1230,7 +1230,12 @@ in `internal/scan.checkReceipts`
 `TestAnExchangerThisClientCouldNotNegotiateWithIsNotGraded`,
 `TestExchangersNotContactedAreSaidNotToHaveBeen`,
 `TestAnUnmeasuredExchangerIsNotGradedUnderAnEnforcingPolicy`,
-`TestARefusedGreetingIsNotMeasured`
+`TestARefusedGreetingIsNotMeasured`,
+`TestTheMailVerdictMatrix`, `TestTheDNSVerdictMatrix`,
+`TestTheHSTSVerdictMatrix`, `TestTheTransportVerdictMatrix`,
+`TestAnUnmeasuredTLS13IsNeitherStrongNorWeak`,
+`TestAServerAnsweringTLS13InTLS12IsARefusal`,
+`TestAHostAcceptingEveryPortIsNotGradedForIt`
 
 ### R4a — A verdict's stated reason is true of the thing it grades
 
@@ -1557,7 +1562,8 @@ graded, because what a downgrade costs is the grade of the version it lands on),
 `internal/policy/software.go` (the software a server names and whether with a
 version: reported, never graded, and the version itself never kept)
 
-*Guarded by:* `TestAShortMaxAgeIsDescribedAndNotGraded`,
+*Guarded by:* `TestSixMonthsIsTheFloor` (a threshold a document does set is
+graded, at that document's number),
 `TestSoftwareNamedIsReportedAndNeverGraded`,
 `TestWhatEachGreetingNamedIsOneRowAndOneSentence`,
 `TestTheNameIsKeptAndTheVersionIsNot`,
@@ -1568,7 +1574,6 @@ version: reported, never graded, and the version itself never kept)
 `TestWhatAGreetingNamedIsARow`,
 `TestTheFallbackSignalIsReadInAllThreeWays`,
 `TestTheFallbackIsNotAskedOfASingleVersion`,
-`TestAnExchangerWithoutSTARTTLSIsDescribedAndNotGraded`,
 `TestAnExchangerCertificateThatFailsIsDescribedAndNotGraded`,
 `TestIncludeSubDomainsIsDescribedAndNotGraded`,
 `TestATemporaryRedirectIsDescribedNotGraded`,

@@ -468,6 +468,18 @@ func (p *Prober) Probe(ctx context.Context, host, port string) (*Report, error) 
 	report.Verdict, report.Findings = summarise(results)
 	report.BlockedDestination = blockedDestination(results)
 
+	// Said, because the verdict turns on it. The row already reads "not
+	// measured"; a reader looking for why a server with sound suites is not
+	// graded strong should not have to work it out from that.
+	if tls13(results) == tls13Unmeasured && slices.ContainsFunc(results, func(v VersionResult) bool { return v.Supported }) {
+		why := "this probe did not ask"
+		if i := slices.IndexFunc(results, func(v VersionResult) bool { return v.Version == tls.VersionTLS13 }); i >= 0 && results[i].Error != "" {
+			why = results[i].Error
+		}
+		report.unsettled(fmt.Sprintf(
+			"Whether TLS 1.3 is accepted was not established (%s), so the transport is not graded strong.", why))
+	}
+
 	// What Go's client cannot ask, asked by hand, and folded in only upwards.
 	//
 	// A server speaking only SSL 3.0 was reported as refusing every version
@@ -730,6 +742,15 @@ func summarise(results []VersionResult) (policy.Verdict, []policy.Finding) {
 		}
 	}
 
+	// A missing version is graded here, where the versions are seen
+	// together, because no single row can say it. Only a server that answered
+	// something: with nothing accepted there is no connection to describe.
+	if len(verdicts) > 0 && tls13(results) == tls13Refused {
+		f := policy.NoTLS13()
+		verdicts = append(verdicts, f.Verdict)
+		collect([]policy.Finding{f})
+	}
+
 	// Most severe first, so a caller showing only the top item shows the
 	// thing that matters.
 	slices.SortStableFunc(findings, func(a, b policy.Finding) int {
@@ -757,9 +778,45 @@ func summarise(results []VersionResult) (policy.Verdict, []policy.Finding) {
 				return policy.Ungraded, findings
 			}
 		}
+
+		// The same asymmetry for TLS 1.3. Strong now says it was accepted,
+		// and a handshake that timed out or was reset established neither
+		// that nor the opposite.
+		if tls13(results) == tls13Unmeasured {
+			return policy.Ungraded, findings
+		}
 	}
 
 	return worst, findings
+}
+
+type tls13Answer int
+
+const (
+	tls13Accepted tls13Answer = iota
+	tls13Refused
+	tls13Unmeasured
+)
+
+// tls13 says what the server answered to TLS 1.3.
+//
+// A refusal is the server's own answer, set where the failure is classified;
+// anything else that is not a success is a handshake that did not finish, or
+// one this probe did not make.
+func tls13(results []VersionResult) tls13Answer {
+	for _, v := range results {
+		if v.Version != tls.VersionTLS13 {
+			continue
+		}
+		switch {
+		case v.Supported:
+			return tls13Accepted
+		case v.Refused:
+			return tls13Refused
+		}
+		return tls13Unmeasured
+	}
+	return tls13Unmeasured
 }
 
 // enumerateCiphers offers every candidate, records what the server picks,
@@ -1066,6 +1123,18 @@ func classifyHandshakeError(err error, version uint16) (text string, refused boo
 	msg := err.Error()
 
 	switch {
+	// The server answered in a version this probe did not offer, which is
+	// the server declining the one it was offered. A server that predates
+	// TLS 1.3 reads a hello offering only 1.3 as a TLS 1.2 hello and answers
+	// in 1.2; that is how most servers without 1.3 say so.
+	//
+	// It sat in the case below until 2026-10-23, because Go's sentence for
+	// it contains "unsupported protocol version", and a server without TLS
+	// 1.3 was reported as one this build of Go never asked. Ahead of that
+	// case so the words cannot catch it again.
+	case strings.Contains(msg, "server selected unsupported protocol version"):
+		return fmt.Sprintf("server refused %s", versionName(version)), true
+
 	// Our own client would not offer this version, which is not the same as
 	// the server refusing it. Saying so keeps a false negative out of the
 	// report.

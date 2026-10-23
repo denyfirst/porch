@@ -40,7 +40,16 @@ import (
 // and the domain therefore gets none. No rule changed its meaning and no
 // threshold moved — but a domain that graded clean yesterday can grade worse
 // today on an unchanged configuration, and that is a version change.
-const MailVersion = "porch-mail-v4"
+//
+// v5, 2026-10-23. Strong had been reachable with nothing to grade: a domain
+// publishing no mail record at all, and one whose exchangers were never
+// reached, both came back strong, because every rule here is about something
+// that exists. A live report of a domain with no SPF, no DMARC and no MX said
+// strong. Now a domain no DMARC record covers is weak, so is p=none, so is an
+// exchanger that does not offer STARTTLS, and a domain whose exchangers were
+// not all measured is not strong. A name with no DMARC record of its own is
+// read under the nearest one above it, as receivers read it.
+const MailVersion = "porch-mail-v5"
 
 var (
 	rfc7208 = Reference{
@@ -74,6 +83,14 @@ var (
 	nist800177 = Reference{
 		"NIST SP 800-177 Rev. 1 — Trustworthy Email",
 		"https://csrc.nist.gov/pubs/sp/800/177/r1/final",
+	}
+	rfc3207 = Reference{
+		"RFC 3207 — SMTP Service Extension for Secure SMTP over Transport Layer Security",
+		"https://www.rfc-editor.org/rfc/rfc3207",
+	}
+	rfc7505 = Reference{
+		"RFC 7505 — A \"Null MX\" No Service Resource Record for Domains That Accept No Mail",
+		"https://www.rfc-editor.org/rfc/rfc7505",
 	}
 )
 
@@ -185,6 +202,13 @@ type MailFacts struct {
 
 	// DMARCReason says why the policy could not be read.
 	DMARCReason string `json:"dmarcReason,omitempty"`
+
+	// DMARCFrom is the name above this one whose record applies, where this
+	// one publishes none. A receiver looks there (RFC 7489 §6.6.3), so a
+	// subdomain under a domain at p=reject is covered, and the fields above
+	// then describe that record: DMARCPolicy is what it asks for this name,
+	// its sp= where it sets one and its p= where it does not.
+	DMARCFrom string `json:"dmarcFrom,omitempty"`
 
 	// TLSReporting is true when the domain publishes a TLS-RPT record saying
 	// where to send reports about failed transport security.
@@ -491,11 +515,15 @@ func GradeMail(f MailFacts) MailFinding {
 
 	// A DMARC record with no p= is not a policy. RFC 7489 §6.3 requires it,
 	// and a record without one is discarded.
-	if f.DMARCRecords == 1 && f.DMARCPolicy == "" && f.DMARCReason == "" {
+	//
+	// A p= naming something RFC 7489 does not define is the same record: a
+	// receiver finds no policy it can apply. Until v5 only a missing tag was
+	// graded, and "p=rejet" came back strong.
+	if f.DMARCRecords == 1 && f.DMARCReason == "" && strength(f.DMARCPolicy) == 0 {
 		add("mail.dmarc-no-policy", Weak,
 			"The DMARC record names no policy",
-			"RFC 7489 requires a p= tag. Without one there is no policy to apply, so the "+
-				"domain has no DMARC in effect.",
+			"RFC 7489 requires a p= tag naming none, quarantine or reject. Without one there is no "+
+				"policy to apply, so the domain has no DMARC in effect.",
 			rfc7489)
 	}
 
@@ -505,6 +533,41 @@ func GradeMail(f MailFacts) MailFinding {
 			"RFC 7489 says a receiver finding more than one applies no policy at all. The domain "+
 				"appears to have DMARC and does not.",
 			rfc7489)
+	}
+
+	// No DMARC record covers the domain.
+	//
+	// Graded since v5. Until then an absence was described and not graded, on
+	// the reasoning that a domain sending no mail needs no policy, and a domain
+	// with no mail record of any kind came back strong. Impersonation does not
+	// need the domain to send anything: without DMARC a receiver has no
+	// instruction to refuse mail that only claims to come from it, which is
+	// what makes a domain usable for phishing, and NIST SP 800-177 Rev. 1
+	// recommends DMARC for that reason. A domain that sends no mail says so in
+	// three records and is then graded on them.
+	if f.DMARCReason == "" && f.DMARCRecords == 0 {
+		add("mail.dmarc-absent", Weak,
+			"No DMARC policy covers the domain",
+			"Neither the domain nor any name above it publishes a DMARC record, so receivers have no "+
+				"instruction to refuse mail that only claims to come from it, and anyone can send in its "+
+				"name. A domain that sends no mail is impersonated as easily as one that does: it says so "+
+				"with a DMARC record at p=reject, an SPF record of \"v=spf1 -all\" and a null MX (RFC 7505).",
+			rfc7489, nist800177, rfc7505)
+	}
+
+	// p=none, which asks receivers for nothing.
+	//
+	// Graded since v5, and graded as what it is rather than as a mistake: the
+	// monitoring step, under which failing mail is delivered as though no
+	// policy existed. Tightening it before the reports are read rejects real
+	// mail, and the rationale says so.
+	if f.DMARCReason == "" && f.DMARCRecords == 1 && f.DMARCPolicy == "none" {
+		add("mail.dmarc-not-enforcing", Weak,
+			"The DMARC policy asks receivers to do nothing",
+			"p=none is the monitoring step: receivers deliver mail that fails as though no policy "+
+				"existed, so the domain can still be impersonated. Move to p=quarantine, then p=reject, "+
+				"once the aggregate reports show every server that sends for the domain passing.",
+			rfc7489, nist800177)
 	}
 
 	// Reports addressed to somewhere that has not agreed to receive them.
@@ -704,6 +767,31 @@ func GradeMail(f MailFacts) MailFinding {
 			rfc2181)
 	}
 
+	// An exchanger that offers no encryption at all.
+	//
+	// Graded since v5. RFC 3207 leaves STARTTLS optional, and v4 described its
+	// absence rather than grading it (R21). What it leaves is mail crossing the
+	// network readable by anyone on the path, and NIST SP 800-177 Rev. 1
+	// recommends encryption for every mail server: the document R21 asks for.
+	var plain []string
+	for _, x := range f.Exchangers {
+		if x.Measured && !x.Offered {
+			plain = append(plain, x.Host)
+		}
+	}
+	if len(plain) > 0 {
+		verb := "does"
+		if len(plain) > 1 {
+			verb = "do"
+		}
+		add("mail.exchanger-no-starttls", Weak,
+			"A mail exchanger offers no encryption",
+			namedHosts(plain)+" "+verb+" not offer STARTTLS, so mail delivered to "+thatHost(len(plain))+
+				" crosses the network unencrypted and anyone on the path can read it. RFC 3207 leaves "+
+				"STARTTLS optional; NIST SP 800-177 recommends it for every mail server.",
+			rfc3207, nist800177)
+	}
+
 	// An exchanger that forwards mail for a domain it does not serve.
 	//
 	// The oldest misconfiguration in mail and still the most expensive one to
@@ -777,9 +865,37 @@ func GradeMail(f MailFacts) MailFinding {
 		out.Verdict = Ungraded
 	}
 
+	// Nor is a domain whose exchangers were not all measured.
+	//
+	// The rules about exchangers — encryption, retired versions, relaying,
+	// MTA-STS and DANE — fall silent for one that was not reached, and silence
+	// is not passing (R4). Until v5 a domain whose every exchanger timed out,
+	// the shape a network blocking port 25 gives, came back strong.
+	if out.Verdict == Strong && exchangersIncomplete(f) {
+		out.Verdict = Ungraded
+	}
+
 	out.Notes = append(out.Notes, describeMail(f)...)
 	out.Notes = append(out.Notes, describeDKIM(f)...)
 	return out
+}
+
+// exchangersIncomplete reports whether the domain names exchangers and any of
+// them was not measured: not contacted, beyond the eight asked, or reached
+// without a conversation that settled whether it encrypts.
+func exchangersIncomplete(f MailFacts) bool {
+	if !f.MXRead || f.MXReason != "" || f.NullMX || len(f.MXHosts) == 0 {
+		return false
+	}
+	if !f.ExchangersContacted || f.ExchangersPartial {
+		return true
+	}
+	for _, x := range f.Exchangers {
+		if !x.Measured || (x.Offered && !x.Upgraded) {
+			return true
+		}
+	}
+	return false
 }
 
 // principalUnread reports whether a record every mail rule rests on could not
@@ -851,16 +967,16 @@ func describeMail(f MailFacts) []Note {
 			"is slow, and several large receivers ignore it."))
 	}
 
+	if f.DMARCReason == "" && f.DMARCFrom != "" && f.DMARCRecords >= 1 {
+		out = append(out, Observed("This name publishes no DMARC record of its own, so receivers apply the one at "+
+			f.DMARCFrom+", and what it asks for names beneath it is what this report reads."))
+	}
+
+	// An absent record and p=none are graded above, and say what they mean
+	// there.
 	switch {
 	case f.DMARCReason != "":
 		out = append(out, Unsettled("The DMARC policy was not read: "+f.DMARCReason+"."))
-	case f.DMARCRecords == 0:
-		out = append(out, Observed("The domain publishes no DMARC record, so receivers have no instruction for mail "+
-			"that fails SPF, and the domain gets no reports."))
-	case f.DMARCPolicy == "none":
-		out = append(out, Observed("The DMARC policy is p=none: receivers change nothing. It is the monitoring step "+
-			"and is not graded, because tightening it before the reports are read rejects "+
-			"real mail."))
 	case f.DMARCPolicy == "quarantine" || f.DMARCPolicy == "reject":
 		if f.DMARCPercent > 0 && f.DMARCPercent < 100 {
 			out = append(out, Observed("The DMARC policy is p="+f.DMARCPolicy+" for "+strconv.Itoa(f.DMARCPercent)+"% "+
@@ -875,7 +991,7 @@ func describeMail(f MailFacts) []Note {
 	// A domain that rejects failing mail from itself and accepts it from every
 	// name beneath it. Reported, not graded: whether any subdomain sends mail
 	// is not something this can see.
-	if f.DMARCRecords == 1 && f.DMARCSubdomainPolicy != "" && strength(f.DMARCSubdomainPolicy) < strength(f.DMARCPolicy) {
+	if f.DMARCRecords == 1 && f.DMARCFrom == "" && f.DMARCSubdomainPolicy != "" && strength(f.DMARCSubdomainPolicy) < strength(f.DMARCPolicy) {
 		out = append(out, Observed("Subdomains use sp="+f.DMARCSubdomainPolicy+" rather than p="+f.DMARCPolicy+", "+
 			"so failing mail from them is handled "+subdomainHandling(f.DMARCSubdomainPolicy)+
 			". A subdomain that sends no mail can still be impersonated."))
@@ -1224,11 +1340,11 @@ func plainCount(n int, noun string) string {
 // describeExchangers says what the exchangers answered when asked for
 // encryption, and what could not be established.
 //
-// Almost nothing here is graded. RFC 3207 makes STARTTLS optional, and a sender
-// delivering opportunistically encrypts without checking the certificate, so an
-// exchanger offering no STARTTLS or a certificate that does not verify is a fact
-// a reader needs rather than an error a document names (R21). Where a document
-// does make it one — an enforcing MTA-STS policy — GradeMail grades it.
+// A certificate that does not verify is described and not graded: a sender
+// delivering opportunistically encrypts without checking it, so it is a fact a
+// reader needs rather than an error a document names (R21). Where a document
+// does make it one — an enforcing MTA-STS policy — GradeMail grades it. An
+// exchanger offering no STARTTLS at all is graded there too, since v5.
 func describeExchangers(f MailFacts) []Note {
 	var out []Note
 	if !f.MXRead || f.MXReason != "" || f.NullMX || len(f.MXHosts) == 0 {
@@ -1245,8 +1361,8 @@ func describeExchangers(f MailFacts) []Note {
 	}
 
 	var (
-		verified, plain, badCertificate, unmeasured []string
-		timedOut                                    int
+		verified, badCertificate, unmeasured []string
+		timedOut                             int
 	)
 	for _, x := range f.Exchangers {
 		switch {
@@ -1256,7 +1372,7 @@ func describeExchangers(f MailFacts) []Note {
 				timedOut++
 			}
 		case !x.Offered:
-			plain = append(plain, x.Host)
+			// Graded, and said by its finding (mail.exchanger-no-starttls).
 		case !x.Trusted:
 			badCertificate = append(badCertificate, x.Host+" ("+x.CertificateReason+")")
 		case !x.NameMatches:
@@ -1269,16 +1385,6 @@ func describeExchangers(f MailFacts) []Note {
 	if len(verified) > 0 {
 		out = append(out, Observed("STARTTLS is offered by "+namedHosts(verified)+", and the certificate "+
 			"presented verifies for the exchanger's own name against this deployment's trust store."))
-	}
-
-	if len(plain) > 0 {
-		verb := "does"
-		if len(plain) > 1 {
-			verb = "do"
-		}
-		out = append(out, Observed(namedHosts(plain)+" "+verb+" not offer STARTTLS, so mail to "+thatHost(len(plain))+
-			" crosses the network unencrypted. RFC 3207 makes STARTTLS optional, so this is "+
-			"named rather than graded."))
 	}
 
 	if len(badCertificate) > 0 {

@@ -127,7 +127,16 @@ and the rest is where the weak suites are.`, len(short), len(full))
 func TestAnUnfinishedListCannotProduceStrong(t *testing.T) {
 	strongOnly := []CipherResult{gradeCipher(tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)}
 
-	finished := []VersionResult{{
+	// Accepted and finished, so that the TLS 1.2 list is the only thing
+	// either case below can turn on.
+	tls13 := VersionResult{
+		Version: tls.VersionTLS13, Name: "TLS 1.3", Supported: true,
+		Grade:              policy.GradeVersion(tls.VersionTLS13),
+		Ciphers:            []CipherResult{gradeCipher(tls.TLS_AES_128_GCM_SHA256)},
+		CipherListComplete: true,
+	}
+
+	finished := []VersionResult{tls13, {
 		Version: tls.VersionTLS12, Name: "TLS 1.2", Supported: true,
 		Grade: policy.GradeVersion(tls.VersionTLS12), Ciphers: strongOnly,
 		CipherListComplete: true,
@@ -136,7 +145,7 @@ func TestAnUnfinishedListCannotProduceStrong(t *testing.T) {
 		t.Errorf("a finished list of strong suites graded %q, want %q", got, policy.Strong)
 	}
 
-	unfinished := []VersionResult{{
+	unfinished := []VersionResult{tls13, {
 		Version: tls.VersionTLS12, Name: "TLS 1.2", Supported: true,
 		Grade: policy.GradeVersion(tls.VersionTLS12), Ciphers: strongOnly,
 		CipherListComplete: false,

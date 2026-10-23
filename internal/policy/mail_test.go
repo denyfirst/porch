@@ -164,8 +164,6 @@ func TestMailDoesNotGradeADeliberatePosition(t *testing.T) {
 		{"nine of the ten lookups", MailFacts{SPFRecords: 1, SPFAll: "-", SPFLookups: 9, DMARCRecords: 1, DMARCPolicy: "reject"}},
 		{"two void lookups, which are allowed", MailFacts{SPFRecords: 1, SPFAll: "-", SPFVoidLookups: 2, DMARCRecords: 1, DMARCPolicy: "reject"}},
 		{"the ptr mechanism", MailFacts{SPFRecords: 1, SPFAll: "-", SPFUsesPTR: true, DMARCRecords: 1, DMARCPolicy: "reject"}},
-		{"no DMARC record", MailFacts{SPFRecords: 1, SPFAll: "-"}},
-		{"monitoring at p=none", MailFacts{SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "none"}},
 		{"a rollout at 20%", MailFacts{SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject", DMARCPercent: 20}},
 		{"nowhere to send reports", MailFacts{SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject"}},
 		{"no TLS-RPT record", MailFacts{SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject"}},
@@ -460,6 +458,11 @@ func TestIncludeListReadsAsASentence(t *testing.T) {
 // or neither. How many exchangers a domain has is an operational decision no
 // document settles. A verdict on any of it would be a threshold this project
 // invented (R21), landing on a choice somebody made deliberately.
+//
+// Each domain's exchangers answer well, because since porch-mail-v5 a domain
+// whose exchangers were not all measured is not strong (R4): the verdict here
+// is about the path, so nothing else may decide it. Twenty exchangers are more
+// than are asked, and that one is ungraded for that reason and no other.
 func TestTheMailPathIsDescribedAndNeverGraded(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -493,13 +496,24 @@ func TestTheMailPathIsDescribedAndNeverGraded(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := GradeMail(tc.facts)
+			f := tc.facts
+			want := Strong
+			if len(f.MXHosts) > 8 {
+				f.ExchangersPartial, want = true, Ungraded
+			}
+			f.ExchangersContacted = len(f.MXHosts) > 0
+			for i, h := range f.MXHosts {
+				if i < 8 {
+					f.Exchangers = append(f.Exchangers, good(h))
+				}
+			}
+			got := GradeMail(f)
 			if len(got.Findings) != 0 {
 				t.Errorf("graded %v. Nothing about the mail path is an error any document names.",
 					mailRuleIDs(got))
 			}
-			if got.Verdict != Strong {
-				t.Errorf("verdict = %q, want strong", got.Verdict)
+			if got.Verdict != want {
+				t.Errorf("verdict = %q, want %q", got.Verdict, want)
 			}
 		})
 	}

@@ -35,8 +35,14 @@ func TestTheRegistrationLineSaysWhenAndWhetherItIsLocked(t *testing.T) {
 	if line := RegistrationLine(f, now); !strings.Contains(line, "ran out") || !strings.Contains(line, "3 days ago") {
 		t.Errorf("an expired registration reads %q", line)
 	}
-	if notes := strings.Join(Texts(DescribeRegistration(f, now)), " "); !strings.Contains(notes, "has run out") {
-		t.Errorf("an expired registration's notes read %q", notes)
+	// Graded since porch-dns-v4 (dns.registration-expired), and said by the
+	// finding rather than twice.
+	if notes := strings.Join(Texts(DescribeRegistration(f, now)), " "); strings.Contains(notes, "run out") {
+		t.Errorf("an expired registration is described as well as graded: %q", notes)
+	}
+	graded := GradeDNS(DNSFacts{Apex: true, NameServers: []NameServer{{Name: "a.ns.example", Addresses: []string{"192.0.2.1"}}, {Name: "b.ns.example", Addresses: []string{"198.51.100.1"}}}, Networks: 2, Registration: &f}, now)
+	if graded.Verdict != Insecure || !hasRule(graded.Findings, "dns.registration-expired", Insecure) {
+		t.Errorf("an expired registration graded %q", graded.Verdict)
 	}
 
 	f.RegistryLocked, f.TransferLocked = true, true
