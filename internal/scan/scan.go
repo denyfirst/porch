@@ -178,6 +178,12 @@ type Result struct {
 	Exposure     *exposure.Result `json:"exposure,omitempty"`
 	ExposureLine string           `json:"exposureLine,omitempty"`
 
+	// ExposureFindings grades what answered (policy.GradeExposure). Apart
+	// from the transport's findings, because none of them is about TLS, and
+	// joined into Verdict and Findings, because a host is not in good order
+	// while one of these answers.
+	ExposureFindings []policy.Finding `json:"exposureFindings,omitempty"`
+
 	// ExposureChecked is each service asked, with what came back, so the
 	// line's count says what it counted (R4, R16).
 	ExposureChecked []policy.Checked `json:"exposureChecked,omitempty"`
@@ -614,7 +620,16 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 		if found.Asked && found.Reason == "" {
 			out.ExposureChecked = policy.ExposureChecked(exposureAsked(found))
 		}
-		tlsReport.Notes = append(tlsReport.Notes, policy.DescribeExposure(open)...)
+		tlsReport.Notes = append(tlsReport.Notes, policy.DescribeExposure(open, found.Ports)...)
+
+		// Graded since porch-tls-v9, and only from a look that finished: a
+		// probe that could not ask has found nothing either way.
+		if found.Asked && found.Reason == "" {
+			out.ExposureFindings = policy.GradeExposure(open, found.Ports)
+			for _, f := range out.ExposureFindings {
+				out.Verdict = policy.Worst(out.Verdict, f.Verdict)
+			}
+		}
 	}
 
 	// Asked last, and bounded by whatever is left of the caller's deadline.
@@ -639,7 +654,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	// "strong", the one answer an unfinished list cannot support (R11). Found
 	// by the 2026-09-16 audit (A10). Only Strong is withdrawn: a weak or
 	// insecure finding that was seen stays seen.
-	out.Verdict = settle(out.Verdict, tlsReport)
+	out.Verdict = settle(out.Verdict, tlsReport, out.Certificate)
 
 	// Last, because it reads from everything above it.
 	out.Coverage = policy.Coverage(coverageFacts(out))
@@ -647,10 +662,17 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	return out, nil
 }
 
-// settle withdraws Strong from a scan whose transport did not finish, and
-// leaves every other verdict as it is.
-func settle(v policy.Verdict, t *tlsprobe.Report) policy.Verdict {
-	if v == policy.Strong && transportUnfinished(t) {
+// settle withdraws Strong from a scan whose transport did not finish, or
+// whose certificate was not graded, and leaves every other verdict as it is.
+//
+// The certificate half is a guard rather than a case anybody has seen. Strong
+// over a host says its certificate was looked at and passed, and Worst passes
+// over an ungraded certificate exactly as it passes over an unfinished list.
+func settle(v policy.Verdict, t *tlsprobe.Report, c *certinfo.Report) policy.Verdict {
+	if v != policy.Strong {
+		return v
+	}
+	if transportUnfinished(t) || c == nil || c.Verdict == policy.Ungraded {
 		return policy.Ungraded
 	}
 	return v
@@ -876,6 +898,7 @@ func (r *Result) Findings() []policy.Finding {
 	if r.Stapling != nil {
 		collect(r.Stapling.Findings)
 	}
+	collect(r.ExposureFindings)
 	return out
 }
 

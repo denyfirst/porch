@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/certinfo"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/tlsprobe"
@@ -198,6 +199,7 @@ func soundChain(t *testing.T) (*x509.Certificate, *tls.Certificate) {
 func TestSettlingWithdrawsOnlyStrong(t *testing.T) {
 	unfinished := &tlsprobe.Report{Versions: []tlsprobe.VersionResult{{Supported: true}}}
 	finished := &tlsprobe.Report{Versions: []tlsprobe.VersionResult{{Supported: true, CipherListComplete: true}}}
+	graded := &certinfo.Report{Verdict: policy.Strong}
 
 	for v, want := range map[policy.Verdict]policy.Verdict{
 		policy.Strong:   policy.Ungraded,
@@ -205,11 +207,18 @@ func TestSettlingWithdrawsOnlyStrong(t *testing.T) {
 		policy.Insecure: policy.Insecure,
 		policy.Ungraded: policy.Ungraded,
 	} {
-		if got := settle(v, unfinished); got != want {
+		if got := settle(v, unfinished, graded); got != want {
 			t.Errorf("an unfinished scan at %q settled to %q, want %q", v, got, want)
 		}
-		if got := settle(v, finished); got != v {
+		if got := settle(v, finished, graded); got != v {
 			t.Errorf("a finished scan at %q settled to %q", v, got)
+		}
+
+		// No certificate graded is the same withdrawal for the same reason.
+		for _, c := range []*certinfo.Report{nil, {}} {
+			if got := settle(v, finished, c); got != want {
+				t.Errorf("a scan at %q with certificate %+v settled to %q, want %q", v, c, got, want)
+			}
 		}
 	}
 }

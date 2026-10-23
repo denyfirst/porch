@@ -39,22 +39,29 @@ func TestAnExchangerThatVerifiesIsSaidToVerify(t *testing.T) {
 	}
 }
 
-// No STARTTLS, and no MTA-STS: described and not graded.
+// No STARTTLS: graded weak since porch-mail-v5.
 //
-// RFC 3207 makes STARTTLS optional. Grading its absence would invent a rule no
-// document sets (R21) — but saying nothing would leave a reader believing their
-// mail is encrypted in transit when it is not.
-func TestAnExchangerWithoutSTARTTLSIsDescribedAndNotGraded(t *testing.T) {
+// RFC 3207 makes STARTTLS optional, and until v5 its absence was described and
+// not graded. What it leaves is mail crossing the network readable by anyone on
+// the path, and NIST SP 800-177 Rev. 1 recommends encryption for every mail
+// server, so it is weak, and the rationale says what it costs.
+func TestAnExchangerWithoutSTARTTLSIsGradedWeak(t *testing.T) {
 	x := good("mx1.example.net")
 	x.Offered, x.Upgraded, x.Version, x.Suite = false, false, "", ""
 
 	got := GradeMail(exchangerFacts(x))
-	if len(got.Findings) != 0 {
-		t.Errorf("graded %v for an exchanger RFC 3207 does not require to offer STARTTLS", mailRuleIDs(got))
+	if ids := mailRuleIDs(got); len(ids) != 1 || ids[0] != "mail.exchanger-no-starttls" {
+		t.Fatalf("graded %v, want only mail.exchanger-no-starttls", ids)
 	}
-	text := mailNoteText(got.Notes)
-	if !strings.Contains(text, "mx1.example.net does not offer STARTTLS") || !strings.Contains(text, "unencrypted") {
-		t.Errorf("the report does not say mail to it crosses the network unencrypted:\n%s", text)
+	if got.Verdict != Weak {
+		t.Errorf("verdict = %q, want weak", got.Verdict)
+	}
+	why := got.Findings[0].Rationale
+	if !strings.Contains(why, "mx1.example.net does not offer STARTTLS") || !strings.Contains(why, "unencrypted") {
+		t.Errorf("the finding does not say mail to it crosses the network unencrypted: %s", why)
+	}
+	if strings.Contains(mailNoteText(got.Notes), "does not offer STARTTLS") {
+		t.Error("the exchanger is described in the notes as well as graded, so the report says it twice")
 	}
 }
 

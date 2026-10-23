@@ -68,7 +68,13 @@ import (
 // notBefore through notAfter inclusive. cert.validity-too-long now fires for
 // a certificate one second past its limit, which read as exactly the limit and
 // passed: a verdict change on an unchanged server, so a version change.
-const TLSVersion = "porch-tls-v8"
+// v9, 2026-10-23. Three verdict changes, each where the report already said
+// the fact and graded nothing. version.no-tls13: a server that accepts an
+// older version and declines TLS 1.3 is weak, and one whose TLS 1.3
+// handshake did not finish is not strong. exposure.service-open: a database,
+// remote desktop or file share answering the internet is weak. And Strong
+// needs a graded certificate.
+const TLSVersion = "porch-tls-v9"
 
 // Informational is what the name inventory carries where a check carries a
 // rule-set name, and it is a word rather than a version deliberately.
@@ -634,6 +640,32 @@ func GradeVersion(version uint16) VersionFinding {
 				Policy:     TLSVersion,
 			}},
 		}
+	}
+}
+
+// NoTLS13 is the finding for a server that accepts an earlier version and
+// answered a TLS 1.3 hello by declining it.
+//
+// Raised only on a refusal the server sent. A TLS 1.3 handshake that timed
+// out or was reset says nothing about the server's configuration, and
+// grading it would mark a correct server down for a connection that dropped
+// (R6); that case withdraws Strong instead, because Strong claims TLS 1.3
+// was found and it was not looked at.
+//
+// The hello offers what TLS 1.3 makes mandatory to implement: the AES-128-GCM
+// suite, the P-256 group and the common signature schemes. A server that
+// speaks TLS 1.3 and still declines all of that is declining it for every
+// mainstream client as well.
+func NoTLS13() Finding {
+	return Finding{
+		RuleID:  "version.no-tls13",
+		Verdict: Weak,
+		Title:   "TLS 1.3 is not accepted",
+		Rationale: "The server declined TLS 1.3, so every connection uses an older version. TLS 1.2 sends the certificate " +
+			"unencrypted and is only as safe as its suite list. RFC 9325 says TLS 1.3 SHOULD be supported and " +
+			"preferred; NIST SP 800-52 Rev. 2 required it of federal servers from January 2024.",
+		References: []Reference{rfc9325, nist80052, rfc9846},
+		Policy:     TLSVersion,
 	}
 }
 

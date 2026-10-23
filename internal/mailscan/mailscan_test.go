@@ -3,6 +3,7 @@ package mailscan
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1080,5 +1081,65 @@ func TestTheReportAddressesArePrintedOnlyWhenAskedFor(t *testing.T) {
 	}
 	if got := shown.Observed.DMARCReportTo.Destinations[0].Mailbox; got != "x@silent.example" {
 		t.Errorf("the address came back as %q", got)
+	}
+}
+
+// A name with no DMARC record of its own is read under the nearest one above
+// it, as a receiver reads it (RFC 7489 §6.6.3).
+//
+// Since porch-mail-v5 a domain no record covers is weak, so a subdomain of a
+// domain at p=reject read as uncovered would be graded for a protection it has.
+// The record above asks with sp= where it sets one, and the walk stops before
+// the top-level domain and at a name it could not read.
+func TestARecordAboveCoversANameWithoutOne(t *testing.T) {
+	skipUnderDemo(t)
+	for _, tc := range []struct {
+		name       string
+		records    map[string][]string
+		fail       map[string]error
+		wantFrom   string
+		wantPolicy string
+		wantReason bool
+		wantRule   string
+	}{
+		{"sp= is what the record above asks of a name below it",
+			map[string][]string{"_dmarc.example.com": {"v=DMARC1; p=reject; sp=quarantine"}}, nil,
+			"example.com", "quarantine", false, ""},
+		{"p= where the record above sets no sp=",
+			map[string][]string{"_dmarc.example.com": {"v=DMARC1; p=reject"}}, nil,
+			"example.com", "reject", false, ""},
+		{"p=none above is not enforcing below either",
+			map[string][]string{"_dmarc.example.com": {"v=DMARC1; p=none"}}, nil,
+			"example.com", "none", false, "mail.dmarc-not-enforcing"},
+		{"no record anywhere is a domain no DMARC covers",
+			map[string][]string{}, nil,
+			"", "", false, "mail.dmarc-absent"},
+		{"an unread record above is not an absent one",
+			map[string][]string{}, map[string]error{"_dmarc.example.com": errors.New("timeout")},
+			"", "", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			z := &zone{records: tc.records, fail: tc.fail}
+			got, err := (&Scanner{Resolver: z}).Scan(context.Background(), "mail.dept.example.com")
+			if err != nil {
+				t.Fatalf("Scan: %v", err)
+			}
+			f := got.Observed
+			if f.DMARCFrom != tc.wantFrom || f.DMARCPolicy != tc.wantPolicy {
+				t.Errorf("DMARC from %q at p=%q, want from %q at p=%q", f.DMARCFrom, f.DMARCPolicy, tc.wantFrom, tc.wantPolicy)
+			}
+			if (f.DMARCReason != "") != tc.wantReason {
+				t.Errorf("reason = %q, want one: %v", f.DMARCReason, tc.wantReason)
+			}
+			if tc.wantRule != "" && !slices.Contains(findingIDs(got), tc.wantRule) {
+				t.Errorf("findings %v, want %s", findingIDs(got), tc.wantRule)
+			}
+			if tc.wantReason && slices.Contains(findingIDs(got), "mail.dmarc-absent") {
+				t.Error("a record that could not be read was graded as absent")
+			}
+			if z.askedFor("_dmarc.com") {
+				t.Errorf("the walk asked the top-level domain for a DMARC record: %v", z.asked)
+			}
+		})
 	}
 }

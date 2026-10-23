@@ -99,10 +99,10 @@ func DescribeRegistration(f RegistrationFacts, now time.Time) []Note {
 		return nil
 	}
 	var out []Note
+	// A registration that has run out is graded (dns.registration-expired)
+	// and said there.
 	switch {
 	case !f.Expires.IsZero() && f.Expires.Before(now):
-		out = append(out, Observed("The registration has run out. Every service under the domain stops "+
-			"with it, and once the registry's grace periods end anybody can register the name."))
 	case !f.Expires.IsZero() && f.Expires.Sub(now) < renewSoon:
 		out = append(out, Observed("The registration runs out within a month. Every service under the "+
 			"domain stops with it; renewing, or turning on automatic renewal, is done at the registrar."))

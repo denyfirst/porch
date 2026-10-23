@@ -18,6 +18,9 @@ func stsFacts() MailFacts {
 		MTASTSRecords: 1, MTASTSPolicyRead: true, MTASTSMode: "enforce",
 		MTASTSMaxAge: 604800, MTASTSPolicyMX: []string{"mx1.example.net"},
 		DANEAsked: 1,
+		// Measured, since porch-mail-v5 withholds strong from a domain whose
+		// exchangers were not (R4). Tests about an exchanger replace it.
+		ExchangersContacted: true, Exchangers: []ExchangerTLS{good("mx1.example.net")},
 	}
 }
 

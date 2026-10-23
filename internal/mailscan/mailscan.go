@@ -406,7 +406,7 @@ func (s *Scanner) readSPF(ctx context.Context, r Resolver, domain string, facts 
 
 // readDMARC reads the policy at _dmarc, if there is one.
 func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, facts *policy.MailFacts) {
-	answer, err := r.LookupTXT(ctx, dmarcPrefix+domain)
+	records, err := dmarcAt(ctx, r, domain)
 	if err != nil {
 		// Only the shape of the failure: the underlying error names resolvers
 		// and addresses (I6).
@@ -414,12 +414,26 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 		return
 	}
 
-	// A name that does not exist is a domain with no DMARC, which is a fact
-	// about the domain rather than a failure to look.
-	var records []string
-	for _, v := range answer.Values {
-		if isDMARC(v) {
-			records = append(records, v)
+	// A name with no record of its own is covered by the nearest one above
+	// it, which is where a receiver looks (RFC 7489 §6.6.3). Without this a
+	// subdomain under a domain at p=reject read as having no DMARC at all, and
+	// since porch-mail-v5 that is a finding. Walked label by label, as DMARC's
+	// revision does, up to the name below the top-level domain and no more
+	// than maxDMARCWalk names. A name that could not be read stops the walk
+	// and is said: an unread record is not an absent one (R4).
+	at := domain
+	if len(records) == 0 {
+		for name, i := parentLabel(domain), 0; i < maxDMARCWalk && strings.Contains(name, "."); name, i = parentLabel(name), i+1 {
+			found, err := dmarcAt(ctx, r, name)
+			if err != nil {
+				facts.DMARCReason = "the DMARC record of " + name + ", which would apply to this name, could not be read"
+				return
+			}
+			if len(found) > 0 {
+				at, records = name, found
+				facts.DMARCFrom = name
+				break
+			}
 		}
 	}
 	facts.DMARCRecords = len(records)
@@ -439,7 +453,7 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 		facts.DMARCRecord = display.Mark(boundRecord(records[0]))
 	}
 
-	var rua string
+	var rua, policyTag, subdomainTag string
 	for _, tag := range strings.Split(records[0], ";") {
 		name, value, ok := strings.Cut(strings.TrimSpace(tag), "=")
 		if !ok {
@@ -450,16 +464,25 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 
 		switch name {
 		case "p":
-			facts.DMARCPolicy = strings.ToLower(value)
+			policyTag = strings.ToLower(value)
 		case "pct":
 			if n, err := strconv.Atoi(value); err == nil && n >= 0 && n <= 100 {
 				facts.DMARCPercent = n
 			}
 		case "sp":
-			facts.DMARCSubdomainPolicy = display.Mark(strings.ToLower(value))
+			subdomainTag = strings.ToLower(value)
+			facts.DMARCSubdomainPolicy = display.Mark(subdomainTag)
 		case "rua":
 			rua = value
 		}
+	}
+
+	// What the record asks of this name. Its own p= where the record is its
+	// own; a record above it asks with sp= where it sets one and with p=
+	// where it does not (RFC 7489 §6.3).
+	facts.DMARCPolicy = policyTag
+	if facts.DMARCFrom != "" && subdomainTag != "" {
+		facts.DMARCPolicy = subdomainTag
 	}
 
 	// Where the reports go, and whether the places named have agreed to
@@ -473,12 +496,41 @@ func (s *Scanner) readDMARC(ctx context.Context, r Resolver, domain string, fact
 	// vendor with no such record gets nothing while its own DNS looks correct.
 	facts.DMARCReporting = rua != ""
 	if rua != "" {
-		found := dmarcreports.Verify(ctx, txtOnly{r}, domain, dmarcreports.Read(domain, rua))
+		// About the domain the record belongs to, which is the one whose
+		// reports they are.
+		found := dmarcreports.Verify(ctx, txtOnly{r}, at, dmarcreports.Read(at, rua))
 		if !s.ShowReportAddresses {
 			found = found.WithoutMailboxes()
 		}
 		facts.DMARCReportTo = found
 	}
+}
+
+// maxDMARCWalk is how many names above a name without a DMARC record are asked
+// for one. Five is deeper than any organisational domain sits below the names
+// people scan, and bounds what a name with many labels can make this ask.
+const maxDMARCWalk = 5
+
+// dmarcAt reads the DMARC records published for one name. A name that does not
+// exist is a name with none, which is a fact rather than a failure to look.
+func dmarcAt(ctx context.Context, r Resolver, name string) ([]string, error) {
+	answer, err := r.LookupTXT(ctx, dmarcPrefix+name)
+	if err != nil {
+		return nil, err
+	}
+	var records []string
+	for _, v := range answer.Values {
+		if isDMARC(v) {
+			records = append(records, v)
+		}
+	}
+	return records, nil
+}
+
+// parentLabel is the name one label up.
+func parentLabel(name string) string {
+	_, parent, _ := strings.Cut(name, ".")
+	return parent
 }
 
 // txtOnly gives internal/dmarcreports the one lookup it asks for.

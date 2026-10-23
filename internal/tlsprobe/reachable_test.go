@@ -89,6 +89,17 @@ func reachableRules(t *testing.T) map[string]bool {
 			}
 		}
 	}
+
+	// And what summarise raises from the versions together, which no single
+	// version's grade can: TLS 1.2 accepted and TLS 1.3 declined, the answer
+	// TestAServerAnsweringTLS13InTLS12IsARefusal has a real server give.
+	_, together := summarise([]VersionResult{
+		{Version: tls.VersionTLS13, Refused: true},
+		{Version: tls.VersionTLS12, Supported: true, Grade: policy.GradeVersion(tls.VersionTLS12), CipherListComplete: true},
+	})
+	for _, f := range together {
+		reachable[f.RuleID] = true
+	}
 	return reachable
 }
 

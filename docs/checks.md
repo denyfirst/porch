@@ -43,7 +43,11 @@ one; and Cert Spotter which certificates are logged for the name. Set
 `CERTSPOTTER_TOKEN` to an SSLMate API key for more than the anonymous rate.
 
 **Grades:** protocol versions, cipher suites, the certificate and its chain,
-revocation, and certificate transparency.
+revocation, and certificate transparency. A server that declines TLS 1.3 is
+weak; one whose TLS 1.3 handshake did not finish is not graded strong. Any of
+the services above that answers is weak, unless every port on the list
+answers at that address: something there completes every connection, and
+which services are behind it is not established, so none is graded.
 
 ### Obsolete suites
 
@@ -113,7 +117,8 @@ with it are kept, never the version; reported, not graded.
 **Grades:** how the site is reached over HTTPS, redirects, HSTS, cookies, mixed
 content, a few headers, a page that trusts any origin with credentials, and any
 of the files above that is served. The HSTS policy graded is the one from the last
-HTTPS hop.
+HTTPS hop; one lasting less than six months is weak, the minimum in Mozilla's
+web security guidelines.
 
 ### Limits
 
@@ -140,12 +145,16 @@ proven to the copy asking, or where only its operator can use it. From each
 greeting, only which mail server it names, from a fixed list, and whether a
 version came with it are kept; the greeting itself is not.
 
-**Grades** only what a standard calls an error: two SPF records, more than ten
-SPF lookups, `+all`, two DMARC records, an unusable MTA-STS policy, and a mail
-server still speaking TLS 1.0 or 1.1, which RFC 8996 retired (weak where it
+**Grades** what a standard calls an error or a published guide says to do:
+two SPF records, more than ten SPF lookups, `+all`, two DMARC records, no DMARC
+record covering the domain, `p=none` (weak: it asks receivers for nothing), an
+unusable MTA-STS policy, a mail server that offers no STARTTLS (weak), and a
+mail server still speaking TLS 1.0 or 1.1, which RFC 8996 retired (weak where it
 also speaks TLS 1.2 or 1.3, because a sender refused there falls back to plain
-text; insecure where it speaks nothing newer). `~all`, `p=none` and the choice
-of MTA-STS or DANE are observed, not graded.
+text; insecure where it speaks nothing newer). A name with no DMARC record of
+its own is read under the nearest one above it, as receivers read it. A domain
+whose mail servers were not all reached is not graded strong. `~all` and the
+choice of MTA-STS or DANE are observed, not graded.
 
 Many mail servers refuse an address with no reverse DNS name. Give yours one
 and pass it with `-helo`. A blocked outbound port 25 is reported as such.
@@ -165,8 +174,10 @@ only that a zone stay reachable over IPv4.
 one network, a name server that resolves to nothing, a parent that hands out
 different servers or stale glue, a broken DNSSEC chain, a signature at the
 top of the zone that does not verify with the zone's own keys or has expired,
-and an alias at the top of a zone. Serial, timers, the signing
-algorithm and an open zone transfer are reported, not graded.
+an alias at the top of a zone, and an unsigned zone (weak: nothing lets a
+resolver tell its answers from forged ones). Serial, timers, the signing
+algorithm and an open zone transfer are reported, not graded. A zone whose
+delegation or signing could not be read is not graded strong.
 
 If the name is an alias whose target no longer exists, whoever claims the
 target next can answer for your name. This is reported, not graded.
@@ -175,7 +186,9 @@ target next can answer for your name. This is reported, not graded.
 its registration: the registrar, when it runs out, and whether it is locked
 against transfer. Which registry that is comes from IANA's list, read whole,
 so IANA learns no domain. The registry is asked about the registered domain
-first and a longer name only if it holds no shorter one. Reported, not graded.
+first and a longer name only if it holds no shorter one. Reported, and graded
+only once the registration has run out (insecure: anybody can register the
+name once the grace periods end).
 
 **And asks** RIPEstat, run by RIPE NCC, whether the routes to the name's
 addresses and its name servers' are signed with RPKI (RFC 6811): valid,

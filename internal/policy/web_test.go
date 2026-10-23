@@ -227,7 +227,8 @@ func TestGradeHSTS(t *testing.T) {
 		{"sent only where it is ignored", nil, []string{"max-age=31536000"}, "hsts.plaintext-only", Weak},
 		{"no readable max-age", []string{"includeSubDomains"}, nil, "hsts.unparseable", Weak},
 		{"withdrawn", []string{"max-age=0"}, nil, "hsts.disabled", Weak},
-		{"preload asked for without a year", []string{"max-age=86400; includeSubDomains; preload"}, nil,
+		{"shorter than six months", []string{"max-age=86400; includeSubDomains"}, nil, "hsts.short-max-age", Weak},
+		{"preload asked for without a year", []string{"max-age=15768000; includeSubDomains; preload"}, nil,
 			"hsts.preload-ineffective", Weak},
 		{"preload asked for without subdomains", []string{"max-age=63072000; preload"}, nil,
 			"hsts.preload-ineffective", Weak},
@@ -256,16 +257,12 @@ func TestGradeHSTS(t *testing.T) {
 	}
 }
 
-func TestAShortMaxAgeIsDescribedAndNotGraded(t *testing.T) {
-	// No standards body publishes a minimum, and OWASP recommends a short one
-	// during a rollout. A rule failing anything under a year would be this
-	// project inventing a threshold and then penalising a correct choice.
+func TestAShortMaxAgeIsGradedWeakAndStillDescribed(t *testing.T) {
+	// Mozilla's guidelines set six months as the floor. Under it the policy
+	// lapses for anybody away longer, and that is weak however deliberate.
 	got := GradeHSTS([]string{"max-age=86400; includeSubDomains"}, nil, true)
-	if len(got.Findings) != 0 {
-		t.Fatalf("a short max-age was graded: %v", webRuleIDs(got))
-	}
-	if len(got.Notes) == 0 {
-		t.Fatal("and nothing was said about how long it lasts")
+	if !webHas(got, "hsts.short-max-age") || got.Verdict != Weak {
+		t.Fatalf("a one-day max-age graded %q with %v, want weak hsts.short-max-age", got.Verdict, webRuleIDs(got))
 	}
 
 	joined := notesText(got)
@@ -274,6 +271,23 @@ func TestAShortMaxAgeIsDescribedAndNotGraded(t *testing.T) {
 	}
 	if !strings.Contains(joined, "preload") {
 		t.Errorf("the note does not say what the one-year figure is for: %q", joined)
+	}
+}
+
+// The boundary, both sides of it, and one well clear.
+func TestSixMonthsIsTheFloor(t *testing.T) {
+	for age, short := range map[string]bool{
+		"15767999": true,
+		"15768000": false,
+		"63072000": false,
+	} {
+		got := GradeHSTS([]string{"max-age=" + age + "; includeSubDomains"}, nil, true)
+		if webHas(got, "hsts.short-max-age") != short {
+			t.Errorf("max-age=%s: graded %v, short=%v wanted", age, webRuleIDs(got), short)
+		}
+		if !short && got.Verdict != Strong {
+			t.Errorf("max-age=%s graded %q, want strong", age, got.Verdict)
+		}
 	}
 }
 

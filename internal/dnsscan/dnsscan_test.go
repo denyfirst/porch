@@ -389,15 +389,13 @@ func TestABrokenChainIsTheFindingThisExistsFor(t *testing.T) {
 		t.Errorf("no key at all: %q %v", got.Verdict, ruleIDs(got))
 	}
 
-	// An unsigned zone is a choice, not a fault.
+	// An unsigned zone is weak since porch-dns-v4: nothing tells its answers
+	// from forged ones, and RFC 9364 and NIST SP 800-81-2 say to sign.
 	unsigned := served(t)
 	unsigned.ds = nil
 	got = read(t, unsigned)
-	if len(got.Findings) != 0 || got.Verdict != policy.Strong {
+	if !has(got, "dns.unsigned") || got.Verdict != policy.Weak || len(got.Findings) != 1 {
 		t.Errorf("an unsigned zone: %q %v", got.Verdict, ruleIDs(got))
-	}
-	if !noteSaying(got, "not signed") {
-		t.Error("an unsigned zone is not said to be unsigned")
 	}
 
 	// A digest type this does not compute is neither matched nor ruled out.
@@ -1401,7 +1399,10 @@ func TestWhenTheSignaturesRunOutIsReadAndOnlyExpiryIsGraded(t *testing.T) {
 	if !noteSaying(got, "runs out on 2026-09-30, in 6 days") {
 		t.Errorf("the date is not reported: %v", noteTexts(got))
 	}
-	if got.Verdict != policy.Strong || len(got.Findings) != 0 {
+	// Nothing graded. Not strong either where the signatures could not be
+	// checked, which these, made up for the test, cannot be: since
+	// porch-dns-v4 an unchecked signature is not a passing one (R4).
+	if len(got.Findings) != 0 || (got.Verdict != policy.Strong && got.Observed.SignatureCheckReason == "") {
 		t.Errorf("a signature with time left was graded: %q %v", got.Verdict, ruleIDs(got))
 	}
 

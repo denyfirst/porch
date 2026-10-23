@@ -22,10 +22,20 @@ import (
 // nobody can follow, and a DNSSEC chain that does not check out — which takes
 // a domain off the internet for everybody behind a validating resolver, and
 // leaves it working for whoever set it up. Everything else is reported.
+//
+// Since v4 two more: a zone that is not signed, because nothing then tells a
+// resolver its answers from forged ones and the documents that set the line
+// now exist, and a registration that has run out, which takes everything with
+// it and hands the name to whoever registers it next.
 
 // DNSVersion identifies this rule set, which moves independently of the
 // others.
-const DNSVersion = "porch-dns-v3"
+//
+// v4, 2026-10-23. A zone whose delegation could not be read came back strong:
+// every rule about name servers fell silent and silence was taken for passing.
+// It is ungraded now, as is a zone whose signing could not be established. An
+// unsigned zone is weak, and a registration that has run out is insecure.
+const DNSVersion = "porch-dns-v4"
 
 var (
 	rfc1034 = Reference{
@@ -59,6 +69,18 @@ var (
 	rfc8624 = Reference{
 		"RFC 8624 — Algorithm Implementation Requirements and Usage Guidance for DNSSEC",
 		"https://www.rfc-editor.org/rfc/rfc8624",
+	}
+	rfc9364 = Reference{
+		"RFC 9364 — DNS Security Extensions (DNSSEC) (BCP 237)",
+		"https://www.rfc-editor.org/rfc/rfc9364",
+	}
+	nist80081 = Reference{
+		"NIST SP 800-81-2 — Secure Domain Name System (DNS) Deployment Guide",
+		"https://csrc.nist.gov/pubs/sp/800/81/2/final",
+	}
+	icannERRP = Reference{
+		"ICANN Expired Registration Recovery Policy",
+		"https://www.icann.org/resources/pages/errp-2013-02-28-en",
 	}
 )
 
@@ -529,9 +551,24 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	// ── Graded: the chain ────────────────────────────────────────────
 
 	switch {
+	// A delegation signer that could not be asked for is not one that is
+	// absent. Until v4 this case came second, and a lookup that failed read
+	// as an unsigned zone.
+	case !f.Signed && f.ChainReason != "":
+		unsettled("Whether the zone is signed was not established: " + f.ChainReason)
+
+	// Graded since v4. It had been "a choice rather than a fault", and it is a
+	// choice; what it leaves is a zone whose answers nothing distinguishes from
+	// forged ones, and RFC 9364 (BCP 237) and NIST SP 800-81-2 say to sign.
 	case !f.Signed:
-		note("The zone is not signed: the parent holds no delegation signer for it. That is a " +
-			"choice rather than a fault.")
+		add("dns.unsigned", Weak,
+			"The zone is not signed",
+			"The parent holds no delegation signer for this zone, so nothing lets a resolver tell its "+
+				"answers from forged ones: an attacker on the path, or one who poisons a resolver's "+
+				"cache, can answer for it, with its addresses, its mail exchangers and the records that "+
+				"prove control of it. RFC 9364 and NIST SP 800-81-2 recommend signing; at most DNS "+
+				"providers it is a setting, and the registrar then publishes the signer.",
+			rfc9364, nist80081)
 	case f.ChainReason != "":
 		unsettled("The DNSSEC chain could not be checked: " + f.ChainReason)
 	case len(f.Keys) == 0:
@@ -769,7 +806,46 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 			"not a check this program made.")
 	}
 
+	// A registration that has run out.
+	//
+	// Graded since v4, and insecure because the break is the published one:
+	// once the registry's grace periods end, anybody can register the name and
+	// answer for everything it was used for. A registration about to run out
+	// stays described (DescribeRegistration): automatic renewal does not show
+	// from outside, so "soon" is not a fact about the domain.
+	if r := f.Registration; r != nil && r.Asked && r.Reason == "" && !r.Expires.IsZero() && r.Expires.Before(now) {
+		add("dns.registration-expired", Insecure,
+			"The domain's registration has run out",
+			"The registry records the registration as having ended on "+r.Expires.UTC().Format("2006-01-02")+
+				". Every service under the domain stops with it, and once the registry's grace periods "+
+				"end anybody can register the name and answer for everything it was used for. Renewing "+
+				"is done at the registrar, and is usually still possible during the grace period.",
+			icannERRP)
+	}
+
+	// Strong claims that nothing above fell short, and a rule about something
+	// that was not read falls silent rather than passing (R4). Until v4 a zone
+	// whose delegation could not be read at all came back strong.
+	if out.Verdict == Strong && dnsUnsettled(f) {
+		out.Verdict = Ungraded
+	}
+
 	return withLimits(out)
+}
+
+// dnsUnsettled reports whether something every DNS rule rests on was not
+// established: the delegation, whether the zone is signed, or, for a signed
+// zone, the link and the signatures it exists for.
+func dnsUnsettled(f DNSFacts) bool {
+	switch {
+	case f.NSReason != "", f.ChainReason != "":
+		return true
+	case f.Signed && f.SignatureCheckReason != "":
+		return true
+	case f.Signed && !f.ChainMatched && !computable(f.Signers):
+		return true
+	}
+	return false
 }
 
 // withLimits adds the limits of the method, from the one place that declares

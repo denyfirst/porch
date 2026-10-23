@@ -1716,6 +1716,12 @@ function parentSays(facts) {
   if (atZone.length > 0) parts.push("does not hand out " + atZone.join(", "));
   return "Asked directly, " + above + " " + parts.join(", and ") + ".";
 }
+// dmarcFrom names the domain above whose record applies, where the name
+// checked publishes none of its own (porch-mail-v5).
+function dmarcFrom(facts) {
+  return facts.dmarcFrom ? ", from " + facts.dmarcFrom : "";
+}
+
 // saysReportTo is where a DMARC record asks for its aggregate reports, and
 // what was established about each destination outside the domain.
 //
@@ -1810,13 +1816,14 @@ function zone(facts) {
   if (facts.dmarcReason) {
     row("DMARC", "not read: " + facts.dmarcReason);
   } else if (!facts.dmarcRecords) {
-    row("DMARC", "none published");
+    row("DMARC", "none published, here or above", "weak");
   } else if (facts.dmarcRecords > 1) {
-    row("DMARC", facts.dmarcRecords + " records, so a receiver applies none", "weak");
-  } else if (!facts.dmarcPolicy) {
-    row("DMARC", "published, and names no policy", "weak");
+    row("DMARC", facts.dmarcRecords + " records" + dmarcFrom(facts) + ", so a receiver applies none", "weak");
+  } else if (!["none", "quarantine", "reject"].includes(facts.dmarcPolicy)) {
+    row("DMARC", "published" + dmarcFrom(facts) + ", and names no policy", "weak");
   } else {
-    row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%");
+    row("DMARC", "p=" + facts.dmarcPolicy + " at " + (facts.dmarcPercent || 0) + "%" + dmarcFrom(facts),
+      facts.dmarcPolicy === "none" ? "weak" : null);
   }
   if (facts.dmarcRecord) row("Record", facts.dmarcRecord, null, true);
 

@@ -150,13 +150,13 @@ func printMail(w io.Writer, r mailResult) {
 		case f.DMARCReason != "":
 			fmt.Fprintf(w, "    DMARC      not read: %s\n", f.DMARCReason)
 		case f.DMARCRecords == 0:
-			fmt.Fprintf(w, "    DMARC      none published\n")
+			fmt.Fprintf(w, "    DMARC      none published, here or above\n")
 		case f.DMARCRecords > 1:
-			fmt.Fprintf(w, "    DMARC      %d records, so a receiver applies none\n", f.DMARCRecords)
-		case f.DMARCPolicy == "":
-			fmt.Fprintf(w, "    DMARC      published, and names no policy\n")
+			fmt.Fprintf(w, "    DMARC      %d records%s, so a receiver applies none\n", f.DMARCRecords, dmarcFrom(f))
+		case f.DMARCPolicy != "none" && f.DMARCPolicy != "quarantine" && f.DMARCPolicy != "reject":
+			fmt.Fprintf(w, "    DMARC      published%s, and names no policy\n", dmarcFrom(f))
 		default:
-			fmt.Fprintf(w, "    DMARC      p=%s at %d%%\n", f.DMARCPolicy, f.DMARCPercent)
+			fmt.Fprintf(w, "    DMARC      p=%s at %d%%%s\n", f.DMARCPolicy, f.DMARCPercent, dmarcFrom(f))
 		}
 		printRecord(w, f.DMARCRecord)
 
@@ -434,4 +434,13 @@ func saysReportTo(f *policy.MailFacts) string {
 		line += fmt.Sprintf(", and %d more this check did not read", dest.Dropped)
 	}
 	return line
+}
+
+// dmarcFrom names the domain above whose record applies, where the name
+// checked publishes none of its own (porch-mail-v5).
+func dmarcFrom(f *policy.MailFacts) string {
+	if f.DMARCFrom == "" {
+		return ""
+	}
+	return ", from " + f.DMARCFrom
 }

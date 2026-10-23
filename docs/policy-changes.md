@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v8`, `porch-web-v5`, `porch-mail-v4` and `porch-dns-v3`. Reports
+`porch-tls-v9`, `porch-web-v6`, `porch-mail-v5` and `porch-dns-v4`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,90 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-tls-v8` → `porch-tls-v9`
+
+Released in v0.31.0, 2026-10.
+
+- **Added `version.no-tls13`, weak.** The server accepts an older version and
+  declined TLS 1.3 (RFC 9325, NIST SP 800-52 Rev. 2). A TLS 1.3 handshake that
+  timed out or was reset is not a refusal: it is not graded, and the transport
+  is then not strong, with a note saying why.
+- **A server answering a TLS 1.3 hello in TLS 1.2 now reads as refusing TLS
+  1.3.** That is how most servers without TLS 1.3 answer. It was reported as a
+  version this build of Go did not offer.
+- **Added `exposure.service-open`, weak.** One of the services on the exposure
+  list (a database, remote desktop, a file share, an administration port)
+  accepts a connection from the internet (CISA's performance goals, NIST SP
+  800-41). One finding names every service that answered.
+- An address where every port on the list accepts a connection is graded for
+  none of them, and its services are not named. Something there completes
+  every connection whatever is behind it, such as a SYN proxy or a tarpit, so
+  which services answer is not established, and a note says so.
+- **Strong needs a graded certificate.** A scan whose certificate was not
+  graded is not strong.
+
+---
+
+## `porch-web-v5` → `porch-web-v6`
+
+Released in v0.31.0, 2026-10.
+
+- **Added `hsts.short-max-age`, weak.** The policy lasts less than six months
+  (15768000 seconds), the minimum in Mozilla's web security guidelines. It used
+  to be described and not graded, on the reading that no document sets a
+  floor. A short `max-age` is still the right way to begin a rollout, and the
+  finding says so.
+
+---
+
+## `porch-mail-v4` → `porch-mail-v5`
+
+Released in v0.31.0, 2026-10.
+
+- **Strong now needs something to grade.** A domain publishing no mail record
+  at all, and one whose exchangers were never reached, both came back strong.
+- **Added `mail.dmarc-absent`, weak.** No DMARC record covers the domain, so
+  anyone can send in its name (RFC 7489, NIST SP 800-177 Rev. 1). A domain that
+  sends no mail says so with `p=reject`, `v=spf1 -all` and a null MX (RFC 7505).
+- **Added `mail.dmarc-not-enforcing`, weak.** The policy is `p=none`, the
+  monitoring step, under which failing mail is delivered.
+- **`mail.dmarc-no-policy` also fires for a `p=` naming no policy RFC 7489
+  defines.** `p=rejet` came back strong.
+- **DMARC is read up the tree, as receivers read it** (RFC 7489, 6.6.3). A
+  name with no record of its own is covered by the nearest name above it that
+  has one, under that record's `sp=` where it sets one and its `p=` where it
+  does not. The walk stops before the top-level domain and asks at most five
+  names. A lookup that failed stops the walk and is reported as not
+  established, not as absent.
+- **Added `mail.exchanger-no-starttls`, weak.** An exchanger that was reached
+  offers no STARTTLS, so mail to it crosses the network unencrypted (RFC 3207,
+  NIST SP 800-177 Rev. 1).
+- **A domain whose exchangers were not all measured is not strong.** Examples:
+  one not contacted, one beyond the eight asked, or one that offered STARTTLS
+  and did not complete it.
+
+---
+
+## `porch-dns-v3` → `porch-dns-v4`
+
+Released in v0.31.0, 2026-10.
+
+- **A zone whose delegation could not be read is not strong.** Every rule
+  about name servers fell silent, and silence read as passing. The same holds
+  where signing could not be established, or where a signed zone's link or
+  signatures could not be checked.
+- **A delegation signer that could not be asked for no longer reads as an
+  unsigned zone.** It is reported as not established.
+- **Added `dns.unsigned`, weak.** The parent holds no delegation signer, so
+  nothing lets a resolver tell the zone's answers from forged ones (RFC 9364,
+  NIST SP 800-81-2). It used to be described as a choice.
+- **Added `dns.registration-expired`, insecure.** The registry records the
+  registration as ended. Once the grace periods end, anybody can register the
+  name. A registration about to run out is still described and not graded,
+  because automatic renewal does not show from outside.
 
 ---
 
