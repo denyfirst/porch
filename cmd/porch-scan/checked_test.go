@@ -25,7 +25,8 @@ func TestWhatALineCountedIsOnBothFaces(t *testing.T) {
 		`details.appendChild(el("summary", null, items.length + " checked"));`,
 		`name.appendChild(el("code", null, item.item));`,
 		`cell.appendChild(el("span", "checked-state", item.state || ""));`,
-		`document.querySelectorAll("details.checked-list:not([open])")`,
+		`const PRINTED_OPEN = "details.checked-list, details.notes-section";`,
+		`document.querySelectorAll(PRINTED_OPEN)`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s", want)
