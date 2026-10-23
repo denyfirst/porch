@@ -410,6 +410,10 @@ function printButton() {
   return button;
 }
 
+// What a report folds: the checked lists and the note sections, which are
+// the only details elements a report makes.
+const PRINTED_OPEN = "details.checked-list, details.notes-section";
+
 // A sheet of paper says when it was printed. A report handed to an auditor is
 // read days later, and a fresh report on an installation carries no time of
 // its own. Written as the print dialogue opens, from this machine's clock, into
@@ -417,18 +421,23 @@ function printButton() {
 window.addEventListener("beforeprint", () => {
   const stamp = document.getElementById("print-date");
   if (stamp) stamp.textContent = "Printed " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  // Every folded list is printed open, and folded again afterwards only if
-  // the reader had not opened it themselves.
-  for (const list of document.querySelectorAll("details.checked-list:not([open])")) {
-    list.open = true;
-    list.dataset.printOpened = "1";
+  // Everything a report folds is printed open, and folded again afterwards
+  // only if the reader had not opened it themselves. Paper has no summary to
+  // press: a PDF of cyberlek.net on 2026-10-23 carried the DNS card's
+  // "6 measured, not graded" and none of the six, among them that the
+  // registration ran out in twelve days.
+  for (const box of document.querySelectorAll(PRINTED_OPEN)) {
+    if (box.open) continue;
+    box.open = true;
+    box.dataset.printOpened = "1";
   }
 });
 
 window.addEventListener("afterprint", () => {
-  for (const list of document.querySelectorAll("details.checked-list[data-print-opened]")) {
-    list.open = false;
-    delete list.dataset.printOpened;
+  for (const box of document.querySelectorAll(PRINTED_OPEN)) {
+    if (!box.dataset.printOpened) continue;
+    box.open = false;
+    delete box.dataset.printOpened;
   }
 });
 

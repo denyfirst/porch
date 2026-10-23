@@ -189,6 +189,34 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 		t.Error("a printed report does not say when it was printed")
 	}
 
+	// And everything it folds is printed open. Paper has no summary to press:
+	// a PDF on 2026-10-23 carried the DNS card's "6 measured, not graded" and
+	// none of the six, because only the checked lists were opened for print.
+	// Every details element the script makes is named in the one list
+	// beforeprint opens, whether its class is written where it is made or
+	// comes from the note sections' table.
+	printed := regexp.MustCompile(`const PRINTED_OPEN = "([^"]+)";`).FindStringSubmatch(string(app))
+	if printed == nil || !strings.Contains(string(app), "document.querySelectorAll(PRINTED_OPEN)") {
+		t.Fatal("app.js names no list of what a report folds for beforeprint to open")
+	}
+	var folded []string
+	for _, m := range regexp.MustCompile(`el\("details", "([^"]+)"\)`).FindAllStringSubmatch(string(app), -1) {
+		folded = append(folded, strings.Fields(m[1])[0])
+	}
+	if strings.Contains(string(app), `el("details", section.box)`) {
+		for _, m := range regexp.MustCompile(`box: "([^"]+)"`).FindAllStringSubmatch(string(app), -1) {
+			folded = append(folded, strings.Fields(m[1])[0])
+		}
+	}
+	if len(folded) < 2 || strings.Contains(string(app), `createElement("details")`) {
+		t.Fatalf("the folded parts of a report were not all found (%v); read this test against app.js", folded)
+	}
+	for _, class := range folded {
+		if !strings.Contains(printed[1], "details."+class) {
+			t.Errorf("a report folds details.%s, and beforeprint does not open it, so paper loses what it holds", class)
+		}
+	}
+
 	// The way around the installation and the things that are pressed do not
 	// belong to the document.
 	hidden := []string{
