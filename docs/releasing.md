@@ -189,8 +189,7 @@ yet" text goes public. Write them to `NOTES.md` outside the commit, then:
 
 ```powershell
 $sig = 'dist\v0.2.0\SHA256SUMS.sig'; $got = Join-Path $env:TEMP ('sig-' + [guid]::NewGuid())
-if (-not (Test-Path NOTES.md)) { Write-Host 'STOP: NOTES.md does not exist; nothing was uploaded' }
-elseif (Test-Path $sig) {
+if (-not (Test-Path NOTES.md)) { Write-Host 'STOP: NOTES.md does not exist; nothing was uploaded' } elseif (Test-Path $sig) {
 gh release upload v0.2.0 dist\v0.2.0\SHA256SUMS.sig --clobber
 gh release edit v0.2.0 --notes-file NOTES.md
 $body = (gh release view v0.2.0 --json body --jq .body) -join "`n"
@@ -201,8 +200,7 @@ Remove-Item -Recurse -Force $got -ErrorAction SilentlyContinue
 if ($ok -and $noted) {
 gh release edit v0.2.0 --draft=false
 Remove-Item NOTES.md
-} elseif (-not $noted) { Write-Host 'STOP: the notes are not on the release; it stays a draft' }
-else { Write-Host 'STOP: the release does not carry the signature release.ps1 made; it stays a draft' }
+} elseif (-not $noted) { Write-Host 'STOP: the notes are not on the release; it stays a draft' } else { Write-Host 'STOP: the release does not carry the signature release.ps1 made; it stays a draft' }
 } else { Write-Host "STOP: $sig does not exist, so release.ps1 signed nothing; nothing was uploaded" }
 ```
 
@@ -212,7 +210,11 @@ The signature comes from the directory named for the tag, which only
 The block is one statement. PowerShell reads it to the last brace before it
 runs any of it, so no step that fails can be followed by the publish, and the
 release is published only once the signature downloaded back from it is the
-one `release.ps1` wrote. On 2026-10-16 these were four lines: `release.ps1`
+one `release.ps1` wrote. That holds only while every `elseif` and `else` sits
+on the line its brace closes: pasted into a PowerShell window, an `if` runs as
+soon as its brace closes at the end of a line, and an `elseif` on the next
+line is a command of its own that does not exist. On 2026-10-23 the block for
+v0.30.1 stopped there, having uploaded nothing. On 2026-10-16 these were four lines: `release.ps1`
 had signed nothing, the upload failed, and the next lines published v0.29.1
 unsigned. `reproduce.yml` failed within minutes, and the release went back to
 draft until it was signed.
