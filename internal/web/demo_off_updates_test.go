@@ -105,7 +105,8 @@ func TestTheBannerUsesOnlyAVersionThatIsAReleaseName(t *testing.T) {
 
 // New check carries the banner, hidden until the script has a reason to
 // show it, and This installation carries the Updates part, with the daily
-// check off until the page has read the choice.
+// check off until the page has read the choice, and says how an update is
+// installed while there is none to install.
 func TestTheUpdatePartsAreOnTheirPages(t *testing.T) {
 	console := consoleAs(t)
 	for _, want := range []string{`id="update-banner" role="status" hidden`, `id="update-commands"`, `data-copy="update-commands"`} {
@@ -115,7 +116,7 @@ func TestTheUpdatePartsAreOnTheirPages(t *testing.T) {
 	}
 
 	installation := workspaceWith(t, "/installation")
-	for _, want := range []string{`id="updates-check"`, `id="updates-daily" disabled`, `<script src="/app.js"></script>`, "Asked of GitHub"} {
+	for _, want := range []string{`id="updates-check"`, `id="updates-daily" disabled`, `<script src="/app.js"></script>`, "Asked of GitHub", "<dt>Installing</dt>", "Never by itself."} {
 		if !strings.Contains(installation, want) {
 			t.Errorf("This installation has no %s", want)
 		}
