@@ -102,6 +102,18 @@ func TestTheReleaseProcedureIsWrittenDown(t *testing.T) {
 	if n := strings.Count(page, "--draft=false"); n != 1 {
 		t.Errorf("docs/releasing.md publishes in %d places; the one inside the check is the only one there should be", n)
 	}
+
+	// Every block is pasted into a PowerShell window, which runs an if as
+	// soon as its brace closes at the end of a line. An elseif or else that
+	// begins the next line is then a command of its own: on 2026-10-23 the
+	// publish block stopped at "elseif" for v0.30.1, having done nothing.
+	for _, block := range regexp.MustCompile("(?s)```powershell\n(.*?)```").FindAllStringSubmatch(page, -1) {
+		for _, line := range strings.Split(block[1], "\n") {
+			if regexp.MustCompile(`^\s*(elseif|else)\b`).MatchString(line) {
+				t.Errorf("docs/releasing.md begins a line with %q, which a PowerShell window runs as a command of its own", strings.TrimSpace(line))
+			}
+		}
+	}
 }
 
 // A procedure's first instruction has to work.
