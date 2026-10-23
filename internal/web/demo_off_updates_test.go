@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/denyfirst/porch/internal/ociimage"
 	"github.com/denyfirst/porch/internal/updates"
 )
 
@@ -100,6 +101,47 @@ func TestTheBannerUsesOnlyAVersionThatIsAReleaseName(t *testing.T) {
 	}
 	if !strings.Contains(cmds, `C("grep"), " ", F("-qF"), " ", S("'_" + version + "_'")`) {
 		t.Error("the commands do not check the signed list is this version's, so an older signed release could be installed")
+	}
+}
+
+// The commands leave nothing behind, as the guide's do: the folder and every
+// Porch image no container uses go once the new version has started, and a
+// download that did not verify goes too. The guide's lines are run in
+// cmd/porchd (TestAnUpdateLeavesOnlyTheComposeFileAndTheData); these are
+// the page's, read in order.
+func TestTheUpdateCommandsLeaveNothingBehind(t *testing.T) {
+	body, err := assets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(body)
+	cmds := src[strings.Index(src, "function updateCommands("):strings.Index(src, "function drawCommands(")]
+
+	if label := ociimage.Porch("v0.0.0", "amd64", nil, nil).Labels["org.opencontainers.image.source"]; jsConst(t, src, "RELEASE_LABEL") != "org.opencontainers.image.source="+label {
+		t.Errorf("the commands prune by %q; the image carries the source label %q", jsConst(t, src, "RELEASE_LABEL"), label)
+	}
+	if strings.Contains(cmds, "before-") {
+		t.Error("the commands keep the compose file they replace")
+	}
+
+	// In this order, each only once the one before it worked, all inside the
+	// branch that verified.
+	order := []string{
+		`C("then")`,
+		`C("cp"), " " + dir + "/docker-compose.yml docker-compose.yml ", O("&&")`,
+		`C("sudo"), " ", C("docker"), " compose up ", F("-d"), " ", O("&&")`,
+		`C("rm"), " ", F("-r"), " " + dir + " ", O("&&")`,
+		`C("sudo"), " ", C("docker"), " image prune ", F("-a"), " ", F("-f"), " ", F("--filter"), " label=" + RELEASE_LABEL, O(";")`,
+		`C("else"), " ", C("rm"), " ", F("-rf"), " " + dir, O(";")`,
+		`C("fi")`,
+	}
+	at := 0
+	for _, piece := range order {
+		i := strings.Index(cmds[at:], piece)
+		if i < 0 {
+			t.Fatalf("the commands do not have, in its place, %s", piece)
+		}
+		at += i + len(piece)
 	}
 }
 

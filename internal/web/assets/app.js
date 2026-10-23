@@ -4056,11 +4056,19 @@ function namesLimits(data) {
   the compose file in use is replaced in the one line that first checks the
   signature, that the signed list is this version's and not an older one's,
   and the file's digest.
+
+  They leave nothing behind. Once the new version has started, the same line
+  removes the folder and every Porch image no container uses, chosen by the
+  label every Porch image carries, so no other image on the server is
+  touched; a download that does not verify is removed too. The compose file
+  replaced is not kept: going back is the same lines for the older release,
+  checked the same way.
 */
 const RELEASE_NAME = /^v\d{1,4}\.\d{1,4}\.\d{1,4}$/;
 const RELEASE_SIGNER = "releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR";
 const RELEASE_FINGERPRINT = "SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y";
 const RELEASE_PAGE = "https://github.com/denyfirst/porch/releases/";
+const RELEASE_LABEL = "org.opencontainers.image.source=https://github.com/denyfirst/porch";
 
 // The lines, as pieces a terminal would colour: [class, text], or text.
 function updateCommands(version) {
@@ -4079,11 +4087,12 @@ function updateCommands(version) {
       C("grep"), " ", F("-qF"), " ", S("'_" + version + "_'"), " " + dir + "/SHA256SUMS ", O("&&"), " ",
       O("("), C("cd"), " " + dir + " ", O("&&"), " ", C("sha256sum"), " ", F("--ignore-missing"), " ", F("-c"), " SHA256SUMS", O(")"),
       O(";"), " ", C("then"), " ",
-      O("("), C("test"), " ", F("-e"), " docker-compose.yml.before-" + version + " ", O("||"), " ",
-      C("cp"), " docker-compose.yml docker-compose.yml.before-" + version, O(")"), " ", O("&&"), " ",
       C("cp"), " " + dir + "/docker-compose.yml docker-compose.yml ", O("&&"), " ",
-      C("sudo"), " ", C("docker"), " compose up ", F("-d"), O(";"), " ",
-      C("else"), " ", C("echo"), " ", S("'STOP: " + version + " did not verify; nothing was changed'"), O(";"), " ", C("fi")],
+      C("sudo"), " ", C("docker"), " compose up ", F("-d"), " ", O("&&"), " ",
+      C("rm"), " ", F("-r"), " " + dir + " ", O("&&"), " ",
+      C("sudo"), " ", C("docker"), " image prune ", F("-a"), " ", F("-f"), " ", F("--filter"), " label=" + RELEASE_LABEL, O(";"), " ",
+      C("else"), " ", C("rm"), " ", F("-rf"), " " + dir, O(";"), " ",
+      C("echo"), " ", S("'STOP: " + version + " did not verify; its download was removed and nothing was changed'"), O(";"), " ", C("fi")],
   ];
 }
 
@@ -4211,9 +4220,11 @@ function showUpdateBanner(state) {
     "Run them on the server, in the folder the compose file is in. They download " + state.latest +
       "'s compose file and signed list into ", ["update-" + state.latest],
     ", check the signature with the key written into this page and that the list is " + state.latest +
-      "'s, and only then keep the compose file in use as ", ["docker-compose.yml.before-" + state.latest],
-    ", put the new one in its place and restart. If anything does not verify they print STOP and change " +
-      "nothing. Changes of your own belong in ", ["docker-compose.override.yml"],
+      "'s, and only then put the new compose file in place of the one in use and restart. Once it has " +
+      "started they remove that folder and every Porch image no container uses, so nothing is left behind. " +
+      "If anything does not verify they remove the folder, print STOP and change nothing else. " +
+      "Changes of your own belong in ",
+    ["docker-compose.override.yml"],
     ", which Docker Compose reads beside it and an update leaves alone.",
   ]) {
     note.appendChild(typeof piece === "string" ? document.createTextNode(piece) : el("code", null, piece[0]));
