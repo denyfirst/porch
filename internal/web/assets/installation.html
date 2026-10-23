@@ -96,6 +96,21 @@
           this server's address.</span>
         </label>
       </dd>
+
+      <!--
+        Said on the page as well as in the comment above: an operator looking
+        here for how to update found nothing while the copy was current,
+        because the commands are drawn only once a newer release has verified
+        (live test, 2026-10-23).
+      -->
+      <dt>Installing</dt>
+      <dd>
+        Never by itself. When a check finds a newer signed release,
+        <a href="/">New check</a> shows the commands to run on the server, in
+        the folder the compose file is in. They check the signature again
+        before they change anything, and keep the compose file they replace.
+        <a href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md#upgrading">The same by hand</a>.
+      </dd>
     </dl>
   </div>
 

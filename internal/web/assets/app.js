@@ -4231,6 +4231,16 @@ function showUpdates(state) {
     latest.appendChild(document.createTextNode(said + " Signed by the release key "));
     latest.appendChild(el("code", "key-fingerprint", RELEASE_FINGERPRINT));
     latest.appendChild(document.createTextNode(state.checked ? "; checked " + state.checked + "." : "."));
+    // Where to go from here, when there is somewhere: the commands are drawn
+    // on New check, beside the banner that announces them.
+    if (state.newer) {
+      const go = document.createElement("a");
+      go.href = "/";
+      go.textContent = "New check";
+      latest.appendChild(document.createTextNode(" The commands to install it are on "));
+      latest.appendChild(go);
+      latest.appendChild(document.createTextNode("."));
+    }
   } else {
     // A check that failed is said as failed, with its reason on the line below.
     // "Found nothing it could believe" was printed for GitHub being out of
