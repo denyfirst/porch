@@ -2068,6 +2068,18 @@ demonstration), `internal/web/assets/app.js` (`updateCommands`,
 `TestTheBannerUsesOnlyAVersionThatIsAReleaseName`,
 `TestTheUpdatePartsAreOnTheirPages`, `TestTheBannerSaysWhenItsReleaseWasFound`
 
+### S19 — An installation keeps its compose file and its data, and nothing it fetched to check them
+
+*Enforced in:* `docs/self-host.md` (the install, the upgrade, and the lines
+that remove what earlier ones kept), `internal/web/assets/porch.html` (the
+install), `internal/web/assets/app.js` (`updateCommands`)
+
+*Guarded by:* `TestTheInstallKeepsOnlyTheComposeFile`,
+`TestAnUpdateLeavesOnlyTheComposeFileAndTheData`,
+`TestWhatEarlierLinesLeftIsRemoved`,
+`TestTheUpdateCommandsLeaveNothingBehind`,
+`TestAServerHoldsTheReleaseAndNothingElse`
+
 ---
 
 ## Known gaps

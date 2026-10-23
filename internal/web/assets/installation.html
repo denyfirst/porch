@@ -108,7 +108,8 @@
         Never by itself. When a check finds a newer signed release,
         <a href="/">New check</a> shows the commands to run on the server, in
         the folder the compose file is in. They check the signature again
-        before they change anything, and keep the compose file they replace.
+        before they change anything, and once the new version runs they
+        remove what they downloaded and the image it replaced.
         <a href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md#upgrading">The same by hand</a>.
       </dd>
     </dl>
