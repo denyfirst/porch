@@ -42,6 +42,11 @@ type RegistrationFacts struct {
 
 	// Reason says why nothing was established.
 	Reason string `json:"reason,omitempty"`
+
+	// NoService is true where the registry publishes no RDAP service, so
+	// nothing could have been established. Any other Reason is a question
+	// that went unanswered, and a zone is not strong on it (dns-v5).
+	NoService bool `json:"noService,omitempty"`
 }
 
 // renewSoon is how close an expiry is said to be close. Not a grade: the
@@ -95,8 +100,17 @@ func expiryPhrase(expires, now time.Time) string {
 // DescribeRegistration is what the facts mean, where they mean something to
 // act on.
 func DescribeRegistration(f RegistrationFacts, now time.Time) []Note {
-	if !f.Asked || f.Reason != "" {
+	switch {
+	case !f.Asked:
 		return nil
+	case f.NoService:
+		return []Note{Unsettled("Whether the registration has run out cannot be read: " + f.Reason +
+			", so no scan can ask it. A registration that has run out is graded insecure where it can " +
+			"be read; here the date is at the registrar.")}
+	case f.Reason != "":
+		return []Note{Unsettled("Whether the registration has run out was not established: " + f.Reason +
+			". A registration that has run out is graded insecure, so the zone is not graded strong " +
+			"while this is unknown.")}
 	}
 	var out []Note
 	// A registration that has run out is graded (dns.registration-expired)

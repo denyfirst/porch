@@ -136,7 +136,7 @@ func printDNS(w io.Writer, r dnsResult) {
 			field(w, "Zone (SOA)", "begins above this name")
 		}
 
-		printText(w, f.Text)
+		printText(w, f.Text, f.TextReason)
 		field(w, "DNSSEC (DS)", dnssecLine(*f))
 		if f.RegistrationLine != "" {
 			field(w, "Registration", f.RegistrationLine)
@@ -257,7 +257,7 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 		}
 	}
 	if len(f.NameServers) > 1 && f.Networks == 1 {
-		fmt.Fprintf(w, "    every address above is in one network, so they fail together\n")
+		fmt.Fprintf(w, "    every address above is in one network (one IPv4 /24 or IPv6 /48), so they fail together\n")
 	}
 
 	fmt.Fprintf(w, "    %-28s %s\n", "the zone above", parentLine(f))
@@ -330,7 +330,12 @@ func listOrNone(values []string) string {
 //
 // Bounded twice, because a TXT record is whatever somebody put there: at most
 // eight records, and each cut to a length that still shows what it is.
-func printText(w io.Writer, records []string) {
+func printText(w io.Writer, records []string, reason string) {
+	// Records that could not be read are not a name publishing none (R4).
+	if reason != "" {
+		field(w, "Text (TXT)", "not read: "+reason)
+		return
+	}
 	if len(records) == 0 {
 		field(w, "Text (TXT)", "none")
 		return

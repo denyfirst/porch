@@ -83,6 +83,9 @@ func TestTheMailPathDrawsItsRowsWhateverTheMXSays(t *testing.T) {
 		"\n  row(\"DANE\", daneSummary(facts));\n",
 		`"not checked: the exchangers are not known"`,
 		`"not measured: " + (facts.exchangersReason || "this scan did not contact them")`,
+		// An unread record is drawn as unread on both faces (2026-10-25).
+		`row("TLS-RPT", facts.tlsReportingReason ? "not read: " + facts.tlsReportingReason`,
+		`return "not read: " + facts.mtaStsReason;`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the page does not carry %s, so the two faces disagree", want)

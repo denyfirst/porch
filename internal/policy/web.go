@@ -101,6 +101,15 @@ type WebHop struct {
 	// answer carries no status and is not evidence about configuration.
 	Answered bool
 
+	// Silent is whether a request went to an address and nothing answered:
+	// refused, or no reply in time. A hop that did not answer and is not
+	// silent asked nothing, or asked and was cut off, and says nothing about
+	// whether anything listens there.
+	Silent bool
+
+	// Reason is why the hop did not answer, as the probe words it.
+	Reason string
+
 	// Status is the HTTP status code, when one arrived.
 	Status int
 
@@ -155,7 +164,7 @@ func GradeReach(secure, plain []WebHop) WebResult {
 	// how it redirects; it is a different report.
 	switch {
 	case secureLanded == nil:
-		out.unsettled("Nothing answered over TLS, so what a visitor reaches on the secure address was " +
+		out.unsettled("No response arrived over TLS, so what a visitor reaches on the secure address was " +
 			"not established. Whether the handshake succeeds is the TLS check's question.")
 	case !secureLanded.TLS:
 		out.add(Finding{
@@ -204,10 +213,17 @@ func GradeReach(secure, plain []WebHop) WebResult {
 		out.unsettled("The plaintext address redirects somewhere this scan did not follow, so whether " +
 			"a visitor ends up on TLS was not established.")
 
-	case plainLanded == nil:
+	case plainLanded == nil && len(plain) > 0 && plain[0].Silent:
 		out.observe("Nothing answered on port 80, so there is no plaintext request to intercept. A " +
 			"visitor who types the name without https:// reaches this site only if their " +
 			"browser tries TLS first.")
+
+	case plainLanded == nil:
+		// Not an observation: a name that did not resolve, a destination
+		// refused here or a connection cut off says nothing about whether
+		// anything listens on port 80. Said as an observation until
+		// 2026-10-25, of names where no request had been made.
+		out.unsettled("Whether anything answers on port 80 was not established: " + whyUnanswered(plain) + ".")
 
 	case plainLanded.TLS:
 		// The chain started on http and finished on https: correct. What
@@ -356,7 +372,7 @@ func GradeHSTS(secure, plain []string, secureAnswered bool) WebResult {
 	var out WebResult
 
 	if !secureAnswered {
-		out.unsettled("Nothing answered over TLS, so what this host declares about coming back " +
+		out.unsettled("No response arrived over TLS, so what this host declares about coming back " +
 			"over TLS was not established here. That is different from declaring nothing.")
 		return out
 	}
@@ -524,6 +540,15 @@ func landed(chain []WebHop) *WebHop {
 		}
 	}
 	return nil
+}
+
+// whyUnanswered is the reason the first request of a chain got no response,
+// as the probe worded it.
+func whyUnanswered(chain []WebHop) string {
+	if len(chain) == 0 || chain[0].Reason == "" {
+		return "no request was made"
+	}
+	return chain[0].Reason
 }
 
 // firstAnswer returns the first hop that answered, or nil.

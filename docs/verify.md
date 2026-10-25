@@ -247,8 +247,8 @@ or not anyone runs it by hand.
 porch-scan v0.30.0
 policy porch-tls-v9
 policy porch-web-v6
-policy porch-mail-v5
-policy porch-dns-v4
+policy porch-mail-v6
+policy porch-dns-v5
 scans only domains this user has shown control of, from this machine
 ```
 

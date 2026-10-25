@@ -156,6 +156,11 @@ func TestNothingThatIsNotARegistrationReadsAsOne(t *testing.T) {
 			if got.Reason == "" || got.Registrar != "" || !got.Expires.IsZero() || !got.Asked {
 				t.Errorf("read %+v", got)
 			}
+			// A question put and not answered: not a registry with no service,
+			// which is the one failure that does not withhold strong (dns-v5).
+			if got.NoService {
+				t.Errorf("a registry that was asked is reported as publishing no service: %+v", got)
+			}
 			for _, leak := range []string{"127.0.0.1", "dial ", "tcp ", "x509", "json"} {
 				if strings.Contains(got.Reason, leak) {
 					t.Errorf("the reason describes the machine: %s", got.Reason)
@@ -171,7 +176,7 @@ func TestARegistryIsAskedOnlyOverHTTPS(t *testing.T) {
 	r := newRegistry(t)
 	c := r.client()
 	for _, name := range []string{"example.plain", "example.none"} {
-		if got := c.Lookup(context.Background(), name); !strings.Contains(got.Reason, "publishes no RDAP service") {
+		if got := c.Lookup(context.Background(), name); !strings.Contains(got.Reason, "publishes no RDAP service") || !got.NoService {
 			t.Errorf("%s: %+v", name, got)
 		}
 	}
@@ -199,8 +204,8 @@ func TestAListThatCannotBeReadIsNotHammered(t *testing.T) {
 	r.list = "not json"
 	c := r.client()
 	for range 3 {
-		if got := c.Lookup(context.Background(), "example.test"); !strings.Contains(got.Reason, "IANA's list") {
-			t.Errorf("read %+v", got)
+		if got := c.Lookup(context.Background(), "example.test"); !strings.Contains(got.Reason, "IANA's list") || got.NoService {
+			t.Errorf("read %+v; a list that could not be read is not a registry with no service", got)
 		}
 	}
 	if r.lists != 1 {

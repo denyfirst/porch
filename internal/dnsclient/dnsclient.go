@@ -175,13 +175,21 @@ type Answer struct {
 	// www.example.com that finds nothing there tries example.com next.
 	Name string
 
-	// Validated is the AD bit the resolver set.
+	// Validated is the AD bit the resolver set, on every answer the walk read.
 	//
 	// It means the resolver says it verified the DNSSEC chain. It does not
 	// mean this service verified anything, and a report that presents it as
 	// though it did is claiming somebody else's work. False is ambiguous by
 	// construction: an unsigned zone and a validation this resolver did not
 	// attempt look identical from here.
+	//
+	// Every answer, not the last. The walk reads the first name that has
+	// records, so each empty answer below it is part of the result: one the
+	// resolver did not vouch for could be hiding a record, and the walk would
+	// then read a parent's policy in its place. Until 2026-10-25 this was the
+	// last answer's bit alone, and a name in an unsigned zone beneath a signed
+	// top-level domain was reported validated on the strength of the
+	// top-level domain's answer.
 	Validated bool
 
 	// Existed is false when the resolver said the name asked about does not
@@ -587,9 +595,11 @@ func (c *Client) LookupCAA(ctx context.Context, name string) (Answer, error) {
 			return out, err
 		}
 
-		out.Validated = reply.validated
 		if i == 0 {
+			out.Validated = reply.validated
 			out.Existed = reply.existed
+		} else {
+			out.Validated = out.Validated && reply.validated
 		}
 		if len(reply.records) > 0 {
 			out.Records = reply.records

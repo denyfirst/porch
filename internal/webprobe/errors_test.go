@@ -220,3 +220,35 @@ func TestAPolicyRefusalIsRecognisedWhateverItSays(t *testing.T) {
 		}
 	}
 }
+
+// Only a request that went out and was refused, or went unanswered, says that
+// nothing answers at the address.
+//
+// Found in a report on 2026-10-25: a name that did not resolve was reported as
+// having nothing listening on port 80, and as offering no plaintext request to
+// intercept. No request had been made.
+func TestOnlyARefusalOrASilenceSaysNothingAnswers(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    error
+		silent bool
+	}{
+		{"refused", errors.New("dial tcp 192.0.2.1:80: connect: connection refused"), true},
+		{"timed out", errors.New("dial tcp 192.0.2.1:80: i/o timeout"), true},
+		{"no address", &net.DNSError{Err: "no such host", Name: "example.com", IsNotFound: true}, false},
+		{"refused by policy", fmt.Errorf("%w: 127.0.0.1 is loopback", safedial.ErrBlocked), false},
+		{"cancelled", context.Canceled, false},
+		{"no route from here", errors.New("dial tcp [2001:db8::1]:80: connect: network is unreachable"), false},
+		{"closed after it opened", errors.New("read tcp 192.0.2.1:80: connection reset by peer"), false},
+		{"something else", errors.New("something nobody anticipated"), false},
+	} {
+		text, blocked := classifyProbeError(tc.err)
+		h := Hop{Err: text, blocked: blocked}
+		if h.Silent() != tc.silent {
+			t.Errorf("%s (%q): silent %v, want %v", tc.name, text, h.Silent(), tc.silent)
+		}
+	}
+	if (Hop{Status: 200}).Silent() {
+		t.Error("a hop that answered is silent")
+	}
+}

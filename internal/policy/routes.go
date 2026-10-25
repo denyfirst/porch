@@ -28,11 +28,26 @@ type RouteFacts struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// RoutesLine says how the routes validated, in one line.
-func RoutesLine(rs []RouteFacts) string {
+// RoutesLine says how the routes validated, in one line. skipped is how many
+// further addresses were not asked about, past the bound on how many are.
+func RoutesLine(rs []RouteFacts, skipped int) string {
 	if len(rs) == 0 {
 		return ""
 	}
+	return routesCounted(rs) + notAsked(skipped)
+}
+
+// notAsked is the tail of the line where the bound left addresses out. Until
+// 2026-10-25 the line said "of 8 addresses" of a name with twelve, and a
+// reader took the eight for all of them.
+func notAsked(skipped int) string {
+	if skipped <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(", and %d more not asked", skipped)
+}
+
+func routesCounted(rs []RouteFacts) string {
 	count := map[string]int{}
 	unsettled := 0
 	for _, r := range rs {
@@ -62,6 +77,14 @@ func RoutesLine(rs []RouteFacts) string {
 	return strings.Join(parts, ", ") + " of " + addresses(len(rs))
 }
 
+// plainAddresses is "the other N were", or "one other was" for one.
+func plainAddresses(n int) string {
+	if n == 1 {
+		return "one other was"
+	}
+	return fmt.Sprintf("the other %d were", n)
+}
+
 // addresses writes a count of addresses; plural would add a bare s.
 func addresses(n int) string {
 	if n == 1 {
@@ -71,18 +94,44 @@ func addresses(n int) string {
 }
 
 // DescribeRoutes says what an invalid or unsigned route means, and who can
-// change it.
-func DescribeRoutes(rs []RouteFacts) []Note {
+// change it; why a route was not established, where one was not; and which
+// addresses were not asked about at all.
+func DescribeRoutes(rs []RouteFacts, skipped int) []Note {
 	var invalid, unsigned []string
+	unread := map[string][]string{}
+	var reasons []string
 	for _, r := range rs {
-		switch r.State {
-		case "invalid":
+		switch {
+		case r.State == "invalid":
 			invalid = append(invalid, r.Address)
-		case "not-found":
+		case r.State == "not-found":
 			unsigned = append(unsigned, r.Address)
+		case r.State == "":
+			// Said, with the reason. Until 2026-10-25 the line counted these
+			// as "not established" and nothing said why, so a service that
+			// could not be reached and a route nobody could find looked alike.
+			reason := r.Reason
+			if reason == "" {
+				reason = "no reason was recorded"
+			}
+			if _, ok := unread[reason]; !ok {
+				reasons = append(reasons, reason)
+			}
+			unread[reason] = append(unread[reason], r.Address)
 		}
 	}
 	var out []Note
+	for _, reason := range reasons {
+		routeIs := "route to " + list(unread[reason]) + " is"
+		if len(unread[reason]) > 1 {
+			routeIs = "routes to " + list(unread[reason]) + " are"
+		}
+		out = append(out, Unsettled("Whether the "+routeIs+" signed was not established: "+reason+"."))
+	}
+	if skipped > 0 {
+		out = append(out, Unsettled(fmt.Sprintf("Routes were asked about for %s, the name's own first and "+
+			"then its name servers', and %s not asked about.", addresses(len(rs)), plainAddresses(skipped))))
+	}
 	if len(invalid) > 0 {
 		out = append(out, Observed("The route to "+list(invalid)+" contradicts its RPKI signature (RFC 6811), "+
 			"so networks that validate routes drop it and cannot reach "+them(invalid)+". The network "+

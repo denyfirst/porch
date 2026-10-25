@@ -214,6 +214,12 @@ func TestTheMTASTSRowSaysWhatWasRead(t *testing.T) {
 			facts: policy.MailFacts{},
 			want:  "no",
 		},
+		// A record that could not be read is not a record the domain lacks:
+		// this row said "no" for one until 2026-10-25.
+		"the record not read": {
+			facts: policy.MailFacts{MTASTSReason: "the MTA-STS record could not be read"},
+			want:  "not read: the MTA-STS record could not be read",
+		},
 		"announced and not read": {
 			facts: policy.MailFacts{MTASTSRecords: 1,
 				MTASTSPolicyReason: "this deployment reads the record and not the policy file"},
@@ -589,5 +595,18 @@ func TestTheOldVersionAnswerReachesBothFaces(t *testing.T) {
 	}
 	if strings.Contains(text, "LEGACY     mx4.example.com") {
 		t.Errorf("an exchanger that was not asked has a row:\n%s", text)
+	}
+}
+
+// A TLS-RPT record nobody read is drawn as unread, never as absent: the row
+// said "no" for one until 2026-10-25.
+func TestAnUnreadTLSRPTRecordIsNotDrawnAsAbsent(t *testing.T) {
+	r := mailSample()
+	r.Observed.TLSReporting = false
+	r.Observed.TLSReportingReason = "the TLS-RPT record could not be read"
+	var buf bytes.Buffer
+	printMail(&buf, r)
+	if !strings.Contains(buf.String(), "TLS-RPT    not read: the TLS-RPT record could not be read") {
+		t.Errorf("a TLS-RPT record nobody read was drawn as absent:\n%s", buf.String())
 	}
 }

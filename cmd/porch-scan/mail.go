@@ -168,8 +168,12 @@ func printMail(w io.Writer, r mailResult) {
 			fmt.Fprintf(w, "    Reports to %s\n", line)
 		}
 
+		// A record that could not be read is not a record the domain lacks (R4).
 		reporting := "no"
-		if f.TLSReporting {
+		switch {
+		case f.TLSReportingReason != "":
+			reporting = "not read: " + f.TLSReportingReason
+		case f.TLSReporting:
 			reporting = "yes"
 		}
 		fmt.Fprintf(w, "    TLS-RPT    %s\n", reporting)
@@ -296,6 +300,8 @@ func maxAge(seconds int) string {
 // read is shown; a mode that was not is shown as not read, with the reason.
 func stsLine(f *policy.MailFacts) string {
 	switch {
+	case f.MTASTSReason != "":
+		return "not read: " + f.MTASTSReason
 	case f.MTASTSRecords == 0:
 		return "no"
 	case f.MTASTSPolicyRead && f.MTASTSMode != "":

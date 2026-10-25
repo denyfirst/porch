@@ -549,10 +549,10 @@ func (t txtOnly) LookupTXT(ctx context.Context, name string) ([]string, error) {
 func (s *Scanner) readTLSReporting(ctx context.Context, r Resolver, domain string, facts *policy.MailFacts) {
 	answer, err := r.LookupTXT(ctx, tlsReportPrefix+domain)
 	if err != nil {
-		// Absent rather than unknown would be a claim; this one is small
-		// enough that a failure and an absence lead to the same sentence, and
-		// the note says the record was not found rather than that it does not
-		// exist.
+		// Unknown, not absent. Until 2026-10-25 this returned in silence and
+		// the report said the domain publishes no record, which is a claim
+		// about the domain made from a failure of this scan (R4).
+		facts.TLSReportingReason = "the TLS-RPT record could not be read"
 		return
 	}
 
@@ -788,6 +788,10 @@ func (s *Scanner) readTransportSecurity(ctx context.Context, r Resolver, domain 
 				facts.MTASTSRecords++
 			}
 		}
+	} else {
+		// Unknown, not absent: the rules about a policy fall silent for a
+		// record nobody read, and the report says so (R4).
+		facts.MTASTSReason = "the MTA-STS record could not be read"
 	}
 
 	// Before DANE rather than after, so that a scan which spends its context

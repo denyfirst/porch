@@ -69,13 +69,13 @@ func classifyProbeError(err error) (text string, blocked bool) {
 		strings.Contains(msg, "i/o timeout"),
 		strings.Contains(msg, "context deadline exceeded"),
 		strings.Contains(msg, "Client.Timeout"):
-		return "the request timed out", false
+		return errTimedOut, false
 
 	case errors.Is(err, context.Canceled):
 		return "the scan was cancelled before this address was reached", false
 
 	case strings.Contains(msg, "connection refused"):
-		return "the connection was refused", false
+		return errRefused, false
 
 	case strings.Contains(msg, "connection reset"),
 		strings.Contains(msg, "broken pipe"),
@@ -178,3 +178,11 @@ func unwrapURLError(err error) string {
 // because the row about the other form of a name tells it apart from every
 // other failure.
 const errNoAddress = "the name did not resolve"
+
+// errRefused and errTimedOut are the two failures that say nothing answers
+// at the address: a request went out and was refused, or went unanswered.
+// Constants because Hop.Silent tells them apart from every other failure.
+const (
+	errRefused  = "the connection was refused"
+	errTimedOut = "the request timed out"
+)

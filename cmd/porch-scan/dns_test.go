@@ -124,7 +124,7 @@ func TestThePublishedRecordsAreBounded(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printText(&buf, records)
+	printText(&buf, records, "")
 	text := buf.String()
 
 	if strings.Contains(text, strings.Repeat("x", maxTextLength+1)) {
@@ -693,5 +693,22 @@ func TestTheIPv6LineReachesBothFaces(t *testing.T) {
 	printMail(&mail, r)
 	if !strings.Contains(mail.String(), "MX IPv6    1 of 1 exchanger has an IPv6 address") {
 		t.Errorf("the terminal does not print the exchangers' line:\n%s", mail.String())
+	}
+}
+
+// Text records that could not be read are drawn as not read, on both faces;
+// until 2026-10-25 a lookup that failed was drawn as "none".
+func TestTextRecordsNotReadAreNotNone(t *testing.T) {
+	var buf bytes.Buffer
+	printText(&buf, nil, "the lookup did not complete")
+	if !strings.Contains(buf.String(), "not read: the lookup did not complete") || strings.Contains(buf.String(), "none") {
+		t.Errorf("text records nobody read were drawn as:\n%s", buf.String())
+	}
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `facts.textReason ? "not read: " + facts.textReason`) {
+		t.Error("the page draws text records nobody read as none, so the two faces disagree")
 	}
 }

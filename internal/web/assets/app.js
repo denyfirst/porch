@@ -1057,8 +1057,8 @@ function certificate(cert, tls, issuance, stapling, report) {
 // — the same arrangement as the section titles below. A sentence about how
 // grading works, said in two different words on two faces of one report,
 // would be worse than not saying it at all.
-const WORST_CASE = "Worst case: an attacker chooses which option to negotiate, " +
-  "so the weakest one a server accepts is the one that decides.";
+const WORST_CASE = "Worst case: the weakest thing found sets the verdict, " +
+  "because it is the one an attacker would use.";
 
 // The three sections, their order and their words. The terminal report reads
 // the same three from noteSections in cmd/denyfirst-scan, and the two are
@@ -1430,8 +1430,10 @@ function published(facts) {
     row("Zone (SOA)", "begins above this name");
   }
 
+  // Records that could not be read are not a name publishing none (R4).
   const text = facts.text || [];
-  row("Text records (TXT)", text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
+  row("Text records (TXT)", facts.textReason ? "not read: " + facts.textReason
+    : text.length === 0 ? "none" : text.length + (text.length === 1 ? " record" : " records"));
 
   row("DNSSEC (DS)", dnssecLine(facts), dnssecMark(facts));
 
@@ -1677,9 +1679,13 @@ function delegation(facts) {
   const networks = facts.networks || 0;
   if (servers.length > 1 && networks > 0) {
     frag.appendChild(el("p", "section-note",
+      // What is counted, said: an IPv4 /24 and an IPv6 /48 each count once,
+      // so blocks one operator holds count separately. "10 networks" of one
+      // provider read as ten independent ones until 2026-10-25.
       networks === 1
-        ? "Every address above is in one network, so they fail together."
-        : "Their addresses are in " + networks + " networks."));
+        ? "Every address above is in one network (one IPv4 /24 or IPv6 /48), so they fail together."
+        : "Their addresses are in " + networks + " networks, counting each IPv4 /24 and IPv6 /48 as one; " +
+          "blocks one operator holds count separately."));
   }
 
   frag.appendChild(el("p", "section-note", parentSays(facts)));
@@ -1836,7 +1842,9 @@ function zone(facts) {
   const reportTo = saysReportTo(facts);
   if (reportTo) row("Reports to", reportTo);
 
-  row("TLS-RPT", facts.tlsReporting ? "yes" : "no");
+  // A record that could not be read is not a record the domain lacks (R4).
+  row("TLS-RPT", facts.tlsReportingReason ? "not read: " + facts.tlsReportingReason
+    : facts.tlsReporting ? "yes" : "no");
   if (facts.tlsRptRecord) row("Record", facts.tlsRptRecord, null, true);
 
   // Signing keys, and which names were looked under.
@@ -2001,6 +2009,9 @@ function maxAge(seconds) {
 }
 
 function stsSays(facts) {
+  if (facts.mtaStsReason) {
+    return "not read: " + facts.mtaStsReason;
+  }
   if (!facts.mtaStsRecords) {
     return "no";
   }

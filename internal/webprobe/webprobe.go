@@ -412,6 +412,17 @@ type Hop struct {
 	blocked bool
 }
 
+// Silent reports that this hop's request went to an address and nothing
+// answered it: the connection was refused, or no reply came in time. Those are
+// the only hops that can say nothing answers there.
+//
+// A name with no address, a destination this deployment refused, a cancelled
+// scan, a route this machine lacks and a connection that closed after it
+// opened all leave a hop that cannot. Until 2026-10-25 every one of them was
+// read as "nothing answered on port 80", including a name that did not resolve,
+// where no request was made at all.
+func (h Hop) Silent() bool { return h.Err == errRefused || h.Err == errTimedOut }
+
 // Chain is one starting address and the hops that followed from it.
 type Chain struct {
 	Hops []Hop `json:"hops"`
