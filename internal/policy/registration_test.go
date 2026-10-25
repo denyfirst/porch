@@ -53,15 +53,29 @@ func TestTheRegistrationLineSaysWhenAndWhetherItIsLocked(t *testing.T) {
 
 // A registry that did not answer is said to be one, and nothing is claimed
 // about the registration; a registry nobody asked says nothing at all.
+//
+// Since dns-v5 what a failed lookup costs is said too: a registration that
+// has run out is graded, so the zone is not strong while it is unknown. A
+// registry with no RDAP service is said as that, and costs nothing, because
+// no scan can ask it.
 func TestARegistrationNotEstablishedClaimsNothing(t *testing.T) {
 	now := time.Now()
 	f := RegistrationFacts{Asked: true, Reason: "the registry did not answer the lookup"}
 	if got := RegistrationLine(f, now); got != "not established: the registry did not answer the lookup" {
 		t.Errorf("the line reads %q", got)
 	}
-	if notes := DescribeRegistration(f, now); notes != nil {
-		t.Errorf("a failed lookup carries notes: %v", Texts(notes))
+	notes := DescribeRegistration(f, now)
+	if len(notes) != 1 || notes[0].Kind != KindUnsettled ||
+		!strings.HasPrefix(notes[0].Text, "Whether the registration has run out was not established") {
+		t.Errorf("a failed lookup is described as %v", notes)
 	}
+
+	none := RegistrationFacts{Asked: true, Reason: "the registry for .az publishes no RDAP service", NoService: true}
+	notes = DescribeRegistration(none, now)
+	if len(notes) != 1 || notes[0].Kind != KindUnsettled || !strings.Contains(notes[0].Text, "no scan can ask it") {
+		t.Errorf("a registry with no service is described as %v", notes)
+	}
+
 	if RegistrationLine(RegistrationFacts{}, now) != "" || DescribeRegistration(RegistrationFacts{}, now) != nil {
 		t.Error("a registry nobody asked is described")
 	}

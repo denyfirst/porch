@@ -171,10 +171,21 @@ func TestTheDNSVerdictMatrix(t *testing.T) {
 				return f
 			}, Strong, ""},
 
+		// Since v5: dns.registration-expired reads the registration, so one
+		// asked about and not read is not passing. A registry that publishes
+		// no RDAP service at all is not a question that went unanswered: no
+		// scan can put it, and the report says so instead.
 		{"could not have its registration read",
 			func() DNSFacts {
 				f := signed()
 				f.Registration = &RegistrationFacts{Asked: true, Reason: "x"}
+				return f
+			}, Ungraded, ""},
+
+		{"is under a registry that publishes no RDAP service",
+			func() DNSFacts {
+				f := signed()
+				f.Registration = &RegistrationFacts{Asked: true, Reason: "x", NoService: true}
 				return f
 			}, Strong, ""},
 

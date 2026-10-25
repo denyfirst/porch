@@ -220,9 +220,9 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	// that the scan did not finish. A self-hosted copy answered that on
 	// 2026-10-20, and the same scan from its command line minutes later took
 	// four seconds.
-	// Only a registration that has run out moves the verdict, and only once
-	// it was read: one cut short is a line saying "not established" and
-	// nothing worse. Routes are described and never graded (R21).
+	// A registration that has run out moves the verdict, and since dns-v5 so
+	// does one that was asked about and not read: the zone is then not
+	// strong. Routes are described and never graded (R21).
 	outside, cancel := shareBefore(ctx, outsideReserve)
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -311,6 +311,7 @@ func (s *Scanner) readRegistration(ctx context.Context, domain string, facts *po
 		RegistryLocked:   r.RegistryLocked(),
 		DelegationSigned: r.DelegationSigned,
 		Reason:           r.Reason,
+		NoService:        r.NoService,
 	}
 	facts.Registration = &f
 	facts.RegistrationLine = policy.RegistrationLine(f, s.now())

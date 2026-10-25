@@ -28,6 +28,11 @@ Released in v0.32.0, 2026-10.
   servers that do not answer for the zone, that recurse, and about the parent
   handing out other servers silent, and silence is not passing. The report
   says which server did not answer and why; it said nothing.
+- **Nor is a zone strong where its registration was asked about and not
+  read.** `dns.registration-expired` reads it, and it was strong when the
+  registry timed out. A top-level domain whose registry publishes no RDAP
+  service is different: no scan can ask it, so the report says so, names the
+  registrar as where the date is, and the verdict is not withheld.
 - A note that a zone transfer was not established is filed as not
   established. It was filed among what the scan measured.
 

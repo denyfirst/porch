@@ -41,6 +41,9 @@ import (
 // that do not answer for the zone, that recurse, and about a parent handing
 // out other servers fall silent for a question that was not answered, and
 // silence is not passing (R4). The same reading mail-v5 gave exchangers.
+// Nor where the registration was asked about and not read, since a
+// registration that has run out is graded; a registry with no RDAP service
+// at all is said, and does not withhold strong, because no scan can read it.
 const DNSVersion = "porch-dns-v5"
 
 var (
@@ -887,6 +890,12 @@ func dnsUnsettled(f DNSFacts) bool {
 		return true
 	case f.ParentReason != "":
 		// Since v5: dns.parent-and-zone-disagree reads the parent's answer.
+		return true
+	case f.Registration != nil && f.Registration.Asked && f.Registration.Reason != "" && !f.Registration.NoService:
+		// Since v5: dns.registration-expired reads the registration. A
+		// registry that publishes no RDAP service is not this: there was
+		// no question to put, and no scan can ever put one, and the report
+		// says so.
 		return true
 	}
 	// Since v5: dns.name-server-not-authoritative and

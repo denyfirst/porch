@@ -51,9 +51,38 @@ func TestTheRegistrationReachesTheReport(t *testing.T) {
 	if !strings.Contains(notes, "within a month") || !strings.Contains(notes, "not locked against transfer") {
 		t.Errorf("the notes do not say what to act on: %s", notes)
 	}
-	// Reported, never graded (R21).
+	// A registration about to run out is reported, not graded: automatic
+	// renewal does not show from outside.
 	if got.Verdict != policy.Strong {
 		t.Errorf("the registration moved the verdict to %q", got.Verdict)
+	}
+}
+
+// A registry that publishes no RDAP service is said as that and leaves the
+// verdict alone; one asked and not answered leaves the zone not strong
+// (dns-v5). Both reach the scan from the client's own flag, not from words.
+func TestARegistryWithNoServiceIsNotAnUnansweredOne(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		reg  rdap.Registration
+		want policy.Verdict
+	}{
+		{"no service", rdap.Registration{Asked: true, NoService: true,
+			Reason: "the registry for .com publishes no RDAP service"}, policy.Strong},
+		{"no answer", rdap.Registration{Asked: true,
+			Reason: "the registry did not answer the lookup"}, policy.Ungraded},
+	} {
+		got, err := (&Scanner{Resolver: served(t), Registry: &stubRegistry{reg: c.reg}}).
+			Scan(context.Background(), "example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Verdict != c.want {
+			t.Errorf("%s: verdict %q, want %q", c.name, got.Verdict, c.want)
+		}
+		if got.Observed.Registration == nil || got.Observed.Registration.NoService != c.reg.NoService {
+			t.Errorf("%s: the facts read %+v", c.name, got.Observed.Registration)
+		}
 	}
 }
 
@@ -182,7 +211,23 @@ func TestSlowOutsideServicesDoNotSpendTheScan(t *testing.T) {
 	if line := got.Observed.RoutesLine; !strings.Contains(line, "not established") {
 		t.Errorf("the routes line reads %q", line)
 	}
-	if got.Verdict != policy.Strong {
-		t.Errorf("services that did not answer moved the verdict to %q", got.Verdict)
+	// Since dns-v5 a registration asked about and not read withholds strong,
+	// because a registration that has run out is graded. Nothing worse: a
+	// question that went unanswered is not a finding.
+	if got.Verdict != policy.Ungraded || len(got.Findings) != 0 {
+		t.Errorf("a registry that did not answer graded the zone %q %v, want ungraded and nothing more",
+			got.Verdict, ruleIDs(got))
+	}
+
+	// The routes are described and never graded, so a route service that
+	// never answers moves nothing.
+	fresh, stop := context.WithTimeout(context.Background(), outsideReserve+time.Second)
+	defer stop()
+	routesOnly, err := (&Scanner{Resolver: served(t), Routes: hangingRoutes{}}).Scan(fresh, "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if routesOnly.Verdict != policy.Strong {
+		t.Errorf("a route service that did not answer moved the verdict to %q", routesOnly.Verdict)
 	}
 }

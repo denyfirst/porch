@@ -1245,7 +1245,8 @@ in `internal/scan.checkReceipts`
 `TestTextRecordsNotReadCarryTheReason`, `TestTextRecordsNotReadAreNotNone`,
 `TestARouteNotEstablishedSaysWhyAndTheBoundIsSaid`,
 `TestTheRoutesNotAskedAndNotEstablishedAreSaid`,
-`TestAQuestionNotAnsweredIsSaidAndIsNotPassing`
+`TestAQuestionNotAnsweredIsSaidAndIsNotPassing`,
+`TestARegistryWithNoServiceIsNotAnUnansweredOne`
 
 ### R4a — A verdict's stated reason is true of the thing it grades
 

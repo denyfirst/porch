@@ -98,6 +98,12 @@ type Registration struct {
 
 	// Reason says why nothing was established. Empty on success.
 	Reason string `json:"reason,omitempty"`
+
+	// NoService is true where the top-level domain's registry publishes no
+	// RDAP service at all. Then nothing was established, and nothing could
+	// be: no scan, from anywhere, can read the registration this way. Every
+	// other Reason is a question that was put and went unanswered.
+	NoService bool `json:"noService,omitempty"`
 }
 
 // Has reports whether the registry gave this status.
@@ -167,9 +173,9 @@ func (c *Client) Lookup(ctx context.Context, name string) Registration {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout())
 	defer cancel()
 
-	base, reason := c.serviceFor(ctx, labels[len(labels)-1])
+	base, reason, none := c.serviceFor(ctx, labels[len(labels)-1])
 	if reason != "" {
-		return Registration{Asked: true, Reason: reason}
+		return Registration{Asked: true, Reason: reason, NoService: none}
 	}
 	host := ""
 	if u, err := url.Parse(base); err == nil {
@@ -194,8 +200,9 @@ func (c *Client) Lookup(ctx context.Context, name string) Registration {
 		Reason: "the registry holds no registration for this name or the domains above it"}
 }
 
-// serviceFor finds the registry that answers for a top-level domain.
-func (c *Client) serviceFor(ctx context.Context, tld string) (string, string) {
+// serviceFor finds the registry that answers for a top-level domain. none is
+// true where IANA's list was read and names no service for it.
+func (c *Client) serviceFor(ctx context.Context, tld string) (base, reason string, none bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -205,7 +212,7 @@ func (c *Client) serviceFor(ctx context.Context, tld string) (string, string) {
 		services, err := c.readBootstrap(ctx)
 		if err != nil {
 			if c.services == nil {
-				return "", "IANA's list of registries could not be read"
+				return "", "IANA's list of registries could not be read", false
 			}
 			// The list kept from before is a day or so old, and registries
 			// rarely move: better than no answer.
@@ -214,13 +221,13 @@ func (c *Client) serviceFor(ctx context.Context, tld string) (string, string) {
 		}
 	}
 	if c.services == nil {
-		return "", "IANA's list of registries could not be read"
+		return "", "IANA's list of registries could not be read", false
 	}
 	base, ok := c.services[tld]
 	if !ok {
-		return "", "the registry for ." + tld + " publishes no RDAP service"
+		return "", "the registry for ." + tld + " publishes no RDAP service", true
 	}
-	return base, ""
+	return base, "", false
 }
 
 // readBootstrap reads IANA's file: a list of services, each a list of
