@@ -642,6 +642,8 @@ func TestAServerHoldsTheReleaseAndNothingElse(t *testing.T) {
 	fetch := []string{
 		`for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done`,
 		`ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && grep -qF "_${V}_" SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }`,
+		// Which only the check needs (TestTheInstallKeepsOnlyTheComposeFile).
+		`rm -f allowed_signers SHA256SUMS SHA256SUMS.sig`,
 	}
 	for _, path := range []string{"internal/web/assets/porch.html", "docs/self-host.md"} {
 		// The page colours its commands with spans; what it says is the text.

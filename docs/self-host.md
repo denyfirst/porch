@@ -52,12 +52,14 @@ the compose file is the only thing a server has to check.
    for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSLO "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
    echo 'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR' > allowed_signers
    ssh-keygen -Y verify -f allowed_signers -I releases@denyfirst.dev -n file -s SHA256SUMS.sig < SHA256SUMS && grep -qF "_${V}_" SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS || { rm -f docker-compose.yml; echo 'STOP: docker-compose.yml did not verify and was removed'; }
+   rm -f allowed_signers SHA256SUMS SHA256SUMS.sig
    ```
 
    It has to print `Good "file" signature for releases@denyfirst.dev with
    ED25519 key SHA256:ut6bginhZ4lZINMSXNDv3vJ6fyvmDHhtnoBJH0/Nr9Y` and
    `docker-compose.yml: OK`. Otherwise it prints `STOP` and removes the
-   compose file, so the next step has nothing to start.
+   compose file, so the next step has nothing to start. The last line
+   removes the key and the signed list, which only the check needs.
 
    The key is written out rather than fetched: a key fetched from GitHub comes
    from the same place as the release, and whoever could replace one could
@@ -161,18 +163,33 @@ V=vX.Y.Z
 test -f docker-compose.yml && mkdir -p "update-${V}"
 for f in docker-compose.yml SHA256SUMS SHA256SUMS.sig; do curl -fsSL -o "update-${V}/${f}" "https://github.com/denyfirst/porch/releases/download/${V}/${f}"; done
 echo 'releases@denyfirst.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD7Ie9zRf76RynH052/Abkv5k2nzosQd2DihyQMixVR' > "update-${V}/allowed_signers"
-if ssh-keygen -Y verify -f "update-${V}/allowed_signers" -I releases@denyfirst.dev -n file -s "update-${V}/SHA256SUMS.sig" < "update-${V}/SHA256SUMS" && grep -qF "_${V}_" "update-${V}/SHA256SUMS" && (cd "update-${V}" && sha256sum --ignore-missing -c SHA256SUMS); then (test -e "docker-compose.yml.before-${V}" || cp docker-compose.yml "docker-compose.yml.before-${V}") && cp "update-${V}/docker-compose.yml" docker-compose.yml && sudo docker compose up -d; else echo "STOP: ${V} did not verify; nothing was changed"; fi
+if ssh-keygen -Y verify -f "update-${V}/allowed_signers" -I releases@denyfirst.dev -n file -s "update-${V}/SHA256SUMS.sig" < "update-${V}/SHA256SUMS" && grep -qF "_${V}_" "update-${V}/SHA256SUMS" && (cd "update-${V}" && sha256sum --ignore-missing -c SHA256SUMS); then cp "update-${V}/docker-compose.yml" docker-compose.yml && sudo docker compose up -d && rm -r "update-${V}" && sudo docker image prune -a -f --filter label=org.opencontainers.image.source=https://github.com/denyfirst/porch; else rm -rf "update-${V}"; echo "STOP: ${V} did not verify; its download was removed and nothing was changed"; fi
 ```
 
 Run in the installation's directory, they fetch into a folder of their own,
 check the signature, that the signed list is `V`'s and not an older release's,
-and the compose file's digest. Only then is the compose file in use kept as
-`docker-compose.yml.before-V` and the new one put in its place. Each line is
-safe on its own: a pasted line runs whether or not the one before it worked,
-and nothing beside the compose file in use is written until the last one has
-verified. The data directory, the password and every published record stay.
-To go back, copy `docker-compose.yml.before-V` over `docker-compose.yml` and
-run `sudo docker compose up -d`.
+and the compose file's digest. Only then is the new compose file put in place
+of the one in use. Each line is safe on its own: a pasted line runs whether or
+not the one before it worked, and nothing beside the compose file in use is
+written until the last one has verified. If anything does not verify, the last
+line removes the folder and prints `STOP`. The data directory, the password
+and every published record stay.
+
+Once the new version has started, the same line removes the folder and every
+Porch image no container uses: the one just replaced, and any an interrupted
+update left. It picks them by the label every Porch image carries, so no other
+image on the server is touched. Nothing else is kept either: to go back, run
+the same lines with `V` set to the release you left, which checks it the same
+way and pulls its image again.
+
+Earlier versions of these lines kept `docker-compose.yml.before-V` and the
+`update-V` folder, and the install kept `allowed_signers`, `SHA256SUMS` and
+`SHA256SUMS.sig`. None of them is needed. In the installation's directory:
+
+```sh
+test -f docker-compose.yml && rm -rf update-v* docker-compose.yml.before-v* allowed_signers SHA256SUMS SHA256SUMS.sig
+sudo docker image prune -a -f --filter label=org.opencontainers.image.source=https://github.com/denyfirst/porch
+```
 
 Changes of your own belong in `docker-compose.override.yml`, which Docker
 Compose reads beside the compose file and an update leaves alone.
