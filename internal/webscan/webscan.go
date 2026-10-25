@@ -499,6 +499,8 @@ func hops(c *webprobe.Chain) []policy.WebHop {
 		out = append(out, policy.WebHop{
 			TLS:      h.TLS,
 			Answered: h.Err == "",
+			Silent:   h.Silent(),
+			Reason:   h.Err,
 			Status:   h.Status,
 		})
 	}

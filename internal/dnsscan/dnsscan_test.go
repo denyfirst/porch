@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net/netip"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,12 @@ type zone struct {
 	nsec3     []dnsclient.NSEC3PARAM
 
 	validated bool
+
+	// parentValidated is the AD bit on the delegation signer's answer alone,
+	// which the zone above writes: a validating resolver vouches for the
+	// absence of a signer beneath a signed parent even when this zone is not
+	// signed.
+	parentValidated bool
 
 	// signatures are the RRSIG records the SOA answer carries, which is where
 	// the date a signed zone stops being accepted comes from, and
@@ -97,7 +104,7 @@ func (z *zone) LookupDS(_ context.Context, _ string) (dnsclient.ZoneAnswer, erro
 	if err := z.fail["ds"]; err != nil {
 		return dnsclient.ZoneAnswer{}, err
 	}
-	return dnsclient.ZoneAnswer{DS: z.ds, Existed: true, Validated: z.validated}, nil
+	return dnsclient.ZoneAnswer{DS: z.ds, Existed: true, Validated: z.validated || z.parentValidated}, nil
 }
 
 func (z *zone) LookupDNSKEY(_ context.Context, _ string) (dnsclient.ZoneAnswer, error) {
@@ -148,6 +155,9 @@ func (z *zone) LookupNSEC3PARAM(_ context.Context, _ string) (dnsclient.ZoneAnsw
 }
 
 func (z *zone) LookupTXT(_ context.Context, _ string) (dnsclient.TXTAnswer, error) {
+	if err := z.fail["txt"]; err != nil {
+		return dnsclient.TXTAnswer{}, err
+	}
 	return dnsclient.TXTAnswer{Values: z.text, Existed: true}, nil
 }
 
@@ -269,6 +279,7 @@ func read(t *testing.T, z *zone) *Result {
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
+	observationsObserved(t, got)
 	return got
 }
 
@@ -330,6 +341,39 @@ func TestAZoneThatIsServedAndSignedReadsStrong(t *testing.T) {
 	if !got.Observed.SignaturesVerified || got.Observed.SignatureFault != "" || got.Observed.SignatureCheckReason != "" {
 		t.Errorf("the signatures read verified %v, fault %q, reason %q", got.Observed.SignaturesVerified,
 			got.Observed.SignatureFault, got.Observed.SignatureCheckReason)
+	}
+}
+
+// The resolver is said to have validated the zone's answers only where it
+// validated every one of them.
+//
+// Found in a report on 2026-10-25, in the CAA lookup, and present here too:
+// the bit was taken from any one answer, and the one a validating resolver
+// always vouches for beneath a signed parent is the absence of a delegation
+// signer. An unsigned zone was one sentence away from being called validated.
+func TestTheResolverIsSaidToHaveValidatedOnlyWhatItValidated(t *testing.T) {
+	const said = "The resolver reported these answers DNSSEC-validated"
+	says := func(r *Result) bool {
+		for _, n := range r.Notes {
+			if strings.HasPrefix(n.Text, said) {
+				return true
+			}
+		}
+		return false
+	}
+
+	signed := served(t)
+	signed.validated = true
+	if got := read(t, signed); !got.Observed.ResolverValidated || !says(got) {
+		t.Errorf("a signed zone whose every answer was validated: validated %v, said %v",
+			got.Observed.ResolverValidated, says(got))
+	}
+
+	unsigned := served(t)
+	unsigned.ds, unsigned.keys, unsigned.signatures, unsigned.keySignatures = nil, nil, nil, nil
+	unsigned.parentValidated = true
+	if got := read(t, unsigned); got.Observed.ResolverValidated || says(got) {
+		t.Errorf("an unsigned zone whose parent vouched only for the missing signer was said validated")
 	}
 }
 
@@ -860,8 +904,25 @@ func asking(t *testing.T, z *zone, s *servers) *Result {
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
+	observationsObserved(t, got)
 	return got
 }
+
+// observationsObserved fails a report that files a question it could not
+// settle among what it established. Every scan in this file passes through
+// it: an observation is counted as measured on the report's face, and a
+// sentence saying something was not established is the one thing it cannot
+// be. The zone-transfer note was filed that way until 2026-10-25.
+func observationsObserved(t *testing.T, r *Result) {
+	t.Helper()
+	for _, n := range r.Notes {
+		if n.Kind == policy.KindObserved && unsettledWording.MatchString(n.Text) {
+			t.Errorf("an observation says something was not established: %q", n.Text)
+		}
+	}
+}
+
+var unsettledWording = regexp.MustCompile(`not established|was not read|were not read|could not be read|did not complete`)
 
 // A server that does not answer for the zone is found by asking it, which is
 // the question a resolver cannot answer: one that reached a working server
@@ -1192,6 +1253,58 @@ func TestAParentThatWasNotAskedIsNotAgreement(t *testing.T) {
 	}
 }
 
+// A question a graded rule reads that went unanswered leaves the zone not
+// strong, and the report says which server did not answer and why.
+//
+// Found in the 2026-10-25 review: a server asked directly that failed was
+// recorded with its reason and nothing said it; its serial read "not read",
+// the rules about it fell silent, and the zone was strong.
+func TestAQuestionNotAnsweredIsSaidAndIsNotPassing(t *testing.T) {
+	z := served(t)
+	answering := func() *servers {
+		return &servers{
+			authoritative: map[string]bool{"192.0.2.53": true, "198.51.100.53": true},
+			claiming:      map[string]bool{}, recursing: map[string]bool{}, refusing: map[string]bool{},
+			fail:     map[string]error{},
+			referral: []string{"ns1.example.net", "ns2.example.org"},
+		}
+	}
+
+	if got := asking(t, z, answering()); got.Verdict != policy.Strong {
+		t.Fatalf("every question answered: verdict %q %v", got.Verdict, ruleIDs(got))
+	}
+
+	silent := answering()
+	silent.fail["198.51.100.53"] = errors.New("dnsclient: reading the reply: i/o timeout")
+	got := asking(t, z, silent)
+	if got.Verdict == policy.Strong {
+		t.Errorf("a server that did not answer left the zone strong")
+	}
+	said := false
+	for _, n := range got.Notes {
+		said = said || (n.Kind == policy.KindUnsettled && strings.HasPrefix(n.Text, "Whether ns2.example.org answers for this zone"))
+	}
+	if !said {
+		t.Errorf("the server that did not answer is not named: %v", noteTexts(got))
+	}
+
+	orphan := answering()
+	orphan.referral = nil
+	if got := asking(t, z, orphan); got.Verdict == policy.Strong || got.Observed.ParentReason == "" {
+		t.Errorf("a parent that did not answer left the zone strong (reason %q)", got.Observed.ParentReason)
+	}
+}
+
+// Text records that could not be read carry the reason, and are not empty.
+func TestTextRecordsNotReadCarryTheReason(t *testing.T) {
+	z := served(t)
+	z.fail["txt"] = errors.New("dnsclient: reading the reply: i/o timeout")
+	got := read(t, z)
+	if got.Observed.TextReason == "" || len(got.Observed.Text) != 0 {
+		t.Errorf("text records nobody read: reason %q, records %v", got.Observed.TextReason, got.Observed.Text)
+	}
+}
+
 // Whether the servers hold the same copy of the zone is read from the answers
 // already in hand, and reported rather than graded.
 //
@@ -1210,6 +1323,9 @@ func TestWhetherTheServersHoldTheSameCopyIsReadAndNotGraded(t *testing.T) {
 		refusing:      map[string]bool{},
 		fail:          map[string]error{},
 		serial:        map[string]uint32{"198.51.100.53": 5},
+		// The zone above delegates to the same two, so the parent's answer is
+		// in hand: since dns-v5 a parent that did not answer is not strong.
+		referral: []string{"ns1.example.net", "ns2.example.org"},
 	}
 
 	got := asking(t, z, behind)
@@ -1295,6 +1411,7 @@ func TestWhetherTheZoneCanBeReadWholeIsAskedAndReported(t *testing.T) {
 		refusing:      map[string]bool{},
 		fail:          map[string]error{},
 		handing:       map[string]bool{"198.51.100.53": true},
+		referral:      []string{"ns1.example.net", "ns2.example.org"},
 	}
 
 	got := asking(t, z, open)

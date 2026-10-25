@@ -35,7 +35,13 @@ import (
 // every rule about name servers fell silent and silence was taken for passing.
 // It is ungraded now, as is a zone whose signing could not be established. An
 // unsigned zone is weak, and a registration that has run out is insecure.
-const DNSVersion = "porch-dns-v4"
+//
+// v5, 2026-10-25. Nor is a zone strong where a server it names, or the zone
+// above it, was asked directly and did not answer: the rules about servers
+// that do not answer for the zone, that recurse, and about a parent handing
+// out other servers fall silent for a question that was not answered, and
+// silence is not passing (R4). The same reading mail-v5 gave exchangers.
+const DNSVersion = "porch-dns-v5"
 
 var (
 	rfc1034 = Reference{
@@ -201,6 +207,10 @@ type DNSFacts struct {
 	Routes     []RouteFacts `json:"routes,omitempty"`
 	RoutesLine string       `json:"routesLine,omitempty"`
 
+	// RoutesSkipped is how many of those addresses were not asked about,
+	// past the bound on how many are.
+	RoutesSkipped int `json:"routesSkipped,omitempty"`
+
 	// IPv4 and IPv6 are what the name itself resolves to, kept apart because
 	// they are two questions: a name with an address of one kind and none of
 	// the other is ordinary, and a report that merged them could not say which
@@ -291,6 +301,10 @@ type DNSFacts struct {
 	// graded: the mail check grades the sender policy, and the rest belongs to
 	// whoever put it there.
 	Text []string `json:"text,omitempty"`
+
+	// TextReason says why the text records could not be read. Until
+	// 2026-10-25 a lookup that failed was shown as a name publishing none.
+	TextReason string `json:"textReason,omitempty"`
 
 	// Signed is whether the parent holds a delegation signer for this zone,
 	// which is what anchors the chain. A zone without one is unsigned, and that
@@ -436,8 +450,8 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 		add("dns.name-servers-one-network", Weak,
 			"Every name server answers from the same network",
 			"RFC 2182 asks for name servers that do not fail together. These "+
-				strconv.Itoa(len(f.NameServers))+" answer from one network, so whatever takes it "+
-				"out takes the domain with it.",
+				strconv.Itoa(len(f.NameServers))+" answer from one network (one IPv4 /24 or IPv6 /48), so "+
+				"whatever takes it out takes the domain with it.",
 			rfc2182)
 	}
 
@@ -456,6 +470,30 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 			recursing = append(recursing, ns.Name)
 		}
 	}
+	// A server asked directly that did not answer, said with the reason.
+	// Until 2026-10-25 nothing said it: the serial read "not read" and the
+	// rules about it were silent, which read as a server that passed them.
+	unanswered := map[string][]string{}
+	var unansweredWhy []string
+	for _, ns := range f.NameServers {
+		if ns.AskedReason == "" {
+			continue
+		}
+		if _, ok := unanswered[ns.AskedReason]; !ok {
+			unansweredWhy = append(unansweredWhy, ns.AskedReason)
+		}
+		unanswered[ns.AskedReason] = append(unanswered[ns.AskedReason], ns.Name)
+	}
+	for _, why := range unansweredWhy {
+		servers := unanswered[why]
+		answers, it := " answers", " it"
+		if len(servers) > 1 {
+			answers, it = " answer", " they"
+		}
+		unsettled("Whether " + list(servers) + answers + " for this zone, and whether" + it + answers +
+			" questions about other domains, was not established: " + why + ".")
+	}
+
 	if len(lame) > 0 {
 		add("dns.name-server-not-authoritative", Weak,
 			"A name server this zone names does not answer for it",
@@ -760,7 +798,10 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 			"header, so nothing was taken. To see what it hands over, run porch-scan -check " +
 			"names -read-zone on your own zone.")
 	} else if len(unread) > 0 {
-		note("Whether the zone can be read whole was not established for " + strings.Join(unread, ", ") +
+		// Unsettled: a question that did not complete established nothing.
+		// Filed as an observation until 2026-10-25, where it was counted
+		// among what the scan measured.
+		unsettled("Whether the zone can be read whole was not established for " + strings.Join(unread, ", ") +
 			": the question did not complete. That is not a zone that refused one (R4).")
 	}
 
@@ -844,6 +885,16 @@ func dnsUnsettled(f DNSFacts) bool {
 		return true
 	case f.Signed && !f.ChainMatched && !computable(f.Signers):
 		return true
+	case f.ParentReason != "":
+		// Since v5: dns.parent-and-zone-disagree reads the parent's answer.
+		return true
+	}
+	// Since v5: dns.name-server-not-authoritative and
+	// dns.name-server-offers-recursion read each server's own answer.
+	for _, ns := range f.NameServers {
+		if ns.AskedReason != "" {
+			return true
+		}
 	}
 	return false
 }

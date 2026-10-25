@@ -106,6 +106,41 @@ func TestTheRoutesReachTheReport(t *testing.T) {
 	}
 }
 
+// boundedRoutes answers the first two addresses, as the real client answers
+// the first eight, and fails them with a reason.
+type boundedRoutes struct{}
+
+func (boundedRoutes) Check(_ context.Context, addresses []string) []rpki.Route {
+	var out []rpki.Route
+	for _, a := range addresses[:2] {
+		out = append(out, rpki.Route{Address: a, Reason: "RIPEstat could not be reached"})
+	}
+	return out
+}
+
+// A route not established says why, and addresses past the bound are counted
+// as not asked. Found in a report on 2026-10-25: "8 not established of 8
+// addresses" for a name whose servers had twelve, and no reason anywhere.
+func TestTheRoutesNotAskedAndNotEstablishedAreSaid(t *testing.T) {
+	got, err := (&Scanner{Resolver: served(t), Routes: boundedRoutes{}}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// served has two addresses of its own and one for each of two servers.
+	if got.Observed.RoutesSkipped != 2 {
+		t.Errorf("%d addresses counted as not asked, want 2", got.Observed.RoutesSkipped)
+	}
+	if want := "2 not established of 2 addresses, and 2 more not asked"; got.Observed.RoutesLine != want {
+		t.Errorf("the line reads %q, want %q", got.Observed.RoutesLine, want)
+	}
+	notes := strings.Join(policy.Texts(got.Notes), " ")
+	for _, want := range []string{"was not established: RIPEstat could not be reached", "the other 2 were not asked about"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("the notes do not say %q: %s", want, notes)
+		}
+	}
+}
+
 // hangingRegistry and hangingRoutes answer only once they are given up on.
 type hangingRegistry struct{}
 

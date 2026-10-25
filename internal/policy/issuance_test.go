@@ -192,6 +192,11 @@ func TestEveryCheckedStateMentionsTransparency(t *testing.T) {
 		if !strings.Contains(joined, "transparency") {
 			t.Errorf("a checked state does not mention what records issuance when a restriction fails: %s", joined)
 		}
+		// Not as a section "below": a report whose handshake did not complete
+		// has none, and until 2026-10-25 the sentence pointed at it anyway.
+		if strings.Contains(joined, "below") {
+			t.Errorf("the issuance notes point at a section that may not be there: %s", joined)
+		}
 	}
 }
 

@@ -1235,7 +1235,17 @@ in `internal/scan.checkReceipts`
 `TestTheHSTSVerdictMatrix`, `TestTheTransportVerdictMatrix`,
 `TestAnUnmeasuredTLS13IsNeitherStrongNorWeak`,
 `TestAServerAnsweringTLS13InTLS12IsARefusal`,
-`TestAHostAcceptingEveryPortIsNotGradedForIt`
+`TestAHostAcceptingEveryPortIsNotGradedForIt`,
+`TestTheWalkIsValidatedOnlyWhereEveryAnswerWas`,
+`TestTheResolverIsSaidToHaveValidatedOnlyWhatItValidated`,
+`TestOnlyARefusalOrASilenceSaysNothingAnswers`,
+`TestAnUnaskedPlaintextAddressIsNotOneWhereNothingAnswered`,
+`TestAnUnreadRecordIsNotAnAbsentOne`, `TestAnMTASTSRecordNotReadIsNotAnAbsence`,
+`TestTLSReportingIsOnlyTrueWhenTheRecordSaysSo`,
+`TestTextRecordsNotReadCarryTheReason`, `TestTextRecordsNotReadAreNotNone`,
+`TestARouteNotEstablishedSaysWhyAndTheBoundIsSaid`,
+`TestTheRoutesNotAskedAndNotEstablishedAreSaid`,
+`TestAQuestionNotAnsweredIsSaidAndIsNotPassing`
 
 ### R4a — A verdict's stated reason is true of the thing it grades
 

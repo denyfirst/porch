@@ -1,7 +1,7 @@
 # Rule set changes
 
 Every verdict names the rule set that graded it. The ones in force are
-`porch-tls-v9`, `porch-web-v6`, `porch-mail-v5` and `porch-dns-v4`. Reports
+`porch-tls-v9`, `porch-web-v6`, `porch-mail-v6` and `porch-dns-v5`. Reports
 from two rule sets are not comparable: a server graded `strong` under one and
 `weak` under the next may not have changed at all. This page says what moved,
 so a pipeline can tell a configuration that got worse from a rule that got
@@ -15,6 +15,36 @@ Porch. The numbers did not reset, and older sections keep the names they
 shipped under, because those are the names in the reports.
 
 Newest first.
+
+---
+
+## `porch-dns-v4` → `porch-dns-v5`
+
+Released in v0.32.0, 2026-10.
+
+- **A zone is not strong where a question that a graded rule reads went
+  unanswered.** A server the zone names that was asked directly and did not
+  answer, or a zone above it that did not answer, leaves the rules about
+  servers that do not answer for the zone, that recurse, and about the parent
+  handing out other servers silent, and silence is not passing. The report
+  says which server did not answer and why; it said nothing.
+- A note that a zone transfer was not established is filed as not
+  established. It was filed among what the scan measured.
+
+---
+
+## `porch-mail-v5` → `porch-mail-v6`
+
+Released in v0.32.0, 2026-10.
+
+- **Strong needs every record a graded rule reads.** A domain whose MTA-STS
+  record could not be read, whose announced MTA-STS policy was not read, or
+  whose DMARC reports go to an outside destination whose consent could not be
+  read is not strong. The rules about each fall silent where nothing was read,
+  and silence is not passing. The same reading v5 gave exchangers that were
+  not measured.
+- An MTA-STS or TLS-RPT record that could not be read is reported as not
+  established. It was reported as absent.
 
 ---
 

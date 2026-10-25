@@ -49,7 +49,13 @@ import (
 // exchanger that does not offer STARTTLS, and a domain whose exchangers were
 // not all measured is not strong. A name with no DMARC record of its own is
 // read under the nearest one above it, as receivers read it.
-const MailVersion = "porch-mail-v5"
+//
+// v6, 2026-10-25. Strong also needs every record a graded rule reads. A domain
+// whose MTA-STS record could not be read, whose announced policy was not read,
+// or whose DMARC reports go somewhere whose consent could not be read came
+// back strong, though the rules about each fall silent for what was not read
+// — and silence is not passing (R4). The same reading v5 gave exchangers.
+const MailVersion = "porch-mail-v6"
 
 var (
 	rfc7208 = Reference{
@@ -214,6 +220,11 @@ type MailFacts struct {
 	// where to send reports about failed transport security.
 	TLSReporting bool `json:"tlsReporting"`
 
+	// TLSReportingReason says why the TLS-RPT record could not be read. Until
+	// 2026-10-25 a lookup that failed was reported as a domain publishing
+	// none.
+	TLSReportingReason string `json:"tlsReportingReason,omitempty"`
+
 	// Mail exchangers
 
 	// MXRead records that the MX lookup answered at all. Without it an empty
@@ -250,6 +261,11 @@ type MailFacts struct {
 	// MTASTSRecords is how many records announce an MTA-STS policy. The record
 	// only: it says a policy exists and never what the policy is.
 	MTASTSRecords int `json:"mtaStsRecords"`
+
+	// MTASTSReason says why the MTA-STS record could not be read. Until
+	// 2026-10-25 a lookup that failed was reported as a domain announcing no
+	// policy.
+	MTASTSReason string `json:"mtaStsReason,omitempty"`
 
 	// MTASTSPolicyRead is whether the policy file itself was fetched.
 	//
@@ -898,11 +914,18 @@ func exchangersIncomplete(f MailFacts) bool {
 	return false
 }
 
-// principalUnread reports whether a record every mail rule rests on could not
-// be read. The records themselves being absent is not this: an absence was
+// principalUnread reports whether a record a graded mail rule rests on could
+// not be read. The records themselves being absent is not this: an absence was
 // read, and is described.
+//
+// The MTA-STS record and policy, and the consent of an outside report
+// destination, since v6: mail.mta-sts-policy-invalid, the two coverage rules
+// and mail.dmarc-reports-unauthorised read them, and fall silent where they
+// were not read.
 func principalUnread(f MailFacts) bool {
-	return f.SPFReason != "" || f.SPFUnreadIncludes > 0 || f.DMARCReason != "" || f.MXReason != ""
+	return f.SPFReason != "" || f.SPFUnreadIncludes > 0 || f.DMARCReason != "" || f.MXReason != "" ||
+		f.MTASTSReason != "" || (f.MTASTSRecords > 0 && !f.MTASTSPolicyRead) ||
+		len(f.DMARCReportTo.Unread()) > 0
 }
 
 // describeMail says what was established and deliberately not graded.
@@ -1004,7 +1027,11 @@ func describeMail(f MailFacts) []Note {
 
 	out = append(out, describeReporting(f)...)
 
-	if !f.TLSReporting {
+	switch {
+	case f.TLSReportingReason != "":
+		out = append(out, Unsettled("Whether the domain publishes a TLS-RPT record was not established: "+
+			f.TLSReportingReason+"."))
+	case !f.TLSReporting:
 		out = append(out, Observed("The domain publishes no TLS-RPT record, so it hears nothing when other servers "+
 			"fail to deliver to it over TLS. Nothing is wrong without one."))
 	}
@@ -1160,8 +1187,12 @@ func describeMailPath(f MailFacts) []Note {
 		return out
 
 	case len(f.MXHosts) == 0:
-		out = append(out, Observed("The domain publishes no MX record, so senders fall back to its address record. "+
-			"A domain that takes no mail should say so with a null MX."))
+		// Whether the name has an address is the DNS check's to read, not this
+		// one's, so the sentence holds either way. Until 2026-10-25 it said
+		// senders fall back to the address record, of names that had none.
+		out = append(out, Observed("The domain publishes no MX record, so senders try the name's own address "+
+			"instead (RFC 5321), and where it has none, mail to it cannot be delivered. A domain "+
+			"that takes no mail should say so with a null MX."))
 		return out
 	}
 
@@ -1221,6 +1252,10 @@ func describeMailPath(f MailFacts) []Note {
 func describeSTS(f MailFacts) []Note {
 	var out []Note
 
+	if f.MTASTSReason != "" {
+		return append(out, Unsettled("Whether the domain announces an MTA-STS policy was not established: "+
+			f.MTASTSReason+"."))
+	}
 	if f.MTASTSRecords == 0 {
 		return append(out, Observed("The domain announces no MTA-STS policy, so a sender that cannot negotiate TLS "+
 			"with these hosts may deliver in the clear."))

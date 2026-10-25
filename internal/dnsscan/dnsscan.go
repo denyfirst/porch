@@ -201,11 +201,13 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	}
 
 	facts := policy.DNSFacts{Policy: policy.DNSVersion}
-	soa := s.readZone(ctx, resolver, domain, &facts)
+	var ad vouched
+	soa := s.readZone(ctx, resolver, domain, &facts, &ad)
 	s.readAddresses(ctx, resolver, domain, &facts)
 	s.readAlias(ctx, resolver, domain, &facts)
-	s.readNameServers(ctx, resolver, domain, &facts)
-	s.readChain(ctx, resolver, domain, soa, &facts)
+	s.readNameServers(ctx, resolver, domain, &facts, &ad)
+	s.readChain(ctx, resolver, domain, soa, &facts, &ad)
+	facts.ResolverValidated = ad.every()
 	s.readAbsence(ctx, resolver, domain, &facts)
 	s.askServers(ctx, domain, &facts)
 	s.askParent(ctx, resolver, domain, &facts)
@@ -218,8 +220,9 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	// that the scan did not finish. A self-hosted copy answered that on
 	// 2026-10-20, and the same scan from its command line minutes later took
 	// four seconds.
-	// Neither moves the verdict (R21), so one cut short is a line saying
-	// "not established" and nothing worse.
+	// Only a registration that has run out moves the verdict, and only once
+	// it was read: one cut short is a line saying "not established" and
+	// nothing worse. Routes are described and never graded (R21).
 	outside, cancel := shareBefore(ctx, outsideReserve)
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -238,7 +241,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 	if facts.Registration != nil {
 		notes = append(notes, policy.DescribeRegistration(*facts.Registration, s.now())...)
 	}
-	notes = append(notes, policy.DescribeRoutes(facts.Routes)...)
+	notes = append(notes, policy.DescribeRoutes(facts.Routes, facts.RoutesSkipped)...)
 
 	return &Result{
 		Domain:   domain,
@@ -250,6 +253,28 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 		Duration: s.now().Sub(started),
 	}, nil
 }
+
+// vouched is the resolver's AD bit across the answers the zone's report rests
+// on: its records, its servers, its delegation signer and its keys.
+//
+// Every one of them, or the report says nothing about validation. Until
+// 2026-10-25 any one answer was enough, and the one a validating resolver
+// always vouches for is the delegation signer's absence, which the zone above
+// proves — so an unsigned zone beneath a signed one could be said to have had
+// its answers validated, when none of its own were.
+type vouched struct {
+	answers   int
+	validated int
+}
+
+func (v *vouched) add(validated bool) {
+	v.answers++
+	if validated {
+		v.validated++
+	}
+}
+
+func (v *vouched) every() bool { return v.answers > 0 && v.validated == v.answers }
 
 // outsideReserve is the time kept back from the services asked last, so that
 // the scan returns inside its caller's deadline with what it has. Grading and
@@ -310,13 +335,25 @@ func (s *Scanner) readRoutes(ctx context.Context, facts *policy.DNSFacts) {
 			Address: r.Address, Prefix: r.Prefix, Origins: r.Origins, State: r.State, Reason: r.Reason,
 		})
 	}
-	facts.RoutesLine = policy.RoutesLine(facts.Routes)
+	// The client asks about a bounded number; the rest are counted here so
+	// the report can say they were not asked about rather than leave a
+	// reader to take the ones that were for all of them.
+	distinct := map[netip.Addr]bool{}
+	for _, raw := range addresses {
+		if addr, err := netip.ParseAddr(strings.TrimSpace(raw)); err == nil {
+			distinct[addr] = true
+		}
+	}
+	if len(facts.Routes) > 0 && len(distinct) > len(facts.Routes) {
+		facts.RoutesSkipped = len(distinct) - len(facts.Routes)
+	}
+	facts.RoutesLine = policy.RoutesLine(facts.Routes, facts.RoutesSkipped)
 }
 
 // readZone reads the record at the top of the zone and the text records, and
 // decides whether a zone begins here at all. The answer is returned for the
 // signature check, which needs the record as it was signed.
-func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) dnsclient.ZoneAnswer {
+func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts, ad *vouched) dnsclient.ZoneAnswer {
 	answer, err := r.LookupSOA(ctx, domain)
 	answer, err = s.unlessRejected(ctx, r, domain, dnsclient.TypeSOA, answer, err, facts)
 
@@ -355,7 +392,9 @@ func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts
 		facts.SOAExpire = soa.Expire
 		facts.SOAMinimum = soa.Minimum
 	}
-	facts.ResolverValidated = facts.ResolverValidated || answer.Validated
+	if err == nil {
+		ad.add(answer.Validated)
+	}
 
 	if text, err := r.LookupTXT(ctx, domain); err == nil {
 		// Marked, because these are shown as published, on a page and in the
@@ -365,6 +404,9 @@ func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts
 		for _, v := range text.Values {
 			facts.Text = append(facts.Text, display.Mark(v))
 		}
+	} else {
+		// Unknown, not empty: the report says the records were not read.
+		facts.TextReason = shape(err)
 	}
 	return answer
 }
@@ -404,7 +446,7 @@ func (s *Scanner) readAddresses(ctx context.Context, r Resolver, domain string, 
 
 // readNameServers reads the delegation and resolves each server named, so that
 // a name nobody can resolve is visible as what it is.
-func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts) {
+func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string, facts *policy.DNSFacts, ad *vouched) {
 	if !facts.Apex {
 		return
 	}
@@ -414,7 +456,7 @@ func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string
 		facts.NSReason = shape(err)
 		return
 	}
-	facts.ResolverValidated = facts.ResolverValidated || answer.Validated
+	ad.add(answer.Validated)
 
 	hosts := answer.NS
 	if len(hosts) > maxNameServers {
@@ -451,7 +493,7 @@ func (s *Scanner) readNameServers(ctx context.Context, r Resolver, domain string
 
 // readChain reads both ends of the DNSSEC link and works out whether they
 // meet, and then checks the signatures the link exists for.
-func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, soa dnsclient.ZoneAnswer, facts *policy.DNSFacts) {
+func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, soa dnsclient.ZoneAnswer, facts *policy.DNSFacts, ad *vouched) {
 	if !facts.Apex {
 		return
 	}
@@ -462,7 +504,7 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, soa 
 		facts.ChainReason = shape(err)
 		return
 	}
-	facts.ResolverValidated = facts.ResolverValidated || signers.Validated
+	ad.add(signers.Validated)
 	if len(signers.DS) == 0 {
 		return
 	}
@@ -474,7 +516,7 @@ func (s *Scanner) readChain(ctx context.Context, r Resolver, domain string, soa 
 		facts.ChainReason = shape(err)
 		return
 	}
-	facts.ResolverValidated = facts.ResolverValidated || keys.Validated
+	ad.add(keys.Validated)
 
 	for _, k := range keys.Keys {
 		facts.Keys = append(facts.Keys, policy.KeyDigest{

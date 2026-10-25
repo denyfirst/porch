@@ -1,6 +1,7 @@
 package webscan
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/denyfirst/porch/internal/markup"
@@ -145,5 +146,67 @@ func TestAnIncompletePageReachesTheGrading(t *testing.T) {
 	}
 	if contentFacts(page(false)).Incomplete {
 		t.Error("a whole page was carried as incomplete")
+	}
+}
+
+// A plaintext address no request reached is not one where nothing answered.
+//
+// Found in a report on 2026-10-25, of a name with no address: "Nothing answered
+// on port 80, so there is no plaintext request to intercept", filed among what
+// the scan measured. No request had been made, and a name that resolves for a
+// visitor somewhere else may well answer there.
+func TestAnUnaskedPlaintextAddressIsNotOneWhereNothingAnswered(t *testing.T) {
+	const nothing = "Nothing answered on port 80"
+	notes := func(r *Result) (observed, unsettled []string) {
+		for _, n := range r.Notes {
+			switch n.Kind {
+			case policy.KindObserved:
+				observed = append(observed, n.Text)
+			case policy.KindUnsettled:
+				unsettled = append(unsettled, n.Text)
+			}
+		}
+		return observed, unsettled
+	}
+	failed := func(tls bool, err string) *webprobe.Chain {
+		return chain(webprobe.Hop{URL: address(tls, "example.test"), TLS: tls, Err: err})
+	}
+
+	for _, tc := range []struct {
+		situation string
+		plainErr  string
+		observed  bool
+	}{
+		{"the name did not resolve", "the name did not resolve", false},
+		{"the destination was refused here", "not fetched: this is not a destination the service will connect to", false},
+		{"the connection closed after it opened", "the connection closed before a response arrived", false},
+		{"the connection was refused", "the connection was refused", true},
+		{"the request timed out", "the request timed out", true},
+	} {
+		got := Grade(&webprobe.Report{Host: "example.test",
+			Secure: failed(true, tc.plainErr), Plain: failed(false, tc.plainErr)})
+		observed, unsettled := notes(got)
+		said := false
+		for _, o := range observed {
+			said = said || strings.HasPrefix(o, nothing)
+		}
+		if said != tc.observed {
+			t.Errorf("%s: observed %q is %v, want %v: %q", tc.situation, nothing, said, tc.observed, observed)
+		}
+		if !tc.observed {
+			want := "Whether anything answers on port 80 was not established: " + tc.plainErr + "."
+			found := false
+			for _, u := range unsettled {
+				found = found || u == want
+			}
+			if !found {
+				t.Errorf("%s: the report does not say why port 80 was not established: %q", tc.situation, unsettled)
+			}
+		}
+		for _, u := range unsettled {
+			if strings.HasPrefix(u, "Nothing answered over TLS") {
+				t.Errorf("%s: %q says something answered nothing where nothing may have been asked", tc.situation, u)
+			}
+		}
 	}
 }

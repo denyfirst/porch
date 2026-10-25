@@ -475,6 +475,7 @@ func TestTheMailPathIsDescribedAndNeverGraded(t *testing.T) {
 		{"MTA-STS and no DANE", MailFacts{
 			SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject",
 			MXRead: true, MXHosts: []string{"mx1.example"}, MTASTSRecords: 1, DANEAsked: 1,
+			MTASTSPolicyRead: true, MTASTSMode: "testing", MTASTSPolicyMX: []string{"mx1.example"},
 		}},
 		{"DANE on every exchanger", MailFacts{
 			SPFRecords: 1, SPFAll: "-", DMARCRecords: 1, DMARCPolicy: "reject",
@@ -731,4 +732,46 @@ func TestTheVoidLookupFindingNamesThePolicies(t *testing.T) {
 		return
 	}
 	t.Fatalf("no void-lookup finding: %+v", got.Findings)
+}
+
+// A record that could not be read is not a record the domain does not publish.
+//
+// Found in the 2026-10-25 review: a failed lookup of the TLS-RPT record, or of
+// the MTA-STS record, was reported as the domain publishing none. Both are
+// claims about the domain, made from a failure of this scan (R4).
+func TestAnUnreadRecordIsNotAnAbsentOne(t *testing.T) {
+	f := exchangerFacts(good("mx1.example.net"))
+	f.TLSReportingReason = "the TLS-RPT record could not be read"
+	f.MTASTSReason = "the MTA-STS record could not be read"
+
+	got := GradeMail(f)
+	for _, n := range got.Notes {
+		if strings.Contains(n.Text, "publishes no TLS-RPT record") || strings.Contains(n.Text, "announces no MTA-STS policy") {
+			t.Errorf("an unread record is reported as absent: %q", n.Text)
+		}
+	}
+	for _, want := range []string{
+		"Whether the domain publishes a TLS-RPT record was not established: the TLS-RPT record could not be read.",
+		"Whether the domain announces an MTA-STS policy was not established: the MTA-STS record could not be read.",
+	} {
+		found := false
+		for _, n := range got.Notes {
+			found = found || (n.Kind == KindUnsettled && n.Text == want)
+		}
+		if !found {
+			t.Errorf("the report does not say %q", want)
+		}
+	}
+}
+
+// The sentence about a domain with no MX holds whether or not the name has an
+// address, which this check does not read. Until 2026-10-25 it said senders
+// fall back to the address record, of a name that had none.
+func TestNoMXSaysNothingAboutAnAddressItDidNotRead(t *testing.T) {
+	got := GradeMail(MailFacts{MXRead: true})
+	for _, n := range got.Notes {
+		if strings.Contains(n.Text, "publishes no MX record") && strings.Contains(n.Text, "fall back to its address record") {
+			t.Errorf("the note assumes an address record: %q", n.Text)
+		}
+	}
 }

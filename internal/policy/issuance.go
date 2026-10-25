@@ -310,9 +310,13 @@ func DescribeIssuance(f IssuanceFacts) Issuance {
 	// of the report. Stated on every branch, because a reader who has just
 	// been told issuance is restricted is exactly the reader most likely to
 	// stop reading.
+	//
+	// Without "below": a report whose handshake did not complete has no
+	// transparency section to point at, and until 2026-10-25 the sentence
+	// pointed at one anyway.
 	const pairing = "An authority checks CAA when it issues, so it does not help against a resolver " +
-		"poisoned at that moment or a compromised authority; certificate transparency, " +
-		"below, records the result either way. The format is RFC 8659."
+		"poisoned at that moment or a compromised authority; certificate transparency " +
+		"records the result either way. The format is RFC 8659."
 
 	switch {
 	case len(f.Authorities) == 0 && len(f.Wildcards) == 0 && f.Other > 0:

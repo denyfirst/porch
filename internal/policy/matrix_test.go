@@ -1,8 +1,11 @@
 package policy
 
 import (
+	"regexp"
 	"testing"
 	"time"
+
+	"github.com/denyfirst/porch/internal/dmarcreports"
 )
 
 // The verdict matrix: one row per situation a domain can be in, and the
@@ -71,9 +74,38 @@ func TestTheMailVerdictMatrix(t *testing.T) {
 
 		{"has an exchanger that offered STARTTLS and did not complete it",
 			func() MailFacts { f := sound(); f.Exchangers[0].Upgraded = false; return f }, Ungraded, ""},
+
+		// Since v6: a rule that reads a record cannot pass a record nobody read.
+		{"could not have its MTA-STS record read",
+			func() MailFacts { f := sound(); f.MTASTSReason = "x"; return f }, Ungraded, ""},
+
+		{"announces an MTA-STS policy that was not read",
+			func() MailFacts { f := sound(); f.MTASTSRecords = 1; f.MTASTSPolicyReason = "x"; return f }, Ungraded, ""},
+
+		{"announces an MTA-STS policy that was read and covers its exchanger",
+			func() MailFacts {
+				f := sound()
+				f.MTASTSRecords, f.MTASTSPolicyRead, f.MTASTSMode = 1, true, "enforce"
+				f.MTASTSPolicyMX = []string{"mx1.example.net"}
+				return f
+			}, Strong, ""},
+
+		{"sends reports somewhere whose consent could not be read",
+			func() MailFacts {
+				f := sound()
+				f.DMARCReportTo = dmarcreports.Found{Asked: true, Destinations: []dmarcreports.Destination{
+					{Domain: "reports.example.org", External: true, Reason: "x"}}}
+				return f
+			}, Ungraded, ""},
+
+		// TLS-RPT is described and never graded, so an unread one changes no
+		// verdict; it changes the sentence (TestAnUnreadRecordIsNotAnAbsentOne).
+		{"could not have its TLS-RPT record read",
+			func() MailFacts { f := sound(); f.TLSReportingReason = "x"; return f }, Strong, ""},
 	} {
 		t.Run(row.situation, func(t *testing.T) {
 			got := GradeMail(row.facts())
+			observationsObserved(t, got.Notes)
 			if got.Verdict != row.want {
 				t.Errorf("a domain that %s is graded %q with %v, want %q", row.situation, got.Verdict, mailRuleIDs(got), row.want)
 			}
@@ -145,9 +177,19 @@ func TestTheDNSVerdictMatrix(t *testing.T) {
 				f.Registration = &RegistrationFacts{Asked: true, Reason: "x"}
 				return f
 			}, Strong, ""},
+
+		// Since v5: the rules about each server, and about the parent, read
+		// answers to questions put directly; one that went unanswered is not
+		// passing.
+		{"has a server that did not answer when asked directly",
+			func() DNSFacts { f := signed(); f.NameServers[1].AskedReason = "x"; return f }, Ungraded, ""},
+
+		{"has a parent that did not answer",
+			func() DNSFacts { f := signed(); f.ParentReason = "x"; return f }, Ungraded, ""},
 	} {
 		t.Run(row.situation, func(t *testing.T) {
 			got := GradeDNS(row.facts(), now)
+			observationsObserved(t, got.Notes)
 			if got.Verdict != row.want {
 				t.Errorf("a zone that %s is graded %q with %v, want %q", row.situation, got.Verdict, got.Findings, row.want)
 			}
@@ -175,6 +217,7 @@ func TestTheHSTSVerdictMatrix(t *testing.T) {
 	} {
 		t.Run(row.situation, func(t *testing.T) {
 			got := GradeHSTS(row.secure, nil, row.answered)
+			observationsObserved(t, got.Notes)
 			if got.Verdict != row.want {
 				t.Errorf("a site that %s is graded %q with %v, want %q", row.situation, got.Verdict, webRuleIDs(got), row.want)
 			}
@@ -184,3 +227,20 @@ func TestTheHSTSVerdictMatrix(t *testing.T) {
 		})
 	}
 }
+
+// observationsObserved fails a set of notes that files something it could not
+// settle among what it established. Every row of every matrix passes through
+// it: an observation is counted as measured on the report's face, and a
+// sentence saying something was not established is the one thing it cannot be.
+// Two such notes were found on 2026-10-25, one in the DNS check and one in the
+// web check.
+func observationsObserved(t *testing.T, notes []Note) {
+	t.Helper()
+	for _, n := range notes {
+		if n.Kind == KindObserved && unsettledWording.MatchString(n.Text) {
+			t.Errorf("an observation says something was not established: %q", n.Text)
+		}
+	}
+}
+
+var unsettledWording = regexp.MustCompile(`not established|was not read|were not read|could not be read|did not complete`)

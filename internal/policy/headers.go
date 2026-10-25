@@ -170,7 +170,7 @@ func GradeHeaders(f HeaderFacts) WebResult {
 	var out WebResult
 
 	if !f.Answered {
-		out.unsettled("Nothing answered over TLS, so what this host sends on a response was not " +
+		out.unsettled("No response arrived over TLS, so what this host sends on a response was not " +
 			"established here. That is different from sending nothing.")
 		return out
 	}

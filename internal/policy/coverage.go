@@ -135,5 +135,10 @@ func upperFirst(s string) string {
 // negotiate, so the weakest thing a server will agree to is the thing that
 // decides. That reasoning is on /method in full; this is the clause that
 // stops a reader needing it.
-const WorstCase = "Worst case: an attacker chooses which option to negotiate, " +
-	"so the weakest one a server accepts is the one that decides."
+//
+// Worded for every check since 2026-10-25. It spoke of negotiation alone and
+// was printed under a mail or DNS verdict too, where nothing is negotiated:
+// a domain with no DMARC record is weak because anyone can send in its name,
+// not because an attacker chose an option.
+const WorstCase = "Worst case: the weakest thing found sets the verdict, " +
+	"because it is the one an attacker would use."

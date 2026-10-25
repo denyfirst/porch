@@ -237,9 +237,10 @@ func TestAFailedLookupIsNotADomainWithNoPolicy(t *testing.T) {
 	}
 }
 
-// A TLS-RPT lookup that fails says the record was not found, not that it is
-// absent — and either way nothing is graded, so the two lead to the same
-// sentence and the sentence claims only what was seen.
+// A TLS-RPT lookup that fails is recorded with its reason, not as an absence.
+// Nothing about TLS-RPT is graded, so the verdict is the same either way; the
+// sentence is not. Until 2026-10-25 a failed lookup was reported as a domain
+// publishing no record.
 func TestTLSReportingIsOnlyTrueWhenTheRecordSaysSo(t *testing.T) {
 	skipUnderDemo(t)
 	for _, tc := range []struct {
@@ -260,7 +261,34 @@ func TestTLSReportingIsOnlyTrueWhenTheRecordSaysSo(t *testing.T) {
 			if got.Observed.TLSReporting != tc.expect {
 				t.Errorf("TLSReporting = %v, want %v", got.Observed.TLSReporting, tc.expect)
 			}
+			if failed := tc.name == "the lookup failed"; (got.Observed.TLSReportingReason != "") != failed {
+				t.Errorf("TLSReportingReason = %q; a failed lookup carries a reason and nothing else does",
+					got.Observed.TLSReportingReason)
+			}
 		})
+	}
+}
+
+// An MTA-STS record that could not be read is recorded with its reason, not as
+// a domain announcing no policy, and the domain is not strong (mail-v6).
+func TestAnMTASTSRecordNotReadIsNotAnAbsence(t *testing.T) {
+	skipUnderDemo(t)
+	z := &zone{
+		records: map[string][]string{
+			"example.com":        {"v=spf1 -all"},
+			"_dmarc.example.com": {"v=DMARC1; p=reject; rua=mailto:reports@example.com"},
+		},
+		fail: map[string]error{"_mta-sts.example.com": errors.New("no answer")},
+	}
+	got, err := (&Scanner{Resolver: z}).Scan(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if got.Observed.MTASTSReason == "" || got.Observed.MTASTSRecords != 0 {
+		t.Errorf("a failed MTA-STS lookup: reason %q, records %d", got.Observed.MTASTSReason, got.Observed.MTASTSRecords)
+	}
+	if got.Verdict == policy.Strong {
+		t.Errorf("a domain whose MTA-STS record was not read is strong")
 	}
 }
 

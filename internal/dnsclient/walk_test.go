@@ -12,9 +12,10 @@ import (
 // network. The key is the name in lower case, since the question that reaches
 // it carries randomised case.
 type fakeResolver struct {
-	answers map[string][]record
-	missing map[string]bool // names the resolver says do not exist
-	asked   []string
+	answers  map[string][]record
+	missing  map[string]bool // names the resolver says do not exist
+	unsigned map[string]bool // names answered without the AD bit
+	asked    []string
 }
 
 func (f *fakeResolver) conn(t *testing.T) func(context.Context, string, string) (net.Conn, error) {
@@ -45,6 +46,9 @@ func (f *fakeResolver) conn(t *testing.T) func(context.Context, string, string) 
 			f.asked = append(f.asked, asked)
 
 			flags := uint16(flagsAnswerValidated)
+			if f.unsigned[asked] {
+				flags = flagsAnswer
+			}
 			if f.missing[asked] {
 				flags = 0x8183 // NXDOMAIN, and no AD
 			}
@@ -112,6 +116,43 @@ func TestExistedDescribesTheNameAskedAbout(t *testing.T) {
 	}
 	if got.Queries < 2 {
 		t.Errorf("took %d queries; the walk should continue past a missing name to find a parent policy", got.Queries)
+	}
+}
+
+// The walk is validated only where every answer it read was.
+//
+// Found in a report on 2026-10-25: a name in an unsigned zone beneath a signed
+// top-level domain was said to have been validated by the resolver, because
+// the walk kept the bit from its last answer, the top-level domain's. The empty
+// answer that decided the result came from the unsigned zone, and nothing
+// vouched for it.
+func TestTheWalkIsValidatedOnlyWhereEveryAnswerWas(t *testing.T) {
+	parent := name(t, "example")
+	for _, c := range []struct {
+		situation string
+		answers   map[string][]record
+		unsigned  map[string]bool
+		want      bool
+	}{
+		{"every answer validated", nil, nil, true},
+		{"nothing found, the name's own answer unvalidated", nil,
+			map[string]bool{"zone.example": true}, false},
+		{"found at the parent, the name's own empty answer unvalidated",
+			map[string][]record{"example": {{parent, TypeCAA, caaRecord(0, "issue", "letsencrypt.org")}}},
+			map[string]bool{"zone.example": true}, false},
+		{"found at the name, its answer validated, a parent unvalidated",
+			map[string][]record{"zone.example": {{name(t, "zone.example"), TypeCAA, caaRecord(0, "issue", "letsencrypt.org")}}},
+			map[string]bool{"example": true}, true},
+	} {
+		fake := &fakeResolver{answers: c.answers, unsigned: c.unsigned}
+		client := &Client{Server: "resolver.invalid:53", Dial: fake.conn(t)}
+		got, err := client.LookupCAA(context.Background(), "zone.example")
+		if err != nil {
+			t.Fatalf("%s: LookupCAA: %v", c.situation, err)
+		}
+		if got.Validated != c.want {
+			t.Errorf("%s: validated %v, want %v (asked %v)", c.situation, got.Validated, c.want, fake.asked)
+		}
 	}
 }
 
