@@ -372,6 +372,15 @@ type DNSFinding struct {
 	Verdict  Verdict   `json:"verdict"`
 	Findings []Finding `json:"findings,omitempty"`
 	Notes    []Note    `json:"notes,omitempty"`
+
+	// Withheld says why no verdict was given where something was measured:
+	// a rule's input that was not read, or a name that is not a zone. Both
+	// faces print it under the verdict, which said "nothing was measured"
+	// whatever the reason until 2026-10-26: a domain whose records were all
+	// read and whose exchangers this machine could not reach was described
+	// as one nothing had been measured about (R4a). Empty where a verdict was
+	// given, and where nothing was graded because nothing was measured.
+	Withheld string `json:"withheld,omitempty"`
 }
 
 // GradeDNS applies the rules above.
@@ -431,12 +440,14 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	// would report a fact about example.com under the name www.example.com.
 	if f.SOAReason != "" {
 		out.Verdict = ""
+		out.Withheld = "whether a zone begins at this name was not established"
 		unsettled("Whether a zone begins at this name was not established: " + f.SOAReason + ". Nothing " +
 			"about its delegation could be read without it.")
 		return withLimits(out)
 	}
 	if !f.Apex {
 		out.Verdict = ""
+		out.Withheld = "no zone begins at this name: it is a name inside one"
 		note("No zone begins at this name: it is a name inside one. Ask about the domain itself to read its delegation.")
 		return withLimits(out)
 	}
@@ -885,6 +896,7 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	// whose delegation could not be read at all came back strong.
 	if out.Verdict == Strong && dnsUnsettled(f) {
 		out.Verdict = Ungraded
+		out.Withheld = "something the DNS rules read was not established; what is said below"
 	}
 
 	return withLimits(out)

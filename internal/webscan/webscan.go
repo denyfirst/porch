@@ -129,6 +129,10 @@ type Result struct {
 	// graded, which is not the same as nothing being wrong.
 	Verdict policy.Verdict `json:"verdict,omitempty"`
 
+	// Withheld says why no verdict was given where something was measured,
+	// as policy.MailFinding does. Both faces print it under the verdict.
+	Withheld string `json:"withheld,omitempty"`
+
 	Findings []policy.Finding `json:"findings,omitempty"`
 
 	// Notes carry their kind: what was observed, what could not be settled,
@@ -460,6 +464,7 @@ func GradeAt(observed *webprobe.Report, now time.Time) *Result {
 	// join the TLS check had (audit A10, A15).
 	if out.Verdict == policy.Strong && reach.Verdict == policy.Ungraded {
 		out.Verdict = policy.Ungraded
+		out.Withheld = "where the site leads a visitor was not established; why is said below"
 	}
 
 	// A store that could not be read, said before the standing limits because

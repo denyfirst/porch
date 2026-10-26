@@ -97,6 +97,10 @@ type Result struct {
 	// when nothing could be measured, which is not the same as passing.
 	Verdict policy.Verdict `json:"verdict,omitempty"`
 
+	// Withheld says why no verdict was given where something was measured,
+	// as policy.MailFinding does. Both faces print it under the verdict.
+	Withheld string `json:"withheld,omitempty"`
+
 	TLS         *tlsprobe.Report `json:"tls,omitempty"`
 	Certificate *certinfo.Report `json:"certificate,omitempty"`
 
@@ -654,7 +658,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	// "strong", the one answer an unfinished list cannot support (R11). Found
 	// by the 2026-09-16 audit (A10). Only Strong is withdrawn: a weak or
 	// insecure finding that was seen stays seen.
-	out.Verdict = settle(out.Verdict, tlsReport, out.Certificate)
+	out.Verdict, out.Withheld = settle(out.Verdict, tlsReport, out.Certificate)
 
 	// Last, because it reads from everything above it.
 	out.Coverage = policy.Coverage(coverageFacts(out))
@@ -662,20 +666,33 @@ func (s *Scanner) Scan(ctx context.Context, target string) (*Result, error) {
 	return out, nil
 }
 
-// settle withdraws Strong from a scan whose transport did not finish, or
-// whose certificate was not graded, and leaves every other verdict as it is.
+// settle withdraws Strong from a scan whose transport did not finish or was
+// not graded, or whose certificate was not graded, says why, and leaves every
+// other verdict as it is.
 //
 // The certificate half is a guard rather than a case anybody has seen. Strong
 // over a host says its certificate was looked at and passed, and Worst passes
 // over an ungraded certificate exactly as it passes over an unfinished list.
-func settle(v policy.Verdict, t *tlsprobe.Report, c *certinfo.Report) policy.Verdict {
+//
+// The transport half is not. tlsprobe leaves the transport ungraded where TLS
+// 1.3 was not established, as porch-tls-v9 says it must, and until 2026-10-26
+// a sound certificate then made the scan strong: Worst passed over the
+// transport, and nothing here asked about it.
+func settle(v policy.Verdict, t *tlsprobe.Report, c *certinfo.Report) (policy.Verdict, string) {
 	if v != policy.Strong {
-		return v
+		return v, ""
 	}
-	if transportUnfinished(t) || c == nil || c.Verdict == policy.Ungraded {
-		return policy.Ungraded
+	switch {
+	case transportUnfinished(t):
+		return policy.Ungraded, "a version's list of cipher suites stopped before the server said it had no more"
+	case t != nil && t.Verdict == policy.Ungraded:
+		return policy.Ungraded, "the transport was not graded; why is said below"
+	case c == nil:
+		return policy.Ungraded, "no certificate was read"
+	case c.Verdict == policy.Ungraded:
+		return policy.Ungraded, "the certificate was not graded; why is said below"
 	}
-	return v
+	return v, ""
 }
 
 // transportUnfinished reports whether a version the server accepted has a

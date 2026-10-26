@@ -465,6 +465,15 @@ type MailFinding struct {
 	Verdict  Verdict   `json:"verdict"`
 	Findings []Finding `json:"findings,omitempty"`
 	Notes    []Note    `json:"notes,omitempty"`
+
+	// Withheld says why no verdict was given where something was measured:
+	// a rule's input that was not read, or a name that is not a zone. Both
+	// faces print it under the verdict, which said "nothing was measured"
+	// whatever the reason until 2026-10-26: a domain whose records were all
+	// read and whose exchangers this machine could not reach was described
+	// as one nothing had been measured about (R4a). Empty where a verdict was
+	// given, and where nothing was graded because nothing was measured.
+	Withheld string `json:"withheld,omitempty"`
 }
 
 // GradeMail applies the rules above.
@@ -877,8 +886,9 @@ func GradeMail(f MailFacts) MailFinding {
 	// 2026-09-16 audit (A11) a domain whose three lookups all failed came
 	// back strong. Only Strong is withdrawn: a finding raised from what was
 	// read stays.
-	if out.Verdict == Strong && principalUnread(f) {
-		out.Verdict = Ungraded
+	var withheld []string
+	if principalUnread(f) {
+		withheld = append(withheld, "a record the graded rules read could not be read")
 	}
 
 	// Nor is a domain whose exchangers were not all measured.
@@ -887,8 +897,15 @@ func GradeMail(f MailFacts) MailFinding {
 	// MTA-STS and DANE — fall silent for one that was not reached, and silence
 	// is not passing (R4). Until v5 a domain whose every exchanger timed out,
 	// the shape a network blocking port 25 gives, came back strong.
-	if out.Verdict == Strong && exchangersIncomplete(f) {
+	if exchangersIncomplete(f) {
+		withheld = append(withheld, "not every mail exchanger was measured, and the rules about how they "+
+			"take mail read each one")
+	}
+	// Each reason said, where both hold: a reader who fixed one would
+	// otherwise find the grade still withheld for the other.
+	if out.Verdict == Strong && len(withheld) > 0 {
 		out.Verdict = Ungraded
+		out.Withheld = strings.Join(withheld, ", and ") + "; why is said below"
 	}
 
 	out.Notes = append(out.Notes, describeMail(f)...)

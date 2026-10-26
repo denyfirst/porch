@@ -2,6 +2,7 @@ package policy
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -112,6 +113,7 @@ func TestTheMailVerdictMatrix(t *testing.T) {
 			if row.rule != "" && !mailHas(got, row.rule) {
 				t.Errorf("a domain that %s is graded without %s: %v", row.situation, row.rule, mailRuleIDs(got))
 			}
+			withheldSaysWhy(t, row.situation, got.Verdict, got.Withheld)
 		})
 	}
 }
@@ -198,6 +200,10 @@ func TestTheDNSVerdictMatrix(t *testing.T) {
 		{"has a parent that did not answer",
 			func() DNSFacts { f := signed(); f.ParentReason = "x"; return f }, Ungraded, ""},
 
+		// A name inside a zone is not one, and is not graded as one.
+		{"is a name inside one",
+			func() DNSFacts { f := signed(); f.Apex = false; return f }, Ungraded, ""},
+
 		// A zone record that could not be read is not a name inside a zone,
 		// and nothing about the delegation is graded without it.
 		{"has a zone record that could not be read",
@@ -226,6 +232,7 @@ func TestTheDNSVerdictMatrix(t *testing.T) {
 			if row.rule != "" && !hasRule(got.Findings, row.rule, got.Verdict) {
 				t.Errorf("a zone that %s is graded without %s: %v", row.situation, row.rule, got.Findings)
 			}
+			withheldSaysWhy(t, row.situation, got.Verdict, got.Withheld)
 		})
 	}
 }
@@ -274,3 +281,35 @@ func observationsObserved(t *testing.T, notes []Note) {
 }
 
 var unsettledWording = regexp.MustCompile(`not established|was not read|were not read|could not be read|did not complete`)
+
+// withheldSaysWhy holds a matrix row to the reason its verdict was withheld.
+//
+// Every row measures something, so an ungraded one has a reason other than
+// "nothing was measured", which is what both faces printed under every
+// ungraded verdict until 2026-10-26 (R4a). And a verdict that was given was
+// not withheld.
+func withheldSaysWhy(t *testing.T, situation string, v Verdict, withheld string) {
+	t.Helper()
+	if v == Ungraded && withheld == "" {
+		t.Errorf("%s: ungraded with no reason, so it reads as nothing having been measured", situation)
+	}
+	if v != Ungraded && withheld != "" {
+		t.Errorf("%s: graded %q and also said to be withheld: %q", situation, v, withheld)
+	}
+}
+
+// A grade withheld for two reasons says both: a reader who fixed one would
+// otherwise find the grade still withheld for the other.
+func TestEveryReasonAMailGradeWasWithheldIsSaid(t *testing.T) {
+	f := exchangerFacts(ExchangerTLS{Host: "mx1.example.net", Reason: "port 25 could not be reached from here"})
+	f.DMARCRecords, f.DMARCPolicy, f.DMARCReason = 0, "", "x"
+	got := GradeMail(f)
+	if got.Verdict != Ungraded {
+		t.Fatalf("graded %q", got.Verdict)
+	}
+	for _, want := range []string{"a record the graded rules read could not be read", "not every mail exchanger was measured"} {
+		if !strings.Contains(got.Withheld, want) {
+			t.Errorf("the grade was withheld for %q, which does not say %q", got.Withheld, want)
+		}
+	}
+}

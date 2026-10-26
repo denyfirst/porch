@@ -2440,8 +2440,14 @@ function reportShow(frame, entry, data) {
 
   // A check that reached nothing broke no rule, and saying only that reads
   // as a pass. It is said under the verdict instead: there was nothing to
-  // fall short of.
-  if (verdict === "ungraded") {
+  // fall short of. Where something was measured and the grade was withheld,
+  // the reason is said instead: until 2026-10-26 a domain whose records were
+  // all read, and whose exchangers this machine could not reach, read as one
+  // nothing had been measured about (R4a).
+  if (verdict === "ungraded" && data.withheld) {
+    entry.top.appendChild(el("p", "report-absent",
+      "Not graded: " + data.withheld + ". What was measured is below; a verdict on part of it would read as one on the whole."));
+  } else if (verdict === "ungraded") {
     entry.top.appendChild(el("p", "report-absent",
       "Nothing was measured, so nothing could be graded. This is not a clean result; it is an absent one."));
   }

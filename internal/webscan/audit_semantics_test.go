@@ -65,6 +65,10 @@ func TestAnUnfollowedRedirectIsNotADestination(t *testing.T) {
 	if got.Verdict == policy.Strong {
 		t.Error("a site whose plaintext redirect was not followed was called strong")
 	}
+	// And says why, rather than that nothing was measured (R4a).
+	if got.Verdict != policy.Ungraded || !strings.Contains(got.Withheld, "where the site leads a visitor was not established") {
+		t.Errorf("an unfollowed redirect left the report %q, withheld for %q", got.Verdict, got.Withheld)
+	}
 
 	// Followed to its end on plaintext, the same redirect is the finding.
 	stuck := &webprobe.Chain{Hops: []webprobe.Hop{{URL: address(false, "example.test"), Status: 302}}}

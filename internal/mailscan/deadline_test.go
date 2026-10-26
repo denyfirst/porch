@@ -8,6 +8,7 @@ import (
 
 	"github.com/denyfirst/porch/internal/dkim"
 	"github.com/denyfirst/porch/internal/dnsclient"
+	"github.com/denyfirst/porch/internal/policy"
 	"github.com/denyfirst/porch/internal/smtptls"
 )
 
@@ -50,6 +51,11 @@ func TestExchangersThatNeverAnswerDoNotCostTheReport(t *testing.T) {
 		if x.Measured || x.Reason == "" {
 			t.Errorf("an exchanger that never answered is not said to be unmeasured: %+v", x)
 		}
+	}
+	// The shape a network blocking port 25 gives. The grade is withheld, and
+	// the report says that is why, not that nothing was measured (R4a).
+	if got.Verdict != policy.Ungraded || !strings.Contains(got.Withheld, "not every mail exchanger was measured") {
+		t.Errorf("unreached exchangers left the report %q, withheld for %q", got.Verdict, got.Withheld)
 	}
 }
 

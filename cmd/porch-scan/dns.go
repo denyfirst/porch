@@ -87,9 +87,16 @@ func printDNS(w io.Writer, r dnsResult) {
 		return
 	}
 
+	// The reason the grade was withheld, where something was measured; the
+	// line said "no zone begins at this name" for every ungraded zone until
+	// 2026-10-26, including one whose servers did not all answer (R4a).
 	verdict := string(r.Verdict)
-	if verdict == "" {
-		verdict = "ungraded (no zone begins at this name, so there was nothing to grade)"
+	switch {
+	case verdict != "":
+	case r.Withheld != "":
+		verdict = "ungraded (" + r.Withheld + ")"
+	default:
+		verdict = "ungraded (nothing was found wrong, and nothing was established)"
 	}
 	fmt.Fprintf(w, "\n  Verdict   %s\n", verdict)
 	if r.Verdict == policy.Weak || r.Verdict == policy.Insecure {

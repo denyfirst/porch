@@ -78,6 +78,10 @@ Released in v0.31.0, 2026-10.
   which services answer is not established, and a note says so.
 - **Strong needs a graded certificate.** A scan whose certificate was not
   graded is not strong.
+- **Corrected after v0.32.0:** a TLS 1.3 handshake that timed out or was reset
+  left the transport ungraded, as above, and a sound certificate then made the
+  whole scan strong. The scan is now not strong either, and says why. A
+  server that was strong only because of this now reads ungraded.
 
 ---
 

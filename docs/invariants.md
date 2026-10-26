@@ -1262,10 +1262,19 @@ in `internal/scan.checkReceipts`
 
 ### R4a — A verdict's stated reason is true of the thing it grades
 
-*Enforced in:* `internal/policy.cipherRules`
+*Enforced in:* `internal/policy.cipherRules`; for a verdict withheld where
+something was measured, the `Withheld` reason the mail, DNS, TLS and web
+results carry, which both faces print in place of "nothing was measured"
 
 *Guarded by:* `FuzzGradeCipher`, `TestEveryStatedReasonIsTrueOfTheSuite`,
-`TestForwardSecrecyIsNeverDeniedOfASuiteThatHasIt`
+`TestForwardSecrecyIsNeverDeniedOfASuiteThatHasIt`,
+`TestAWithheldGradeSaysWhyOnBothFaces`,
+`TestEveryReasonAMailGradeWasWithheldIsSaid`, `TestTheMailVerdictMatrix`,
+`TestTheDNSVerdictMatrix`, `TestSettlingWithdrawsOnlyStrong`,
+`TestAnUnfinishedTransportDoesNotEndStrong`,
+`TestExchangersThatNeverAnswerDoNotCostTheReport`,
+`TestAnUnfollowedRedirectIsNotADestination`,
+`TestAZoneRecordNotReadIsNotANameInsideAZone`
 
 ### R4b — Trust and expiry are separate questions, asked separately
 

@@ -6,7 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/denyfirst/porch/internal/dnsscan"
+	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/policy"
+	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/webprobe"
 	"github.com/denyfirst/porch/internal/webscan"
 )
@@ -166,5 +169,68 @@ func TestTheDKIMRowDoesNotCallAnUnreadSelectorEmpty(t *testing.T) {
 			t.Fatalf("the DKIM row does not have, in its place, %s", piece)
 		}
 		at += i + len(piece)
+	}
+}
+
+// A grade withheld where something was measured says why, on both faces.
+//
+// Until 2026-10-26 both said nothing had been measured under every ungraded
+// verdict: a domain whose SPF, DMARC, DKIM and MTA-STS were all read, and
+// whose exchangers the scanning machine could not reach on port 25, read as
+// one nothing was known about (R4a). Nothing measured at all still says so.
+func TestAWithheldGradeSaysWhyOnBothFaces(t *testing.T) {
+	why := "not every mail exchanger was measured"
+	var buf bytes.Buffer
+	printMail(&buf, mailResult{Domain: "example.test", Result: &mailscan.Result{
+		Domain: "example.test", Policy: policy.MailVersion, Withheld: why,
+		Observed: &policy.MailFacts{},
+	}})
+	if out := buf.String(); !strings.Contains(out, "Verdict   ungraded ("+why+")") || strings.Contains(out, "nothing was established") {
+		t.Errorf("the terminal does not say why the mail grade was withheld:\n%s", out)
+	}
+
+	buf.Reset()
+	printDNS(&buf, dnsResult{Domain: "example.test", Result: &dnsscan.Result{
+		Domain: "example.test", Policy: policy.DNSVersion, Withheld: "something the DNS rules read was not established",
+		Observed: &policy.DNSFacts{Apex: true, SOAFound: true},
+	}})
+	if out := buf.String(); !strings.Contains(out, "Verdict   ungraded (something the DNS rules read was not established)") ||
+		strings.Contains(out, "no zone begins") {
+		t.Errorf("the terminal does not say why the DNS grade was withheld:\n%s", out)
+	}
+
+	// The TLS and web checks the same way.
+	buf.Reset()
+	printReport(&buf, result{Result: &scan.Result{Target: "example.test:443", Policy: policy.TLSVersion,
+		Withheld: "the transport was not graded; why is said below"}})
+	if !strings.Contains(buf.String(), "Verdict   ungraded (the transport was not graded; why is said below)") {
+		t.Errorf("the terminal does not say why the TLS grade was withheld:\n%s", buf.String())
+	}
+	buf.Reset()
+	printWebReport(&buf, webResult{Host: "example.test", Result: &webscan.Result{
+		Withheld: "where the site leads a visitor was not established; why is said below"}})
+	if !strings.Contains(buf.String(), "Verdict   ungraded (where the site leads a visitor was not established; why is said below)") {
+		t.Errorf("the terminal does not say why the web grade was withheld:\n%s", buf.String())
+	}
+
+	// Nothing measured, and nothing withheld: the old line, which is then true.
+	buf.Reset()
+	printMail(&buf, mailResult{Domain: "example.test", Result: &mailscan.Result{
+		Domain: "example.test", Policy: policy.MailVersion, Observed: &policy.MailFacts{},
+	}})
+	if !strings.Contains(buf.String(), "ungraded (nothing was found wrong, and nothing was established)") {
+		t.Errorf("an ungraded mail check with no reason reads:\n%s", buf.String())
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(page)
+	reason := strings.Index(src, `if (verdict === "ungraded" && data.withheld) {`)
+	said := strings.Index(src, `"Not graded: " + data.withheld + ". What was measured is below; a verdict on part of it would read as one on the whole."`)
+	absent := strings.Index(src, `"Nothing was measured, so nothing could be graded. This is not a clean result; it is an absent one."`)
+	if reason < 0 || said < reason || absent < said || strings.Count(src, "Nothing was measured, so nothing could be graded") != 1 {
+		t.Error("the page says nothing was measured before it asks whether a grade was withheld, so the two faces disagree")
 	}
 }
