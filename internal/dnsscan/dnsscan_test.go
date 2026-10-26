@@ -1295,6 +1295,25 @@ func TestAQuestionNotAnsweredIsSaidAndIsNotPassing(t *testing.T) {
 	}
 }
 
+// A record at the top of the zone that could not be read leaves whether a zone
+// begins here unknown. Until 2026-10-25 it read as a name inside a zone, as an
+// observation.
+func TestAZoneRecordNotReadIsNotANameInsideAZone(t *testing.T) {
+	z := served(t)
+	z.fail["soa"] = errors.New("dnsclient: reading the reply: i/o timeout")
+	z.fail["unchecked"] = errors.New("dnsclient: reading the reply: i/o timeout")
+	got := read(t, z)
+	if got.Observed.SOAReason == "" || got.Observed.Apex {
+		t.Errorf("an unread zone record: reason %q, apex %v", got.Observed.SOAReason, got.Observed.Apex)
+	}
+	if got.Verdict != policy.Ungraded {
+		t.Errorf("verdict %q; nothing about the delegation was read", got.Verdict)
+	}
+	if noteSaying(got, "it is a name inside one") || !noteSaying(got, "Whether a zone begins at this name was not established") {
+		t.Errorf("the notes read %v", noteTexts(got))
+	}
+}
+
 // Text records that could not be read carry the reason, and are not empty.
 func TestTextRecordsNotReadCarryTheReason(t *testing.T) {
 	z := served(t)

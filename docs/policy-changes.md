@@ -28,6 +28,10 @@ Released in v0.32.0, 2026-10.
   servers that do not answer for the zone, that recurse, and about the parent
   handing out other servers silent, and silence is not passing. The report
   says which server did not answer and why; it said nothing.
+- **Nor where a server's addresses could not be read.** The rules about a
+  server that resolves to nothing and about servers on one network read them.
+  `dns.name-servers-one-network` is no longer raised from a count that left a
+  server out.
 - **Nor is a zone strong where its registration was asked about and not
   read.** `dns.registration-expired` reads it, and it was strong when the
   registry timed out. A top-level domain whose registry publishes no RDAP

@@ -230,6 +230,32 @@ func TestAHostThatDoesNotAnswerIsCountedAndNotInvented(t *testing.T) {
 	}
 }
 
+// No host answering is not hosts that named nothing: no certificate was read,
+// and until 2026-10-26 the line read "named none of them" (R4).
+func TestNoHostAnsweringIsNotACertificateThatNamedNothing(t *testing.T) {
+	dead, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listening: %v", err)
+	}
+	deadAddr := dead.Addr().String()
+	_ = dead.Close()
+
+	r := &Reader{
+		Timeout: 2 * time.Second,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, network, deadAddr)
+		},
+	}
+	got := r.Under(context.Background(), "example.test", []string{"www.example.test", "mail.example.test"})
+
+	if got.Reason == "" {
+		t.Error("no host answered and the hosts read as having presented certificates that named nothing")
+	}
+	if got.Hosts != 2 || got.Answered != 0 || len(got.Names) != 0 {
+		t.Errorf("asked %d, answered %d, named %v; want 2, 0 and nothing", got.Hosts, got.Answered, got.Names)
+	}
+}
+
 // Asking no hosts is an answer, and it is not a failure.
 //
 // An estate where nothing answers has no certificates to read, and that is a

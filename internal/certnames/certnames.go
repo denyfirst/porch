@@ -40,6 +40,7 @@ package certnames
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -194,6 +195,17 @@ func (r *Reader) Under(ctx context.Context, domain string, hosts []string) Found
 			}
 			found[name] = true
 		}
+	}
+
+	if out.Answered == 0 {
+		// No certificate was read, so there is nothing to say what one would
+		// have named, and until 2026-10-26 this read "named none of them"
+		// (R4).
+		reason := fmt.Sprintf("none of the %d hosts asked completed a TLS handshake, so no certificate was read", out.Hosts)
+		if out.Hosts == 1 {
+			reason = "the one host asked did not complete a TLS handshake, so no certificate was read"
+		}
+		return Found{Asked: true, Hosts: out.Hosts, Reason: reason}
 	}
 
 	for name := range found {

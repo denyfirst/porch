@@ -58,6 +58,12 @@ type Found struct {
 	Addresses int `json:"addresses"`
 	Answered  int `json:"answered"`
 
+	// Unread is how many addresses could not be asked: the lookup failed
+	// rather than answered that there was no record. An address with no
+	// reverse record is a fact about it; one whose question went unanswered
+	// is not, and until 2026-10-26 the two were counted alike.
+	Unread int `json:"unread,omitempty"`
+
 	// Foreign is how many reverse records named a host under another domain.
 	// Counted rather than listed, as everywhere else: a provider's own name
 	// for a leased address is evidence about the answer rather than part of
@@ -138,7 +144,12 @@ func (r *Reader) Under(ctx context.Context, domain string, ranges []netip.Prefix
 		return out
 	}
 
-	answers := make([][]string, len(addresses))
+	type answer struct {
+		names []string
+		read  bool
+	}
+
+	answers := make([]answer, len(addresses))
 	slots := make(chan struct{}, r.parallel())
 	var wg sync.WaitGroup
 
@@ -154,19 +165,24 @@ func (r *Reader) Under(ctx context.Context, domain string, ranges []netip.Prefix
 				return
 			}
 
-			answers[i] = r.one(ctx, addr)
+			names, read := r.one(ctx, addr)
+			answers[i] = answer{names: names, read: read}
 		}(i, addr)
 	}
 	wg.Wait()
 
 	found := map[string]bool{}
-	for _, names := range answers {
-		if len(names) == 0 {
+	for _, a := range answers {
+		if !a.read {
+			out.Unread++
+			continue
+		}
+		if len(a.names) == 0 {
 			continue
 		}
 		out.Answered++
 
-		for _, raw := range names {
+		for _, raw := range a.names {
 			name := fold(clean(raw))
 			if name == "" {
 				continue
@@ -179,6 +195,13 @@ func (r *Reader) Under(ctx context.Context, domain string, ranges []netip.Prefix
 		}
 	}
 
+	if out.Unread == out.Addresses {
+		// Not one question was answered, which says nothing about the range:
+		// "named none of them" would be the reassuring wrong answer (R4).
+		return Found{Asked: true, Addresses: out.Addresses, Unread: out.Unread,
+			Reason: fmt.Sprintf("none of the %d addresses asked had its reverse record read", out.Addresses)}
+	}
+
 	for name := range found {
 		out.Names = append(out.Names, name)
 	}
@@ -186,16 +209,21 @@ func (r *Reader) Under(ctx context.Context, domain string, ranges []netip.Prefix
 	return out
 }
 
-// one asks a single address what it answers to.
-func (r *Reader) one(ctx context.Context, addr netip.Addr) []string {
+// one asks a single address what it answers to, and says whether the question
+// was answered at all: a name with no reverse record is an answer, a lookup
+// that failed or was never made is not.
+func (r *Reader) one(ctx context.Context, addr netip.Addr) (names []string, read bool) {
+	if ctx.Err() != nil {
+		return nil, false
+	}
 	ctx, cancel := context.WithTimeout(ctx, r.timeout())
 	defer cancel()
 
 	answer, err := r.Resolver.LookupPTR(ctx, Reverse(addr))
 	if err != nil {
-		return nil
+		return nil, false
 	}
-	return answer.PTR
+	return answer.PTR, true
 }
 
 // Addresses is every address in the ranges, refused where there are too many.

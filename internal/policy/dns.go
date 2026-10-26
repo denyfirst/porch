@@ -198,6 +198,11 @@ type DNSFacts struct {
 	// the answers belong to whichever zone contains it.
 	Apex bool `json:"apex"`
 
+	// SOAReason says why the record at the top of the zone could not be
+	// read, which leaves whether a zone begins here unknown. Until 2026-10-25
+	// a lookup that failed read as a name inside a zone.
+	SOAReason string `json:"soaReason,omitempty"`
+
 	// Registration is what the registry holds for the domain the name
 	// belongs to, and RegistrationLine says it in one line, built once here
 	// so the page and the terminal read the same string (R16). Nil where no
@@ -424,6 +429,12 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 	// A name inside a zone is not a zone. Nothing here describes it, and
 	// grading the containing zone's delegation as though it were this name's
 	// would report a fact about example.com under the name www.example.com.
+	if f.SOAReason != "" {
+		out.Verdict = ""
+		unsettled("Whether a zone begins at this name was not established: " + f.SOAReason + ". Nothing " +
+			"about its delegation could be read without it.")
+		return withLimits(out)
+	}
 	if !f.Apex {
 		out.Verdict = ""
 		note("No zone begins at this name: it is a name inside one. Ask about the domain itself to read its delegation.")
@@ -449,7 +460,9 @@ func GradeDNS(f DNSFacts, now time.Time) DNSFinding {
 				"server is a single point of failure. This zone names "+
 				strconv.Itoa(len(f.NameServers))+".",
 			rfc1034, rfc2182)
-	case f.Networks == 1:
+	case f.Networks == 1 && !serverAddressesUnread(f):
+		// Not where a server's addresses went unread: they may be on another
+		// network, and the count is then a lower bound rather than a fact.
 		add("dns.name-servers-one-network", Weak,
 			"Every name server answers from the same network",
 			"RFC 2182 asks for name servers that do not fail together. These "+
@@ -899,9 +912,22 @@ func dnsUnsettled(f DNSFacts) bool {
 		return true
 	}
 	// Since v5: dns.name-server-not-authoritative and
-	// dns.name-server-offers-recursion read each server's own answer.
+	// dns.name-server-offers-recursion read each server's own answer, and
+	// dns.name-server-without-address and dns.name-servers-one-network read
+	// each server's addresses.
 	for _, ns := range f.NameServers {
 		if ns.AskedReason != "" {
+			return true
+		}
+	}
+	return serverAddressesUnread(f)
+}
+
+// serverAddressesUnread reports whether any server's addresses could not be
+// read, in whole or in part.
+func serverAddressesUnread(f DNSFacts) bool {
+	for _, ns := range f.NameServers {
+		if ns.Reason != "" {
 			return true
 		}
 	}

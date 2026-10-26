@@ -381,6 +381,11 @@ func (s *Scanner) readZone(ctx context.Context, r Resolver, domain string, facts
 		}
 	}
 
+	if err != nil {
+		// Unknown, not a name inside a zone: the report says the record was
+		// not read (R4).
+		facts.SOAReason = shape(err)
+	}
 	if err == nil && len(answer.SOA) > 0 {
 		soa := answer.SOA[0]
 		facts.Apex = true

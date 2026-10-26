@@ -35,6 +35,7 @@ package inventory
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -153,6 +154,18 @@ type Reading struct {
 	// Foreign is how many names this source carried that belong to other
 	// domains, and were therefore not listed.
 	Foreign int `json:"foreign,omitempty"`
+
+	// Unread says what this source asked and could not read, where it read
+	// the rest: a record type, or how many addresses or hosts. What it named
+	// is still what it named; what it did not is not shown to name nothing,
+	// and both faces print this after "not read:" rather than let "named none
+	// of them" stand for the whole (R4).
+	Unread string `json:"unread,omitempty"`
+
+	// Transferred is set where a server handed the zone over, so a zone that
+	// was transferred and named nothing is not drawn as one every server
+	// refused. Zone only.
+	Transferred bool `json:"transferred,omitempty"`
 
 	// Reason says why nothing was established, where nothing was.
 	Reason string `json:"reason,omitempty"`
@@ -349,11 +362,11 @@ func Merge(domain string, from Sources) Inventory {
 		Certificates: e.Certificates,
 		Truncated:    e.Truncated || p.Truncated || z.Truncated || from.NSEC.Truncated,
 		Logs:         Reading{Asked: e.Asked, Foreign: e.Foreign, Reason: e.Reason},
-		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason},
 		Passive:      Reading{Asked: p.Asked, Foreign: p.Foreign, Reason: p.Reason},
-		Presented:    Reading{Asked: h.Asked, Foreign: h.Foreign, Reason: h.Reason},
-		Reverse:      Reading{Asked: v.Asked, Foreign: v.Foreign, Reason: v.Reason},
-		Zone:         Reading{Asked: z.Asked, Foreign: z.Foreign, Reason: z.Reason},
+		Records:      Reading{Asked: d.Asked, Foreign: d.Foreign, Reason: d.Reason, Unread: recordsUnread(d)},
+		Presented:    Reading{Asked: h.Asked, Foreign: h.Foreign, Reason: h.Reason, Unread: presentedUnread(h)},
+		Reverse:      Reading{Asked: v.Asked, Foreign: v.Foreign, Reason: v.Reason, Unread: reverseUnread(v)},
+		Zone:         Reading{Asked: z.Asked, Foreign: z.Foreign, Reason: z.Reason, Transferred: z.From != ""},
 		Known:        Reading{Asked: k.Asked, Foreign: k.Foreign, Reason: k.Reason},
 		NSEC:         Reading{Asked: n.Asked, Foreign: n.Foreign, Reason: n.Reason},
 	}
@@ -625,6 +638,38 @@ func names(n *Name, want Source) int {
 		}
 	}
 	return count
+}
+
+// recordsUnread is the domain's own records that could not be read, where
+// others were.
+func recordsUnread(d dnsnames.Found) string {
+	if d.Reason != "" || len(d.Unread) == 0 {
+		return ""
+	}
+	parts := make([]string, len(d.Unread))
+	for i, s := range d.Unread {
+		parts[i] = "the " + string(s)
+	}
+	return strings.Join(parts, " and ")
+}
+
+// presentedUnread is the hosts asked that presented no certificate, where
+// some did.
+func presentedUnread(h certnames.Found) string {
+	if h.Reason != "" || h.Answered >= h.Hosts {
+		return ""
+	}
+	return fmt.Sprintf("the certificates of %d of the %d hosts asked, which did not complete a TLS handshake",
+		h.Hosts-h.Answered, h.Hosts)
+}
+
+// reverseUnread is the addresses whose question went unanswered, where
+// others answered.
+func reverseUnread(v ptrnames.Found) string {
+	if v.Reason != "" || v.Unread == 0 {
+		return ""
+	}
+	return fmt.Sprintf("the reverse records of %d of the %d addresses asked", v.Unread, v.Addresses)
 }
 
 // fold is one spelling of a name, so that two sources naming the same host

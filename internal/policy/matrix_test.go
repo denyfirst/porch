@@ -197,6 +197,25 @@ func TestTheDNSVerdictMatrix(t *testing.T) {
 
 		{"has a parent that did not answer",
 			func() DNSFacts { f := signed(); f.ParentReason = "x"; return f }, Ungraded, ""},
+
+		// A zone record that could not be read is not a name inside a zone,
+		// and nothing about the delegation is graded without it.
+		{"has a zone record that could not be read",
+			func() DNSFacts {
+				f := signed()
+				f.SOAReason = "x"
+				return f
+			}, Ungraded, ""},
+
+		// A server whose addresses went unread may be on another network,
+		// and may resolve: neither rule about it passes, and neither fails.
+		{"has a server whose addresses could not be read",
+			func() DNSFacts {
+				f := signed()
+				f.NameServers[1].Addresses, f.NameServers[1].Reason = nil, "x"
+				f.Networks = 1
+				return f
+			}, Ungraded, ""},
 	} {
 		t.Run(row.situation, func(t *testing.T) {
 			got := GradeDNS(row.facts(), now)

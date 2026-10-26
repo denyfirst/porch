@@ -712,3 +712,65 @@ func TestTextRecordsNotReadAreNotNone(t *testing.T) {
 		t.Error("the page draws text records nobody read as none, so the two faces disagree")
 	}
 }
+
+// A zone record that could not be read is drawn as not read, on both faces;
+// until 2026-10-25 it was drawn as a name inside a zone.
+func TestAZoneRecordNotReadIsDrawnAsNotRead(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(page)
+	reason := strings.Index(src, `} else if (facts.soaReason) {`)
+	drawn := strings.Index(src, `row("Zone (SOA)", "not read: " + facts.soaReason);`)
+	inside := strings.Index(src, `row("Zone (SOA)", "begins above this name");`)
+	if reason < 0 || drawn < reason || inside < drawn {
+		t.Error("the page draws an unread zone record as a name inside a zone, so the two faces disagree")
+	}
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{Domain: "example.test", Result: &dnsscan.Result{
+		Domain: "example.test", Policy: policy.DNSVersion,
+		Observed: &policy.DNSFacts{SOAReason: "the lookup did not complete"},
+	}})
+	if out := buf.String(); !strings.Contains(out, "not read: the lookup did not complete") || strings.Contains(out, "begins above") {
+		t.Errorf("the terminal draws an unread zone record as:\n%s", out)
+	}
+}
+
+// "They fail together" is not said where a server's addresses went unread,
+// on either face: the unread server may be on another network, and the count
+// is then a lower bound (R4).
+func TestOneNetworkIsNotSaidWithAServerUnread(t *testing.T) {
+	facts := &policy.DNSFacts{
+		Apex: true, SOAFound: true, Networks: 1,
+		NameServers: []policy.NameServer{
+			{Name: "ns1.example.test", Addresses: []string{"192.0.2.1"}},
+			{Name: "ns2.example.test", Reason: "the lookup did not complete"},
+		},
+	}
+	var buf bytes.Buffer
+	printDNS(&buf, dnsResult{Domain: "example.test", Result: &dnsscan.Result{
+		Domain: "example.test", Policy: policy.DNSVersion, Observed: facts,
+	}})
+	if strings.Contains(buf.String(), "fail together") {
+		t.Errorf("a server unread and the terminal still says the servers fail together:\n%s", buf.String())
+	}
+
+	// And with both read, it is said.
+	buf.Reset()
+	facts.NameServers[1] = policy.NameServer{Name: "ns2.example.test", Addresses: []string{"192.0.2.2"}}
+	printDNS(&buf, dnsResult{Domain: "example.test", Result: &dnsscan.Result{
+		Domain: "example.test", Policy: policy.DNSVersion, Observed: facts,
+	}})
+	if !strings.Contains(buf.String(), "fail together") {
+		t.Errorf("two servers in one network and the terminal does not say so:\n%s", buf.String())
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `if (servers.length > 1 && networks > 0 && !servers.some((s) => s.reason)) {`) {
+		t.Error("the page says how many networks the servers are in with one of them unread, so the two faces disagree")
+	}
+}

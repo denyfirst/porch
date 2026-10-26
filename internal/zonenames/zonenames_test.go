@@ -18,6 +18,7 @@ type stubZone struct {
 
 	servers []string
 	names   map[string][]string // server -> the zone it hands over
+	broken  map[string]bool     // server -> answers with something that is not a refusal
 	failNS  bool
 
 	asked []string
@@ -47,6 +48,11 @@ func (s *stubZone) Transfer(_ context.Context, server, _ string) ([]string, bool
 	for name, zone := range s.names {
 		if strings.HasPrefix(server, "192.0.2."+octet(name)+":") {
 			return zone, false, nil
+		}
+	}
+	for name := range s.broken {
+		if strings.HasPrefix(server, "192.0.2."+octet(name)+":") {
+			return nil, false, errors.New("dnsclient: reading the reply: i/o timeout")
 		}
 	}
 	return nil, false, dnsclient.ErrNoTransfer
@@ -185,5 +191,30 @@ func TestWhatAServerSendsIsCleanedBeforeItIsKept(t *testing.T) {
 	}
 	if len(got.Names) != 3 {
 		t.Errorf("the names kept are %v", got.Names)
+	}
+}
+
+// A zone some of whose servers did not answer is not a zone every server
+// refused, and one none of whose servers answered is not a refusal at all.
+//
+// Found in the 2026-10-25 review: a server that timed out was skipped and not
+// counted, so a zone none of whose servers answered was reported as one where
+// "every server refused the transfer, which is the ordinary answer".
+func TestAServerThatDidNotAnswerIsNotARefusal(t *testing.T) {
+	for _, c := range []struct {
+		situation string
+		broken    map[string]bool
+		want      string
+	}{
+		{"none answered", map[string]bool{"ns1.example.test": true, "ns2.example.test": true},
+			"no server this zone is delegated to answered the question"},
+		{"one answered", map[string]bool{"ns2.example.test": true},
+			"1 of the 2 servers asked refused the transfer, and the rest did not answer the question"},
+	} {
+		zone := &stubZone{servers: []string{"ns1.example.test", "ns2.example.test"}, broken: c.broken}
+		got := (&Reader{Resolver: zone}).Under(context.Background(), "example.test")
+		if got.Reason != c.want {
+			t.Errorf("%s: the reason reads %q, want %q", c.situation, got.Reason, c.want)
+		}
 	}
 }

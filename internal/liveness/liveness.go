@@ -40,12 +40,13 @@ package liveness
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/netip"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/denyfirst/porch/internal/dnsclient"
@@ -246,7 +247,8 @@ func (c *Checker) one(ctx context.Context, name string) Name {
 
 	// The other family, asked separately, because a name may publish only one
 	// and an estate that answers on IPv6 alone is one this must not call gone.
-	if six, err := c.Resolver.LookupAddresses(ctx, name, dnsclient.TypeAAAA); err == nil {
+	six, sixErr := c.Resolver.LookupAddresses(ctx, name, dnsclient.TypeAAAA)
+	if sixErr == nil {
 		addresses = append(addresses, six.Addresses...)
 		if len(six.Alias) > 0 && len(answer.Alias) == 0 {
 			answer.Alias = six.Alias
@@ -260,6 +262,13 @@ func (c *Checker) one(ctx context.Context, name string) Name {
 
 	out.Addresses = addresses
 	if len(addresses) == 0 {
+		// No IPv4 address and an IPv6 lookup that failed is not a name that
+		// does not resolve: it may resolve on IPv6 alone. Said as gone until
+		// 2026-10-25.
+		if sixErr != nil {
+			out.Reason = "its IPv6 addresses could not be looked up"
+			return out
+		}
 		// An alias whose target resolves to nothing is a different fact from a
 		// name that simply does not exist, and the difference is the one an
 		// operator acts on.
@@ -287,37 +296,122 @@ func (c *Checker) one(ctx context.Context, name string) Name {
 		return out
 	}
 
+	// Each port is asked at the first address that settles it: one that
+	// accepts, refuses, or stays silent for its own share of the time. An
+	// address this machine has no route to settles nothing, so the next is
+	// tried; at most maxAddressesAsked of them, the first of each family
+	// first.
+	//
+	// Until 2026-10-25 every failure to connect, at the first address alone,
+	// read as nothing answering: a name published only on IPv6, asked from a
+	// machine with no IPv6 route, was reported silent, and so was one whose
+	// first port used up the time before the second was asked.
+	settled, ranOut := true, false
+	var on80 netip.Addr
 	for _, port := range c.ports() {
-		if c.answers(ctx, reachable[0], port) {
+		heard := knockUnsettled
+		for _, addr := range askOrder(reachable) {
+			heard = c.knock(ctx, addr, port)
+			if heard == knockAnswered && port == "80" {
+				on80 = addr
+			}
+			if heard != knockUnsettled {
+				break
+			}
+		}
+		switch heard {
+		case knockAnswered:
 			out.Answered = append(out.Answered, port)
+		case knockUnsettled:
+			settled = false
+			ranOut = ranOut || ctx.Err() != nil
 		}
 	}
 	sort.Strings(out.Answered)
 
-	if len(out.Answered) > 0 {
+	switch {
+	case len(out.Answered) > 0:
 		out.Status = Live
-	} else {
+	case settled:
 		out.Status = Silent
+	case ranOut:
+		out.Reason = "the time for this name ran out before its ports were asked"
+	default:
+		out.Reason = "none of its addresses could be reached from this machine"
 	}
 
-	if host != nil && slices.Contains(out.Answered, "80") && c.unclaimed(ctx, name, reachable[0], host) {
+	if host != nil && on80.IsValid() && c.unclaimed(ctx, name, on80, host) {
 		out.Status, out.Provider = Unclaimed, host.name
 	}
 	return out
 }
 
-// answers reports whether one address accepted a connection on one port.
+// knock is what asking one address on one port established.
+type knock int
+
+const (
+	// knockUnsettled: nothing was established — no route from here, a
+	// destination refused, or the name's time ran out.
+	knockUnsettled knock = iota
+	// knockAnswered: something accepted the connection.
+	knockAnswered
+	// knockRefused: the address refused it, so nothing listens there.
+	knockRefused
+	// knockSilent: nothing answered in the time a port is given.
+	knockSilent
+)
+
+// maxAddressesAsked bounds how many addresses one port is tried at.
+const maxAddressesAsked = 2
+
+// askOrder is the addresses a port is tried at: the first IPv4 address, then
+// the first IPv6 one, then the rest, bounded.
+func askOrder(reachable []netip.Addr) []netip.Addr {
+	var four, six, rest []netip.Addr
+	for _, a := range reachable {
+		switch {
+		case a.Is4() && len(four) == 0:
+			four = append(four, a)
+		case !a.Is4() && len(six) == 0:
+			six = append(six, a)
+		default:
+			rest = append(rest, a)
+		}
+	}
+	out := append(append(four, six...), rest...)
+	if len(out) > maxAddressesAsked {
+		out = out[:maxAddressesAsked]
+	}
+	return out
+}
+
+// knock asks whether one address accepts a connection on one port.
 //
 // Opened and closed, carrying nothing. No protocol is spoken and no request is
 // made: what is being established is that something is listening, which is the
 // whole of what "live" claims.
-func (c *Checker) answers(ctx context.Context, addr netip.Addr, port string) bool {
-	conn, err := c.dial()(ctx, "tcp", net.JoinHostPort(addr.String(), port))
-	if err != nil {
-		return false
+//
+// Each port gets its own share of the name's time, so a port that drops the
+// connection attempt does not leave the next one unasked.
+func (c *Checker) knock(ctx context.Context, addr netip.Addr, port string) knock {
+	dctx, cancel := context.WithTimeout(ctx, c.timeout()/4)
+	defer cancel()
+	conn, err := c.dial()(dctx, "tcp", net.JoinHostPort(addr.String(), port))
+	if err == nil {
+		_ = conn.Close()
+		return knockAnswered
 	}
-	_ = conn.Close()
-	return true
+	var timeout net.Error
+	switch {
+	case ctx.Err() != nil:
+		// The name's time, or the scan's, ran out: nothing was settled.
+		return knockUnsettled
+	case errors.Is(err, syscall.ECONNREFUSED), strings.Contains(err.Error(), "connection refused"):
+		return knockRefused
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():
+		return knockSilent
+	}
+	return knockUnsettled
 }
 
 func (c *Checker) dial() DialFunc {

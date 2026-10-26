@@ -418,6 +418,8 @@ func saysZone(inv inventory.Inventory) string {
 		return "not asked: -read-zone was not given"
 	case r.Reason != "":
 		return "Not established: " + r.Reason
+	case r.Named == 0 && r.Transferred:
+		return "named none of them: the zone was handed over and holds no other name under it"
 	case r.Named == 0:
 		return "named none of them: every server refused the transfer, which is the ordinary answer"
 	default:
@@ -456,10 +458,12 @@ func saysRecords(inv inventory.Inventory) string {
 		return "not read"
 	case r.Reason != "":
 		return "Not established: " + r.Reason
+	case r.Named == 0 && r.Unread != "":
+		return "named none of them in what was read; not read: " + r.Unread
 	case r.Named == 0:
 		return "named none of them: its mail, sender policy and delegation name no host under it"
 	default:
-		return fmt.Sprintf("named %d of them, from %s", r.Named, wordList(recordSources(inv)))
+		return fmt.Sprintf("named %d of them, from %s", r.Named, wordList(recordSources(inv))) + notRead(r)
 	}
 }
 
@@ -494,11 +498,22 @@ func saysPresented(inv inventory.Inventory) string {
 		return "not asked: -read-certificates was not given"
 	case r.Reason != "":
 		return "Not established: " + r.Reason
+	case r.Named == 0 && r.Unread != "":
+		return "named none of them in what was read; not read: " + r.Unread
 	case r.Named == 0:
 		return "named none of them"
 	default:
-		return fmt.Sprintf("named %d of them, off the certificates they presented", r.Named)
+		return fmt.Sprintf("named %d of them, off the certificates they presented", r.Named) + notRead(r)
 	}
+}
+
+// notRead is what a source could not read, where it read the rest, as the
+// tail of its line.
+func notRead(r inventory.Reading) string {
+	if r.Unread == "" {
+		return ""
+	}
+	return "; not read: " + r.Unread
 }
 
 // saysReverse is what the addresses in the named ranges answered to.
@@ -512,10 +527,12 @@ func saysReverse(inv inventory.Inventory) string {
 		return "not walked: no address range was named"
 	case r.Reason != "":
 		return "Not established: " + r.Reason
+	case r.Named == 0 && r.Unread != "":
+		return "named none of them in what was read; not read: " + r.Unread
 	case r.Named == 0:
 		return "named none of them"
 	default:
-		return fmt.Sprintf("named %d of them, off the reverse records in the ranges named", r.Named)
+		return fmt.Sprintf("named %d of them, off the reverse records in the ranges named", r.Named) + notRead(r)
 	}
 }
 
@@ -584,12 +601,24 @@ func wordList(in []string) string {
 //
 // A name no certificate ever covered has no window at all, and says so rather
 // than borrowing the phrase a log would have used.
-func covered(n inventory.Name) string {
+//
+// Said of what the logs returned, and only where they were read. Until
+// 2026-10-25 this read "in no logged certificate" whether or not the logs had
+// been asked, and of a search that is bounded and can be cut short: a claim
+// about every log, made from one answer or from none.
+func covered(n inventory.Name, logs inventory.Reading, truncated bool) string {
 	if n.LastSeen.IsZero() {
-		if hasSource(n, inventory.FromCertificate) {
+		switch {
+		case hasSource(n, inventory.FromCertificate):
 			return "no dates in the log"
+		case !logs.Asked:
+			return "the logs were not asked"
+		case logs.Reason != "":
+			return "not known: the logs were not read"
+		case truncated:
+			return "not in the certificates listed, which are not all of them"
 		}
-		return "in no logged certificate"
+		return "not in the certificates the logs returned"
 	}
 	out := "certificates to " + n.LastSeen.Format("2006-01-02")
 	if !n.FirstSeen.IsZero() {
@@ -627,7 +656,9 @@ func printNamesLimits(w io.Writer, inv inventory.Inventory, probed bool) {
 		fmt.Fprintf(w, "    authority leaves no trace in a public log.\n")
 	}
 
-	if inv.Records.Established() {
+	// Every record read, or the sentence says more than was: a domain whose
+	// exchangers went unread has not been shown to take no mail.
+	if inv.Records.Established() && inv.Records.Unread == "" {
 		fmt.Fprintf(w, "    From the domain's own records, these are the hosts its mail, its\n")
 		fmt.Fprintf(w, "    sender policy and its delegation have to name. A host that takes no\n")
 		fmt.Fprintf(w, "    mail, sends none and answers for no zone is in none of them.\n")
@@ -935,7 +966,7 @@ func printWildcards(w io.Writer, inv inventory.Inventory) {
 
 	fmt.Fprintf(w, "\n  Wildcards, which name no host\n")
 	for _, n := range wildcards {
-		fmt.Fprintf(w, "    %-44s %s\n", n.Name, covered(n))
+		fmt.Fprintf(w, "    %-44s %s\n", n.Name, covered(n, inv.Logs, inv.Truncated))
 	}
 }
 
@@ -969,7 +1000,7 @@ func printNamesFound(w io.Writer, inv inventory.Inventory) {
 
 	fmt.Fprintf(w, "\n  Names found, none of them asked what it is doing now\n")
 	for _, n := range named {
-		fmt.Fprintf(w, "    %-*s %-*s %s\n", nameWidth, n.Name, sourceWidth, namedBy(n), covered(n))
+		fmt.Fprintf(w, "    %-*s %-*s %s\n", nameWidth, n.Name, sourceWidth, namedBy(n), covered(n, inv.Logs, inv.Truncated))
 	}
 }
 

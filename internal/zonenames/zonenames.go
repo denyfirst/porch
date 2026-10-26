@@ -38,6 +38,7 @@ package zonenames
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -179,6 +180,18 @@ func (r *Reader) Under(ctx context.Context, domain string) Found {
 
 	if out.Servers == 0 {
 		return Found{Asked: true, Reason: "the servers this zone is delegated to could not be read"}
+	}
+	// Every server refused, which is the ordinary answer; anything less is
+	// not that answer. A server that could not be reached, or answered in a
+	// way this does not read, may hand the zone to somebody else, and until
+	// 2026-10-25 a zone none of whose servers answered read as one every
+	// server had refused.
+	switch {
+	case out.Refused == 0:
+		out.Reason = "no server this zone is delegated to answered the question"
+	case out.Refused < out.Servers:
+		out.Reason = fmt.Sprintf("%d of the %d servers asked refused the transfer, and the rest did not answer the question",
+			out.Refused, out.Servers)
 	}
 	return out
 }

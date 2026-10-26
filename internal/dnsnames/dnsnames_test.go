@@ -189,6 +189,10 @@ func TestOneLookupFailingDoesNotLoseTheOthers(t *testing.T) {
 	if len(got.Names) != 2 {
 		t.Errorf("named %+v, want the two the working lookups gave", got.Names)
 	}
+	// And the one that failed is said, not read as a domain with no mail.
+	if len(got.Unread) != 1 || got.Unread[0] != FromMX {
+		t.Errorf("the records not read are %v, want the MX alone", got.Unread)
+	}
 }
 
 // Every lookup failing is a fact about the resolver, not about the domain.
