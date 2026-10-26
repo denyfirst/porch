@@ -508,7 +508,7 @@ func TestNamesSurviveAReportThatEstablishedNoStatus(t *testing.T) {
 	if !strings.Contains(out, "none of them asked what it is doing now") {
 		t.Errorf("the report does not say the status went unasked:\n%s", out)
 	}
-	if !strings.Contains(out, "mail.example.test MX          in no logged certificate") {
+	if !strings.Contains(out, "mail.example.test MX          not in the certificates the logs returned") {
 		t.Errorf("a name is missing what named it:\n%s", out)
 	}
 
@@ -654,10 +654,53 @@ func TestTheReportSaysWhatARegisterObserved(t *testing.T) {
 		}
 	}
 
-	// A name only a register has was in no certificate, and the report says
-	// that rather than leaving the column empty for a reader to fill in.
-	if !strings.Contains(out, "in no logged certificate") {
+	// A name only a register has was in none of the certificates the logs
+	// returned, and the report says that rather than leaving the column empty
+	// for a reader to fill in.
+	if !strings.Contains(out, "not in the certificates the logs returned") {
 		t.Errorf("a name no certificate covered does not say so:\n%s", out)
+	}
+}
+
+// What the logs column says of a name no certificate carried depends on what
+// the logs said, and it claims nothing about a log nobody read.
+//
+// Found in the 2026-10-25 review: the column read "in no logged certificate"
+// whether or not the logs had been asked, and of a search that is bounded and
+// can be cut short.
+func TestTheLogsColumnClaimsOnlyWhatTheLogsReturned(t *testing.T) {
+	name := inventory.Name{Name: "mail.example.test", Sources: []inventory.Source{inventory.FromMX}}
+	for _, c := range []struct {
+		situation string
+		logs      inventory.Reading
+		truncated bool
+		want      string
+	}{
+		{"not asked", inventory.Reading{}, false, "the logs were not asked"},
+		{"asked and not read", inventory.Reading{Asked: true, Reason: "the monitor did not answer"}, false,
+			"not known: the logs were not read"},
+		{"read and cut short", inventory.Reading{Asked: true}, true,
+			"not in the certificates listed, which are not all of them"},
+		{"read", inventory.Reading{Asked: true}, false, "not in the certificates the logs returned"},
+	} {
+		if got := covered(name, c.logs, c.truncated); got != c.want {
+			t.Errorf("%s: the column reads %q, want %q", c.situation, got, c.want)
+		}
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`if (!logs.asked) return "the logs were not asked";`,
+		`if (logs.reason) return "not known: the logs were not read";`,
+		`if (data.truncated) return "not in the certificates listed, which are not all of them";`,
+		`return "not in the certificates the logs returned";`,
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
 	}
 }
 
@@ -1121,5 +1164,77 @@ func TestARegisterIsAskedOnlyOverHTTPS(t *testing.T) {
 		if _, err := registerNamed(registerSecurityTrails, good, time.Second); err != nil {
 			t.Errorf("the https register address %q was refused: %v", good, err)
 		}
+	}
+}
+
+// A source that read part of what it asked says which part it could not
+// read, on both faces, rather than let "named none of them" stand for the
+// whole: a domain whose exchangers went unread has not been shown to take no
+// mail, and a range whose addresses did not answer has not been shown to name
+// nothing (R4). Until 2026-10-26 one record read was all of them read, a
+// resolver that answered no address read as a range with no reverse records,
+// and a zone handed over with nothing under its apex read as one every server
+// refused.
+func TestASourceThatReadPartSaysWhatItCouldNotRead(t *testing.T) {
+	inv := inventory.Merge("example.test", inventory.Sources{
+		Records: dnsnames.Found{Asked: true, Unread: []dnsnames.Source{dnsnames.FromMX}},
+		Reverse: ptrnames.Found{Asked: true, Addresses: 4, Answered: 1, Unread: 2},
+		Presented: certnames.Found{Asked: true, Hosts: 3, Answered: 1,
+			Names: []string{"www.example.test"}},
+		Zone: zonenames.Found{Asked: true, Servers: 2, From: "ns1.example.test"},
+	})
+
+	for _, c := range []struct{ source, got, want string }{
+		{"records", saysRecords(inv), "named none of them in what was read; not read: the MX record"},
+		{"reverse", saysReverse(inv), "named none of them in what was read; not read: the reverse records of 2 of the 4 addresses asked"},
+		{"presented", saysPresented(inv), "named 1 of them, off the certificates they presented; not read: the certificates of 2 of the 3 hosts asked, which did not complete a TLS handshake"},
+		{"zone", saysZone(inv), "named none of them: the zone was handed over and holds no other name under it"},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s reads %q, want %q", c.source, c.got, c.want)
+		}
+	}
+
+	var buf bytes.Buffer
+	printNames(&buf, inv)
+	if strings.Contains(buf.String(), "these are the hosts its mail") {
+		t.Errorf("an MX not read is still drawn as every host the mail has to name:\n%s", buf.String())
+	}
+
+	// And with everything read, the old lines stand.
+	whole := inventory.Merge("example.test", inventory.Sources{
+		Records: dnsnames.Found{Asked: true},
+		Reverse: ptrnames.Found{Asked: true, Addresses: 4},
+		Zone:    zonenames.Found{Asked: true, Servers: 2, Refused: 2},
+	})
+	if got := saysRecords(whole); got != "named none of them: its mail, sender policy and delegation name no host under it" {
+		t.Errorf("records read whole reads %q", got)
+	}
+	if got := saysReverse(whole); got != "named none of them" {
+		t.Errorf("a range read whole reads %q", got)
+	}
+	if got := saysZone(whole); got != "named none of them: every server refused the transfer, which is the ordinary answer" {
+		t.Errorf("a zone every server refused reads %q", got)
+	}
+
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`if (!r.named && r.transferred) return "named none of them: the zone was handed over and holds no other name under it";`,
+		`if (!r.named && r.unread) return "named none of them in what was read; not read: " + r.unread;`,
+		`return r.unread ? "; not read: " + r.unread : "";`,
+		`return "named " + r.named + " of them, from " + wordList(recordSources(data)) + notRead(r);`,
+		`return "named " + r.named + " of them, off the reverse records in the ranges named" + notRead(r);`,
+		`return "named " + r.named + " of them, off the certificates they presented" + notRead(r);`,
+		`if (answered(data.records) && !data.records.unread) {`,
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("the page does not carry %s, so the two faces disagree", want)
+		}
+	}
+	if n := strings.Count(string(page), `if (!r.named && r.unread) return "named none of them in what was read; not read: " + r.unread;`); n != 3 {
+		t.Errorf("the page says what was not read on %d of the three sources that can read part", n)
 	}
 }

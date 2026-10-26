@@ -1426,6 +1426,9 @@ function published(facts) {
     // in a folded note until now. Built by the server (R16).
     if (facts.timersLine) row("Timers (SOA)", facts.timersLine);
     if (facts.soaMailbox) row("Mailbox (SOA)", facts.soaMailbox);
+  } else if (facts.soaReason) {
+    // A record that could not be read is not a name inside a zone (R4).
+    row("Zone (SOA)", "not read: " + facts.soaReason);
   } else {
     row("Zone (SOA)", "begins above this name");
   }
@@ -1676,8 +1679,10 @@ function delegation(facts) {
   table.appendChild(body);
   frag.appendChild(table);
 
+  // Not where a server's addresses went unread: the count is then a lower
+  // bound, and "they fail together" would be a guess.
   const networks = facts.networks || 0;
-  if (servers.length > 1 && networks > 0) {
+  if (servers.length > 1 && networks > 0 && !servers.some((s) => s.reason)) {
     frag.appendChild(el("p", "section-note",
       // What is counted, said: an IPv4 /24 and an IPv6 /48 each count once,
       // so blocks one operator holds count separately. "10 networks" of one
@@ -1856,9 +1861,19 @@ function zone(facts) {
   if (facts.dkimLooked) {
     const keys = facts.dkimKeys || [];
     const found = keys.filter(k => k.found);
+    // A selector whose lookup failed is not one that holds no key: until
+    // 2026-10-26 a resolver that answered none of them drew "none at the
+    // selectors tried" here, while the notes below said they went unread.
+    const unread = keys.filter(k => k.reason).length;
+    const notRead = unread ? "; " + unread + " could not be read" : "";
 
     if (found.length) {
-      row("DKIM", found.map(k => k.selector + " (" + k.describes + ")").join(", "));
+      row("DKIM", found.map(k => k.selector + " (" + k.describes + ")").join(", ") + notRead);
+    } else if (unread === keys.length) {
+      row("DKIM", "not read: none of the " + keys.length + " selectors tried could be read");
+    } else if (unread) {
+      row("DKIM", "none at the " + (keys.length - unread) + " of the " + keys.length +
+        " selectors tried that answered" + notRead);
     } else {
       row("DKIM", "none at the " + keys.length + " selectors tried");
     }
@@ -3610,7 +3625,7 @@ function buildNames(data) {
       // names it reaches and gives up on the rest when the time runs out.
       if (data.probed) tr.appendChild(doingCell(name));
 
-      tr.appendChild(el("td", loggedWindow(name) ? null : "mark-faint", covered(name)));
+      tr.appendChild(el("td", loggedWindow(name) ? null : "mark-faint", covered(name, data)));
       rows.appendChild(tr);
     }
     table.appendChild(rows);
@@ -3639,7 +3654,7 @@ function buildNames(data) {
     for (const name of wildcards) {
       const tr = el("tr");
       tr.appendChild(el("td", "hostname", name.name));
-      tr.appendChild(el("td", null, covered(name)));
+      tr.appendChild(el("td", null, covered(name, data)));
       rows.appendChild(tr);
     }
     table.appendChild(rows);
@@ -3705,6 +3720,7 @@ function saysZone(data) {
 
   if (!r.asked) return "not asked: this installation does not ask for one";
   if (r.reason) return "Not established: " + r.reason;
+  if (!r.named && r.transferred) return "named none of them: the zone was handed over and holds no other name under it";
   if (!r.named) return "named none of them: every server refused the transfer, which is the ordinary answer";
   return "named " + r.named + " of them, handed over by the zone itself";
 }
@@ -3734,10 +3750,17 @@ function saysRecords(data) {
 
   if (!r.asked) return "not read";
   if (r.reason) return "Not established: " + r.reason;
+  if (!r.named && r.unread) return "named none of them in what was read; not read: " + r.unread;
   if (!r.named) {
     return "named none of them: its mail, sender policy and delegation name no host under it";
   }
-  return "named " + r.named + " of them, from " + wordList(recordSources(data));
+  return "named " + r.named + " of them, from " + wordList(recordSources(data)) + notRead(r);
+}
+
+// notRead is what a source could not read, where it read the rest, as the
+// tail of its line, as on the command line.
+function notRead(r) {
+  return r.unread ? "; not read: " + r.unread : "";
 }
 
 // saysPassive is what a passive register observed, in one line.
@@ -3798,8 +3821,9 @@ function saysReverse(data) {
 
   if (!r.asked) return "not walked: no address range was named";
   if (r.reason) return "Not established: " + r.reason;
+  if (!r.named && r.unread) return "named none of them in what was read; not read: " + r.unread;
   if (!r.named) return "named none of them";
-  return "named " + r.named + " of them, off the reverse records in the ranges named";
+  return "named " + r.named + " of them, off the reverse records in the ranges named" + notRead(r);
 }
 
 // saysPresented is what the hosts themselves said, in one line.
@@ -3812,8 +3836,9 @@ function saysPresented(data) {
 
   if (!r.asked) return "not asked: this installation does not read them";
   if (r.reason) return "Not established: " + r.reason;
+  if (!r.named && r.unread) return "named none of them in what was read; not read: " + r.unread;
   if (!r.named) return "named none of them";
-  return "named " + r.named + " of them, off the certificates they presented";
+  return "named " + r.named + " of them, off the certificates they presented" + notRead(r);
 }
 
 // recordSources are the record types that named something, in a fixed order.
@@ -3921,7 +3946,7 @@ function loggedWindow(name) {
   return Boolean(name.lastSeen) && !name.lastSeen.startsWith("0001-01-01");
 }
 
-function covered(name) {
+function covered(name, data) {
   // A date the service does not have is absent, not the first day of year one.
   // It was the latter until 2026-09-27, because `omitempty` does nothing for a
   // time in Go — and this drew "certificates to 0001-01-01" beside a host a
@@ -3931,9 +3956,15 @@ function covered(name) {
     // A name only the domain's own records carried was never in a
     // certificate, so it has no window rather than an empty one — and saying
     // "no dates in the log" would suggest a log had it and lost them.
-    return (name.sources || []).indexOf("certificate") >= 0
-      ? "no dates in the log"
-      : "in no logged certificate";
+    if ((name.sources || []).indexOf("certificate") >= 0) return "no dates in the log";
+    // Said of what the logs returned, and only where they were read. Until
+    // 2026-10-25 this read "in no logged certificate" whether or not the logs
+    // had been asked, and of a search that is bounded (R4).
+    const logs = (data && data.logs) || {};
+    if (!logs.asked) return "the logs were not asked";
+    if (logs.reason) return "not known: the logs were not read";
+    if (data.truncated) return "not in the certificates listed, which are not all of them";
+    return "not in the certificates the logs returned";
   }
   const to = "certificates to " + name.lastSeen.slice(0, 10);
   return name.firstSeen ? "from " + name.firstSeen.slice(0, 10) + ", " + to : to;
@@ -3972,7 +4003,9 @@ function namesLimits(data) {
         "no trace in a public log."
     );
   }
-  if (answered(data.records)) {
+  // Every record read, or the sentence says more than was: a domain whose
+  // exchangers went unread has not been shown to take no mail.
+  if (answered(data.records) && !data.records.unread) {
     item(
       "From the domain's own records, these are the hosts its mail, its sender policy and its delegation have to name. " +
         "A host that takes no mail, sends none and answers for no zone is in none of them."

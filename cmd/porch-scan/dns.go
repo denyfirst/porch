@@ -132,6 +132,9 @@ func printDNS(w io.Writer, r dnsResult) {
 			if f.SOAMailbox != "" {
 				field(w, "Mailbox (SOA)", f.SOAMailbox)
 			}
+		} else if f.SOAReason != "" {
+			// A record that could not be read is not a name inside a zone (R4).
+			field(w, "Zone (SOA)", "not read: "+f.SOAReason)
 		} else {
 			field(w, "Zone (SOA)", "begins above this name")
 		}
@@ -256,7 +259,13 @@ func printDelegation(w io.Writer, f policy.DNSFacts) {
 			fmt.Fprintf(w, "    %-28s %s%s\n", ns.Name, strings.Join(ns.Addresses, ", "), serial)
 		}
 	}
-	if len(f.NameServers) > 1 && f.Networks == 1 {
+	unread := false
+	for _, ns := range f.NameServers {
+		unread = unread || ns.Reason != ""
+	}
+	// Not where a server's addresses went unread: the count is then a lower
+	// bound, and "they fail together" would be a guess.
+	if len(f.NameServers) > 1 && f.Networks == 1 && !unread {
 		fmt.Fprintf(w, "    every address above is in one network (one IPv4 /24 or IPv6 /48), so they fail together\n")
 	}
 

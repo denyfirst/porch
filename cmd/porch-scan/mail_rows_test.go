@@ -127,3 +127,44 @@ func TestAChainNothingWasAttemptedAtSaysSo(t *testing.T) {
 		t.Error("the page no longer carries the sentence, so the two faces disagree")
 	}
 }
+
+// The DKIM row is drawn by the page alone, so its wording is held here: a
+// selector whose lookup failed is not one that holds no key, and a resolver
+// that answered none of them is not a domain with no keys at the names tried
+// (R4). Until 2026-10-26 it drew "none at the selectors tried" either way.
+func TestTheDKIMRowDoesNotCallAnUnreadSelectorEmpty(t *testing.T) {
+	page, err := os.ReadFile("../../internal/web/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(page)
+	start := strings.Index(src, "if (facts.dkimLooked) {")
+	if start < 0 {
+		t.Fatal("the page no longer draws a DKIM row")
+	}
+	end := strings.Index(src[start:], `row("DKIM", "not checked: a selector has to be named");`)
+	if end < 0 {
+		t.Fatal("the DKIM row's branches could not be found")
+	}
+	body := src[start : start+end]
+
+	// In this order: what was found, then nothing read, then some read, and
+	// only then "none", so "none" is never reached with a selector unread.
+	at := 0
+	for _, piece := range []string{
+		`const unread = keys.filter(k => k.reason).length;`,
+		`if (found.length) {`,
+		`} else if (unread === keys.length) {`,
+		`"not read: none of the " + keys.length + " selectors tried could be read"`,
+		`} else if (unread) {`,
+		`" selectors tried that answered" + notRead`,
+		`} else {`,
+		`row("DKIM", "none at the " + keys.length + " selectors tried");`,
+	} {
+		i := strings.Index(body[at:], piece)
+		if i < 0 {
+			t.Fatalf("the DKIM row does not have, in its place, %s", piece)
+		}
+		at += i + len(piece)
+	}
+}

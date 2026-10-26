@@ -1246,7 +1246,19 @@ in `internal/scan.checkReceipts`
 `TestARouteNotEstablishedSaysWhyAndTheBoundIsSaid`,
 `TestTheRoutesNotAskedAndNotEstablishedAreSaid`,
 `TestAQuestionNotAnsweredIsSaidAndIsNotPassing`,
-`TestARegistryWithNoServiceIsNotAnUnansweredOne`
+`TestARegistryWithNoServiceIsNotAnUnansweredOne`,
+`TestTheLogsColumnClaimsOnlyWhatTheLogsReturned`,
+`TestOnlyWhatWasAskedSettlesAPort`, `TestAPortTheScanRanOutOnIsNotSilent`,
+`TestAFailedIPv6LookupIsNotAGoneName`,
+`TestAZoneRecordNotReadIsNotANameInsideAZone`,
+`TestAZoneRecordNotReadIsDrawnAsNotRead`,
+`TestOneNetworkIsNotSaidWithAServerUnread`,
+`TestAServerThatDidNotAnswerIsNotARefusal`,
+`TestAddressesWhoseQuestionWentUnansweredAreCountedApart`,
+`TestNoHostAnsweringIsNotACertificateThatNamedNothing`,
+`TestOneLookupFailingDoesNotLoseTheOthers`,
+`TestASourceThatReadPartSaysWhatItCouldNotRead`,
+`TestTheDKIMRowDoesNotCallAnUnreadSelectorEmpty`
 
 ### R4a — A verdict's stated reason is true of the thing it grades
 

@@ -82,6 +82,11 @@ type Found struct {
 	// part of the estate this describes.
 	Foreign int `json:"foreign,omitempty"`
 
+	// Unread are the records that could not be read, where others were: a
+	// domain whose exchangers went unread has not been shown to name none.
+	// Until 2026-10-26 one record read was the whole of them read.
+	Unread []Source `json:"unread,omitempty"`
+
 	// Reason says why nothing was established, where nothing was. Empty where
 	// the records were read, including where they named nothing.
 	Reason string `json:"reason,omitempty"`
@@ -156,12 +161,15 @@ func (r *Reader) Under(ctx context.Context, domain string) Found {
 	}
 
 	var reached bool
+	var unread []Source
 
 	if answer, err := r.Resolver.LookupMX(ctx, domain); err == nil {
 		reached = true
 		for _, mx := range answer.Records {
 			keep(mx.Host, FromMX)
 		}
+	} else {
+		unread = append(unread, FromMX)
 	}
 
 	if answer, err := r.Resolver.LookupTXT(ctx, domain); err == nil {
@@ -171,6 +179,8 @@ func (r *Reader) Under(ctx context.Context, domain string) Found {
 				keep(name, FromSPF)
 			}
 		}
+	} else {
+		unread = append(unread, FromSPF)
 	}
 
 	if answer, err := r.Resolver.LookupNS(ctx, domain); err == nil {
@@ -178,6 +188,8 @@ func (r *Reader) Under(ctx context.Context, domain string) Found {
 		for _, ns := range answer.NS {
 			keep(ns, FromNS)
 		}
+	} else {
+		unread = append(unread, FromNS)
 	}
 
 	if !reached {
@@ -188,6 +200,7 @@ func (r *Reader) Under(ctx context.Context, domain string) Found {
 	}
 
 	out.Foreign = foreign
+	out.Unread = unread
 	for name, sources := range found {
 		out.Names = append(out.Names, Name{Name: name, Sources: sources})
 	}

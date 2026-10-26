@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -85,7 +86,7 @@ func TestEachStateIsItsOwnAnswer(t *testing.T) {
 			if address == "93.184.216.34:443" {
 				return fakeConn{}, nil
 			}
-			return nil, errors.New("refused")
+			return nil, errRefused
 		},
 	}
 
@@ -168,7 +169,7 @@ func TestNothingPrivateIsEverDialled(t *testing.T) {
 			mu.Lock()
 			dialled = append(dialled, address)
 			mu.Unlock()
-			return nil, errors.New("refused")
+			return nil, errRefused
 		},
 	}
 
@@ -191,7 +192,7 @@ func TestAnEstatePastTheBoundIsCut(t *testing.T) {
 	resolver := &stubResolver{answers: map[string]dnsclient.ZoneAnswer{}}
 	c := &Checker{Resolver: resolver, Timeout: time.Second,
 		Dial: func(context.Context, string, string) (net.Conn, error) {
-			return nil, errors.New("refused")
+			return nil, errRefused
 		}}
 
 	names := make([]string, maxNames+50)
@@ -227,4 +228,104 @@ func TestAnsweringAreTheNamesSomethingIsListeningOn(t *testing.T) {
 	if len(got) != 2 || got[0] != "live.example.test" || got[1] != "also-live.example.test" {
 		t.Errorf("the names to ask again are %v", got)
 	}
+}
+
+// errRefused is a refusal as the dialler words one.
+var errRefused = errors.New("dial tcp 192.0.2.1:443: connect: connection refused")
+
+// Only a refusal, an answer, or a port's own silence settles a port; a route
+// this machine lacks, or a name's time running out, settles nothing.
+//
+// Found in the 2026-10-25 review: every failure to connect, at the first
+// address alone, read as "silent: nothing answered". A name published only on
+// IPv6, asked from a machine with no IPv6 route, was reported silent.
+func TestOnlyWhatWasAskedSettlesAPort(t *testing.T) {
+	resolver := &stubResolver{answers: map[string]dnsclient.ZoneAnswer{
+		"unroutable.example.test": {Addresses: addrs(t, "2a01:4f8::10"), Existed: true},
+		"both.example.test":       {Addresses: addrs(t, "2a01:4f8::11", "93.184.216.40"), Existed: true},
+		"dropped.example.test":    {Addresses: addrs(t, "93.184.216.41"), Existed: true},
+	}}
+	// Addresses this safedial will dial; the dialler below stands in for a
+	// machine with no IPv6 route.
+	unreachable := errors.New("dial tcp [2a01:4f8::10]:443: connect: network is unreachable")
+	c := &Checker{
+		Resolver: resolver,
+		Timeout:  400 * time.Millisecond,
+		Dial: func(ctx context.Context, _, address string) (net.Conn, error) {
+			switch {
+			case strings.HasPrefix(address, "[2a01:4f8::"):
+				return nil, unreachable
+			case strings.HasPrefix(address, "93.184.216.41:"):
+				// A firewall that drops the attempt: nothing comes back.
+				<-ctx.Done()
+				return nil, ctx.Err()
+			default:
+				return nil, errRefused
+			}
+		},
+	}
+	got := c.Check(context.Background(), []string{"unroutable.example.test", "both.example.test", "dropped.example.test"})
+	want := map[string]Status{
+		// Nothing was asked that could answer: not silent.
+		"unroutable.example.test": Unchecked,
+		// The IPv6 address could not be reached; the IPv4 one refused, which
+		// settles it.
+		"both.example.test": Silent,
+		// Each port stayed silent for its own share of the time, so both were
+		// asked and both are settled.
+		"dropped.example.test": Silent,
+	}
+	for _, n := range got {
+		if n.Status != want[n.Name] {
+			t.Errorf("%s reads as %q, want %q (%+v)", n.Name, n.Status, want[n.Name], n)
+		}
+		if n.Status == Unchecked && n.Reason == "" {
+			t.Errorf("%s is unchecked and does not say why", n.Name)
+		}
+	}
+}
+
+// A port the scan's own time ran out on is not a port that stayed silent: the
+// address was given less than its share, and nothing was settled.
+func TestAPortTheScanRanOutOnIsNotSilent(t *testing.T) {
+	resolver := &stubResolver{answers: map[string]dnsclient.ZoneAnswer{
+		"late.example.test": {Addresses: addrs(t, "93.184.216.42"), Existed: true},
+	}}
+	c := &Checker{
+		Resolver: resolver,
+		Timeout:  4 * time.Second,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	// The scan's time, far shorter than a port's share of the name's.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	got := c.Check(ctx, []string{"late.example.test"})
+	if len(got) != 1 || got[0].Status != Unchecked || got[0].Reason == "" {
+		t.Errorf("a name the scan ran out of time on reads %+v, want unchecked with a reason", got)
+	}
+}
+
+// A name with no IPv4 address whose IPv6 lookup failed is not gone: it may
+// resolve on IPv6 alone.
+func TestAFailedIPv6LookupIsNotAGoneName(t *testing.T) {
+	c := &Checker{Resolver: sixFails{}, Timeout: time.Second,
+		Dial: func(context.Context, string, string) (net.Conn, error) { return nil, errRefused }}
+	got := c.Check(context.Background(), []string{"v6only.example.test"})
+	if got[0].Status == Gone || got[0].Reason == "" {
+		t.Errorf("a name whose IPv6 lookup failed reads as %+v", got[0])
+	}
+}
+
+// sixFails answers A with nothing and fails the AAAA question.
+type sixFails struct{}
+
+func (sixFails) LookupAddresses(_ context.Context, _ string, qtype uint16) (dnsclient.ZoneAnswer, error) {
+	if qtype == dnsclient.TypeAAAA {
+		return dnsclient.ZoneAnswer{}, errors.New("no answer")
+	}
+	return dnsclient.ZoneAnswer{Existed: true}, nil
 }

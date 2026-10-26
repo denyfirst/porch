@@ -168,6 +168,50 @@ func TestAResolverThatAnsweredNothingIsNotAnEmptyRange(t *testing.T) {
 	if len(got.Names) != 0 {
 		t.Errorf("a resolver that answered nothing produced %v", got.Names)
 	}
+	// Until 2026-10-26 this was all the test held, and the range still read
+	// "named none of them": no names is what an empty range says too.
+	if got.Reason == "" || got.Unread != 4 {
+		t.Errorf("no question was answered and the range reads as read: reason %q, unread %d", got.Reason, got.Unread)
+	}
+	if strings.Contains(got.Reason, "resolver detail") {
+		t.Errorf("the resolver's own words travel: %q", got.Reason)
+	}
+}
+
+// Some questions answered and some not: what answered is kept, and the rest
+// is counted, apart from the addresses that answered with no record.
+func TestAddressesWhoseQuestionWentUnansweredAreCountedApart(t *testing.T) {
+	resolver := &flakyResolver{fails: map[string]bool{
+		Reverse(netip.MustParseAddr("203.0.113.2")): true,
+		Reverse(netip.MustParseAddr("203.0.113.3")): true,
+	}, names: map[string][]string{
+		Reverse(netip.MustParseAddr("203.0.113.0")): {"gw.example.test."},
+	}}
+	got := (&Reader{Resolver: resolver}).Under(context.Background(), "example.test",
+		[]netip.Prefix{netip.MustParsePrefix("203.0.113.0/30")})
+
+	if got.Reason != "" {
+		t.Fatalf("two addresses answered and this says %q", got.Reason)
+	}
+	if got.Addresses != 4 || got.Answered != 1 || got.Unread != 2 {
+		t.Errorf("asked %d, answered %d, unread %d; want 4, 1 and 2", got.Addresses, got.Answered, got.Unread)
+	}
+	if len(got.Names) != 1 || got.Names[0] != "gw.example.test" {
+		t.Errorf("the names kept are %v", got.Names)
+	}
+}
+
+// flakyResolver fails for some names and answers the rest from a table.
+type flakyResolver struct {
+	fails map[string]bool
+	names map[string][]string
+}
+
+func (f *flakyResolver) LookupPTR(_ context.Context, name string) (dnsclient.ZoneAnswer, error) {
+	if f.fails[name] {
+		return dnsclient.ZoneAnswer{}, errors.New("i/o timeout")
+	}
+	return dnsclient.ZoneAnswer{PTR: f.names[name]}, nil
 }
 
 // Naming no range asks nothing at all.
