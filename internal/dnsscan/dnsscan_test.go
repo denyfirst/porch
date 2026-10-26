@@ -1309,6 +1309,10 @@ func TestAZoneRecordNotReadIsNotANameInsideAZone(t *testing.T) {
 	if got.Verdict != policy.Ungraded {
 		t.Errorf("verdict %q; nothing about the delegation was read", got.Verdict)
 	}
+	// And the scan says why, rather than that nothing was measured.
+	if got.Withheld != "whether a zone begins at this name was not established" {
+		t.Errorf("the grade was withheld for %q", got.Withheld)
+	}
 	if noteSaying(got, "it is a name inside one") || !noteSaying(got, "Whether a zone begins at this name was not established") {
 		t.Errorf("the notes read %v", noteTexts(got))
 	}

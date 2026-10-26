@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"math/big"
 	"net"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -133,6 +134,10 @@ func TestAnUnfinishedTransportDoesNotEndStrong(t *testing.T) {
 	if got.Verdict != policy.Ungraded {
 		t.Errorf("verdict %q, want ungraded: nothing was shown to be wrong, and the measurement did not finish", got.Verdict)
 	}
+	// And the report says why, rather than that nothing was measured (R4a).
+	if !strings.Contains(got.Withheld, "stopped before the server said it had no more") {
+		t.Errorf("the grade was withheld for %q", got.Withheld)
+	}
 }
 
 // Only strong is withdrawn: a finding that was seen stays seen.
@@ -197,8 +202,11 @@ func soundChain(t *testing.T) (*x509.Certificate, *tls.Certificate) {
 // withdrawing every verdict escaped on 2026-09-16: the whole-scan test above
 // only ever sees strong.
 func TestSettlingWithdrawsOnlyStrong(t *testing.T) {
-	unfinished := &tlsprobe.Report{Versions: []tlsprobe.VersionResult{{Supported: true}}}
-	finished := &tlsprobe.Report{Versions: []tlsprobe.VersionResult{{Supported: true, CipherListComplete: true}}}
+	unfinished := &tlsprobe.Report{Verdict: policy.Strong, Versions: []tlsprobe.VersionResult{{Supported: true}}}
+	finished := &tlsprobe.Report{Verdict: policy.Strong, Versions: []tlsprobe.VersionResult{{Supported: true, CipherListComplete: true}}}
+	// The transport tlsprobe leaves ungraded where TLS 1.3 was not
+	// established. A sound certificate made the scan strong until 2026-10-26.
+	notGraded := &tlsprobe.Report{Versions: []tlsprobe.VersionResult{{Supported: true, CipherListComplete: true}}}
 	graded := &certinfo.Report{Verdict: policy.Strong}
 
 	for v, want := range map[policy.Verdict]policy.Verdict{
@@ -207,16 +215,23 @@ func TestSettlingWithdrawsOnlyStrong(t *testing.T) {
 		policy.Insecure: policy.Insecure,
 		policy.Ungraded: policy.Ungraded,
 	} {
-		if got := settle(v, unfinished, graded); got != want {
-			t.Errorf("an unfinished scan at %q settled to %q, want %q", v, got, want)
+		for name, transport := range map[string]*tlsprobe.Report{"an unfinished": unfinished, "an ungraded": notGraded} {
+			got, why := settle(v, transport, graded)
+			if got != want {
+				t.Errorf("%s transport at %q settled to %q, want %q", name, v, got, want)
+			}
+			// Withheld says why, and only where it withheld.
+			if (got == policy.Ungraded && v == policy.Strong) != (why != "") {
+				t.Errorf("%s transport at %q settled to %q withheld for %q", name, v, got, why)
+			}
 		}
-		if got := settle(v, finished, graded); got != v {
-			t.Errorf("a finished scan at %q settled to %q", v, got)
+		if got, why := settle(v, finished, graded); got != v || why != "" {
+			t.Errorf("a finished scan at %q settled to %q, withheld for %q", v, got, why)
 		}
 
 		// No certificate graded is the same withdrawal for the same reason.
 		for _, c := range []*certinfo.Report{nil, {}} {
-			if got := settle(v, finished, c); got != want {
+			if got, _ := settle(v, finished, c); got != want {
 				t.Errorf("a scan at %q with certificate %+v settled to %q, want %q", v, c, got, want)
 			}
 		}

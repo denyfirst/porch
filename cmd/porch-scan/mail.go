@@ -119,8 +119,15 @@ func printMail(w io.Writer, r mailResult) {
 		return
 	}
 
+	// The reason the grade was withheld, where something was measured: a
+	// domain whose records were read and whose exchangers were not reached
+	// read as one nothing was established about until 2026-10-26 (R4a).
 	verdict := string(r.Verdict)
-	if verdict == "" {
+	switch {
+	case verdict != "":
+	case r.Withheld != "":
+		verdict = "ungraded (" + r.Withheld + ")"
+	default:
 		verdict = "ungraded (nothing was found wrong, and nothing was established)"
 	}
 	fmt.Fprintf(w, "\n  Verdict   %s\n", verdict)

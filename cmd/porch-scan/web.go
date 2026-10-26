@@ -175,8 +175,14 @@ func printWebReport(w io.Writer, r webResult) {
 		return
 	}
 
+	// The reason the grade was withheld, where something was measured, as
+	// for mail (R4a).
 	verdict := string(r.Verdict)
-	if verdict == "" {
+	switch {
+	case verdict != "":
+	case r.Withheld != "":
+		verdict = "ungraded (" + r.Withheld + ")"
+	default:
 		verdict = "ungraded (nothing was found wrong, and nothing was established)"
 	}
 	fmt.Fprintf(w, "\n  Verdict   %s\n", verdict)

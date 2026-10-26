@@ -306,6 +306,10 @@ type Result struct {
 	Findings []policy.Finding `json:"findings,omitempty"`
 	Notes    []policy.Note    `json:"notes,omitempty"`
 
+	// Withheld says why no verdict was given where something was measured,
+	// as policy.MailFinding does.
+	Withheld string `json:"withheld,omitempty"`
+
 	// Observed is what the lookups established, kept so a reader can check a
 	// verdict against the evidence rather than taking it on trust.
 	Observed *policy.MailFacts `json:"observed,omitempty"`
@@ -377,6 +381,7 @@ func (s *Scanner) Scan(ctx context.Context, domain string) (*Result, error) {
 		Verdict:  graded.Verdict,
 		Findings: graded.Findings,
 		Notes:    graded.Notes,
+		Withheld: graded.Withheld,
 		Observed: &facts,
 		Duration: s.now().Sub(started),
 	}, nil

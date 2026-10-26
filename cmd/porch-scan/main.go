@@ -646,8 +646,15 @@ func printReport(w io.Writer, r result) {
 		return
 	}
 
+	// The reason the grade was withheld, where something was measured: a
+	// host whose TLS 1.3 was not established read as one nothing could be
+	// measured about (R4a).
 	verdict := string(r.Verdict)
-	if verdict == "" {
+	switch {
+	case verdict != "":
+	case r.Withheld != "":
+		verdict = "ungraded (" + r.Withheld + ")"
+	default:
 		verdict = "ungraded (nothing could be measured)"
 	}
 	fmt.Fprintf(w, "\n  Verdict   %s\n", verdict)
