@@ -159,3 +159,70 @@ func TestTheReadmesMarksAreOnlyShapes(t *testing.T) {
 		}
 	}
 }
+
+// The badge a site may show is a shape, a title and a date to fill in.
+//
+// It goes on other people's pages, so it must not be able to do anything
+// there: no script, no link, nothing fetched. The files in the repository
+// carry the placeholder rather than a date, so nobody publishes a day they did
+// not check by forgetting to change it, and they are ASCII, so whatever edits
+// the date cannot garble them. The sizes and the address the page gives are
+// the files' own.
+func TestTheBadgeIsAShapeAndADate(t *testing.T) {
+	page, err := os.ReadFile("../../docs/badge.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := os.ReadFile("../../docs/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(index), "(badge.md)") {
+		t.Error("the docs index does not list the badge")
+	}
+	doc := string(page)
+	if !strings.Contains(doc, `<a href="`+PorchURL+`/">`) {
+		t.Errorf("the badge does not link to %s/", PorchURL)
+	}
+	for name, size := range map[string][2]string{
+		"porch-badge-light.svg": {"264", "60"},
+		"porch-badge-dark.svg":  {"264", "60"},
+		"porch-badge-small.svg": {"188", "24"},
+	} {
+		raw, err := os.ReadFile("../../docs/assets/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		badge := string(raw)
+		lower := strings.ToLower(badge)
+		for _, banned := range []string{"<script", "href", "<image", "<use", "<foreignobject", "<style", "url(", "javascript:", " on"} {
+			if strings.Contains(lower, banned) {
+				t.Errorf("%s contains %q", name, banned)
+			}
+		}
+		for i := 0; i < len(badge); i++ {
+			if badge[i] > 0x7e || badge[i] < 0x20 && badge[i] != '\n' {
+				t.Errorf("%s has byte %#x at %d, which is not printable ASCII", name, badge[i], i)
+				break
+			}
+		}
+		if n := strings.Count(badge, "YYYY-MM-DD"); n != 3 {
+			t.Errorf("%s carries the placeholder %d times, not in its title, its label and its text", name, n)
+		}
+		if regexp.MustCompile(`\d{4}-\d{2}-\d{2}`).MatchString(badge) {
+			t.Errorf("%s carries a date; the repository's copy carries the placeholder", name)
+		}
+		if !strings.Contains(badge, `aria-label="Checked with Porch, YYYY-MM-DD"`) || !strings.Contains(badge, "<title>Checked with Porch, YYYY-MM-DD</title>") {
+			t.Errorf("%s does not say what it is to a reader who cannot see it", name)
+		}
+		if !strings.HasPrefix(badge, `<svg xmlns="http://www.w3.org/2000/svg" width="`+size[0]+`" height="`+size[1]+`" viewBox="0 0 `+size[0]+" "+size[1]+`"`) {
+			t.Errorf("%s is not %sx%s", name, size[0], size[1])
+		}
+		if !strings.Contains(doc, "(assets/"+name+") | "+size[0]+" × "+size[1]+" |") {
+			t.Errorf("the page does not give %s at %s × %s", name, size[0], size[1])
+		}
+	}
+	if !strings.Contains(doc, `<img src="/porch-badge-light.svg" width="264" height="60"`) || !strings.Contains(doc, `<img src="/porch-badge-small.svg" width="188" height="24"`) {
+		t.Error("the page's snippets do not give the badges' own sizes")
+	}
+}
