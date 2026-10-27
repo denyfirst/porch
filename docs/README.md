@@ -4,6 +4,7 @@
 - [Self-hosting](self-host.md): the service on a server, and the command line
 - [Verify a release](verify.md): the signature, the hashes and a rebuild
 - [Who may scan what](scope.md): proof of control, and what Porch will not do
+- [A badge for your site](badge.md): "Checked with Porch", served from your own server
 - [Security invariants](invariants.md): each rule, where it is enforced, and its tests
 - [Rule set changes](policy-changes.md): what moved between versions of the grading rules
 - [Cutting a release](releasing.md): the maintainer's procedure
