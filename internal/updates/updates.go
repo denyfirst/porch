@@ -354,8 +354,9 @@ func (s *Service) SetDaily(on bool) error {
 }
 
 // Run checks once a day while the daily check is on, until ctx ends. The
-// first check comes a few minutes after it is turned on, or after start, and
-// each one after about a day later, at a time no two installations share.
+// first check comes a few minutes after start, and each one after about a
+// day later, at a time no two installations share. Turning it on checks at
+// once, in the handler, so the first one here is a day after that.
 func (s *Service) Run(ctx context.Context) {
 	s.mu.Lock()
 	if s.wake == nil {
@@ -386,12 +387,28 @@ func (s *Service) Run(ctx context.Context) {
 			}
 			next = s.clock().Add(between(time.Minute, 10*time.Minute))
 		case <-due:
+			// A check since this was planned, from Check now or from turning
+			// the daily check on, is the day's check: the next is a day after
+			// it, not a second request to GitHub minutes later.
+			if last, recent := s.checkedWithinADay(); recent {
+				next = last.Add(23*time.Hour + between(0, 2*time.Hour))
+				continue
+			}
 			if s.Settings.Daily() {
 				s.CheckNow(ctx)
 			}
 			next = s.clock().Add(23*time.Hour + between(0, 2*time.Hour))
 		}
 	}
+}
+
+// checkedWithinADay reports when the last check finished, and whether that
+// was less than a day ago.
+func (s *Service) checkedWithinADay() (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	last := s.state.CheckedAt
+	return last, !last.IsZero() && s.clock().Sub(last) < 23*time.Hour
 }
 
 // between is a random duration in [lo, hi), from crypto/rand, so the hour an

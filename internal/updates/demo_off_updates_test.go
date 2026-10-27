@@ -311,3 +311,66 @@ func TestTheHandlerAnswersOnlyItsOwnPages(t *testing.T) {
 		t.Errorf("DELETE answered %d", w.Code)
 	}
 }
+
+// Turning the daily check on asks at once and answers with what it found, so
+// New check's banner is there on the next page load. Until 2026-10-27 the
+// first check came minutes later in the background, the answer said nothing
+// had been found, and the banner waited for Check now.
+func TestTurningTheDailyCheckOnChecksAtOnce(t *testing.T) {
+	sums, sig := testdata(t, "SHA256SUMS"), testdata(t, "SHA256SUMS.sig")
+	c, asked := release(t, sums, sig)
+	s := &Service{Checker: c, Settings: &Settings{Path: filepath.Join(t.TempDir(), "u.json")}, Running: "v0.27.0"}
+
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/updates/daily", strings.NewReader(`{"daily":true}`))
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+
+	var st State
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &st) != nil {
+		t.Fatalf("turning it on answered %d %s", w.Code, w.Body.String())
+	}
+	if asked.Load() == 0 || st.Latest != "v0.27.1" || !st.Newer || !st.Daily || st.CheckedAt.IsZero() {
+		t.Errorf("turning it on asked %d times and answered %+v", asked.Load(), st)
+	}
+	if !s.State().Newer {
+		t.Error("what turning it on found is not what the banner reads")
+	}
+
+	// Turning it off asks nothing.
+	before := asked.Load()
+	r = httptest.NewRequest(http.MethodPost, "/api/v1/updates/daily", strings.NewReader(`{"daily":false}`))
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
+	r.Header.Set("Content-Type", "application/json")
+	s.Handler().ServeHTTP(httptest.NewRecorder(), r)
+	if asked.Load() != before {
+		t.Error("turning the daily check off asked GitHub")
+	}
+}
+
+// A check is the day's check, whoever asked for it: the scheduled one comes
+// a day after it, not minutes later, so turning the daily check on is one
+// request to GitHub and not two.
+func TestACheckIsTheDaysCheck(t *testing.T) {
+	sums, sig := testdata(t, "SHA256SUMS"), testdata(t, "SHA256SUMS.sig")
+	c, _ := release(t, sums, sig)
+	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	s := &Service{Checker: c, Settings: &Settings{}, Running: "v0.27.0", now: func() time.Time { return now }}
+
+	if _, recent := s.checkedWithinADay(); recent {
+		t.Fatal("a service that never checked reads as having checked")
+	}
+	s.CheckNow(context.Background())
+	if last, recent := s.checkedWithinADay(); !recent || !last.Equal(now) {
+		t.Errorf("a check just now reads %v, %v", last, recent)
+	}
+	now = now.Add(22 * time.Hour)
+	if _, recent := s.checkedWithinADay(); !recent {
+		t.Error("a check 22 hours ago does not count as the day's")
+	}
+	now = now.Add(2 * time.Hour)
+	if _, recent := s.checkedWithinADay(); recent {
+		t.Error("a check a day ago still counts as the day's")
+	}
+}
