@@ -144,7 +144,8 @@ from whichever servers the zone names.
 
 Under **This installation**, **Check now** asks GitHub for the latest
 release's signed list and checks it with the release key built into this
-copy; the daily check, off until you turn it on, asks once a day. The request
+copy; the daily check, off until you turn it on, asks when you turn it on and
+then once a day. The request
 carries no cookie, no version and nothing about the installation; GitHub sees
 the server's address. The choice is kept in `porch-data/updates.json`, not
 sealed: it says only whether the daily check is on. Nothing is installed:

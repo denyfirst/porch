@@ -51,6 +51,14 @@ func (s *Service) Handler() http.Handler {
 				refuse(w, http.StatusInternalServerError, "unavailable", "The choice could not be kept.")
 				return
 			}
+			// Turned on, it asks at once, as Check now does: the operator has
+			// just chosen to let it ask. Until 2026-10-27 the first check came
+			// minutes later in the background, the answer said nothing had been
+			// found, and New check showed no banner until Check now was pressed.
+			if *body.Daily {
+				writeJSON(w, http.StatusOK, s.CheckNow(r.Context()))
+				return
+			}
 			writeJSON(w, http.StatusOK, s.State())
 
 		default:
