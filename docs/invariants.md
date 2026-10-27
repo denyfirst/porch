@@ -1804,14 +1804,27 @@ signature's validity is dns.signature-expired's and is not counted twice.
 
 ### W2a — Only the demonstration says where it is, and it says what it is
 
+What it says to a search engine, a link preview or an assistant is what its
+pages say to a person: the llms.txt of each name, the card a preview shows and
+the schema.org microdata on the two front pages repeat the pages' own words,
+claim nothing nobody gave (no rating, no review), and run nothing (microdata
+rather than a script block). An installation somebody runs says none of it.
+
 *Enforced in:* `internal/web.render`, `internal/web.buildPlain`,
-`internal/web/assets/layout.html`
+`internal/web.buildLLMs`, `internal/web.socialCards`,
+`internal/web/assets/layout.html`, `internal/web/assets/home.html`,
+`internal/web/assets/porch.html`
 
 *Guarded by:* `TestACrawlerIsToldWhatThisDeploymentIs`,
 `TestEveryPageSaysWhichAddressItIs`,
 `TestTheDemonstrationTitlesNameTheToolAndTheMaker`,
 `TestPrivacyPageAnswersEveryUrgentQuestion`,
-`TestASelfHostedCopySaysWhatItDoes`
+`TestASelfHostedCopySaysWhatItDoes`,
+`TestEachNameTellsAnAssistantWhatItIs`,
+`TestPorchsLLMsTxtNamesTheReleaseOnlyWhenItHasOne`,
+`TestWhatTheOrganisationsLLMsTxtStatesIsSo`,
+`TestEachPageShowsItsNamesCard`,
+`TestTheFrontPagesSayWhoAndWhatTheyAre`
 
 ### W3 — A table with the same columns is drawn with the same columns
 

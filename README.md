@@ -35,8 +35,9 @@ connection a scan makes.
   whether a newer signed release exists, it asks GitHub when you tell it to.
 - **Only your own domains.** A copy checks a domain only after the domain
   publishes a TXT record proving control.
-- **Nothing intrusive.** No exploits, no malformed packets, no port scanning,
-  no private addresses.
+- **Nothing intrusive.** No exploits, no malformed packets, no port sweeps,
+  no private addresses. The one port check is a fixed list of services that
+  should never face the internet, one connection each, nothing sent.
 - **Nothing to trust blindly.** Go's standard library only, no third-party
   code. Releases are signed and can be rebuilt byte for byte.
 

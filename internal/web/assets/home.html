@@ -139,11 +139,22 @@
 </section>
 
 <section class="band band-tint" id="about">
-  <div class="team">
+  <!--
+    The same facts again for a search engine, as schema.org microdata: who
+    this is, its address, its mark and where its code is. Attributes on what
+    the section already shows, and four elements a browser does not draw,
+    rather than a script block, because no page here carries an inline
+    script of any kind. It names no person, as the page does not.
+  -->
+  <div class="team" itemscope itemtype="https://schema.org/Organization">
+    <meta itemprop="name" content="denyfirst">
+    <link itemprop="url" href="https://denyfirst.dev/">
+    <link itemprop="logo" href="https://denyfirst.dev/denyfirst-touch.png">
+    <link itemprop="sameAs" href="https://github.com/denyfirst">
     <div class="team-text">
       <p class="eyebrow">04 / The team</p>
       <h2 class="band-title">Small and independent.</h2>
-      <p class="band-prose">denyfirst is an independent team that puts privacy
+      <p class="band-prose" itemprop="description">denyfirst is an independent team that puts privacy
       first. You know us by our work, and by the key that signs every
       release.</p>
       <a class="text-link arrow-ne" href="https://github.com/denyfirst/porch">Source on GitHub</a>

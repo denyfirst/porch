@@ -1,0 +1,35 @@
+# Porch
+
+> Porch checks what a server shows the outside world (TLS, the website, mail and DNS) and grades it against published standards. It is open source under AGPL-3.0, runs on your own server, and is made by denyfirst.
+
+- Every finding links the RFC or guideline it rests on, and every report says what it could not measure.
+- A copy checks a domain only after that domain publishes a TXT record proving control.
+- Nothing intrusive: no exploits, no credential guessing, nothing malformed, no port sweeps and no private addresses. The one port check is a fixed list of services that should never face the internet, one connection each, with nothing sent.
+- No account, no telemetry, no log of who checked what. The service keeps results only encrypted under its password; the command line keeps none.
+- Go's standard library only. Releases are signed and can be rebuilt byte for byte.
+- This site runs Porch against denyfirst's own domain only. To check your own, run a copy yourself.
+{{- with .Release}}
+- Current release: [{{.}}](https://github.com/denyfirst/porch/releases/tag/{{.}})
+{{- end}}
+
+## Checks
+{{range .Checks}}
+- {{.Label}}: {{.Says}}
+{{- end}}
+
+## Pages
+{{range .Pages}}
+- [{{.Title}}]({{.URL}}): {{.Description}}
+{{- end}}
+
+## Documentation
+
+- [How the checks work]({{.ChecksURL}}): every connection a scan makes, and the standard behind each finding
+- [Running it yourself](https://github.com/denyfirst/porch/blob/main/docs/self-host.md): the service with Docker, and the command line
+- [Verifying a release](https://github.com/denyfirst/porch/blob/main/docs/verify.md): the signature, the hashes and a rebuild
+- [Who may scan what](https://github.com/denyfirst/porch/blob/main/docs/scope.md): why a copy needs proof of control
+- [Source code](https://github.com/denyfirst/porch)
+
+## Optional
+
+- [denyfirst]({{.SiteURL}}/llms.txt): the team that makes Porch
