@@ -18,7 +18,13 @@
 <meta property="og:title" content="{{.Title}}">
 <meta property="og:description" content="{{.Description}}">
 <meta property="og:url" content="{{.Canonical}}">
-<meta name="twitter:card" content="summary">
+{{if .Organisation}}<meta property="og:image" content="{{.SiteBase}}/og-denyfirst.png">
+<meta property="og:image:alt" content="denyfirst. Security. On your terms.">{{end}}{{if not .Organisation}}<meta property="og:image" content="{{.PorchBase}}/og-porch.png">
+<meta property="og:image:alt" content="porch. Look closer. Know what answers.">{{end}}
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 {{end}}
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">

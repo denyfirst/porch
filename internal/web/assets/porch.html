@@ -1,9 +1,25 @@
 <!-- Porch, on the demonstration: what it is, a live check of our domain, and how to run it. -->
 <section class="porch-hero">
-  <div>
+  {{/* What this is, again for a search engine, as schema.org microdata on
+       what the hero already says, rather than a script block: no page here
+       carries an inline script. Each value is one the page states too: the
+       price is the "Free and open source" of the comparison and the answer
+       on whether it is free, the licence is the one that answer links, and
+       the version is the release this page installs. No rating is given,
+       because nobody has rated it. */}}
+  <div itemscope itemtype="https://schema.org/SoftwareApplication">
+    <meta itemprop="name" content="Porch">
+    <link itemprop="url" href="https://porch.denyfirst.dev/">
+    <meta itemprop="applicationCategory" content="SecurityApplication">
+    <meta itemprop="operatingSystem" content="Linux, macOS, Windows">
+    {{with .Release}}<meta itemprop="softwareVersion" content="{{.}}">
+    {{end}}<link itemprop="license" href="https://github.com/denyfirst/porch/blob/main/LICENSE">
+    <link itemprop="downloadUrl" href="https://github.com/denyfirst/porch/releases">
+    <div hidden itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="0"><meta itemprop="priceCurrency" content="USD"></div>
+    <div hidden itemprop="publisher" itemscope itemtype="https://schema.org/Organization"><meta itemprop="name" content="denyfirst"><link itemprop="url" href="https://denyfirst.dev/"></div>
     <p class="eyebrow eyebrow-dot">Infrastructure checks</p>
     <h1>Look closer.<br><span class="hero-soft">Know what answers.</span></h1>
-    <p class="lede">Porch checks what your servers show the outside world:
+    <p class="lede" itemprop="description">Porch checks what your servers show the outside world:
     TLS, website, mail and DNS. Every finding links to the standard behind
     it.</p>
     <p class="chips"><span>TLS &amp; certificates</span><span>Web reach</span><span>Mail policy</span><span>DNS</span><span>Name inventory</span></p>

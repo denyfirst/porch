@@ -487,6 +487,24 @@ var denyfirstFiles = map[string]servedFile{
 	PGPKeyPath: {"assets/pgp-key.txt", "text/plain; charset=utf-8"},
 }
 
+// socialCards are the pictures a link preview shows, one for each of the
+// demonstration's names, at 1200 by 630 pixels, which is what the previews
+// that show a large picture ask for. The layout names the one for the page's
+// name in og:image, with that size beside it so a preview need not fetch the
+// picture to lay it out; a test holds the two to each other.
+//
+// The demonstration's only: an installation says nothing to a link preview,
+// for the reason it states no canonical address.
+//
+// Each is a few lines its name's front page already says, set as a picture,
+// and nothing else. They carry no metadata, which a test checks: a screenshot
+// tool writes its own name, a path or a date into a PNG unless it is told not
+// to, and none of those is anybody's business.
+var socialCards = map[string]servedFile{
+	"/og-denyfirst.png": {"assets/og-denyfirst.png", "image/png"},
+	"/og-porch.png":     {"assets/og-porch.png", "image/png"},
+}
+
 // rendered holds every page as finished bytes.
 //
 // Built once at startup rather than per request. A template executed on every
@@ -502,6 +520,9 @@ func init() {
 			files[path] = file
 		}
 		moved["/security.txt"] = SecurityTxtPath
+		for path, file := range socialCards {
+			files[path] = file
+		}
 	}
 
 	// The denyfirst front page and the Porch page exist on the demonstration
@@ -1031,15 +1052,16 @@ type plainFile struct {
 	body        []byte
 }
 
-// plain holds the two files a crawler reads, built at startup beside the
-// pages, and plainPorch the same two for porch.denyfirst.dev, which lists its
-// own pages and names its own sitemap.
+// plain holds the files a crawler reads, built at startup beside the pages,
+// and plainPorch the same files for porch.denyfirst.dev, which lists its own
+// pages and names its own sitemap.
 var (
 	plain      = map[string]plainFile{}
 	plainPorch = map[string]plainFile{}
 )
 
-// buildPlain writes robots.txt and, on the demonstration, a sitemap.
+// buildPlain writes robots.txt and, on the demonstration, a sitemap and an
+// llms.txt (llms.go).
 //
 // The demonstration wants to be found, and the pages it wants found are the
 // ones in the table, so the sitemap is that table rather than a list somebody
@@ -1088,6 +1110,7 @@ func buildPlain() {
 		crawler.files["/robots.txt"] = plainFile{"text/plain; charset=utf-8",
 			[]byte("User-agent: *\nAllow: /\n\nSitemap: " + crawler.base + "/sitemap.xml\n")}
 	}
+	buildLLMs()
 }
 
 // organisationPage is what assets/organisation.html reads.

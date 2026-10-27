@@ -37,11 +37,12 @@ var organisationPaths = map[string]bool{
 	PGPKeyPath:      true,
 	"/robots.txt":   true,
 	"/sitemap.xml":  true,
+	"/llms.txt":     true,
 }
 
 // sharedPaths are on both names, each with its own: the front page, the
 // privacy page and the crawler files.
-var sharedPaths = map[string]bool{"/": true, "/privacy": true, "/robots.txt": true, "/sitemap.xml": true}
+var sharedPaths = map[string]bool{"/": true, "/privacy": true, "/robots.txt": true, "/sitemap.xml": true, "/llms.txt": true}
 
 // organisationIcons are the icon addresses a browser asks of every name,
 // answered at denyfirst.dev with the organisation's mark rather than Porch's.

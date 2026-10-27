@@ -1,0 +1,22 @@
+# denyfirst
+
+> denyfirst is an independent team that makes security and privacy tools you can read, rebuild and check for yourself.
+
+- This site sets no cookie, loads nothing from another server, and carries no tracker.
+- All code is public under AGPL-3.0. Releases are signed, and can be rebuilt byte for byte.
+- No accounts, no telemetry, nothing to sign up for.
+
+## Products
+{{range .Products}}
+- [{{.Name}}]({{.URL}}): {{.What}} ([llms.txt]({{.URL}}llms.txt))
+{{- end}}
+
+## Pages
+{{range .Pages}}
+- [{{.Title}}]({{.URL}}): {{.Description}}
+{{- end}}
+
+## Contact
+
+- [Reporting a vulnerability]({{.SiteURL}}/.well-known/security.txt)
+- [Source code](https://github.com/denyfirst/porch)
