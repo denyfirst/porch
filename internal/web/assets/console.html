@@ -47,24 +47,63 @@
   </div>
 
   <form class="composer" id="console-form" autocomplete="off" data-proof="required">
-    <div class="composer-part">
-      <label class="composer-step" for="console-target">01 / Domain</label>
-      <input
-        class="field composer-field"
-        type="text"
-        id="console-target"
-        name="target"
-        placeholder="example.com"
-        spellcheck="false"
-        autocapitalize="off"
-        autocorrect="off"
-        enterkeyhint="go"
-        autofocus>
-      <p class="composer-scope">
-        <span class="scope-dot scope-dot-on" aria-hidden="true"></span>Only domains this installation
-        has been shown control of. A new one is asked for its record first.
-      </p>
-    </div>
+    <!--
+      The domain is chosen, not typed: one of those added under Domains, read
+      from this installation's own list when the page opens. A name typed here
+      could be any name, and every one not proven met the record dialog in the
+      middle of a check; the list holds only the domains somebody here chose to
+      add, so the choice is the scope, said where it is made. Adding one is
+      done on Domains, where its record is shown and asked for, and the last
+      card goes there.
+
+      Whether each is proven is not asked to draw the cards. That is a DNS
+      lookup a domain, on every visit to this page, for a fact the check asks
+      again anyway when it runs; the card says when the domain was added,
+      which is what the list knows.
+
+      The host is typed, under the chosen domain, because a check is usually
+      about one name beneath it: www, mail. What the checks will be run
+      against is said under the field as it is typed, and is the one value
+      the form sends.
+    -->
+    <fieldset class="composer-part">
+      <legend class="composer-step">01 / Domain</legend>
+      <div class="check-grid domain-grid" id="domain-choices">
+        <a class="check check-elsewhere domain-add" href="/domains">
+          <span class="check-name">+ Add a domain</span>
+          <span class="check-says">Publish its record once, and it is here.</span>
+        </a>
+      </div>
+      <p class="composer-scope domain-status" id="domain-status" role="status">Reading this installation&rsquo;s domains.</p>
+      <div class="host-row" id="host-row" hidden>
+        <label class="field-label" for="console-host">A host under it, if not the domain itself</label>
+        <div class="host-field">
+          <input
+            class="field"
+            type="text"
+            id="console-host"
+            placeholder="www, mail"
+            spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
+            enterkeyhint="go"
+            aria-describedby="host-says-line">
+          <span class="host-suffix" id="host-suffix"></span>
+        </div>
+        <p class="composer-scope" id="host-says-line">
+          <span class="scope-dot scope-dot-on" aria-hidden="true"></span><span>Checks <strong id="host-says"></strong>.
+          Only a domain this installation has been shown control of is checked.</span>
+        </p>
+      </div>
+      <div class="domain-empty" id="domain-empty" hidden>
+        <p class="report-empty-title">No domain has been added yet</p>
+        <p>Porch checks a domain only once its DNS shows it is yours. Add one
+        under Domains and publish the record it gives you; it then appears
+        here, and under Names.</p>
+        <a class="submit domain-go" href="/domains">Go to Domains</a>
+      </div>
+      <input type="hidden" id="console-target" name="target">
+    </fieldset>
 
     <!--
       Each one named for what it reads rather than for how hard it pushes.
@@ -81,7 +120,7 @@
       offers, so a box would have run two thirds of it and said the rest was
       never asked.
     -->
-    <fieldset class="composer-part checks">
+    <fieldset class="composer-part checks" data-needs-domain>
       <legend class="composer-step">02 / Checks</legend>
       <div class="check-grid">
         {{range .Checks}}
@@ -148,7 +187,7 @@
 
   <div class="console-results" id="console-results" hidden></div>
 
-  <div class="report-empty" id="report-empty">
+  <div class="report-empty" id="report-empty" data-needs-domain>
     <p class="report-empty-title">The report appears here</p>
     <p>Each check leads with its verdict and its findings, with the evidence underneath.</p>
   </div>

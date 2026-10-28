@@ -114,9 +114,12 @@ the compose file is the only thing a server has to check.
 5. Sign in with the password from the log and change it under **This
    installation**. Every page and the API are behind it.
 
-6. Add a domain. The page shows a TXT record, `_porch-challenge.<domain>`, to
-   publish at your DNS provider. Once it is there, every name under that
-   domain can be checked. Delete the record and the domain is refused again.
+6. Add a domain under **Domains**. The page shows a TXT record,
+   `_porch-challenge.<domain>`, to publish at your DNS provider. Once it is
+   there, every name under that domain can be checked. Delete the record and
+   the domain is refused again. **New check** and **Names** offer the domains
+   added here to choose from, with a host under the chosen one, such as `www`
+   or `mail`, typed beside it.
 
 ### Where the record goes at your provider
 
