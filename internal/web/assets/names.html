@@ -18,6 +18,7 @@
     </div>{{end}}
 
     <form class="ask-form" id="scan-form" autocomplete="off" data-check="names">
+      {{if .Demo}}
       <label class="field-label" for="target">Domain</label>
       <div class="field-row">
         <input
@@ -30,11 +31,37 @@
           autocapitalize="off"
           autocorrect="off"
           enterkeyhint="go"
-          aria-describedby="field-help"{{if .Demo}}
+          aria-describedby="field-help"
           value="{{.Target}}"
-          readonly{{end}}>
+          readonly>
         <button class="submit" type="submit" id="submit">List</button>
       </div>
+      {{else}}
+      {{/* Chosen from the domains added under Domains, as on New check and
+           for the same reasons; see console.html. No host field: the
+           inventory is about the whole domain. */}}
+      <fieldset class="domain-part">
+        <legend class="field-label">Domain</legend>
+        <div class="check-grid domain-grid" id="domain-choices">
+          <a class="check check-elsewhere domain-add" href="/domains">
+            <span class="check-name">+ Add a domain</span>
+            <span class="check-says">Publish its record once, and it is here.</span>
+          </a>
+        </div>
+        <p class="field-help domain-status" id="domain-status" role="status">Reading this installation&rsquo;s domains.</p>
+        <div class="domain-empty" id="domain-empty" hidden>
+          <p class="report-empty-title">No domain has been added yet</p>
+          <p>Porch lists the names under a domain only once its DNS shows it
+          is yours. Add one under Domains and publish the record it gives you;
+          it then appears here, and on New check.</p>
+          <a class="submit domain-go" href="/domains">Go to Domains</a>
+        </div>
+        <input type="hidden" id="target" name="target">
+      </fieldset>
+      <div class="field-row names-run" data-needs-domain>
+        <button class="submit" type="submit" id="submit">List</button>
+      </div>
+      {{end}}
 
       {{if .Demo}}
       <p class="field-help" id="field-help">
@@ -44,8 +71,8 @@
         <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#names">How it works</a>.
       </p>
       {{else}}
-      <p class="field-help" id="field-help">
-        A bare domain. No name is guessed. Each is asked only whether it
+      <p class="field-help" id="field-help" data-needs-domain>
+        The names under the chosen domain. No name is guessed. Each is asked only whether it
         answers, except one that points at a hosting service on a fixed list,
         which is asked for its front page once.
         It lists only a domain you have proven control of.
@@ -62,7 +89,7 @@
         installation, behind the password they set; the demonstration has its
         own page and no field.
       -->
-      <div class="field-group">
+      <div class="field-group" data-needs-domain>
         <label class="field-label" for="ranges">Address ranges you own</label>
         <div class="field-row">
           <input
@@ -101,7 +128,7 @@
         Not on the demonstration: the estate it lists is compiled in, so a field
         that took names would be offering something that deployment refuses.
       -->
-      <div class="field-group">
+      <div class="field-group" data-needs-domain>
         <label class="field-label" for="known">Names you already have</label>
         <textarea
           class="field field-lines"

@@ -5298,6 +5298,77 @@ main > .band:last-child { border-bottom: 0; }
 
 .console-results:not([hidden]) + .report-empty { display: none; }
 
+/*
+  The domain a check is about, chosen from the ones added under Domains.
+
+  The cards are the check cards below them, so one form reads as one form; the
+  last card is a door to Domains rather than a choice, drawn dashed as a place
+  a card would go. The host is typed in front of the domain, which is drawn
+  after the field as the part that is not typed.
+*/
+.ask-form .domain-part { margin: 0; padding: 0; border: 0; min-width: 0; }
+
+/* A fieldset is as wide as its widest content unless told otherwise, and the
+   composer clips: on a phone the cards and the host field ran past its edge
+   and were cut off rather than wrapping. */
+fieldset.composer-part { min-width: 0; }
+
+.domain-grid .check-says { font-size: 0.82rem; color: var(--ink-faint); }
+.check-grid .domain-add { border-style: dashed; }
+.domain-add .check-name { color: var(--link); }
+.domain-grid-long { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+.domain-select { width: 100%; font-size: 1.05rem; background: var(--paper); }
+
+.host-row { margin-top: 1.1rem; max-width: var(--measure); }
+.host-field { display: flex; align-items: stretch; }
+.host-field .field {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  font-size: 1.05rem;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.host-suffix {
+  display: flex;
+  align-items: center;
+  max-width: 60%;
+  padding: 0 0.9rem;
+  overflow: hidden;
+  font-size: 1rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-soft);
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-left: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.domain-empty {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  padding: 1.6rem;
+  background: var(--paper);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+}
+
+.domain-empty p { margin: 0; max-width: 34rem; font-size: 0.92rem; line-height: 1.55; color: var(--ink-soft); }
+.domain-empty .report-empty-title { font-size: 1rem; font-weight: 600; color: var(--ink); }
+.domain-go { display: inline-flex; align-items: center; margin-top: 0.4rem; text-decoration: none; }
+.names-run { margin-top: 1rem; }
+
+/* What the script hides stays hidden: each of these draws itself as a grid or
+   a row, which would otherwise outrank the attribute. */
+.domain-grid[hidden], .domain-empty[hidden], .domain-status[hidden], [data-needs-domain][hidden] { display: none; }
+
+@media (max-width: 60rem) {
+  .domain-grid-long { grid-template-columns: 1fr; }
+}
+
 /* Domains. */
 .domain-form .field-row { max-width: 36rem; }
 .domain-record { margin-top: 1rem; }

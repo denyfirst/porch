@@ -2113,6 +2113,10 @@ if (form) form.addEventListener("submit", async event => {
 
   const target = input.value.trim();
   if (!target) {
+    if (input.type === "hidden") {
+      show(failure("Choose a domain, or add one under Domains."));
+      return;
+    }
     show(failure("Enter a hostname to check."));
     input.focus();
     return;
@@ -3088,6 +3092,123 @@ async function loadDomains() {
 
 if (domainTable) loadDomains();
 
+/*
+  The domain a check or an inventory is about, chosen from the ones added
+  under Domains rather than typed.
+
+  The list is read once, as the page opens, from this installation's own
+  sealed list; nothing is asked of DNS to draw it. Whether a domain is proven
+  is the check's question, asked when it runs, so a card says what the list
+  knows: when the domain was added. A few are cards, as the checks are; more
+  than DOMAIN_CARDS_AT_MOST is a list to pick from, where cards would push
+  the checks off the screen. With none, the page says where one is added and
+  hides what could not be run.
+
+  Every card is built here from the names the service returned, with
+  textContent, like everything else on this page.
+*/
+const domainChoices = document.getElementById("domain-choices");
+const DOMAIN_CARDS_AT_MOST = 6;
+
+function chosenDomain() {
+  const box = domainChoices.querySelector("input[name='domain']:checked");
+  if (box) return box.value;
+  const list = domainChoices.querySelector("select");
+  return list ? list.value : "";
+}
+
+async function loadDomainChoices(changed) {
+  const status = document.getElementById("domain-status");
+  const add = domainChoices.querySelector(".domain-add");
+  let list;
+  try {
+    const data = await domainRequest("GET", "/api/v1/domains");
+    list = (data && data.domains) || [];
+  } catch (err) {
+    status.textContent = (err.message || "The domain list could not be read.") + " Domains shows it.";
+    return;
+  }
+  status.hidden = true;
+
+  if (list.length === 0) {
+    domainChoices.hidden = true;
+    document.getElementById("domain-empty").hidden = false;
+    for (const part of document.querySelectorAll("[data-needs-domain]")) part.hidden = true;
+    return;
+  }
+
+  if (list.length > DOMAIN_CARDS_AT_MOST) {
+    const select = el("select", "field domain-select");
+    select.name = "domain";
+    select.setAttribute("aria-label", "Domain");
+    for (const domain of list) {
+      const option = el("option", null, domain.name + ", added " + domain.added);
+      option.value = domain.name;
+      select.appendChild(option);
+    }
+    select.addEventListener("change", changed);
+    domainChoices.classList.add("domain-grid-long");
+    domainChoices.insertBefore(select, add);
+  } else {
+    list.forEach((domain, i) => {
+      const card = el("label", "check");
+      const box = el("input");
+      box.type = "radio";
+      box.name = "domain";
+      box.value = domain.name;
+      box.checked = i === 0;
+      box.addEventListener("change", changed);
+      card.appendChild(box);
+      card.appendChild(el("span", "check-name", domain.name));
+      card.appendChild(el("span", "check-says", "Added " + domain.added));
+      domainChoices.insertBefore(card, add);
+    });
+  }
+  changed();
+}
+
+// HOST_LABEL is one label of a host name: letters, digits and hyphens, not at
+// either end. The service decides what it accepts; this only keeps the page
+// from offering to check a name it would then refuse.
+const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+// hostUnder is the name a check will run against: the domain itself when
+// nothing is typed, the typed host in front of it otherwise. A whole name
+// typed or pasted, ending in the domain, is taken as it is. Empty when what
+// was typed is not a host.
+function hostUnder(typed, domain) {
+  if (!domain) return "";
+  let host = typed.trim().toLowerCase().replace(/\.$/, "");
+  if (host === "" || host === domain) return domain;
+  if (host.endsWith("." + domain)) host = host.slice(0, -(domain.length + 1));
+  return host.split(".").every(label => HOST_LABEL.test(label)) ? host + "." + domain : "";
+}
+
+const consoleHost = document.getElementById("console-host");
+
+if (consoleForm && domainChoices && consoleHost) {
+  const suffix = document.getElementById("host-suffix");
+  const says = document.getElementById("host-says");
+  const update = () => {
+    const domain = chosenDomain();
+    const name = hostUnder(consoleHost.value, domain);
+    suffix.textContent = "." + domain;
+    says.textContent = name || "no host: letters, digits and hyphens, such as www or mail";
+    consoleTarget.value = name;
+  };
+  consoleHost.addEventListener("input", update);
+  loadDomainChoices(() => {
+    document.getElementById("host-row").hidden = false;
+    update();
+  });
+}
+
+if (form && domainChoices && input && input.type === "hidden") {
+  loadDomainChoices(() => {
+    input.value = chosenDomain();
+  });
+}
+
 // proven says whether the checks may run, asking for proof first where it is
 // required. A failure to ask is shown in the results and ends the run.
 async function proven(target) {
@@ -3112,8 +3233,11 @@ if (consoleForm) {
     if (!target) {
       clear(consoleResults);
       consoleResults.hidden = false;
-      consoleResults.appendChild(failure("Enter a hostname to check."));
-      consoleTarget.focus();
+      const typed = consoleHost && consoleHost.value.trim();
+      consoleResults.appendChild(failure(typed
+        ? "A host is letters, digits and hyphens, such as www or mail."
+        : "Choose a domain, or add one under Domains."));
+      if (typed) consoleHost.focus();
       return;
     }
 
