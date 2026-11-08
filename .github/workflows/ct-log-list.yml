@@ -46,8 +46,16 @@ jobs:
         id: compare
         run: |
           set +e
-          go run ./internal/ctlogs/refresh -check > compare.txt 2>&1
-          code=$?
+          # Built and then run, not "go run": go run exits 1 whatever the
+          # program's own code, so a failed fetch read as a change and opened
+          # the issue instead of failing this job.
+          if go build -o "${RUNNER_TEMP}/refresh" ./internal/ctlogs/refresh; then
+            "${RUNNER_TEMP}/refresh" -check > compare.txt 2>&1
+            code=$?
+          else
+            code=2
+            : > compare.txt
+          fi
           cat compare.txt
           echo "code=${code}" >> "${GITHUB_OUTPUT}"
           exit 0
