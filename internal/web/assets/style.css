@@ -4244,11 +4244,16 @@ main > .band:last-child { border-bottom: 0; }
 .update-toggle input:focus-visible + .update-switch { outline: 2px solid var(--tool); outline-offset: 2px; }
 .update-toggle input:disabled + .update-switch { cursor: progress; border-style: dashed; }
 
-.steps .command {
+.steps .command,
+.steps .command-pair {
   grid-column: 2;
   grid-row: 1 / 4;
   align-self: center;
 }
+
+/* Two systems' lines for one step, one above the other. */
+.steps .command-pair { display: grid; gap: 0.75rem; min-width: 0; }
+.steps .command-pair .command { grid-column: auto; grid-row: auto; margin-top: 0; min-width: 0; }
 
 .steps p code {
   font-family: var(--mono);
@@ -4262,7 +4267,8 @@ main > .band:last-child { border-bottom: 0; }
 
 @media (max-width: 52rem) {
   .steps li { grid-template-columns: minmax(0, 1fr); }
-  .steps .command { grid-column: 1; grid-row: auto; margin-top: 1rem; }
+  .steps .command, .steps .command-pair { grid-column: 1; grid-row: auto; margin-top: 1rem; }
+  .steps .command-pair .command { margin-top: 0; }
 }
 
 /*
