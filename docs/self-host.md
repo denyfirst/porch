@@ -19,8 +19,12 @@ release's two Linux binaries, built byte for byte the same wherever they are
 built. The release's `docker-compose.yml` names the image **by digest**, so
 the compose file is the only thing a server has to check.
 
-1. Install Docker. On Debian 13, from Debian's own packages: the engine, the
-   `docker` command and Compose, updated with the rest of the system:
+1. Install Docker. On Debian 13, or Ubuntu 24.04 and later, from the
+   system's own packages: the engine, the `docker` command and Compose,
+   updated with the rest of the system. The names differ, so each system has
+   its own lines.
+
+   Debian 13:
 
    ```sh
    sudo apt-get update
@@ -28,12 +32,34 @@ the compose file is the only thing a server has to check.
    sudo docker compose version
    ```
 
-   The last line has to print a version. `docker-cli` is named because
-   `docker.io` holds only the engine, and a system set not to install
-   recommended packages, as many cloud images are, otherwise has a running
-   engine and no `docker` command (seen on a cloud provider's Debian 13
-   image on 2026-10-20). On another system, follow
-   [Docker's guide](https://docs.docker.com/engine/install/).
+   Ubuntu 24.04 or later:
+
+   ```sh
+   sudo apt-get update
+   sudo apt-get install -y docker.io docker-compose-v2
+   sudo docker compose version
+   ```
+
+   The last line has to print a version.
+
+   - Debian 13 puts the `docker` command in `docker-cli`. `docker.io` holds
+     only the engine, and a system set not to install recommended packages,
+     as many cloud images are, otherwise has a running engine and no
+     `docker` command (seen on a cloud provider's Debian 13 image on
+     2026-10-20). Ubuntu 24.04 has no `docker-cli`: its `docker.io` carries
+     the command, and naming a package that does not exist stopped the whole
+     install there (reported on 2026-11-12).
+   - Ubuntu calls Compose `docker-compose-v2`. Its `docker-compose` is the
+     old Compose v1, a separate `docker-compose` command unmaintained since
+     2023, and it is not used here: every command in this guide is
+     `docker compose`, with a space.
+
+   On any other system, follow
+   [Docker's guide](https://docs.docker.com/engine/install/). Red Hat's
+   family (RHEL, Rocky, AlmaLinux, Fedora) has no lines here yet: Docker is
+   not in its own packages, and SELinux keeps a container from reading a
+   directory that is not labelled for it, which this compose file's data
+   directory is not. Lines for it are added once they have run there.
 
    Every `docker` command in this guide runs with `sudo`. Without it the
    socket refuses (`permission denied while trying to connect to the Docker

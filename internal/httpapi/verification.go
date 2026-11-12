@@ -109,6 +109,11 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.proofMarker != nil {
+		// A failure to remember costs a page its tidy list, not this answer.
+		_ = s.proofMarker.Mark(t.host, err == nil)
+	}
+
 	out := verifyResponse{Required: true, Verified: err == nil, Signed: err == nil && signed}
 	labels := strings.Split(t.host, ".")
 	for i := 0; i+1 < len(labels) && len(out.Records) < maxVerifyRecords; i++ {
