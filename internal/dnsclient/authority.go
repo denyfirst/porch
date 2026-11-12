@@ -152,6 +152,36 @@ func (a *Authority) LookupChallenge(ctx context.Context, name string) (values []
 type authorityWalk struct {
 	a       *Authority
 	queries int
+
+	// zones are the servers each zone was delegated to in this walk, so that
+	// looking up a second server of the same provider starts from its zone
+	// rather than from the root again.
+	zones map[string]*zoneServers
+}
+
+// zoneServers are the servers a delegation names for one zone: the addresses
+// known so far, and the servers whose addresses are looked up only when the
+// ones known have not answered.
+//
+// A delegation can name servers that do not hold the zone. datalead.az, on
+// 2026-11-12, was delegated to ten servers of one provider; the first of them
+// refused every question about it, because the provider serves each domain
+// from two. Every resolver moves on to the next server, and this walk did
+// not: it asked only the first server it could find an address for, and
+// reported a zone that could not be read, so the page showed no record to
+// publish. A server that refuses is now set aside for the rest of the walk,
+// and the next one is asked.
+type zoneServers struct {
+	addrs []delegatedServer
+	names []string
+	lame  map[string]bool
+}
+
+// delegatedServer is one address, and the server name it belongs to. The
+// name is empty for the root servers, which are carried by address.
+type delegatedServer struct {
+	addr netip.Addr
+	name string
 }
 
 // heldAnswer is what one server said, read strictly: records only where their
@@ -166,11 +196,16 @@ type heldAnswer struct {
 	addresses     []netip.Addr
 }
 
-func (w *authorityWalk) roots() []netip.Addr {
-	if len(w.a.Roots) > 0 {
-		return w.a.Roots
+func (w *authorityWalk) roots() *zoneServers {
+	roots := w.a.Roots
+	if len(roots) == 0 {
+		roots = RootServers
 	}
-	return RootServers
+	zs := &zoneServers{}
+	for _, a := range roots {
+		zs.addrs = append(zs.addrs, delegatedServer{addr: a})
+	}
+	return zs
 }
 
 // txt reads the TXT records at name, following an alias with a fresh walk.
@@ -181,7 +216,7 @@ func (w *authorityWalk) txt(ctx context.Context, name string, aliases int) ([]st
 		return nil, exists, err
 	}
 
-	ans, err := w.ask(ctx, servers, name, TypeTXT)
+	ans, err := w.ask(ctx, servers, name, TypeTXT, 0)
 	if err != nil {
 		return nil, false, err
 	}
@@ -200,19 +235,27 @@ func (w *authorityWalk) txt(ctx context.Context, name string, aliases int) ([]st
 	return ans.txt, true, nil
 }
 
-// holders walks from the root to the servers that hold the zone name is in.
+// holders walks from the root to the servers that hold the zone name is in,
+// or from the deepest zone above name that this walk was already delegated.
 //
 // exists is false where a server holding a zone above said, with authority,
 // that a name on the way does not exist: nothing below it can.
-func (w *authorityWalk) holders(ctx context.Context, name string, depth int) ([]netip.Addr, bool, error) {
+func (w *authorityWalk) holders(ctx context.Context, name string, depth int) (*zoneServers, bool, error) {
 	labels := strings.Split(name, ".")
 	servers := w.roots()
 	zone := ""
+	from := len(labels) - 1
+	for i := range labels {
+		if known, ok := w.zones[strings.Join(labels[i:], ".")]; ok {
+			servers, zone, from = known, strings.Join(labels[i:], "."), i-1
+			break
+		}
+	}
 
-	for i := len(labels) - 1; i >= 0; i-- {
+	for i := from; i >= 0; i-- {
 		child := strings.Join(labels[i:], ".")
 
-		ans, err := w.ask(ctx, servers, child, TypeNS)
+		ans, err := w.ask(ctx, servers, child, TypeNS, depth)
 		if err != nil {
 			return nil, false, err
 		}
@@ -232,27 +275,46 @@ func (w *authorityWalk) holders(ctx context.Context, name string, depth int) ([]
 			continue
 		}
 
-		next := inZoneGlue(ans, zone)
-		if len(next) == 0 {
-			for _, server := range ans.referral {
-				if len(next) > 0 || w.queries >= authorityMaxQueries {
-					break
-				}
-				found, err := w.addresses(ctx, server, depth+1)
-				if err == nil {
-					next = found
-				}
-			}
-		}
-		if len(next) == 0 {
+		next := delegated(ans, zone)
+		if len(next.addrs) == 0 && len(next.names) == 0 {
 			return nil, false, fmt.Errorf("dnsclient: none of the servers %s is delegated to could be reached", child)
 		}
+		if w.zones == nil {
+			w.zones = map[string]*zoneServers{}
+		}
+		w.zones[child] = next
 		servers, zone = next, child
 	}
 	return servers, true, nil
 }
 
-// addresses looks up a server's own addresses by the same walk.
+// delegated is the servers a referral names. Addresses it carries are used
+// only for servers inside the zone that sent it; the others are looked up by
+// the walk when they are needed.
+func delegated(ans heldAnswer, zone string) *zoneServers {
+	zs := &zoneServers{}
+	for _, server := range ans.referral {
+		var glue []netip.Addr
+		if zone == "" || server == zone || strings.HasSuffix(server, "."+zone) {
+			glue = orderAddresses(ans.glue[server])
+		}
+		if len(glue) == 0 {
+			zs.names = append(zs.names, server)
+			continue
+		}
+		for _, a := range glue {
+			zs.addrs = append(zs.addrs, delegatedServer{addr: a, name: server})
+		}
+	}
+	// IPv4 first across servers, as before, because a container without
+	// IPv6 fails those dials slowly.
+	sort.SliceStable(zs.addrs, func(i, j int) bool { return zs.addrs[i].addr.Is4() && !zs.addrs[j].addr.Is4() })
+	return zs
+}
+
+// addresses looks up a server's own addresses by the same walk: A, and AAAA
+// only where there is no A, so that a delegation naming many servers costs
+// the bound as little as it can.
 func (w *authorityWalk) addresses(ctx context.Context, host string, depth int) ([]netip.Addr, error) {
 	if depth > authorityMaxDepth {
 		return nil, errors.New("dnsclient: a server's address is further from the root than is followed")
@@ -268,11 +330,14 @@ func (w *authorityWalk) addresses(ctx context.Context, host string, depth int) (
 
 	var out []netip.Addr
 	for _, qtype := range []uint16{TypeA, TypeAAAA} {
-		ans, err := w.ask(ctx, servers, host, qtype)
+		ans, err := w.ask(ctx, servers, host, qtype, depth)
 		if err != nil || !ans.authoritative {
 			continue
 		}
 		out = append(out, ans.addresses...)
+		if len(out) > 0 {
+			break
+		}
 	}
 	if len(out) == 0 {
 		return nil, errors.New("dnsclient: a delegation names a server with no address")
@@ -280,12 +345,41 @@ func (w *authorityWalk) addresses(ctx context.Context, host string, depth int) (
 	return orderAddresses(out), nil
 }
 
-// ask puts one question to the servers in turn until one answers.
-func (w *authorityWalk) ask(ctx context.Context, servers []netip.Addr, name string, qtype uint16) (heldAnswer, error) {
+// ask puts one question to a zone's servers in turn until one answers.
+//
+// A server that refuses does not hold the zone, whatever the delegation said:
+// it is set aside for the rest of the walk and does not count against
+// authorityMaxServers, which bounds the servers that time out or fail. A
+// server named without an address is looked up only once the ones with
+// addresses have not answered. The one that answers is asked first next time.
+func (w *authorityWalk) ask(ctx context.Context, zs *zoneServers, name string, qtype uint16, depth int) (heldAnswer, error) {
 	last := errors.New("dnsclient: no server to ask")
-	for i, server := range servers {
-		if i >= authorityMaxServers {
-			break
+	failed := 0
+	for i := 0; ; i++ {
+		for i >= len(zs.addrs) {
+			if len(zs.names) == 0 {
+				return heldAnswer{}, last
+			}
+			if w.queries >= authorityMaxQueries {
+				return heldAnswer{}, errAuthorityBudget
+			}
+			host := zs.names[0]
+			zs.names = zs.names[1:]
+			found, err := w.addresses(ctx, host, depth+1)
+			if err != nil {
+				last = err
+				continue
+			}
+			for _, a := range found {
+				zs.addrs = append(zs.addrs, delegatedServer{addr: a, name: host})
+			}
+		}
+		server := zs.addrs[i]
+		if server.name != "" && zs.lame[server.name] {
+			continue
+		}
+		if failed >= authorityMaxServers {
+			return heldAnswer{}, last
 		}
 		if w.queries >= authorityMaxQueries {
 			return heldAnswer{}, errAuthorityBudget
@@ -293,17 +387,28 @@ func (w *authorityWalk) ask(ctx context.Context, servers []netip.Addr, name stri
 		w.queries++
 
 		qctx, cancel := context.WithTimeout(ctx, w.a.Client.timeout())
-		ans, err := w.askOne(qctx, server, name, qtype)
+		ans, err := w.askOne(qctx, server.addr, name, qtype)
 		cancel()
 		if err == nil {
+			if i > 0 {
+				copy(zs.addrs[1:i+1], zs.addrs[:i])
+				zs.addrs[0] = server
+			}
 			return ans, nil
 		}
 		last = err
+		if errors.Is(err, ErrRefused) && server.name != "" {
+			if zs.lame == nil {
+				zs.lame = map[string]bool{}
+			}
+			zs.lame[server.name] = true
+		} else {
+			failed++
+		}
 		if ctx.Err() != nil {
-			break
+			return heldAnswer{}, last
 		}
 	}
-	return heldAnswer{}, last
 }
 
 // askOne asks one server one question, without recursion, and reads the reply
@@ -408,19 +513,6 @@ func exactAnswers(raw, question []byte, qtype uint16) (txt []string, alias strin
 		}
 	}
 	return txt, alias, addrs, nil
-}
-
-// inZoneGlue is the glue a referral carried for servers inside the zone that
-// sent it. The root holds every name, so its glue is all in zone.
-func inZoneGlue(ans heldAnswer, zone string) []netip.Addr {
-	var out []netip.Addr
-	for _, server := range ans.referral {
-		if zone != "" && server != zone && !strings.HasSuffix(server, "."+zone) {
-			continue
-		}
-		out = append(out, ans.glue[server]...)
-	}
-	return orderAddresses(out)
 }
 
 // orderAddresses puts IPv4 before IPv6 and drops repeats and anything that is

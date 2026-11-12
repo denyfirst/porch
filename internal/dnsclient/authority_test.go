@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"strings"
@@ -390,6 +391,82 @@ func TestAWalkThatNeverEndsIsBounded(t *testing.T) {
 	// code it checks would move with any change to it, and one did.
 	if n := len(h.questions()); n > 48 {
 		t.Errorf("sixty unreachable servers cost %d questions, more than the bound of 48", n)
+	}
+}
+
+// A delegation may name servers that do not hold the zone, and they refuse.
+// The walk sets each aside and asks the next, as a resolver does, rather than
+// reporting a zone that cannot be read.
+//
+// datalead.az, on 2026-11-12: delegated to ten servers of one provider, the
+// first of which refused, so the page showed an error and no record to
+// publish. Here nine of ten refuse. The referral's order is a map's, so every
+// run puts the one that answers somewhere else, last included, and the walk
+// has to reach it within its bound each time.
+func TestServersThatRefuseTheZoneAreSetAside(t *testing.T) {
+	const provider = "192.0.2.20"
+	for run := 0; run < 20; run++ {
+		h := estate(t, "porch-verification=abc")
+		h.servers[rootAddr] = func(t *testing.T, qname string, qtype uint16) heldReply {
+			switch qname {
+			case "com":
+				return delegate(t, "com", map[string]string{"a.gtld.test": comAddr})
+			case "net":
+				return delegate(t, "net", map[string]string{"b.gtld.test": netAddr})
+			}
+			return heldReply{flags: flagsNXDomain}
+		}
+		h.servers[netAddr] = func(t *testing.T, qname string, qtype uint16) heldReply {
+			if qname == "provider.net" || strings.HasSuffix(qname, ".provider.net") {
+				return delegate(t, "provider.net", map[string]string{"ns.provider.net": provider})
+			}
+			return heldReply{flags: flagsNXDomain}
+		}
+		servers := map[string]string{}
+		for i := 0; i < 10; i++ {
+			servers[fmt.Sprintf("ns%d.provider.net", i)] = ""
+		}
+		h.servers[comAddr] = func(t *testing.T, qname string, qtype uint16) heldReply {
+			if qname == "example.com" {
+				return delegate(t, "example.com", servers)
+			}
+			return heldReply{flags: flagsNXDomain}
+		}
+		h.servers[provider] = func(t *testing.T, qname string, qtype uint16) heldReply {
+			var i int
+			if _, err := fmt.Sscanf(qname, "ns%d.provider.net", &i); err == nil && qtype == TypeA {
+				return heldReply{flags: flagsAuthoritative, answer: []record{addrRecord(t, qname, fmt.Sprintf("192.0.2.%d", 100+i))}}
+			}
+			return holds()
+		}
+		refused := map[string]int{}
+		for i := 0; i < 10; i++ {
+			addr := fmt.Sprintf("192.0.2.%d", 100+i)
+			if i == 7 {
+				h.servers[addr] = h.servers[exampleAddr]
+				continue
+			}
+			h.servers[addr] = func(t *testing.T, qname string, qtype uint16) heldReply {
+				refused[addr]++
+				return heldReply{flags: 0x8005}
+			}
+		}
+
+		values, _, err := walker(h).LookupChallenge(context.Background(), "_porch-challenge.example.com")
+		if err != nil {
+			t.Fatalf("run %d: nine servers refusing and one answering ended the walk: %v", run, err)
+		}
+		if strings.Join(values, ",") != "porch-verification=abc" {
+			t.Fatalf("run %d: the walk read %v", run, values)
+		}
+		for addr, n := range refused {
+			if n > 1 {
+				t.Errorf("run %d: %s refused %d times; a server that refuses is not asked again", run, addr, n)
+			}
+		}
+		if n := len(h.questions()); n > 48 {
+			t.Errorf("run %d: the walk asked %d questions, more than its bound of 48", run, n)
+		}
 	}
 }
 
