@@ -311,6 +311,10 @@ type Server struct {
 	// keeps its history. Nil keeps nothing. See KeepReports.
 	keeper Keeper
 
+	// proofMarker is told what each proof check said, where RememberProof
+	// set one.
+	proofMarker ProofMarker
+
 	sem     semaphore
 	counts  *counters
 	targets *targetLimiter
@@ -1278,6 +1282,22 @@ type Keeper interface {
 // of an estate's weaknesses is not something to serve to whoever asks (P6).
 func (s *Server) KeepReports(k Keeper) {
 	s.keeper = k
+}
+
+// ProofMarker remembers what a proof check said about a name.
+// internal/vault's domain list is the one there is.
+type ProofMarker interface {
+	Mark(name string, proven bool) error
+}
+
+// RememberProof tells this service to hand every definite answer of the
+// verification endpoint to m: proven, or not proven. A lookup that failed is
+// neither and is not handed on. Called before serving, and only where a
+// password is in front of the service, like KeepReports. What m keeps decides
+// which domains a page offers, never whether a check may run: that is asked
+// of DNS again on every scan.
+func (s *Server) RememberProof(m ProofMarker) {
+	s.proofMarker = m
 }
 
 // UseHeloName sets the name the mail check gives each exchanger with EHLO.

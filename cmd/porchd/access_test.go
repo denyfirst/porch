@@ -160,8 +160,9 @@ func TestTheUpdateCheckExistsOnlyBehindThePassword(t *testing.T) {
 }
 
 // The history exists only behind a password: the vault, the reports kept in
-// it and the routes that read it are made inside the one branch that makes
-// the gate, and nowhere else.
+// it, the domain list, what proof checks tell that list, and the routes that
+// read them are made inside the one branch that makes the gate, and nowhere
+// else.
 func TestTheHistoryExistsOnlyBehindThePassword(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
 	const block = "\tif *accessFile != \"\" {\n" +
@@ -171,6 +172,7 @@ func TestTheHistoryExistsOnlyBehindThePassword(t *testing.T) {
 		"\t\troot.Handle(\"/api/v1/history\", history.Handler())\n" +
 		"\t\troot.Handle(\"/api/v1/history/\", history.Handler())\n" +
 		"\t\tdomains := &vault.Domains{Path: filepath.Join(filepath.Dir(*accessFile), \"domains.sealed\"), Key: gate.Key}\n" +
+		"\t\tapi.RememberProof(domains)\n" +
 		"\t\troot.Handle(\"/api/v1/domains\", domains.Handler())\n" +
 		"\t\troot.Handle(\"/api/v1/domains/\", domains.Handler())\n" +
 		"\t}\n"
@@ -178,7 +180,7 @@ func TestTheHistoryExistsOnlyBehindThePassword(t *testing.T) {
 		t.Fatal("the vault is no longer made in the branch that makes the gate")
 	}
 	rest := strings.Replace(src, block, "", 1)
-	for _, never := range []string{"KeepReports(", "history.Handler()", "vault.Vault{", "vault.Domains{", "domains.Handler()"} {
+	for _, never := range []string{"KeepReports(", "RememberProof(", "history.Handler()", "vault.Vault{", "vault.Domains{", "domains.Handler()"} {
 		if strings.Contains(rest, never) {
 			t.Errorf("main.go uses %q outside the branch that makes the gate", never)
 		}

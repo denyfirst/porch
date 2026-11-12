@@ -18,10 +18,14 @@ import (
 // Domains is the list of domains somebody behind the password has added, kept
 // in one file sealed under the same key as the history.
 //
-// Only the names and the date each was added. Whether a domain is proven is
-// not kept: it is a fact about its DNS today, asked again each time the list
-// is shown, so a record deleted from the zone reads as unproven at once
-// rather than as the "proven" somebody saw last week.
+// The names, the date each was added, and what the last proof check this
+// service made said about it. That last is not a proof and nothing treats it
+// as one: every check asks DNS again when it runs, and the Domains page asks
+// again each time the list is shown, so a record deleted from the zone reads
+// as unproven at once there. It is kept so that New check and Names can offer
+// only the domains a check could run against, without a DNS lookup per domain
+// on every visit (reported on 2026-11-12: a domain added and never proven sat
+// among the choices it could not be checked with).
 type Domains struct {
 	// Path is the sealed file. Created, readable by this user alone, when the
 	// first domain is added.
@@ -40,6 +44,11 @@ type Domains struct {
 type Domain struct {
 	Name  string `json:"name"`
 	Added string `json:"added"`
+
+	// Proven is what the last proof check of this exact name said: true or
+	// false. Absent on a domain added before this was kept, and on one no
+	// check has asked about since; a page offers those as it always did.
+	Proven *bool `json:"proven,omitempty"`
 }
 
 // MaxDomains bounds the list. Nobody proves this many; the bound is on what a
@@ -98,8 +107,44 @@ func (d *Domains) Add(name string) (bool, error) {
 	if d.Today != nil {
 		today = d.Today()
 	}
-	list = append(list, Domain{Name: name, Added: today})
+	unproven := false
+	list = append(list, Domain{Name: name, Added: today, Proven: &unproven})
 	return true, d.write(gcm, list)
+}
+
+// Mark records what a proof check just said about a name on the list. A name
+// not on the list is left off it: marking never adds. Nothing is written when
+// the mark is unchanged, or before anybody has signed in, when there is no
+// key to write with; neither is a failure of the check that asked.
+func (d *Domains) Mark(name string, proven bool) error {
+	name, ok := Normalise(name)
+	if !ok {
+		return nil
+	}
+	gcm, err := sealer(d.Key)
+	if errors.Is(err, ErrLocked) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	list, err := d.read(gcm)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		if list[i].Name != name {
+			continue
+		}
+		if list[i].Proven != nil && *list[i].Proven == proven {
+			return nil
+		}
+		list[i].Proven = &proven
+		return d.write(gcm, list)
+	}
+	return nil
 }
 
 // Remove takes a domain off the list. What was kept about it in the history
