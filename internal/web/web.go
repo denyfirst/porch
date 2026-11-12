@@ -431,6 +431,7 @@ type servedFile struct {
 var files = map[string]servedFile{
 	"/style.css":   {"assets/style.css", "text/css; charset=utf-8"},
 	"/app.js":      {"assets/app.js", "text/javascript; charset=utf-8"},
+	"/explain.js":  {"assets/explain.js", "text/javascript; charset=utf-8"},
 	"/theme.js":    {"assets/theme.js", "text/javascript; charset=utf-8"},
 	"/session.js":  {"assets/session.js", "text/javascript; charset=utf-8"},
 	"/hero.js":     {"assets/hero.js", "text/javascript; charset=utf-8"},

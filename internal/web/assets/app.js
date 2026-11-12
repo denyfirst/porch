@@ -2144,7 +2144,10 @@ if (form) form.addEventListener("submit", async event => {
   try {
     const data = await check(target, CHECK, asked());
     if (CHECK_NAME === "names") namesFrame(result, domainOnly(target), data);
-    else show(CHECK.build(data));
+    else {
+      show(CHECK.build(data));
+      explainReport(result);
+    }
   } catch (err) {
     const hint = err.status === 429
       ? "Wait a moment before trying again."
@@ -2206,6 +2209,171 @@ function reportLists(root) {
     cell.appendChild(list);
   }
 }
+
+/*
+  What each part of a report means, said beside it.
+
+  A reader asked what "Referrer-Policy" or a 302 means had to look it up
+  somewhere else, and most did not (reported on 2026-11-12). EXPLAIN, in
+  explain.js, holds a short line and an explanation for every label and
+  section title a report draws. explainReport adds the line under the label
+  and a button beside it, which opens the explanation in a panel with its
+  source; nothing below the rows grows longer.
+
+  Run last, after reportFacts and reportLists, which read the labels as they
+  were written. The labels and values stay exactly as drawn (R16), and
+  everything added is built with textContent. A label is explained once per
+  section: the mail rows repeat "DANE" and "STARTTLS" for each server, and the
+  line said again on each would be noise. explain_test.go holds every label
+  to an entry, so a row added without one fails before it ships.
+*/
+const EXPLAINED = typeof EXPLAIN === "object" && EXPLAIN !== null ? EXPLAIN : {};
+const EXPLAIN_IN = " \u203a ";
+
+function explainEntry(section, label) {
+  return EXPLAINED[section + EXPLAIN_IN + label] || EXPLAINED[label] || null;
+}
+
+function explainButton(key, label) {
+  const button = el("button", "explain-open", "?");
+  button.type = "button";
+  button.dataset.explain = key;
+  button.setAttribute("aria-label", "What is " + label + "?");
+  return button;
+}
+
+function explainReport(root) {
+  if (!root) return;
+  let section = "";
+  const done = new Set();
+  for (const node of root.querySelectorAll("h2.section-title, table.grid > tbody > tr > th, dl dt")) {
+    if (node.querySelector(".explain-open")) continue;
+    const label = node.textContent.trim();
+    if (!label) continue;
+    if (node.matches("h2.section-title")) {
+      section = label;
+      if (EXPLAINED[label]) node.appendChild(explainButton(label, label));
+      continue;
+    }
+    const table = node.closest("table.grid");
+    if (table && !table.tHead) table.classList.add("grid-labelled");
+    const key = EXPLAINED[section + EXPLAIN_IN + label] ? section + EXPLAIN_IN + label : label;
+    const entry = EXPLAINED[key];
+    if (!entry || done.has(section + "\n" + label)) continue;
+    done.add(section + "\n" + label);
+    node.appendChild(explainButton(key, label));
+    if (entry.about) node.appendChild(el("span", "explain-about", entry.about));
+  }
+}
+
+// explainSays is what the report measured beside a label, for the panel: the
+// cell next to a row's heading, or the values under a fact's label.
+function explainSays(button) {
+  const holder = button.closest("th, dt");
+  if (!holder) return "";
+  let text = "";
+  if (holder.tagName === "TH") {
+    const cell = holder.nextElementSibling;
+    text = cell ? cell.textContent : "";
+  } else {
+    for (let n = holder.nextElementSibling; n && n.tagName === "DD"; n = n.nextElementSibling) {
+      text += (text ? "; " : "") + n.textContent;
+    }
+  }
+  text = text.replace(/\s+/g, " ").trim();
+  return text.length > 300 ? text.slice(0, 300) + "…" : text;
+}
+
+let explainPanel = null;
+let explainFrom = null;
+
+function explainShut() {
+  if (!explainPanel) return;
+  explainPanel.panel.hidden = true;
+  explainPanel.scrim.hidden = true;
+  if (explainFrom && explainFrom.isConnected) explainFrom.focus();
+  explainFrom = null;
+}
+
+// The panel is made once, on first use, so a page that is never asked has
+// none, and filled with textContent each time it opens.
+function explainMake() {
+  const scrim = el("div", "explain-scrim");
+  scrim.hidden = true;
+  const panel = el("aside", "explain-panel");
+  panel.hidden = true;
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "true");
+  panel.setAttribute("aria-labelledby", "explain-title");
+  const close = el("button", "explain-close", "Close");
+  close.type = "button";
+  const title = el("h2", "explain-title", "");
+  title.id = "explain-title";
+  const part = (heading, cls) => {
+    const box = el("div", "explain-part");
+    box.appendChild(el("h3", null, heading));
+    const body = el(cls === "explain-how" ? "pre" : "p", cls, "");
+    box.appendChild(body);
+    panel.appendChild(box);
+    return { box, body };
+  };
+  panel.appendChild(close);
+  panel.appendChild(title);
+  const parts = {
+    says: part("This report says", "explain-says"),
+    what: part("What it is", "explain-what"),
+    good: part("Common choice", "explain-good"),
+    how: part("To set it", "explain-how"),
+  };
+  const source = el("p", "explain-source", "");
+  panel.appendChild(source);
+  close.addEventListener("click", explainShut);
+  scrim.addEventListener("click", explainShut);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !panel.hidden) explainShut();
+  });
+  document.body.appendChild(scrim);
+  document.body.appendChild(panel);
+  explainPanel = { scrim, panel, close, title, parts, source };
+  return explainPanel;
+}
+
+function explainOpen(button) {
+  const key = button.dataset.explain;
+  const entry = EXPLAINED[key];
+  if (!entry) return;
+  const p = explainPanel || explainMake();
+  explainFrom = button;
+  const cut = key.lastIndexOf(EXPLAIN_IN);
+  p.title.textContent = cut >= 0 ? key.slice(cut + EXPLAIN_IN.length) : key;
+  const fill = (part, text) => {
+    part.body.textContent = text || "";
+    part.box.hidden = !text;
+  };
+  fill(p.parts.says, button.closest("h2") ? "" : explainSays(button));
+  fill(p.parts.what, entry.what);
+  fill(p.parts.good, entry.good);
+  fill(p.parts.how, entry.how);
+  clear(p.source);
+  if (Array.isArray(entry.src) && /^https:\/\//.test(entry.src[1] || "")) {
+    p.source.appendChild(document.createTextNode("Source: "));
+    // Opened as its own page, sending nothing about this one.
+    const a = el("a", null, entry.src[0]);
+    a.href = entry.src[1];
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    p.source.appendChild(a);
+  }
+  p.source.hidden = !p.source.firstChild;
+  p.panel.hidden = false;
+  p.scrim.hidden = false;
+  p.close.focus();
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest && event.target.closest(".explain-open");
+  if (button) explainOpen(button);
+});
 
 /*
   One frame for every report, whichever page draws it.
@@ -2426,6 +2594,7 @@ function reportShow(frame, entry, data) {
   entry.body.appendChild(entry.spec.build(data));
   for (const dl of entry.body.querySelectorAll("dl.pairs")) reportFacts(dl);
   reportLists(entry.body);
+  explainReport(entry.body);
 
   // The card's foot: where the check is explained, and where it ends. The
   // limits every scan of this kind shares go here too, beside the page that
@@ -2667,6 +2836,7 @@ function namesFrame(container, target, data, opts) {
   body.appendChild(buildNames(data));
   for (const dl of body.querySelectorAll("dl.pairs")) reportFacts(dl);
   reportLists(body);
+  explainReport(body);
   container.appendChild(body);
 }
 
