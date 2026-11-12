@@ -22,8 +22,7 @@ func newDomains(t *testing.T) (*Domains, []byte) {
 }
 
 // Domains are added once, listed by name, removed one at a time, and kept
-// with the date they were added and nothing else: not whether they were
-// proven, which is asked again each time.
+// with the date they were added.
 func TestTheDomainListAddsListsAndRemoves(t *testing.T) {
 	d, _ := newDomains(t)
 	d.Today = func() string { return "2026-09-18" }
@@ -187,4 +186,77 @@ func readFile(t *testing.T, name string) string {
 		t.Fatal(err)
 	}
 	return string(body)
+}
+
+// What the last proof check said is kept per domain, for the pages that offer
+// a domain to check: a domain starts unproven, a check's answer replaces the
+// mark, a name not on the list is never added by marking, and nothing is
+// written before anybody has signed in.
+func TestTheDomainListKeepsTheLastProofAnswer(t *testing.T) {
+	d, _ := newDomains(t)
+	if _, err := d.Add("a.example"); err != nil {
+		t.Fatal(err)
+	}
+	mark := func() *bool {
+		t.Helper()
+		list, err := d.List()
+		if err != nil || len(list) != 1 {
+			t.Fatalf("the list is %+v (%v)", list, err)
+		}
+		return list[0].Proven
+	}
+	if p := mark(); p == nil || *p {
+		t.Fatalf("a domain just added is marked %v, want not proven", p)
+	}
+	if err := d.Mark("A.Example.", true); err != nil {
+		t.Fatal(err)
+	}
+	if p := mark(); p == nil || !*p {
+		t.Fatalf("a proven answer left the mark %v", p)
+	}
+	before, err := os.ReadFile(d.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Mark("a.example", true); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(d.Path); !bytes.Equal(before, after) {
+		t.Error("the same answer again rewrote the list")
+	}
+	if err := d.Mark("a.example", false); err != nil {
+		t.Fatal(err)
+	}
+	if p := mark(); p == nil || *p {
+		t.Fatalf("a record taken away left the mark %v", p)
+	}
+	for _, name := range []string{"www.a.example", "b.example", "not a name"} {
+		if err := d.Mark(name, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if list, _ := d.List(); len(list) != 1 {
+		t.Errorf("marking added a name: %+v", list)
+	}
+
+	locked := &Domains{Path: d.Path, Key: func() []byte { return nil }}
+	if err := locked.Mark("a.example", true); err != nil {
+		t.Errorf("marking before anybody signed in failed the check that asked: %v", err)
+	}
+	if p := mark(); *p {
+		t.Error("a list nobody had opened was written")
+	}
+
+	// A list written before the mark was kept reads as having no answer.
+	legacy := &Domains{Path: filepath.Join(t.TempDir(), "domains.sealed"), Key: d.Key}
+	gcm, err := sealer(legacy.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.write(gcm, []Domain{{Name: "old.example", Added: "2026-10-01"}}); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := legacy.List(); len(list) != 1 || list[0].Proven != nil {
+		t.Errorf("a list from before the mark reads as %+v", list)
+	}
 }

@@ -625,6 +625,7 @@ func run() int {
 		root.Handle("/api/v1/history", history.Handler())
 		root.Handle("/api/v1/history/", history.Handler())
 		domains := &vault.Domains{Path: filepath.Join(filepath.Dir(*accessFile), "domains.sealed"), Key: gate.Key}
+		api.RememberProof(domains)
 		root.Handle("/api/v1/domains", domains.Handler())
 		root.Handle("/api/v1/domains/", domains.Handler())
 	}

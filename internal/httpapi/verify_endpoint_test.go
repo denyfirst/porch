@@ -364,3 +364,41 @@ func TestTheVerifyEndpointSaysWhetherTheProofWasSigned(t *testing.T) {
 		t.Error("an unproven name was reported proven")
 	}
 }
+
+type marks map[string]bool
+
+func (m marks) Mark(name string, proven bool) error {
+	m[name] = proven
+	return nil
+}
+
+// Every definite answer is handed to the domain list, so the pages can offer
+// only what a check could run against; a lookup that failed is not an answer
+// and is not handed on.
+func TestTheVerifyEndpointTellsTheDomainListWhatItFound(t *testing.T) {
+	scope, _ := scopeProving("proven.test")
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	seen := marks{}
+	s.RememberProof(seen)
+
+	askVerify(t, s, "proven.test")
+	askVerify(t, s, "unproven.test")
+	if len(seen) != 2 || !seen["proven.test"] || seen["unproven.test"] {
+		t.Errorf("the list was told %v", seen)
+	}
+
+	scope.Resolver = failingLookup{}
+	if code, _, _ := askVerify(t, s, "failed.test"); code == http.StatusOK {
+		t.Fatal("a failed lookup was answered")
+	}
+	if _, told := seen["failed.test"]; told {
+		t.Error("a failed lookup was handed to the list as an answer")
+	}
+}
+
+type failingLookup struct{}
+
+func (failingLookup) LookupChallenge(context.Context, string) ([]string, bool, error) {
+	return nil, false, errors.New("the servers did not answer")
+}

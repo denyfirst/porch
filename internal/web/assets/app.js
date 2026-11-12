@@ -3097,9 +3097,14 @@ if (domainTable) loadDomains();
   under Domains rather than typed.
 
   The list is read once, as the page opens, from this installation's own
-  sealed list; nothing is asked of DNS to draw it. Whether a domain is proven
-  is the check's question, asked when it runs, so a card says what the list
-  knows: when the domain was added. A few are cards, as the checks are; more
+  sealed list; nothing is asked of DNS to draw it. The list says what the
+  last proof check said of each domain, and one it said is not proven is not
+  offered: it could not be checked (reported on 2026-11-12). It is counted
+  instead, with where its record is, so nothing added goes unmentioned. One
+  the list has no answer for, added before it kept one, is offered as
+  before. Whether a domain is proven is still the check's question, asked
+  when it runs, so a card says what the list knows: when the domain was
+  added. A few are cards, as the checks are; more
   than DOMAIN_CARDS_AT_MOST is a list to pick from, where cards would push
   the checks off the screen. With none, the page says where one is added and
   hides what could not be run.
@@ -3128,11 +3133,18 @@ async function loadDomainChoices(changed) {
     status.textContent = (err.message || "The domain list could not be read.") + " Domains shows it.";
     return;
   }
-  status.hidden = true;
+  const waiting = list.filter(domain => domain.proven === false).length;
+  list = list.filter(domain => domain.proven !== false);
+  status.textContent = waiting === 0 ? "" :
+    (waiting === 1 ? "1 domain is" : waiting + " domains are") + " added and not proven yet. " +
+    "Domains has the record each needs, and shows a domain here once it is proven.";
+  status.hidden = waiting === 0;
 
   if (list.length === 0) {
     domainChoices.hidden = true;
-    document.getElementById("domain-empty").hidden = false;
+    const empty = document.getElementById("domain-empty");
+    if (waiting > 0) empty.querySelector(".report-empty-title").textContent = "No domain is proven yet";
+    empty.hidden = false;
     for (const part of document.querySelectorAll("[data-needs-domain]")) part.hidden = true;
     return;
   }

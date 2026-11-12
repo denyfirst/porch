@@ -48,7 +48,9 @@ func TestThePrivacyPageSaysWhoAProofIsReadFrom(t *testing.T) {
 //
 // The list is read from the installation's own sealed list as the page opens,
 // and nothing asks DNS to draw it: whether a domain is proven is asked by the
-// check when it runs, which the service decides whatever the page sent. So
+// check when it runs, which the service decides whatever the page sent. A
+// domain the list says the last proof check found unproven is not offered,
+// and is counted instead, so nothing added goes unmentioned. So
 // the picker is a convenience over a boundary that is enforced elsewhere, and
 // these hold its shape: the one value each form sends is a field the script
 // fills, every door to adding a domain goes to Domains, and what cannot run
@@ -105,6 +107,9 @@ func TestTheDomainIsChosenNotTyped(t *testing.T) {
 	load, _, _ = strings.Cut(load, "\n}\n")
 	if !strings.Contains(load, `domainRequest("GET", "/api/v1/domains")`) {
 		t.Error("the choices are not read from the installation's own list")
+	}
+	if !strings.Contains(load, "domain.proven !== false") || !strings.Contains(load, "domain.proven === false") {
+		t.Error("a domain the last proof check found unproven is offered, or goes unmentioned")
 	}
 	for _, never := range []string{"VERIFY", "check(", "innerHTML"} {
 		if strings.Contains(load, never) {
