@@ -19,21 +19,39 @@ release's two Linux binaries, built byte for byte the same wherever they are
 built. The release's `docker-compose.yml` names the image **by digest**, so
 the compose file is the only thing a server has to check.
 
-1. Install Docker. On Debian 13, from Debian's own packages: the engine, the
-   `docker` command and Compose, updated with the rest of the system:
+1. Install Docker. On Debian 13 or Ubuntu 24.04 and later, from the system's
+   own packages: the engine, the `docker` command and Compose, updated with
+   the rest of the system:
 
    ```sh
    sudo apt-get update
-   sudo apt-get install -y docker.io docker-cli docker-compose
+   cli=$(apt-cache show docker-cli >/dev/null 2>&1 && echo docker-cli)
+   compose=$(for p in docker-compose-v2 docker-compose; do apt-cache show "$p" 2>/dev/null | grep -q '^Version: 2\.' && { echo "$p"; break; }; done)
+   sudo apt-get install -y docker.io $cli $compose
    sudo docker compose version
    ```
 
-   The last line has to print a version. `docker-cli` is named because
-   `docker.io` holds only the engine, and a system set not to install
-   recommended packages, as many cloud images are, otherwise has a running
-   engine and no `docker` command (seen on a cloud provider's Debian 13
-   image on 2026-10-20). On another system, follow
-   [Docker's guide](https://docs.docker.com/engine/install/).
+   The last line has to print a version. The two lines before the install
+   pick the names each system uses, because they differ, and only ever a
+   Compose v2:
+
+   - Debian 13 splits the `docker` command into `docker-cli`. `docker.io`
+     holds only the engine, and a system set not to install recommended
+     packages, as many cloud images are, otherwise has a running engine and
+     no `docker` command (seen on a cloud provider's Debian 13 image on
+     2026-10-20). Ubuntu 24.04 has no `docker-cli`: its `docker.io` carries
+     the command, and naming a package that does not exist stopped the whole
+     install there (reported on 2026-11-12).
+   - Ubuntu calls Compose `docker-compose-v2`. Its `docker-compose` is the
+     old Compose v1, a separate `docker-compose` command unmaintained since
+     2023, and it is never installed here: every command in this guide is
+     `docker compose`, with a space. A package is chosen for Compose only
+     where its version starts with 2.
+
+   If the last line says `'compose' is not a docker command`, Compose v2 is
+   missing, as it is from Debian 12's packages, whose `docker-compose` is v1
+   and is left out. Then, and on any other
+   system, follow [Docker's guide](https://docs.docker.com/engine/install/).
 
    Every `docker` command in this guide runs with `sudo`. Without it the
    socket refuses (`permission denied while trying to connect to the Docker
