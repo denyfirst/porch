@@ -1860,6 +1860,157 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
 .report-body .grid td { padding-left: 1rem; }
 .report-body .grid td { color: var(--ink-soft); }
 
+/*
+  What a label means, under it, and a button beside it that opens the rest.
+
+  The line is set in the page's own type, sentence case, whatever the label
+  above it is set in: under the uppercase mono labels of a certificate it has
+  to read as words, not as one more label. It wraps at its own width and
+  never sets the label column wider than the label does (reported on
+  2026-11-12: values nobody could read without looking them up elsewhere).
+*/
+.explain-about {
+  display: block;
+  margin-top: 0.18rem;
+  max-width: 17rem;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  color: var(--ink-faint);
+}
+:is(.report-body, .result) .grid-labelled th { min-width: 9rem; }
+
+.explain-open {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-left: 0.4rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: 0.1em;
+  cursor: pointer;
+}
+.explain-open:hover,
+.explain-open:focus-visible { border-color: var(--tool); color: var(--tool); }
+.explain-open:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+
+/* The panel: the second place, beside the report rather than under it. */
+.explain-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--ink) 30%, transparent);
+}
+.explain-panel {
+  position: fixed;
+  z-index: 61;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(27rem, 100%);
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: calc(1.2rem + env(safe-area-inset-top, 0px)) max(1.2rem, env(safe-area-inset-right, 0px)) calc(1.4rem + env(safe-area-inset-bottom, 0px)) 1.2rem;
+  background: var(--card);
+  color: var(--ink);
+  border-left: 1px solid var(--rule);
+  box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  font-family: var(--sans);
+}
+.explain-scrim[hidden], .explain-panel[hidden], .explain-part[hidden], .explain-source[hidden] { display: none; }
+.explain-close {
+  justify-self: end;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.explain-title { margin: 0; font-size: 1.15rem; line-height: 1.3; overflow-wrap: anywhere; }
+.explain-part { display: grid; gap: 0.3rem; }
+.explain-part h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.explain-part p { margin: 0; color: var(--ink-soft); line-height: 1.5; max-width: var(--measure); }
+.explain-says {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+.explain-how {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.explain-source { margin: 0; font-size: 0.82rem; color: var(--ink-faint); }
+
+/*
+  On a phone a labelled row is two lines, the label and its line over the
+  value, rather than two columns: beside a label with its line under it, the
+  value had a third of the width and broke a word at a time. Only tables of
+  labelled rows; a table with column headings keeps its columns.
+*/
+@media (max-width: 34rem) {
+  :is(.report-body, .result) .grid-labelled,
+  :is(.report-body, .result) .grid-labelled tbody,
+  :is(.report-body, .result) .grid-labelled tr,
+  :is(.report-body, .result) .grid-labelled th,
+  :is(.report-body, .result) .grid-labelled td { display: block; width: auto; }
+  :is(.report-body, .result) .grid-labelled th { min-width: 0; padding-bottom: 0.25rem; border-bottom: 0; border-radius: 6px 6px 0 0; }
+  :is(.report-body, .result) .grid-labelled td { padding: 0.45rem 0.75rem 0.7rem; }
+  :is(.report-body, .result) .grid-labelled tr:first-child th,
+  :is(.report-body, .result) .grid-labelled tr:last-child th { border-radius: 6px 6px 0 0; }
+  :is(.report-body, .result) .grid-labelled tr:last-child td { border-bottom: 0; }
+  .explain-about { max-width: none; }
+  .explain-panel {
+    top: auto;
+    height: 85%;
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+    border-radius: 14px 14px 0 0;
+    padding-left: max(1.2rem, env(safe-area-inset-left, 0px));
+  }
+}
+
+@media print {
+  .explain-open, .explain-panel, .explain-scrim { display: none !important; }
+}
+
 /* What the scan observed folds into one bar; what it could not establish is
    open and set apart, because it is what the rest of the report is worth. */
 .report-body .notes-section {

@@ -119,7 +119,7 @@
 </footer>
 {{if not .Brand}}</div>{{end}}
 
-{{if .Script}}<script src="/app.js"></script>{{end}}
+{{if .Script}}<script src="/explain.js"></script><script src="/app.js"></script>{{end}}
 {{if or .SignedIn (eq .Section "login")}}<script src="/session.js"></script>{{end}}
 </body>
 </html>
