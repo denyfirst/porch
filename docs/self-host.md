@@ -52,7 +52,10 @@ the compose file is the only thing a server has to check.
    - Ubuntu calls Compose `docker-compose-v2`. Its `docker-compose` is the
      old Compose v1, a separate `docker-compose` command unmaintained since
      2023, and it is not used here: every command in this guide is
-     `docker compose`, with a space.
+     `docker compose`, with a space. A server where `docker-compose up -d`
+     works and `sudo docker compose up -d` answers that `compose` is not a
+     docker command has only v1; the Ubuntu lines install v2 beside it
+     (reported on 2026-11-13).
 
    On any other system, follow
    [Docker's guide](https://docs.docker.com/engine/install/). Red Hat's
