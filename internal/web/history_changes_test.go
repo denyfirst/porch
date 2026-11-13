@@ -62,7 +62,24 @@ func TestAReportIsComparedOnlyWhereTheComparisonMeansSomething(t *testing.T) {
 	if !strings.Contains(open, `historyRequest("GET", "/api/v1/history/" + previous.id)`) {
 		t.Error("the earlier report is not asked for when a report is opened")
 	}
-	if n := strings.Count(source, `"/api/v1/history/" + previous.id`); n != 1 {
-		t.Errorf("the earlier report is asked for in %d places, want the one above", n)
+	// And under a check just run on New check, through the same comparison,
+	// on the same three conditions: the same check, the same host, and a rule
+	// set on both. Those two places and no third.
+	since := source[at("async function reportSince(entry, target) {"):]
+	since = since[:strings.Index(since, "\n}\n")]
+	for _, want := range []string{
+		`if (!data || typeof data.policy !== "string" || data.policy === "") return;`,
+		`e.check === entry.name && String(e.target).toLowerCase() === host`,
+		`const previous = earlierEntry(newest, same);`,
+		`if (!previous || !previous.policy) return;`,
+		`historyRequest("GET", "/api/v1/history/" + previous.id)`,
+		`changesBlock(reportChanges(data, before.report), data, before.report, previous.date)`,
+	} {
+		if !strings.Contains(since, want) {
+			t.Errorf("reportSince no longer says %s", want)
+		}
+	}
+	if n := strings.Count(source, `"/api/v1/history/" + previous.id`); n != 2 {
+		t.Errorf("the earlier report is asked for in %d places, want History's and New check's", n)
 	}
 }
