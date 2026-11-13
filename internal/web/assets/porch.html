@@ -153,8 +153,10 @@
       differ, so each system has its own lines. Debian puts the command in
       <code>docker-cli</code>; Ubuntu calls Compose
       <code>docker-compose-v2</code>, and its <code>docker-compose</code> is
-      the old Compose v1, unmaintained since 2023, which is not used here. The
-      last line has to print a version. On any other system, Red Hat's family
+      the old Compose v1, unmaintained since 2023, which is not used here: if
+      <code>docker-compose</code> with a hyphen works and
+      <code>sudo docker compose</code> does not, that is v1, and the Ubuntu lines
+      put v2 beside it. The last line has to print a version. On any other system, Red Hat's family
       included, follow <a href="https://docs.docker.com/engine/install/">Docker's guide</a>.
       Every <code>docker</code> command here runs with <code>sudo</code>:
       the <code>docker</code> group is root without a password.</p>
