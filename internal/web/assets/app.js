@@ -902,6 +902,17 @@ function certificate(cert, tls, issuance, stapling, report) {
       life += days >= 0 ? "  ·  " + days + " days left" : "  ·  expired " + (-days) + " days ago";
     }
     pair("Valid", life);
+    // The days left, drawn against the certificate's whole life, so how far
+    // through it a certificate is reads at a glance. A meter rather than a
+    // colour: it says how much, and grades nothing.
+    if (typeof days === "number" && days >= 0 && grade.validityDays > 0) {
+      const meter = el("meter", "life-meter");
+      meter.min = 0;
+      meter.max = grade.validityDays;
+      meter.value = Math.min(days, grade.validityDays);
+      meter.setAttribute("aria-label", days + " of " + grade.validityDays + " days left");
+      pairs.lastElementChild.appendChild(meter);
+    }
   }
 
   if (grade.validityDays) {
@@ -1257,6 +1268,44 @@ function hopOutcome(hop) {
   return cell;
 }
 
+// hopPath draws a chain as the path a visitor's browser takes: each address,
+// and between two of them the answer that moved it on, in the words RFC 9110
+// gives the code. The table under it stays the evidence; this is how the
+// chain reads at a glance. A 302 that sent a first visit on from plaintext
+// was a row like any other, and readers did not see the move (reported on
+// 2026-11-12). Addresses are text, never links, as in the table.
+function hopPath(hops) {
+  const path = el("ol", "hop-path");
+  path.setAttribute("aria-label", "The path a browser takes");
+  hops.forEach((hop, i) => {
+    const stop = el("li", "hop-stop" + (hop.tls ? " hop-tls" : " hop-plain"));
+    stop.appendChild(el("span", "hop-scheme", hop.tls ? "encrypted" : "plain"));
+    stop.appendChild(el("span", "hop-url", hop.url || "—"));
+    path.appendChild(stop);
+    const last = i === hops.length - 1;
+    const step = el("li", last ? "hop-step hop-end" : "hop-step");
+    if (hop.error) {
+      step.appendChild(el("span", "hop-word", "no response"));
+    } else {
+      step.appendChild(el("code", "hop-code", String(hop.status || "—")));
+      const word = hopWord(hop.status, last);
+      if (word) step.appendChild(el("span", "hop-word", word));
+    }
+    path.appendChild(step);
+  });
+  return path;
+}
+
+// hopWord is what a status code means for the path, by RFC 9110's classes.
+function hopWord(status, last) {
+  if (status === 301 || status === 308) return "moved permanently";
+  if (status === 302 || status === 303 || status === 307) return "moved for this visit";
+  if (status >= 200 && status < 300) return last ? "the page" : "answered";
+  if (status >= 400 && status < 500) return "refused";
+  if (status >= 500) return "server error";
+  return "";
+}
+
 function chain(title, c) {
   const frag = document.createDocumentFragment();
   frag.appendChild(sectionTitle(title));
@@ -1267,6 +1316,8 @@ function chain(title, c) {
     frag.appendChild(el("p", "plain", "Nothing was attempted at this address."));
     return frag;
   }
+
+  frag.appendChild(hopPath(c.hops));
 
   const table = el("table", "rows chain");
 
@@ -2287,10 +2338,20 @@ function explainSays(button) {
 let explainPanel = null;
 let explainFrom = null;
 
+// The panel slides out before it is hidden, and is hidden at once where the
+// reader asked for no motion or the slide never ends.
 function explainShut() {
-  if (!explainPanel) return;
-  explainPanel.panel.hidden = true;
-  explainPanel.scrim.hidden = true;
+  if (!explainPanel || explainPanel.panel.hidden) return;
+  const { panel, scrim } = explainPanel;
+  panel.classList.remove("is-open");
+  scrim.classList.remove("is-open");
+  const done = () => {
+    if (panel.classList.contains("is-open")) return;
+    panel.hidden = true;
+    scrim.hidden = true;
+  };
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) done();
+  else setTimeout(done, 200);
   if (explainFrom && explainFrom.isConnected) explainFrom.focus();
   explainFrom = null;
 }
@@ -2367,6 +2428,11 @@ function explainOpen(button) {
   p.source.hidden = !p.source.firstChild;
   p.panel.hidden = false;
   p.scrim.hidden = false;
+  // Shown first, then moved, so the browser has a place to slide it from.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    p.panel.classList.add("is-open");
+    p.scrim.classList.add("is-open");
+  }));
   p.close.focus();
 }
 
@@ -2587,6 +2653,7 @@ function reportShow(frame, entry, data) {
     entry.mark.replaceWith(stamp);
     entry.mark = stamp;
   }
+  entry.data = data;
   entry.section.className = "report-check " + verdictClass("report-check", verdict);
   clear(entry.top);
   entry.top.appendChild(sum);
@@ -3445,12 +3512,45 @@ if (consoleForm) {
       const frame = reportFrame(consoleResults, target, CHECK_ORDER, chosen);
       for (const entry of frame.entries) {
         await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name)));
+        await reportSince(entry, target);
       }
     } finally {
       consoleButton.disabled = false;
       consoleButton.textContent = label;
     }
   });
+}
+
+/*
+  What changed since the report kept before this one, under a check that has
+  just run on New check.
+
+  History has compared a report with the one kept before it since it kept
+  reports; a reader who had just run a check had to go there to see it. Here
+  the same comparison, in the same words: the verdict when the rule set is
+  the same, and the findings by rule that appeared and went. The report just
+  drawn is the newest kept for its check and host, so the one before it is
+  the earlier one. Only behind the password, where reports are kept, and a
+  failure to read the history costs the comparison and nothing else.
+*/
+async function reportSince(entry, target) {
+  const data = entry.data;
+  if (!data || typeof data.policy !== "string" || data.policy === "") return;
+  try {
+    const list = await historyRequest("GET", "/api/v1/history");
+    const host = String(target).toLowerCase();
+    const same = ((list && list.entries) || []).filter(e => e && typeof e.id === "string" &&
+      e.check === entry.name && String(e.target).toLowerCase() === host);
+    if (same.length < 2) return;
+    const newest = same.reduce((a, b) => (b.date > a.date || (b.date === a.date && b.seq > a.seq)) ? b : a);
+    const previous = earlierEntry(newest, same);
+    if (!previous || !previous.policy) return;
+    const before = await historyRequest("GET", "/api/v1/history/" + previous.id);
+    if (!before || !before.report || typeof before.report !== "object") return;
+    entry.top.after(changesBlock(reportChanges(data, before.report), data, before.report, previous.date));
+  } catch {
+    // The comparison is extra; the report above is what was asked for.
+  }
 }
 
 // ── The Porch page ──────────────────────────────────────────────────────
@@ -3624,9 +3724,9 @@ function changesBlock(changes, now, before, beforeDate) {
 
 // earlierEntry is the report kept before this one for the same check and
 // host, or null. Seq orders reports kept on the same date.
-function earlierEntry(entry) {
+function earlierEntry(entry, entries) {
   let best = null;
-  for (const other of historyEntries) {
+  for (const other of entries || historyEntries) {
     if (other.id === entry.id || other.check !== entry.check || other.target !== entry.target) continue;
     const earlier = other.date < entry.date || (other.date === entry.date && other.seq < entry.seq);
     if (!earlier) continue;

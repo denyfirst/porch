@@ -117,6 +117,7 @@
           Consolas, monospace;
 
   --edge: rgba(22, 23, 27, 0.20);
+  --scrim: rgba(10, 10, 14, 0.24);
   --radius: 6px;
 
   --measure: 38rem;
@@ -153,6 +154,7 @@
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
     --edge:       rgba(240, 240, 242, 0.18);
+    --scrim:      rgba(0, 0, 0, 0.5);
     --night-bg:   #1d1830;
     --night-rule: #4a3f6c;
     color-scheme: dark;
@@ -184,6 +186,7 @@
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
     --edge:       rgba(240, 240, 242, 0.18);
+    --scrim:      rgba(0, 0, 0, 0.5);
     --night-bg:   #1d1830;
     --night-rule: #4a3f6c;
     color-scheme: dark;
@@ -1913,8 +1916,10 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: color-mix(in srgb, var(--ink) 30%, transparent);
+  background: var(--scrim);
 }
+.explain-scrim.is-open { animation: explain-dim 160ms ease-out; }
+@keyframes explain-dim { from { background: transparent; } }
 .explain-panel {
   position: fixed;
   z-index: 61;
@@ -1930,8 +1935,22 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   background: var(--card);
   color: var(--ink);
   border-left: 1px solid var(--rule);
-  box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  box-shadow: -12px 0 32px var(--scrim);
   font-family: var(--sans);
+  transform: translateX(100%);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.explain-panel.is-open { transform: none; }
+/*
+  The panel slides in from the edge it belongs to, quickly, and the page
+  behind it dims with a shade of black in either theme. It appeared at once
+  over a page washed with the ink colour, which in the dark theme is light,
+  and read as a different page (reported on 2026-11-13). Without motion where
+  a reader asked for none.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .explain-panel { transition: none; }
+  .explain-scrim.is-open { animation: none; }
 }
 .explain-scrim[hidden], .explain-panel[hidden], .explain-part[hidden], .explain-source[hidden] { display: none; }
 .explain-close {
@@ -1998,6 +2017,7 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   .explain-about { max-width: none; }
   .explain-panel {
     top: auto;
+    transform: translateY(100%);
     height: 85%;
     width: 100%;
     border-left: 0;
@@ -2010,6 +2030,96 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
 @media print {
   .explain-open, .explain-panel, .explain-scrim { display: none !important; }
 }
+
+/* The days a certificate has left, against its whole life. One colour: it
+   says how much, not how good. */
+.life-meter {
+  display: block;
+  width: min(14rem, 100%);
+  height: 0.45rem;
+  margin-top: 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 9%, var(--card));
+  -webkit-appearance: none;
+  appearance: none;
+}
+.life-meter::-webkit-meter-bar { background: color-mix(in srgb, var(--ink) 9%, var(--card)); border: 0; border-radius: 999px; height: 0.45rem; }
+.life-meter::-webkit-meter-optimum-value,
+.life-meter::-webkit-meter-suboptimum-value,
+.life-meter::-webkit-meter-even-less-good-value { background: var(--ink-faint); border-radius: 999px; }
+.life-meter::-moz-meter-bar { background: var(--ink-faint); border-radius: 999px; }
+
+/*
+  The path a chain takes, above its table: each address, and the answer that
+  moved the browser on. The stops come in one after another, quickly, from a
+  place where they are already legible; still where a reader asked for no
+  motion.
+*/
+.hop-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.86rem;
+}
+.hop-stop {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--card);
+}
+.hop-stop.hop-tls { border-color: color-mix(in srgb, var(--strong) 45%, var(--rule)); }
+.hop-scheme {
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.hop-tls .hop-scheme { color: var(--strong); }
+.hop-url { font-family: var(--mono); font-size: 0.8rem; color: var(--ink); overflow-wrap: anywhere; }
+.hop-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-faint);
+}
+/* Drawn, as every arrow here is: the typeface has none (docs_test.go). */
+.hop-step:not(.hop-end)::after {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-left: 0.1rem;
+  border-top: 1.5px solid var(--ink-faint);
+  border-right: 1.5px solid var(--ink-faint);
+  transform: rotate(45deg);
+}
+.hop-code {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--ink);
+}
+.hop-word { font-size: 0.8rem; }
+.hop-path > li { animation: hop-in 140ms ease-out backwards; }
+.hop-path > li:nth-child(2) { animation-delay: 60ms; }
+.hop-path > li:nth-child(3) { animation-delay: 120ms; }
+.hop-path > li:nth-child(4) { animation-delay: 180ms; }
+.hop-path > li:nth-child(5) { animation-delay: 240ms; }
+.hop-path > li:nth-child(n+6) { animation-delay: 300ms; }
+@keyframes hop-in { from { transform: translateX(-6px); } }
+@media (prefers-reduced-motion: reduce) { .hop-path > li { animation: none; } }
+@media print { .hop-path > li { animation: none; } }
 
 /* What the scan observed folds into one bar; what it could not establish is
    open and set apart, because it is what the rest of the report is worth. */
