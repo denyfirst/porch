@@ -142,7 +142,7 @@ func (c *Client) AskServer(ctx context.Context, address, name string, qtype uint
 func (c *Client) askServerRaw(ctx context.Context, address string, query []byte) ([]byte, error) {
 	conn, err := c.dialServer(ctx, net.JoinHostPort(address, serverPort))
 	if err != nil {
-		return nil, fmt.Errorf("dnsclient: reaching the name server: %w", err)
+		return nil, fmt.Errorf("%w: %w", errNotReached, err)
 	}
 	defer conn.Close() //nolint:errcheck // the reply is already read or the error already returned
 
@@ -293,7 +293,7 @@ func (c *Client) AskTransfer(ctx context.Context, address, zone string) (bool, e
 func (c *Client) askServerHead(ctx context.Context, address string, query []byte, want int) ([]byte, error) {
 	conn, err := c.dialServer(ctx, net.JoinHostPort(address, serverPort))
 	if err != nil {
-		return nil, fmt.Errorf("dnsclient: reaching the name server: %w", err)
+		return nil, fmt.Errorf("%w: %w", errNotReached, err)
 	}
 	defer conn.Close() //nolint:errcheck // whatever is still coming is deliberately not read
 

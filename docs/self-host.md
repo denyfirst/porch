@@ -386,8 +386,20 @@ place of the `ghcr.io` line, with `pull_policy: never`.
 - **The container reaches the internet through the host's forward chain.** A
   firewall that drops forwarded traffic, as hardening guides set it
   (`policy drop` on an nftables `forward` chain), drops everything the
-  container sends: every proof says the record could not be looked up, and
-  every check waits and fails. Accept what leaves Docker's bridges and the
+  container sends while the host itself still reaches the internet. Porch
+  then says it could not connect to any of the root name servers, every
+  domain in the list stays "not established", and every check fails.
+
+  To see it, open a connection to a root server from the host, then from the
+  container's own network (the image has no shell, so the host's runs there):
+
+  ```
+  timeout 5 bash -c '</dev/tcp/198.41.0.4/53' && echo host: open
+  pid=$(sudo docker inspect -f '{{.State.Pid}}' "$(sudo docker compose ps -q porch)")
+  sudo nsenter -t "$pid" -n timeout 5 bash -c '</dev/tcp/198.41.0.4/53' && echo container: open
+  ```
+
+  If only the host is open, accept what leaves Docker's bridges and the
   replies to it, in that chain:
 
   ```
@@ -396,7 +408,25 @@ place of the `ghcr.io` line, with `pull_policy: never`.
   ```
 
   `br-*` is the network Compose makes for the installation; `docker0` is the
-  one plain `docker run` uses.
+  one plain `docker run` uses. Nothing is opened towards the container: a
+  connection from outside is still only the published port, on `127.0.0.1`.
+
+  Put the two lines in the `forward` chain of `/etc/nftables.conf`, so they
+  are there after a restart, and check the file with
+  `sudo nft -c -f /etc/nftables.conf` before anything else. Add them to the
+  running firewall with `nft add rule` rather than by loading the file again:
+  a file that starts with `flush ruleset`, as Debian's does, also removes the
+  rules Docker added for itself, and every container loses its network until
+  Docker restarts. For a table named `inet filter`:
+
+  ```
+  sudo nft 'add rule inet filter forward iifname "br-*" accept'
+  sudo nft 'add rule inet filter forward oifname "br-*" ct state established,related accept'
+  ```
+
+  The container may then reach other machines on your network as well as the
+  internet. Porch itself refuses private, loopback and reserved addresses
+  before it connects, whatever a name resolves to.
 
 ---
 

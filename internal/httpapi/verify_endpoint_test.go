@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -12,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denyfirst/porch/internal/ctsearch"
+	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
 )
@@ -121,6 +124,39 @@ func TestAFailedChallengeLookupIsNotUnverified(t *testing.T) {
 	}
 	if strings.Contains(body, "10.0.0.53") || strings.Contains(body, "example.test") {
 		t.Errorf("the refusal carries more than its shape: %s", body)
+	}
+}
+
+type unreachableRoots struct{}
+
+func (unreachableRoots) LookupChallenge(context.Context, string) ([]string, bool, error) {
+	return nil, false, fmt.Errorf("%w: dial tcp 198.41.0.4:53: i/o timeout", dnsclient.ErrNoRootReached)
+}
+
+// A lookup that could not connect to any root says it is this installation's
+// network and where to read about it, wherever a proof is looked up, and
+// still names no address.
+func TestARootNobodyCanConnectToIsSaidToBeTheNetwork(t *testing.T) {
+	scope := &verify.Scope{Secret: verificationSecret, Resolver: unreachableRoots{}}
+	var a, b atomic.Bool
+	s := verifyingService(scope, &a, &b)
+	s.SearchNames(&stubMonitor{estate: ctsearch.Estate{Asked: true}})
+
+	for _, path := range []string{"/api/v1/verify", "/api/v1/scan", "/api/v1/names/scan"} {
+		w := postTo(t, s, path, `{"target":"example.test"}`, "203.0.113.70:5000")
+		body := w.Body.String()
+		if w.Code != http.StatusBadGateway || errorCode(t, w) != "no_network" {
+			t.Errorf("%s: %d %s", path, w.Code, body)
+		}
+		if !strings.Contains(body, "Network in docs/self-host.md") || !strings.Contains(body, "firewall") {
+			t.Errorf("%s does not say where to look: %s", path, body)
+		}
+		if strings.Contains(body, "198.41.0.4") || strings.Contains(body, "example.test") {
+			t.Errorf("%s carries more than its shape: %s", path, body)
+		}
+	}
+	if a.Load() || b.Load() {
+		t.Error("a check connected to the target although its proof could not be looked up")
 	}
 }
 

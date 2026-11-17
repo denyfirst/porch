@@ -63,6 +63,7 @@ import (
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/dkim"
+	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/dnsscan"
 	"github.com/denyfirst/porch/internal/exclusion"
@@ -947,6 +948,15 @@ func (s *Server) runCheck(ctx context.Context, w http.ResponseWriter, c check, t
 				"record at "+verify.Label+" beneath the domain, carrying the token this "+
 				"deployment expects for it, and ask again. /api/v1/verify says which record, "+
 				"and the page shows it.")
+		return
+	}
+
+	// The proof could not be looked up because no root name server could be
+	// connected to. Said as what it is, because "could not be reached" reads
+	// as the target's fault, and the fault is this installation's network:
+	// every check would fail the same way.
+	if errors.Is(err, dnsclient.ErrNoRootReached) {
+		s.refuse(w, http.StatusBadGateway, "no_network", noRootReached)
 		return
 	}
 

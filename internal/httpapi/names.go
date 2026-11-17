@@ -11,6 +11,7 @@ import (
 	"github.com/denyfirst/porch/internal/budget"
 	"github.com/denyfirst/porch/internal/ctsearch"
 	"github.com/denyfirst/porch/internal/demo"
+	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/dnsnames"
 	"github.com/denyfirst/porch/internal/inventory"
 	"github.com/denyfirst/porch/internal/knownnames"
@@ -121,6 +122,9 @@ func (s *Server) handleNames(w http.ResponseWriter, r *http.Request) {
 			s.refuse(w, http.StatusForbidden, "proof_required",
 				"Publish the proof record for this domain first. An inventory is only "+
 					"produced for domains this installation has been shown control of.")
+			return
+		case errors.Is(err, dnsclient.ErrNoRootReached):
+			s.refuse(w, http.StatusBadGateway, "no_network", noRootReached)
 			return
 		default:
 			// The lookup failed, which is not the domain being unverified.

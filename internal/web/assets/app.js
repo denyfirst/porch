@@ -3250,6 +3250,9 @@ async function proveRow(domain, cell) {
   } catch (err) {
     cell.className = "mark-faint";
     cell.textContent = err.status === 429 ? "not asked yet " : "not established ";
+    // Every row fails the same way when the installation cannot reach the
+    // root servers, so the reason is said once, above the list.
+    if (err.code === "no_network") domainListStatus(err.message);
     const retry = el("button", "history-open", "Ask");
     retry.type = "button";
     retry.addEventListener("click", () => proveRow(domain, cell));
