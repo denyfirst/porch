@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/denyfirst/porch/internal/dnsclient"
 	"github.com/denyfirst/porch/internal/mailscan"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/verify"
@@ -99,6 +100,9 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 	case errors.Is(err, verify.ErrNotVerified):
+	case errors.Is(err, dnsclient.ErrNoRootReached):
+		s.refuse(w, http.StatusBadGateway, "no_network", noRootReached)
+		return
 	default:
 		// The lookup failed, which is not the domain being unverified.
 		// Telling somebody to publish a record they may already have
@@ -126,6 +130,13 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+// noRootReached is said where a proof could not be looked up because no root
+// name server could be connected to. Every lookup fails the same way then,
+// and the usual cause is on the host, so it says where to look.
+const noRootReached = "This installation could not connect to any of the internet's root name " +
+	"servers over TCP port 53, so no proof can be looked up. The usual cause is a firewall on " +
+	"the host that drops what the container sends: see Network in docs/self-host.md."
 
 // parseVerifyTarget takes what any check takes: a name, optionally with a
 // port, or a mail address. What is proven is the name.

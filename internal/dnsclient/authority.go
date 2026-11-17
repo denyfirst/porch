@@ -257,6 +257,11 @@ func (w *authorityWalk) holders(ctx context.Context, name string, depth int) (*z
 
 		ans, err := w.ask(ctx, servers, child, TypeNS, depth)
 		if err != nil {
+			if zone == "" && errors.Is(err, errNotReached) {
+				// Asked of the roots, and the last of them could not even be
+				// connected to.
+				return nil, false, fmt.Errorf("%w: %w", ErrNoRootReached, err)
+			}
 			return nil, false, err
 		}
 		if !ans.exists {

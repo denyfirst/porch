@@ -480,6 +480,27 @@ func TestTheWalkIsDialledThroughTheGuard(t *testing.T) {
 	}
 }
 
+// A walk that cannot connect to any root says so, because that is this
+// installation's network and not the name: on 2026-11-17 a host firewall
+// dropped everything a container sent, and every proof said only that the
+// record could not be looked up. A walk that reaches the roots and then
+// cannot reach a zone's servers is the zone's, and is not said that way.
+func TestARootNobodyCanConnectToIsSaidToBeTheNetwork(t *testing.T) {
+	h := estate(t, "porch-verification=abc")
+	delete(h.servers, rootAddr)
+	_, _, err := walker(h).LookupChallenge(context.Background(), "_porch-challenge.example.com")
+	if !errors.Is(err, ErrNoRootReached) {
+		t.Errorf("no root could be connected to, and the walk said %v", err)
+	}
+
+	h = estate(t, "porch-verification=abc")
+	delete(h.servers, exampleAddr)
+	_, _, err = walker(h).LookupChallenge(context.Background(), "_porch-challenge.example.com")
+	if err == nil || errors.Is(err, ErrNoRootReached) {
+		t.Errorf("the roots answered and a zone's server could not be reached, and the walk said %v", err)
+	}
+}
+
 // The root servers carried are the thirteen, each by IPv4 and IPv6, IPv4
 // first.
 func TestTheRootServersAreCarried(t *testing.T) {

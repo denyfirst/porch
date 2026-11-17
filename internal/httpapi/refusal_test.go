@@ -21,6 +21,7 @@ import (
 	"github.com/denyfirst/porch/internal/safedial"
 	"github.com/denyfirst/porch/internal/scan"
 	"github.com/denyfirst/porch/internal/tlsprobe"
+	"github.com/denyfirst/porch/internal/verify"
 )
 
 // blockedScanner stands in for a name that resolves only to an address
@@ -222,6 +223,13 @@ func TestEveryRefusalCodeCanBeProduced(t *testing.T) {
 				"sees that people are asking about domains they have not published a record "+
 				"for, which no scan count can show", got)
 		}
+	}
+
+	// ── a proof that could not be looked up because no root could be reached ──
+	{
+		s := verifyingService(&verify.Scope{Secret: verificationSecret, Resolver: unreachableRoots{}},
+			new(atomic.Bool), new(atomic.Bool))
+		note(postFrom(t, s, `{"target":"cut.test"}`, "203.0.113.91:5000"), "no_network")
 	}
 
 	// ── the inventory's refusals ──

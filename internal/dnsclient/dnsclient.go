@@ -163,6 +163,17 @@ var (
 	// a question that never completed — which is how this was written first,
 	// and what a live scan of denyfirst.dev showed on 2026-09-24.
 	ErrNoTransfer = errors.New("dnsclient: the server does not hand over the zone")
+
+	// ErrNoRootReached is a walk that could not open a connection to any
+	// root server. Nothing below the root can be asked then, so it is the
+	// installation's network that fails and not the name: most often a host
+	// firewall that drops what a container sends (reported on 2026-11-17,
+	// where every proof said only that the record could not be looked up).
+	ErrNoRootReached = errors.New("dnsclient: no root name server could be reached over TCP port 53")
+
+	// errNotReached is a connection to a server that could not be opened,
+	// as against a server that answered badly.
+	errNotReached = errors.New("dnsclient: reaching the name server")
 )
 
 // Answer is one reply, already checked against the question that produced it.

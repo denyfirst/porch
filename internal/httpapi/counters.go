@@ -78,6 +78,12 @@ var refusalCodes = []string{
 	// A plain-HTTP request naming this machine by a name nobody told it was
 	// its own, which is what a page rebinding its domain to this address sends.
 	"host_not_served",
+
+	// A proof that could not be looked up because no root name server could
+	// be connected to: the installation's own network, most often a host
+	// firewall dropping what the container sends. A figure above zero is the
+	// operator's to fix, and no other figure says so.
+	"no_network",
 }
 
 // checkNames are the checks this service counts, and the complete set of keys
