@@ -205,7 +205,8 @@ comm -23 /tmp/cited /tmp/defined     # must be empty
 | `internal/ctlogs` | Google's signed CT log list, carried; checks each transparency receipt against it (R3c) |
 | `internal/dnsclient` | the resolver; CAA, TXT, and the walk up the tree (N5) |
 | `internal/httpapi` | the service; the only package that sees untrusted input |
-| `internal/access` | closes an installation to whoever cannot sign in, and holds the key its kept data is encrypted with |
+| `internal/access` | closes an installation to whoever cannot sign in, with the password and the optional second factor, and holds the key its kept data is encrypted with |
+| `internal/qrcode` | draws the code an authenticator app scans when two-step sign-in is set up; Keybash's encoder, carried unchanged |
 | `internal/vault` | the reports an installation keeps, encrypted under the key that password seals |
 | `internal/sshsig` | checks an SSH signature as `ssh-keygen -Y verify` does, for one key type, one hash and one key |
 | `internal/updates` | says whether a newer signed release exists, when the operator asks or daily if they chose it; installs nothing |
