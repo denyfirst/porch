@@ -345,6 +345,49 @@ There is one password, for whoever runs the installation.
   ends every other session. Guesses are slowed per address. A password sent in
   plain HTTP to anything but `localhost` is refused before it is read.
 
+### Two-step sign-in
+
+Under **This installation**, **Sign-in**, **Turn on** shows a code to scan
+with an authenticator app (Aegis, 2FAS, KeePassXC and the like, any app for
+RFC 6238 codes). Confirm it with a code the app shows and the password; ten
+recovery codes are shown once. From then on a sign-in asks for the password
+and a code from the app, or one of the recovery codes.
+
+- **What it protects.** A password that is guessed, phished, reused or read
+  over someone's shoulder no longer signs in by itself. That matters most for
+  an installation reached over HTTPS from the internet. Through the SSH tunnel
+  the guide uses, the SSH key is already a factor in front of the password.
+- **What it does not.** What is kept is still encrypted under the password: a
+  copy of the disk is protected by the password, as before, and not by the
+  code. A code typed into a page that imitates this one can be used by that
+  page within thirty seconds; a passkey would resist that, a code does not.
+  And it is no defence against somebody who can already run commands on the
+  server.
+- **What is kept.** The authenticator's key and the unused recovery codes, in
+  `porch-data/second-factor`, sealed under the same key as the history. The
+  recovery codes are kept only as a keyed hash. A code is accepted once.
+- **Wrong codes.** With the right password, five wrong codes in five minutes,
+  across every address, and codes wait until the five minutes end; a recovery
+  code still works. A wrong password and a wrong code get the same answer, so
+  the page does not say which was right. How many wrong codes came with the
+  right password is shown under This installation after the next sign-in: if
+  they were not yours, the password has leaked, so change it.
+- **Changing it.** Turning it off, making new recovery codes and changing the
+  password each ask for the password and a code, and turning it on or off
+  ends every other session.
+- **A lost phone.** Sign in with a recovery code, then turn it off and on
+  again with the new phone. With no recovery code left, on the server, in the
+  installation's directory:
+
+  ```sh
+  sudo rm porch-data/second-factor
+  ```
+
+  The password alone signs in again from the next attempt. Whoever can do this
+  can already read everything the service holds, so it opens nothing new.
+- **Moving the access file aside** for a new password moves this file with the
+  history, since it opens only with the old key.
+
 ---
 
 ## The container

@@ -107,9 +107,22 @@ func TestThePagesSayWhetherAPasswordIsInFront(t *testing.T) {
 	if !strings.Contains(installation, "Behind a password") || !strings.Contains(installation, `id="password-form"`) {
 		t.Error("the installation page behind a password does not say so, or offers no way to change it")
 	}
-	// Two parts, each headed, so the form does not read as more of the facts.
-	if !strings.Contains(installation, `<h2 class="work-section">How it runs</h2>`) || !strings.Contains(installation, `<h2 class="work-section">Password</h2>`) {
-		t.Error("the installation page does not head its two parts")
+	// Its parts are headed, so the forms do not read as more of the facts,
+	// and signing in comes first: the password form sat at the foot of the
+	// page, under the update settings, and was hard to find (reported
+	// 2026-11-18). The second factor is beside it, its state in a word.
+	signIn := strings.Index(installation, `<h2 class="work-section" id="sign-in">Sign-in</h2>`)
+	runs := strings.Index(installation, `<h2 class="work-section">How it runs</h2>`)
+	if signIn < 0 || runs < 0 || !strings.Contains(installation, `<h3 class="factor-title">Password</h3>`) {
+		t.Error("the installation page does not head its parts")
+	}
+	if signIn > runs || strings.Index(installation, `id="factor"`) > runs || strings.Index(installation, `id="password-form"`) > runs {
+		t.Error("signing in is not the first thing the installation page shows")
+	}
+	for _, want := range []string{`id="factor-state"`, `id="factor-start"`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-code-row"`} {
+		if !strings.Contains(installation, want) {
+			t.Errorf("the second factor's panel lacks %q", want)
+		}
 	}
 	privacy := flatten(guardedAs(t, "/privacy"))
 	if !strings.Contains(privacy, "One cookie, set when you sign in") || strings.Contains(privacy, "No cookies") {
@@ -144,6 +157,44 @@ func TestTheSessionScriptDoesOnlyThat(t *testing.T) {
 	for _, never := range []string{"localStorage", "sessionStorage", "document.cookie", "innerHTML", "/api/v1/tls", "/api/v1/web", "/api/v1/mail", "sendBeacon"} {
 		if strings.Contains(js, never) {
 			t.Errorf("session.js contains %q", never)
+		}
+	}
+}
+
+// The second factor is drawn by session.js from what the installation sends:
+// the code to scan as SVG built element by element, the recovery codes as
+// text, and nothing kept. The sign-in page keeps the password when it is told
+// a code is needed, which it is told before the password is read.
+func TestTheSessionScriptDrawsTheSecondFactor(t *testing.T) {
+	src, err := assets.ReadFile("assets/session.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(src)
+	for _, want := range []string{
+		`ask("GET", "/api/v1/factor")`,
+		`ask("POST", "/api/v1/factor/setup")`,
+		`ask("POST", "/api/v1/factor/on"`,
+		`"/api/v1/factor/off" : "/api/v1/factor/recovery"`,
+		`document.createElementNS(svg, "path")`,
+		`text.textContent = c;`,
+		`} else if (refusal === "code_required") {`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("session.js no longer contains %q", want)
+		}
+	}
+	// On "code_required" the password field is left as it is.
+	i := strings.Index(js, `} else if (refusal === "code_required") {`)
+	j := strings.Index(js[i:], "} else {")
+	if i < 0 || j < 0 || strings.Contains(js[i:i+j], "field.value") {
+		t.Error("the sign-in page clears the password when it is only asked for a code")
+	}
+
+	login := flatten(guardedAs(t, "/login"))
+	for _, want := range []string{`id="signin-code-row" hidden`, `autocomplete="one-time-code"`, `id="signin-recovery"`} {
+		if !strings.Contains(login, want) {
+			t.Errorf("the sign-in page lacks %q", want)
 		}
 	}
 }

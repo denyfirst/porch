@@ -17,6 +17,116 @@
     </div>
   </div>
 
+  <!--
+    How this installation is signed into, first on the page.
+
+    The password form sat at the foot of this page, under the update
+    settings, and was hard to find when it was needed (reported 2026-11-18).
+    Both ways in are here at the top instead: the second factor with its
+    state in words, and the password beside it.
+
+    The second factor is drawn by session.js from what the installation says:
+    off, being set up, on. Its code to scan is drawn from the modules the
+    installation sends, always dark on light whatever the theme, because a
+    phone's camera reads that and not the inverse.
+  -->
+  <h2 class="work-section" id="sign-in">Sign-in</h2>
+  <div class="signin-panels">
+
+    <section class="panel factor" id="factor" aria-labelledby="factor-title">
+      <div class="factor-head">
+        <h3 class="factor-title" id="factor-title">Two-step sign-in</h3>
+        <span class="factor-state" id="factor-state" data-state="unknown">Asking…</span>
+      </div>
+      <p class="factor-lead">A code from an authenticator app, asked for with the password.</p>
+      <p class="factor-warning" id="factor-warning" role="alert" hidden></p>
+
+      <div class="factor-actions" id="factor-off" hidden>
+        <button class="submit" type="button" id="factor-start">Turn on</button>
+      </div>
+
+      <form class="factor-setup" id="factor-setup" autocomplete="off" hidden>
+        <ol class="factor-steps">
+          <li>
+            <span class="factor-step-title">Scan this with an authenticator app</span>
+            <span class="factor-qr-frame"><svg class="factor-qr" id="factor-qr" role="img" aria-label="Code to scan with an authenticator app" xmlns="http://www.w3.org/2000/svg"></svg></span>
+            <span class="factor-secret-line">Or enter the key by hand:
+              <code class="factor-secret" id="factor-secret"></code>
+              <button class="history-open" type="button" id="factor-secret-copy">Copy</button></span>
+          </li>
+          <li>
+            <label class="factor-step-title" for="factor-code">Enter the code it shows</label>
+            <input class="field factor-code-field" type="text" id="factor-code" inputmode="numeric"
+              autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
+          </li>
+          <li>
+            <label class="factor-step-title" for="factor-password">And this installation's password</label>
+            <input class="field" type="password" id="factor-password" autocomplete="current-password" required>
+          </li>
+        </ol>
+        <div class="factor-actions">
+          <button class="submit" type="submit" id="factor-confirm">Turn on</button>
+          <button class="update-check" type="button" id="factor-cancel">Cancel</button>
+        </div>
+      </form>
+
+      <div class="factor-codes" id="factor-codes" hidden>
+        <p class="factor-codes-lead"><strong>Recovery codes.</strong> Each one signs in once in place of a code
+          from the app. Keep them where the phone is not; they are not shown again.</p>
+        <ol class="factor-code-list" id="factor-code-list"></ol>
+        <div class="factor-actions">
+          <button class="update-check" type="button" id="factor-codes-copy">Copy all</button>
+          <button class="submit" type="button" id="factor-codes-done">I have kept them</button>
+        </div>
+      </div>
+
+      <div class="factor-on" id="factor-on" hidden>
+        <p class="factor-left" id="factor-left"></p>
+        <div class="factor-actions">
+          <button class="update-check" type="button" id="factor-new-codes">New recovery codes</button>
+          <button class="update-check factor-off-button" type="button" id="factor-turn-off">Turn off</button>
+        </div>
+        <form class="factor-step" id="factor-step" autocomplete="off" hidden>
+          <label class="field-label" for="factor-step-password">Password</label>
+          <input class="field" type="password" id="factor-step-password" autocomplete="current-password" required>
+          <label class="field-label" for="factor-step-code">Code from the app, or a recovery code</label>
+          <input class="field" type="text" id="factor-step-code" autocomplete="one-time-code"
+            maxlength="40" spellcheck="false" autocapitalize="off" required>
+          <div class="factor-actions">
+            <button class="submit" type="submit" id="factor-step-submit">Confirm</button>
+            <button class="update-check" type="button" id="factor-step-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <p class="signin-status" id="factor-status" role="status"></p>
+    </section>
+
+    <!--
+      Changing the password keeps the key what is kept is encrypted with, so
+      nothing becomes unreadable, and ends every other session, so a password
+      changed because it leaked stops working wherever it leaked to. With
+      the second factor on, a code is asked as well.
+    -->
+    <form class="panel password-form" id="password-form" autocomplete="on">
+      <h3 class="factor-title">Password</h3>
+      <label class="field-label" for="password-current">Current password</label>
+      <input class="field" type="password" id="password-current" autocomplete="current-password" required>
+      <label class="field-label" for="password-next">New password, at least 12 characters</label>
+      <input class="field" type="password" id="password-next" autocomplete="new-password" minlength="12" required>
+      <label class="field-label" for="password-again">The new password again</label>
+      <input class="field" type="password" id="password-again" autocomplete="new-password" minlength="12" required>
+      <div class="password-code" id="password-code-row" hidden>
+        <label class="field-label" for="password-code">Code from the app, or a recovery code</label>
+        <input class="field" type="text" id="password-code" autocomplete="one-time-code"
+          maxlength="40" spellcheck="false" autocapitalize="off">
+      </div>
+      <button class="submit" type="submit" id="password-submit">Change the password</button>
+      <p class="signin-status" id="password-status" role="status"></p>
+    </form>
+
+  </div>
+
   <h2 class="work-section">How it runs</h2>
   <div class="panel">
     <dl class="state-grid">
@@ -45,7 +155,8 @@
 
       <dt>Access</dt>
       <dd>
-        Behind a password, always. What is kept is encrypted under a key the
+        Behind a password, always, and a code from an authenticator app once
+        two-step sign-in is on. What is kept is encrypted under a key the
         password seals; a forgotten password cannot be recovered.
       </dd>
 
@@ -115,23 +226,6 @@
       </dd>
     </dl>
   </div>
-
-  <!--
-    Changing the password keeps the key what is kept is encrypted with, so
-    nothing becomes unreadable, and ends every other session, so a password
-    changed because it leaked stops working wherever it leaked to.
-  -->
-  <h2 class="work-section">Password</h2>
-  <form class="panel password-form" id="password-form" autocomplete="on">
-    <label class="field-label" for="password-current">Current password</label>
-    <input class="field" type="password" id="password-current" autocomplete="current-password" required>
-    <label class="field-label" for="password-next">New password, at least 12 characters</label>
-    <input class="field" type="password" id="password-next" autocomplete="new-password" minlength="12" required>
-    <label class="field-label" for="password-again">The new password again</label>
-    <input class="field" type="password" id="password-again" autocomplete="new-password" minlength="12" required>
-    <button class="submit" type="submit" id="password-submit">Change the password</button>
-    <p class="signin-status" id="password-status" role="status"></p>
-  </form>
 
   <p class="work-help">
     Who else a check asks, and what each of them learns, is on the
