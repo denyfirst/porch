@@ -70,8 +70,20 @@ type Gate struct {
 	// nobody else arrives to prompt it. Nil while the map is empty.
 	sweeper *time.Timer
 
-	// derive admits one password derivation at a time.
+	// derive admits one password derivation at a time. Everything that reads
+	// and writes the second factor's file holds it too.
 	derive chan struct{}
+
+	// The second factor's in-memory state: wrong codes in the current
+	// window, wrong codes sent with the right password since the last
+	// sign-in and the count that sign-in found, and a seed shown for
+	// scanning that has not been confirmed yet.
+	codeWindow  time.Time
+	codeFails   int
+	wrongCodes  int
+	wrongBefore int
+	setupSeed   string
+	setupUntil  time.Time
 }
 
 type bucket struct {
@@ -132,6 +144,10 @@ func (g *Gate) Wrap(next http.Handler) http.Handler {
 		case "/api/v1/password":
 			g.servePassword(w, r)
 			return
+		case "/api/v1/factor", "/api/v1/factor/setup", "/api/v1/factor/on",
+			"/api/v1/factor/off", "/api/v1/factor/recovery":
+			g.serveFactor(w, r)
+			return
 		}
 		if g.public[r.URL.Path] || g.SignedIn(r) {
 			next.ServeHTTP(w, r)
@@ -149,6 +165,9 @@ func (g *Gate) Wrap(next http.Handler) http.Handler {
 type passwordRequest struct {
 	Password string `json:"password"`
 	Next     string `json:"next,omitempty"`
+	// Code is the authenticator's code or a recovery code, wherever the
+	// second factor is on.
+	Code string `json:"code,omitempty"`
 }
 
 // serveSession signs in on POST and out on DELETE.
@@ -177,18 +196,29 @@ func (g *Gate) serveSession(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Asked before the password is derived or an attempt is spent, so the
+	// answer says only that a code is needed, and nothing of the password.
+	if !g.codeGiven(w, body.Code) {
+		return
+	}
 	if !g.allow(clientKey(r)) {
 		w.Header().Set("Retry-After", strconv.Itoa(int(attemptInterval/time.Second)))
 		refuse(w, http.StatusTooManyRequests, "rate_limited",
 			"Too many attempts from this address. Wait a minute and try again.")
 		return
 	}
-	token, err := g.signIn(body.Password)
+	token, err := g.signIn(body.Password, body.Code)
 	switch {
 	case err == nil:
 	case errors.Is(err, errBusy):
 		w.Header().Set("Retry-After", "2")
 		refuse(w, http.StatusServiceUnavailable, "busy", "Another sign-in is being checked. Try again in a moment.")
+		return
+	case errors.Is(err, errCodeRequired):
+		refuse(w, http.StatusUnauthorized, "code_required", codeRequiredMessage)
+		return
+	case errors.Is(err, errWrongCredentials):
+		refuse(w, http.StatusUnauthorized, "wrong_credentials", wrongCredentialsMessage)
 		return
 	case errors.Is(err, ErrWrongPassword):
 		refuse(w, http.StatusUnauthorized, "wrong_password", "That is not this installation's password.")
@@ -249,6 +279,43 @@ func (g *Gate) servePassword(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusServiceUnavailable, "busy", "Another sign-in is being checked. Try again in a moment.")
 		return
 	}
+	// With the second factor on, the code is asked as well: a session left
+	// open is not enough to set a password its holder chose.
+	on, err := factorOn(g.path)
+	if err != nil {
+		refuse(w, http.StatusInternalServerError, "unavailable",
+			"The new password could not be saved. The operator should look at the installation's log.")
+		return
+	}
+	if on {
+		if strings.TrimSpace(body.Code) == "" {
+			refuse(w, http.StatusUnauthorized, "code_required", codeRequiredMessage)
+			return
+		}
+		// A new password too short is refused before the code is spent:
+		// a code is accepted once, and one used on a refused change would
+		// have to be waited out for the next.
+		if errors.Is(checkLength(body.Next), ErrWeakPassword) {
+			refuse(w, http.StatusBadRequest, "weak_password",
+				"A new password has to be at least "+strconv.Itoa(MinPassword)+" characters.")
+			return
+		}
+		key, err := Unlock(g.path, body.Password)
+		if err == nil {
+			_, err = g.confirmFactor(key, body.Code)
+			clear(key)
+		}
+		switch {
+		case err == nil:
+		case errors.Is(err, ErrWrongPassword), errors.Is(err, errWrongCredentials):
+			refuse(w, http.StatusUnauthorized, "wrong_credentials", wrongCredentialsMessage)
+			return
+		default:
+			refuse(w, http.StatusInternalServerError, "unavailable",
+				"The new password could not be saved. The operator should look at the installation's log.")
+			return
+		}
+	}
 	switch err := Change(g.path, body.Password, body.Next); {
 	case err == nil:
 	case errors.Is(err, ErrWrongPassword):
@@ -269,17 +336,38 @@ func (g *Gate) servePassword(w http.ResponseWriter, r *http.Request) {
 
 var errBusy = errors.New("another derivation is running")
 
-// signIn checks a password and opens a session for it.
-func (g *Gate) signIn(password string) (string, error) {
+// signIn checks a password, and the code where the second factor is on, and
+// opens a session for them.
+func (g *Gate) signIn(password, code string) (string, error) {
 	select {
 	case g.derive <- struct{}{}:
 		defer func() { <-g.derive }()
 	case <-time.After(3 * time.Second):
 		return "", errBusy
 	}
-	key, err := Unlock(g.path, password)
+	// Asked again with the slot held: the second factor may have been turned
+	// on or off since the request was read.
+	on, err := factorOn(g.path)
 	if err != nil {
 		return "", err
+	}
+	if on && strings.TrimSpace(code) == "" {
+		return "", errCodeRequired
+	}
+	key, err := Unlock(g.path, password)
+	if err != nil {
+		if on && errors.Is(err, ErrWrongPassword) {
+			return "", errWrongCredentials
+		}
+		return "", err
+	}
+	if on {
+		if _, err := g.confirmFactor(key, code); err != nil {
+			return "", err
+		}
+		g.mu.Lock()
+		g.wrongBefore, g.wrongCodes = g.wrongCodes, 0
+		g.mu.Unlock()
 	}
 
 	raw := make([]byte, 32)

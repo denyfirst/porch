@@ -284,9 +284,16 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 		t.Errorf("a second reset changed the first folder: %v, %v", list, err)
 	}
 
-	// The names moved are the names main keeps under.
+	// The names moved are the names main keeps under, and the second
+	// factor's, which the access package keeps beside the access file.
 	src := repoFile(t, "cmd/porchd/main.go")
+	if !strings.Contains(repoFile(t, "internal/access/factor.go"), "filepath.Join(filepath.Dir(accessPath), FactorFile)") {
+		t.Error("the second factor is no longer kept beside the access file, where a reset moves it from")
+	}
 	for _, name := range sealed {
+		if name == access.FactorFile {
+			continue
+		}
 		if !strings.Contains(src, `filepath.Join(filepath.Dir(*accessFile), "`+name+`")`) {
 			t.Errorf("%q is moved aside on a reset, and main keeps nothing under it", name)
 		}

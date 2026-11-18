@@ -1383,8 +1383,10 @@ func createAccess(path string) error {
 }
 
 // sealed names what an installation keeps under its data key, beside the
-// access file. The same names main makes the vault with.
-var sealed = []string{"history", "domains.sealed"}
+// access file. The same names main makes the vault with, and the second
+// factor's file: left in place, it would ask a new password for a code from a
+// seed the new key cannot open, and nobody could sign in.
+var sealed = []string{"history", "domains.sealed", access.FactorFile}
 
 // retireSealed moves whatever an earlier key sealed into a new folder named
 // for the date, and says where; it returns "" when there was nothing.
