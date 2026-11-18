@@ -222,7 +222,7 @@ func TestAnotherSiteCannotUseTheSessionEndpoints(t *testing.T) {
 func TestTheSessionTableIsBounded(t *testing.T) {
 	g, _ := behind(t)
 	for range maxSessions + 5 {
-		if _, err := g.signIn(testPassword); err != nil {
+		if _, err := g.signIn(testPassword, ""); err != nil {
 			t.Fatal(err)
 		}
 	}

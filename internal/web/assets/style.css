@@ -83,6 +83,12 @@
   /* The terminal the install commands are drawn in. Dark in both schemes, so
      the dark block does not restate them, and each text colour is checked
      against the panel and its bar rather than the paper. */
+  /* A code to scan is dark on light in either scheme: a phone's camera reads
+     that, and not every app reads the inverse. Not redefined below, on
+     purpose. */
+  --qr-paper:    #ffffff;
+  --qr-ink:      #000000;
+
   --term-bg:     #0e1013;
   --term-bar:    #1a1d22;
   --term-rule:   #2b2f36;
@@ -5879,6 +5885,221 @@ fieldset.composer-part { min-width: 0; }
 .work-heading + .work-section { margin-top: 0; }
 
 .password-form { margin-top: 0; }
+
+/*
+  Sign-in, first on This installation: the second factor and the password,
+  side by side where there is room and one above the other on a phone.
+
+  The second factor's state is said in a word in a frame, in Porch's colour
+  when it is on and in the faint ink when it is off. Not in a verdict's
+  colour: red, amber and green say how a host fared, and this is a setting.
+*/
+.signin-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.signin-panels > * { min-width: 0; }
+.signin-panels .password-form { max-width: none; }
+
+.factor { display: grid; gap: 0.8rem; }
+
+.factor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.factor-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.factor-state {
+  flex: none;
+  padding: 0.15rem 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px dashed var(--rule);
+  border-radius: 999px;
+}
+
+.factor-state[data-state="on"] {
+  color: var(--tool);
+  border: 1px solid color-mix(in srgb, var(--tool) 55%, var(--rule));
+  background: color-mix(in srgb, var(--tool) 8%, transparent);
+}
+
+.panel .factor-lead,
+.panel .factor-left { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+
+.panel .factor-warning {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--weak);
+  border-radius: var(--radius);
+}
+
+.factor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.factor-setup { display: grid; gap: 1rem; }
+.factor-on { display: grid; gap: 0.8rem; }
+
+.factor-steps {
+  display: grid;
+  gap: 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: factor-step;
+}
+
+.factor-steps > li {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 2rem;
+  position: relative;
+  counter-increment: factor-step;
+}
+
+.factor-steps > li::before {
+  content: counter(factor-step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4rem;
+  text-align: center;
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+}
+
+.factor-step-title { font-size: 0.92rem; font-weight: 600; color: var(--ink); }
+
+.factor-qr-frame {
+  display: block;
+  width: min(100%, 13rem);
+  padding: 0.4rem;
+  background: var(--qr-paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.factor-qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  shape-rendering: crispEdges;
+}
+
+.factor-qr-ground { fill: var(--qr-paper); }
+.factor-qr-ink { fill: var(--qr-ink); }
+
+.factor-secret-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.factor-secret {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.factor .field { width: 100%; background: var(--paper); }
+
+.factor-code-field {
+  max-width: 10rem;
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  letter-spacing: 0.25em;
+}
+
+.factor-codes { display: grid; gap: 0.8rem; }
+.panel .factor-codes-lead { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+
+.factor-code-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 0.4rem 1rem;
+  margin: 0;
+  padding: 0.8rem 1rem;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.factor-code-list code {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.factor-step {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--rule);
+}
+
+.factor-step .factor-actions { margin-top: 0.3rem; }
+
+.signin-code,
+.password-code {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* A part laid out as a grid or a row is still hidden when it is: the rules
+   above set display, and would otherwise win over the attribute. */
+.signin-code[hidden],
+.password-code[hidden],
+.factor [hidden] { display: none; }
+
+/* Switches the code field between the app's digits and a recovery code: a
+   line of text, not a second button beside the one that signs in. */
+.signin-switch {
+  justify-self: start;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--link);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
 
 /* History: the list, and a report opened under it. */
 .history-table { width: 100%; }
