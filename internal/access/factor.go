@@ -242,6 +242,11 @@ func codeCounter(seed, code string, now time.Time, last int64) (int64, bool) {
 	current := now.Unix() / 30
 	matched := int64(-1)
 	for _, counter := range []int64{current - 1, current, current + 1} {
+		// Never below zero, since now is at least thirty seconds; said here
+		// as well, so the conversion below is checked where it is made.
+		if counter < 0 {
+			continue
+		}
 		if counter <= last {
 			continue
 		}
