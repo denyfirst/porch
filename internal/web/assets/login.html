@@ -43,9 +43,14 @@
   -->
   <div class="signin-first">
     <p>First sign-in? The password is in the log. On the server, in the porch folder:</p>
-    <pre class="work-code shell"><code id="signin-command"><span class="sh-cmd">sudo</span> <span class="sh-cmd">docker</span> compose logs porch <span class="sh-op">2&gt;&amp;1</span> <span class="sh-op">|</span> <span class="sh-cmd">grep</span> <span class="sh-flag">-A2</span> <span class="sh-str">"password is"</span></code></pre>
-    <button class="history-open" type="button" data-copy="signin-command">Copy</button>
-    <p>Change it after signing in, under This installation.</p>
+    <div class="command-box">
+      <pre class="work-code shell"><code id="signin-command"><span class="sh-cmd">sudo</span> <span class="sh-cmd">docker</span> compose logs porch <span class="sh-op">2&gt;&amp;1</span> <span class="sh-op">|</span> <span class="sh-cmd">grep</span> <span class="sh-flag">-A2</span> <span class="sh-str">"password is"</span></code></pre>
+      <button class="command-box-copy" type="button" data-copy="signin-command" aria-label="Copy the command" title="Copy">
+        <svg class="copy-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>
+        <svg class="copied-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      </button>
+    </div>
+    <p>Change it after signing in, under Security.</p>
   </div>
 
 </section>

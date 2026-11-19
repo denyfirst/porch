@@ -46,6 +46,21 @@ func TestTOTPIsRFC6238(t *testing.T) {
 	}
 }
 
+// The key URI names denyfirst as the issuer and porch as the account, and
+// nothing about the installation; it asks for no image, which an app would
+// fetch from wherever the URI said.
+func TestTheKeyURINamesNoOtherCompanyAndNoHost(t *testing.T) {
+	uri := seedURI("JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP")
+	if uri != "otpauth://totp/denyfirst:porch?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=denyfirst" {
+		t.Errorf("key URI %q", uri)
+	}
+	for _, never := range []string{"image=", "Porch", "localhost"} {
+		if strings.Contains(uri, never) {
+			t.Errorf("the key URI carries %q", never)
+		}
+	}
+}
+
 // factorClock is a gate whose clock the test moves.
 type factorClock struct {
 	g    *Gate

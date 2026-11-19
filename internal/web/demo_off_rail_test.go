@@ -21,6 +21,7 @@ func TestTheRailMarksThePageBeingRead(t *testing.T) {
 		"/names":        `href="/names" aria-current="page"`,
 		"/domains":      `href="/domains" aria-current="page"`,
 		"/history":      `href="/history" aria-current="page"`,
+		"/security":     `href="/security" aria-current="page"`,
 		"/installation": `href="/installation" aria-current="page"`,
 	} {
 		body := get(t, path).Body.String()

@@ -140,8 +140,9 @@ the compose file is the only thing a server has to check.
    sudo sshd -t && sudo systemctl reload ssh
    ```
 
-5. Sign in with the password from the log and change it under **This
-   installation**. Every page and the API are behind it.
+5. Sign in with the password from the log and change it under **Security**,
+   where two-step sign-in is turned on as well. Every page and the API are
+   behind it.
 
 6. Add a domain under **Domains**. The page shows a TXT record,
    `_porch-challenge.<domain>`, to publish at your DNS provider. Once it is
@@ -347,7 +348,7 @@ There is one password, for whoever runs the installation.
 
 ### Two-step sign-in
 
-Under **This installation**, **Sign-in**, **Turn on** shows a code to scan
+Under **Security**, **Turn on** shows a code to scan
 with an authenticator app (Aegis, 2FAS, KeePassXC and the like, any app for
 RFC 6238 codes). Confirm it with a code the app shows and the password; ten
 recovery codes are shown once. From then on a sign-in asks for the password
@@ -370,7 +371,7 @@ and a code from the app, or one of the recovery codes.
   across every address, and codes wait until the five minutes end; a recovery
   code still works. A wrong password and a wrong code get the same answer, so
   the page does not say which was right. How many wrong codes came with the
-  right password is shown under This installation after the next sign-in: if
+  right password is shown under Security after the next sign-in: if
   they were not yours, the password has leaked, so change it.
 - **Changing it.** Turning it off, making new recovery codes and changing the
   password each ask for the password and a code, and turning it on or off
