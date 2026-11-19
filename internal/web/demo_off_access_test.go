@@ -48,7 +48,7 @@ func guardedAs(t *testing.T, path string) string {
 // Every page offers a way out, and loads the one script that signs out: every
 // installation has a password, since porchd does not start without one.
 func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
-	paths := []string{"/", "/domains", "/history", "/installation", "/privacy", "/terms"}
+	paths := []string{"/", "/domains", "/history", "/security", "/installation", "/privacy", "/terms"}
 	for _, path := range paths {
 		page := guardedAs(t, path)
 		if !strings.Contains(page, `<button class="topbar-signout" id="sign-out" type="button">Sign out</button>`) {
@@ -76,9 +76,17 @@ func TestTheSignInPageShowsNothingBehindTheGate(t *testing.T) {
 	}
 
 	// The one command on it is copied as it reads, by session.js: app.js is
-	// behind the gate, so the Copy the other pages use is not here.
-	if !strings.Contains(page, `<code id="signin-command">`) || !strings.Contains(page, `data-copy="signin-command">Copy</button>`) {
-		t.Error("the sign-in page's command has no Copy beside it")
+	// behind the gate, so the Copy the other pages use is not here. The
+	// Copy is an icon inside the command's box, named for a screen reader,
+	// not a button under it that read as one more step (reported 2026-11-18).
+	box := strings.Index(page, `<div class="command-box">`)
+	command := strings.Index(page, `<code id="signin-command">`)
+	button := strings.Index(page, `<button class="command-box-copy" type="button" data-copy="signin-command" aria-label="Copy the command"`)
+	if box < 0 || command < box || button < command {
+		t.Error("the sign-in page's command has no Copy inside its box")
+	}
+	if strings.Contains(page, `data-copy="signin-command">Copy</button>`) {
+		t.Error("the sign-in page still has a Copy button under the command")
 	}
 	src, err := assets.ReadFile("assets/session.js")
 	if err != nil {
@@ -100,28 +108,37 @@ func TestOnlyTheSignInPageAndWhatItNeedsArePublic(t *testing.T) {
 	}
 }
 
-// The installation and privacy pages say a password is there, and what it
-// means, exactly where it is.
+// The installation, security and privacy pages say a password is there, and
+// what it means, exactly where it is.
+//
+// Signing in has a page of its own, Security: the password form sat at the
+// foot of This installation, under the update settings, and was hard to find,
+// and the two together read as one long page (reported 2026-11-18). This
+// installation says how the copy runs and points to Security; it carries no
+// form.
 func TestThePagesSayWhetherAPasswordIsInFront(t *testing.T) {
 	installation := flatten(guardedAs(t, "/installation"))
-	if !strings.Contains(installation, "Behind a password") || !strings.Contains(installation, `id="password-form"`) {
-		t.Error("the installation page behind a password does not say so, or offers no way to change it")
+	if !strings.Contains(installation, "Behind a password") || !strings.Contains(installation, `<a href="/security">Security</a>`) {
+		t.Error("the installation page behind a password does not say so, or where to change it")
 	}
-	// Its parts are headed, so the forms do not read as more of the facts,
-	// and signing in comes first: the password form sat at the foot of the
-	// page, under the update settings, and was hard to find (reported
-	// 2026-11-18). The second factor is beside it, its state in a word.
-	signIn := strings.Index(installation, `<h2 class="work-section" id="sign-in">Sign-in</h2>`)
-	runs := strings.Index(installation, `<h2 class="work-section">How it runs</h2>`)
-	if signIn < 0 || runs < 0 || !strings.Contains(installation, `<h3 class="factor-title">Password</h3>`) {
+	for _, never := range []string{`id="password-form"`, `id="factor"`} {
+		if strings.Contains(installation, never) {
+			t.Errorf("the installation page still carries %q, which is Security's", never)
+		}
+	}
+	if !strings.Contains(installation, `<h2 class="work-section">How it runs</h2>`) || !strings.Contains(installation, `<h2 class="work-section" id="updates">Updates</h2>`) {
 		t.Error("the installation page does not head its parts")
 	}
-	if signIn > runs || strings.Index(installation, `id="factor"`) > runs || strings.Index(installation, `id="password-form"`) > runs {
-		t.Error("signing in is not the first thing the installation page shows")
+
+	security := flatten(guardedAs(t, "/security"))
+	factor := strings.Index(security, `<h2 class="factor-title" id="factor-title">Two-step sign-in</h2>`)
+	password := strings.Index(security, `<h2 class="factor-title">Password</h2>`)
+	if !strings.Contains(security, "<h1>Security</h1>") || factor < 0 || password < factor {
+		t.Error("the security page does not head two-step sign-in and then the password")
 	}
-	for _, want := range []string{`id="factor-state"`, `id="factor-start"`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-code-row"`} {
-		if !strings.Contains(installation, want) {
-			t.Errorf("the second factor's panel lacks %q", want)
+	for _, want := range []string{`id="factor-state"`, `id="factor-start"`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-form"`, `id="password-code-row"`} {
+		if !strings.Contains(security, want) {
+			t.Errorf("the security page lacks %q", want)
 		}
 	}
 	privacy := flatten(guardedAs(t, "/privacy"))
@@ -131,7 +148,7 @@ func TestThePagesSayWhetherAPasswordIsInFront(t *testing.T) {
 
 	// And no page has a sentence left for an installation without one: there
 	// is no such installation to describe.
-	for _, path := range []string{"/", "/installation", "/privacy", "/history", "/domains"} {
+	for _, path := range []string{"/", "/security", "/installation", "/privacy", "/history", "/domains"} {
 		page := flatten(guardedAs(t, path))
 		for _, gone := range []string{"No password", "No cookies", "-results-dir", "porch-scan -history", "Not kept"} {
 			if strings.Contains(page, gone) {

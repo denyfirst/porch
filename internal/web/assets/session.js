@@ -109,23 +109,32 @@
 
   // The sign-in page's command, copied as it reads. Where the clipboard is
   // refused the text is selected instead, for the reader to copy.
+  // The button is an icon in the box's corner: what happened is said in its
+  // label and its title, and drawn as a tick while it is true.
   const copy = document.querySelector(".signin-first [data-copy]");
   if (copy) {
     copy.addEventListener("click", async () => {
       const source = document.getElementById(copy.dataset.copy);
       if (!source) return;
+      let said = "Copied";
       try {
         await navigator.clipboard.writeText(source.textContent);
-        copy.textContent = "Copied";
       } catch {
         const range = document.createRange();
         range.selectNodeContents(source);
         const selection = window.getSelection();
         selection.removeAllRanges();
         selection.addRange(range);
-        copy.textContent = "Selected";
+        said = "Selected; copy it with the keyboard";
       }
-      setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+      copy.dataset.state = "done";
+      copy.title = said;
+      copy.setAttribute("aria-label", said);
+      setTimeout(() => {
+        delete copy.dataset.state;
+        copy.title = "Copy";
+        copy.setAttribute("aria-label", "Copy the command");
+      }, 1500);
     });
   }
 
@@ -240,7 +249,7 @@
     });
   }
 
-  // The second factor, under This installation: its state, setting it up
+  // The second factor, under Security: its state, setting it up
   // from a code to scan, the recovery codes shown once, and the two changes
   // that ask for the password and a code again.
   const factor = document.getElementById("factor");

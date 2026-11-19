@@ -5805,7 +5805,7 @@ fieldset.composer-part { min-width: 0; }
 }
 
 .signin-first p { margin: 0 0 0.6rem; }
-.signin-first .work-code { margin-bottom: 0.6rem; font-size: 0.78rem; }
+.signin-first .work-code { font-size: 0.78rem; }
 
 .signin-mark .wordmark { font-size: 2rem; }
 
@@ -5903,6 +5903,17 @@ fieldset.composer-part { min-width: 0; }
 
 .signin-panels > * { min-width: 0; }
 .signin-panels .password-form { max-width: none; }
+
+/* Security: the two panels one under the other, at a width a form reads
+   well at, two-step sign-in first. */
+.security-panels {
+  display: grid;
+  gap: 1.2rem;
+  max-width: 44rem;
+}
+
+.security-panels > * { min-width: 0; }
+.security-panels .password-form { max-width: none; }
 
 .factor { display: grid; gap: 0.8rem; }
 
@@ -6149,9 +6160,53 @@ fieldset.composer-part { min-width: 0; }
 
 /* The command wraps rather than running out of sight under the card's edge,
    at any width: with sudo and 2>&1 it is wider than the card. What Copy
-   writes is the text, so a wrapped line is still one command. */
+   writes is the text, so a wrapped line is still one command. A quoted
+   string stays on one line, so "password is" is not read as two words. */
 .signin-first .work-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
-.signin-first .history-open { margin: 0 0 0.9rem; }
+.signin-first .work-code .sh-str { white-space: nowrap; }
+
+/*
+  A command with its Copy inside the box, as an icon in the top corner: a
+  button below the box read as one more step (reported 2026-11-18). The text
+  keeps clear of the corner, so the icon never covers a character.
+*/
+.command-box { position: relative; margin-bottom: 0.7rem; }
+.command-box .work-code { margin: 0; padding-right: 3rem; }
+
+.command-box-copy {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--ink-faint);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.command-box-copy:hover,
+.command-box-copy:focus-visible { color: var(--ink); border-color: var(--ink-faint); }
+.command-box-copy:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+
+.command-box-copy svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.command-box-copy .copied-glyph,
+.command-box-copy[data-state="done"] .copy-glyph { display: none; }
+.command-box-copy[data-state="done"] .copied-glyph { display: block; }
+.command-box-copy[data-state="done"] { color: var(--tool); border-color: var(--tool); }
 
 /* A shell command, coloured the way a terminal would: the program, its
    flags, a quoted string and the pipe each told apart. Colour only; the
