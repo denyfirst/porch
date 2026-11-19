@@ -756,6 +756,7 @@ var sectionHeadings = map[string]string{
 	"domains":      "Domains",
 	"history":      "History",
 	"names":        "Names",
+	"security":     "Security",
 	"installation": "This installation",
 }
 
@@ -770,6 +771,8 @@ func renderWorkspace(in Installation) {
 			"The domains this installation may check, and the record that shows each one is yours."},
 		{"/history", "history", "assets/history.html",
 			"What this installation has kept of the checks it ran."},
+		{"/security", "security", "assets/security.html",
+			"How this installation is signed into: two-step sign-in and the password."},
 		{"/installation", "installation", "assets/installation.html",
 			"How this installation was started: what it may check, what it reads and what it keeps."},
 	} {

@@ -211,8 +211,14 @@ func newSeed() (string, error) {
 // seconds are the format's defaults and exactly what codeCounter checks, so
 // they stay implicit. The account is the product's name and nothing about the
 // installation: the app's list, and any backup of it, learns no host name.
+//
+// The issuer is denyfirst, not Porch. Apps that draw a logo pick it by the
+// issuer's name from a list of companies, and Authy drew another company
+// called Porch beside these codes (reported 2026-11-18): a mark that says the
+// code belongs to somebody else. No image parameter is given either, which
+// would have the app fetch a picture from a server it was told about.
 func seedURI(seed string) string {
-	return "otpauth://totp/Porch:porch?secret=" + seed + "&issuer=Porch"
+	return "otpauth://totp/denyfirst:porch?secret=" + seed + "&issuer=denyfirst"
 }
 
 // hotp is RFC 4226: HMAC-SHA1 of the big-endian counter, dynamic truncation
