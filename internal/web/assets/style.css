@@ -5943,12 +5943,23 @@ main > .band:last-child { border-bottom: 0; }
 .composer .field-row { max-width: none; }
 .composer .field-help { font-size: 0.8125rem; color: var(--ink-faint); }
 
+/* The run: one bar the width of the cards above it, what will run and on
+   which name on the left, the button on the right. With the two side by
+   side on the left, the bar's right half was empty (reported 2026-11-20). */
 .composer-run {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1rem;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 1rem 1rem 1rem 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
 }
+
+.composer-run p { flex: 1 1 18rem; min-width: 0; }
+.composer-run .submit { flex: none; }
 
 .workspace .composer-run .submit {
   min-height: 3rem;
@@ -5959,7 +5970,7 @@ main > .band:last-child { border-bottom: 0; }
 
 .composer-run p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--ink-soft);
 }
 
@@ -6007,6 +6018,20 @@ main > .band:last-child { border-bottom: 0; }
 
 /* Domains. */
 .domain-form .field-row { max-width: 36rem; }
+.panel.domain-form .work-help { margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--ink-faint); }
+.ask-form .domain-part > legend { padding: 0; }
+
+/* A button that is not the page's one action, such as adding a file: the
+   height and edge of every other secondary button here. */
+.workspace .button {
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+.workspace .button-secondary { background: var(--raised); border-color: var(--line-strong); }
 .domain-record { margin-top: 1rem; }
 .domain-state { font-weight: 600; }
 
@@ -6118,7 +6143,12 @@ main > .band:last-child { border-bottom: 0; }
   align-items: center;
   justify-self: start;
   gap: 0.375rem;
+  padding: 0;
+  font: inherit;
   font-size: 0.8125rem;
+  background: none;
+  border: 0;
+  cursor: pointer;
   font-weight: 500;
   color: var(--ink-soft);
   text-decoration: none;
@@ -6516,13 +6546,17 @@ main > .band:last-child { border-bottom: 0; }
   font-variant-numeric: tabular-nums;
 }
 
+/* The sign-in card's two steps: the password, then the code, each laid out
+   as the card is. */
+.signin-step,
 .signin-code {
   display: grid;
-  gap: 0.4375rem;
+  gap: 1.25rem;
 }
 
 /* A part laid out as a grid or a row is still hidden when it is: the rules
    above set display, and would otherwise win over the attribute. */
+.signin-step[hidden],
 .signin-code[hidden],
 .signin-field[hidden],
 .factor-warning[hidden],
@@ -6583,7 +6617,8 @@ main > .band:last-child { border-bottom: 0; }
   .workspace .colophon { padding: 1rem; }
   .work-heading h1 { font-size: 1.375rem; }
   .composer-part { padding: 1.125rem 1rem 1.25rem; }
-  .composer-run { flex-direction: column; align-items: stretch; }
+  .composer-run { flex-direction: column; align-items: stretch; padding: 1rem; }
+  .composer-run p { flex: none; }
   .settings-head, .settings-row, .settings-split, .factor-setup, .factor-codes { padding-right: 1rem; padding-left: 1rem; }
   .settings-status:not(:empty) { padding: 0 1rem 1rem; }
   .factor-setup { grid-template-columns: 1fr; }
@@ -6593,54 +6628,88 @@ main > .band:last-child { border-bottom: 0; }
 }
 
 /*
-  A report of more than one check: a tab each, under the findings, and one
-  check's evidence at a time. The tab says what the board's row says, in the
-  same words and colours: running, the verdict, not run. Porch's violet marks
-  the open tab, never a verdict's colour. On paper every check is printed.
+  A report of more than one check: every check one under another, as
+  before, and a bar of them under the findings that stays at the top of the
+  window while the checks are read. Each item is a door to its card, drawn as
+  a button with an edge, and says the check's state in the words and colours
+  of its row on the board: running, the verdict, not run. The card being read
+  is marked in Porch's violet, never a verdict's colour. A row of tabs that
+  showed one check at a time was small, easy to lose and hid the rest
+  (reported 2026-11-20).
+
+  The bar scrolls sideways where it has to, and only sideways: left to
+  choose, a browser gave it a vertical scrollbar as well.
 */
-.report-tabs {
+.report-nav {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
-  gap: 0.25rem;
-  margin: 1.5rem 0 1rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0.625rem 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  background: var(--paper);
   border-bottom: 1px solid var(--rule);
 }
 
-.report-tab {
-  display: inline-flex;
+.report-nav-label {
   flex: none;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 2.625rem;
-  margin-bottom: -1px;
-  padding: 0 0.875rem;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--ink-soft);
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.report-tab-name { color: inherit; }
-.report-tab:hover { color: var(--ink); }
-.report-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--tool); }
-.report-tab:focus-visible { outline-offset: -2px; }
-
-.report-tab-state {
-  border: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3125rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  margin-right: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--ink-faint);
 }
 
-.report-tab-state::before {
+.report-nav-item {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0 1rem 0 0.75rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+
+.report-nav-item:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.report-nav-item[aria-current="true"] {
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-color: var(--tool);
+}
+
+.report-nav-num {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+.report-nav-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.report-nav-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  border: 0;
+}
+
+.report-nav-state::before {
   content: "";
   width: 0.5rem;
   height: 0.5rem;
@@ -6648,13 +6717,26 @@ main > .band:last-child { border-bottom: 0; }
   background: currentColor;
 }
 
-.report-tab-state.stamp-pending::before {
+.report-nav-state.stamp-pending::before {
   background: transparent;
   border: 1px dashed currentColor;
 }
 
-@media screen {
-  .report-check-away { display: none; }
+/* Under the bar the cards' heads stay where they are, and a jump to a card
+   lands it below the bar rather than under it. */
+.report-navved .report-check-head { position: relative; top: auto; }
+.report-navved .report-check { scroll-margin-top: 5rem; }
+.report-navved .report-check:focus { outline: none; }
+.report-navved .report-check:focus-visible { outline: 2px solid var(--tool); outline-offset: 4px; }
+
+/* A phone's rail is a bar held at the top as well: this one is held under it. */
+@media (max-width: 46rem) {
+  .workspace .report-nav { top: calc(3.5rem + 1px); }
+  .workspace .report-navved .report-check { scroll-margin-top: 8rem; }
+  .report-nav-label, .report-nav-num { display: none; }
+  .report-nav-item { gap: 0.5rem; min-height: 2.5rem; padding: 0 0.75rem; }
+  .report-nav-name { font-size: 0.875rem; }
+  .report-nav-state { font-size: 0.75rem; }
 }
 
 /* History: the list, and a report opened under it. */
@@ -6904,7 +6986,7 @@ main > .band:last-child { border-bottom: 0; }
     and .report-actions were both in this list and neither exists, which is a
     rule that does nothing and reads as one that does.
   */
-  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .report-tabs,
+  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .report-nav,
   .summary-actions, .composer, .checks, .colophon-links, .update-banner,
   .ask > h1, .ask-form {
     display: none !important;

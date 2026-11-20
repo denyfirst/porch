@@ -361,3 +361,39 @@ func TestALoggedCertificateIsSetFromItsEntry(t *testing.T) {
 		}
 	}
 }
+
+// A report of several checks keeps every check on the page, one under
+// another, with a bar of them that stays at the top of the window while
+// they are read and leads to each. A row of tabs that showed one check at a
+// time hid the rest, and was small and easy to lose (reported 2026-11-20).
+func TestAReportOfSeveralChecksKeepsThemAllWithABarToEach(t *testing.T) {
+	src := script(t)
+	frame := functionBody(t, src, "reportFrame")
+	for _, want := range []string{
+		`nav = el("nav", "report-nav");`,
+		`item.href = "#" + section.id;`,
+		"if (reportSpy) reportSpy.observe(section);",
+		"if (nav) reportCurrent(frame, frame.entries[0]);",
+	} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("the report frame no longer contains %q", want)
+		}
+	}
+	for _, never := range []string{"report-check-away", `"role", "tab"`, `"tabpanel"`} {
+		if strings.Contains(src, never) {
+			t.Errorf("a report hides a check behind a tab again: %q", never)
+		}
+	}
+	css := stylesheet(t)
+	_, bar, _ := strings.Cut(css, ".report-nav {")
+	bar, _, _ = strings.Cut(bar, "}")
+	for _, want := range []string{"position: sticky;", "overflow-x: auto;", "overflow-y: hidden;"} {
+		if !strings.Contains(bar, want) {
+			t.Errorf("the bar of checks lacks %q", want)
+		}
+	}
+	_, printed, _ := strings.Cut(css, "@media print {")
+	if !strings.Contains(printed, ".report-nav,") {
+		t.Error("the bar of checks is printed")
+	}
+}

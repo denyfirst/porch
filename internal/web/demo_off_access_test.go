@@ -294,8 +294,13 @@ func TestTheSessionScriptDrawsTheSecondFactor(t *testing.T) {
 		t.Error("the sign-in page clears the password when it is only asked for a code")
 	}
 
+	// The code is a second step in the same card, with a way back: the
+	// password stays in its field and goes with the code in one request.
+	if !strings.Contains(js, "step(true);") || !strings.Contains(js, "passwordStep.hidden = toCode;") {
+		t.Error("the sign-in page does not ask for the code as a second step")
+	}
 	login := flatten(guardedAs(t, "/login"))
-	for _, want := range []string{`id="signin-code-row" hidden`, `autocomplete="one-time-code"`, `id="signin-recovery"`} {
+	for _, want := range []string{`id="signin-password-step"`, `id="signin-code-row" hidden`, `id="signin-back"`, `autocomplete="one-time-code"`, `id="signin-recovery"`} {
 		if !strings.Contains(login, want) {
 			t.Errorf("the sign-in page lacks %q", want)
 		}
