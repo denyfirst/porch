@@ -167,9 +167,11 @@ func TestTheQuestionSaysTheScanRanOutRatherThanThatThePageWouldNotAnswer(t *test
 			origins++
 			mu.Unlock()
 			// Held until the request gives up, so the deadline passes while
-			// the question is in flight.
+			// the question is in flight, and then no answer at all: returning
+			// writes a 200, which a client still hanging up can read as the
+			// page's answer (see rpki's TestAnAnswerTooLateSaysSo).
 			<-r.Context().Done()
-			return
+			panic(http.ErrAbortHandler)
 		}
 		w.WriteHeader(http.StatusOK)
 	})
