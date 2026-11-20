@@ -7294,6 +7294,13 @@ main > .band:last-child { border-bottom: 0; }
   .console-results,
   .report-cover { margin-top: 0; }
   .report-check-head { break-after: avoid; }
+
+  /* Paper does not scroll, so no edge of a table is shaded as though it
+     did. Said here, last, and for the report's own containers by name:
+     their shading is set by a rule more particular than the one the first
+     print block undoes, and it printed as a bar down both sides of every
+     cipher table (reported 2026-11-20). */
+  .table-scroll, .report-body .table-scroll { background: none; }
 }
 
 /* Undertakings, each with the way to check it underneath.
