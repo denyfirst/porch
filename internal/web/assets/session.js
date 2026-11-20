@@ -228,13 +228,34 @@
   const signinForm = document.getElementById("signin-form");
   if (signinForm) {
     const field = document.getElementById("signin-password");
+    const passwordStep = document.getElementById("signin-password-step");
     const codeRow = document.getElementById("signin-code-row");
+    const back = document.getElementById("signin-back");
     const code = document.getElementById("signin-code");
     const codeLabel = document.getElementById("signin-code-label");
+    const codeSub = document.getElementById("signin-code-sub");
     const recovery = document.getElementById("signin-recovery");
     const button = document.getElementById("signin-submit");
     const status = document.getElementById("signin-status");
     const boxes = digitBoxes(code);
+
+    // The two steps of one card: the password, then the code. The password
+    // step is hidden, not emptied, while the code is asked for.
+    function step(toCode) {
+      passwordStep.hidden = toCode;
+      codeRow.hidden = !toCode;
+      button.textContent = toCode ? "Verify" : "Sign in";
+      if (!toCode) {
+        if (boxes) boxes.clear();
+        else code.value = "";
+      }
+    }
+
+    back.addEventListener("click", () => {
+      step(false);
+      status.textContent = "";
+      field.focus();
+    });
 
     // A recovery code has letters; a phone shows the keyboard that types it.
     recovery.addEventListener("click", () => {
@@ -242,7 +263,10 @@
       if (boxes) boxes.text(toRecovery);
       else code.inputMode = toRecovery ? "text" : "numeric";
       codeLabel.textContent = toRecovery ? "Recovery code" : "Code from your authenticator app";
-      recovery.textContent = toRecovery ? "Use the code from the app" : "Use a recovery code";
+      codeSub.textContent = toRecovery
+        ? "Enter one of the recovery codes you kept. Each works once."
+        : "Enter the 6-digit code from your authenticator app.";
+      recovery.textContent = toRecovery ? "Use the code from the app instead" : "Use a recovery code instead";
       code.value = "";
       code.focus();
     });
@@ -260,17 +284,18 @@
         if (problem === null) {
           window.location.assign("/");
         } else if (refusal === "code_required") {
-          // Said before the password was read: it stays, and the code is
-          // asked for beside it.
-          codeRow.hidden = false;
-          status.textContent = problem;
+          // Said before the password was read: it stays, out of sight, and
+          // the code is asked for in the second step.
+          step(true);
+          status.textContent = "";
           code.focus();
           button.disabled = false;
         } else {
+          // Wrong, whichever of the two was: both are asked for again, from
+          // the first step, and nothing says which was right.
+          step(false);
           status.textContent = problem;
           field.value = "";
-          if (boxes) boxes.clear();
-          else code.value = "";
           field.focus();
           button.disabled = false;
         }

@@ -12,31 +12,45 @@
   <p class="signin-mark"><span class="wordmark">porch<span class="wordmark-porch-stop">.</span></span></p>
 
   <form class="panel signin-form" id="signin-form" autocomplete="on">
-    <div class="signin-head">
-      <div>
-        <h1>Sign in</h1>
-        <p class="signin-sub">to this installation</p>
+    <div class="signin-step" id="signin-password-step">
+      <div class="signin-head">
+        <div>
+          <h1>Sign in</h1>
+          <p class="signin-sub">to this installation</p>
+        </div>
+        <span class="rail-tag">Self-host</span>
       </div>
-      <span class="rail-tag">Self-host</span>
-    </div>
-    <div class="signin-field">
-      <label class="field-label" for="signin-password">Password</label>
-      <input class="field" type="password" id="signin-password" name="password"
-        autocomplete="current-password" required autofocus>
+      <div class="signin-field">
+        <label class="field-label" for="signin-password">Password</label>
+        <input class="field" type="password" id="signin-password" name="password"
+          autocomplete="current-password" required autofocus>
+      </div>
     </div>
     <!--
-      The code, shown only once the installation says it asks for one, which
-      it says before it reads the password. Digits from the app, or a
-      recovery code, which has letters: the switch below changes the
-      keyboard a phone shows and nothing the installation checks.
+      The second step, drawn in the same card once the installation says it
+      asks for a code, which it says before it reads the password: the step
+      says nothing about whether the password was right. The password stays
+      in its field, out of sight, and goes with the code in one request, so
+      no half-signed-in state exists on the server between the two. Digits
+      from the app, or a recovery code, which has letters: the switch changes
+      the keyboard a phone shows and nothing the installation checks.
     -->
-    <div class="signin-code" id="signin-code-row" hidden>
-      <label class="field-label" for="signin-code" id="signin-code-label">Code from your authenticator app</label>
-      <div class="digits">
-        <input class="field code-field" type="text" id="signin-code" name="code" inputmode="numeric"
-          autocomplete="one-time-code" maxlength="40" spellcheck="false" autocapitalize="off">
+    <div class="signin-step signin-code" id="signin-code-row" hidden>
+      <button class="signin-back" type="button" id="signin-back"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18l-6-6 6-6"/></svg>Back</button>
+      <div class="signin-head">
+        <div>
+          <h1>Two-step sign-in</h1>
+          <p class="signin-sub" id="signin-code-sub">Enter the 6-digit code from your authenticator app.</p>
+        </div>
       </div>
-      <button class="signin-switch" type="button" id="signin-recovery">Use a recovery code</button>
+      <div class="signin-field">
+        <label class="field-label" for="signin-code" id="signin-code-label">Code from your authenticator app</label>
+        <div class="digits">
+          <input class="field code-field" type="text" id="signin-code" name="code" inputmode="numeric"
+            autocomplete="one-time-code" maxlength="40" spellcheck="false" autocapitalize="off">
+        </div>
+        <button class="signin-switch" type="button" id="signin-recovery">Use a recovery code instead</button>
+      </div>
     </div>
     <button class="submit" type="submit" id="signin-submit">Sign in</button>
     <p class="signin-status" id="signin-status" role="status"></p>

@@ -2232,6 +2232,10 @@ const heldHeads = "IntersectionObserver" in window
     }, { rootMargin: "-13px 0px 0px 0px", threshold: [0, 1] })
   : null;
 
+// The cards a bar of checks is watching, for the report on the page now:
+// which one is being read is marked in the bar (reportFrame).
+let reportSpy = null;
+
 // What one item of a list a builder wrote as "a, b, c" may be. Only a cell
 // holding nothing but such items is set as a list (reportLists).
 const LIST_ITEM = [
@@ -2516,19 +2520,30 @@ function reportFrame(container, target, names, chosen, opts) {
   findings.appendChild(frame.todo);
   container.appendChild(findings);
 
-  // More than one check chosen: a tab each, under the findings, and one
-  // check's evidence on the page at a time. The cover and the findings above
-  // still speak for all of them, worst first, so a rule broken in one check
-  // is never behind a tab that is not open; the tabs only choose which
-  // evidence is read. On paper every check is printed, tab or not.
-  const tabbed = chosen.length > 1;
-  let tabs = null;
-  if (tabbed) {
-    tabs = el("div", "report-tabs");
-    tabs.setAttribute("role", "tablist");
-    tabs.setAttribute("aria-label", "Checks in this report");
-    container.appendChild(tabs);
-    container.classList.add("report-tabbed");
+  // More than one check chosen: every check is still on the page, one under
+  // another, and a bar of them under the findings stays at the top of the
+  // window while they are read. Each item says the check's state as its row
+  // on the board does, leads to its card, and is marked while that card is
+  // the one being read. It was a row of tabs that showed one check at a
+  // time, small and easy to lose (reported 2026-11-20): a check that was not
+  // chosen was out of sight, and so was the way back to it.
+  if (reportSpy) reportSpy.disconnect();
+  let nav = null;
+  if (chosen.length > 1) {
+    nav = el("nav", "report-nav");
+    nav.setAttribute("aria-label", "Checks in this report");
+    nav.appendChild(el("span", "report-nav-label", "Jump to"));
+    container.appendChild(nav);
+    container.classList.add("report-navved");
+    reportSpy = "IntersectionObserver" in window
+      ? new IntersectionObserver((seen) => {
+          if (frame.jumping) return;
+          for (const s of seen) {
+            const entry = s.isIntersecting && frame.entries.find(e => e.section === s.target);
+            if (entry) reportCurrent(frame, entry);
+          }
+        }, { rootMargin: "-25% 0px -70% 0px" })
+      : null;
   }
 
   // Every check named keeps its row, chosen or not, so the board keeps its
@@ -2560,6 +2575,8 @@ function reportFrame(container, target, names, chosen, opts) {
     // at the top of the window while the card is read, and gives way to the
     // next card's at the card's end: a reader scrolling through a long
     // report always knows which check the rows in front of them belong to.
+    // Under a bar of checks the bar says that instead, and the head stays
+    // where it is: two bars held over the rows left too few rows to read.
     const section = el("section", "report-check report-check-pending");
     section.id = "report-" + name;
     const head = el("header", "report-check-head");
@@ -2571,7 +2588,9 @@ function reportFrame(container, target, names, chosen, opts) {
     const mark = el("span", "stamp stamp-pending", "running");
     head.appendChild(mark);
     section.appendChild(head);
-    if (heldHeads) heldHeads.observe(head);
+    if (!nav) {
+      if (heldHeads) heldHeads.observe(head);
+    }
     const top = el("div", "report-check-top");
     section.appendChild(top);
     const body = el("div", "report-body");
@@ -2580,63 +2599,68 @@ function reportFrame(container, target, names, chosen, opts) {
     container.appendChild(section);
 
     const entry = { name, spec, row, state, count, policy, section, mark, top, body, done: false, verdict: null, open: 0 };
-    if (tabs) {
-      const tab = el("button", "report-tab");
-      tab.type = "button";
-      tab.id = "report-tab-" + name;
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-controls", section.id);
-      tab.appendChild(el("span", "report-tab-name", spec.label));
-      entry.tabState = el("span", "report-tab-state stamp-pending", "running");
-      tab.appendChild(entry.tabState);
-      tab.addEventListener("click", () => reportSelect(frame, entry));
-      tabs.appendChild(tab);
-      section.setAttribute("role", "tabpanel");
-      section.setAttribute("aria-labelledby", tab.id);
-      entry.tab = tab;
-      // The board's row leads to its check: the tab is chosen, then the
-      // link goes where it points.
-      title.addEventListener("click", () => reportSelect(frame, entry));
+    if (nav) {
+      const item = el("a", "report-nav-item");
+      item.href = "#" + section.id;
+      item.appendChild(el("span", "report-nav-num", number));
+      item.appendChild(el("span", "report-nav-name", spec.label));
+      entry.navState = el("span", "report-nav-state stamp-pending", "running");
+      item.appendChild(entry.navState);
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        reportGo(frame, entry);
+      });
+      nav.appendChild(item);
+      entry.navItem = item;
+      section.tabIndex = -1;
+      if (reportSpy) reportSpy.observe(section);
     }
     frame.entries.push(entry);
   });
 
-  if (tabs) {
-    tabs.addEventListener("keydown", event => {
-      const at = frame.entries.findIndex(e => e.tab === document.activeElement);
-      if (at < 0) return;
-      const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: frame.entries.length - 1 }[event.key];
-      if (to === undefined) return;
-      event.preventDefault();
-      const next = frame.entries[(to + frame.entries.length) % frame.entries.length];
-      reportSelect(frame, next);
-      next.tab.focus();
-    });
-    reportSelect(frame, frame.entries[0]);
-  }
+  if (nav) reportCurrent(frame, frame.entries[0]);
 
   reportTally(frame);
   return frame;
 }
 
-// reportSelect shows one check's evidence under the tabs, and says which to
-// assistive technology as well as drawing it.
-function reportSelect(frame, chosen) {
+// reportCurrent marks the check whose card is being read, in the bar.
+function reportCurrent(frame, current) {
   for (const entry of frame.entries) {
-    if (!entry.tab) continue;
-    const on = entry === chosen;
-    entry.tab.setAttribute("aria-selected", on ? "true" : "false");
-    entry.tab.tabIndex = on ? 0 : -1;
-    entry.section.classList.toggle("report-check-away", !on);
+    if (!entry.navItem) continue;
+    if (entry === current) entry.navItem.setAttribute("aria-current", "true");
+    else entry.navItem.removeAttribute("aria-current");
   }
 }
 
-// reportTabSays puts what a check's row on the board says on its tab: still
-// running, its verdict, or that it did not run.
-function reportTabSays(entry) {
-  if (!entry.tabState) return;
-  entry.tabState.textContent = entry.state.textContent;
-  entry.tabState.className = entry.state.className.replace("stamp stamp-small", "report-tab-state");
+// reportGo takes the reader to one check's card, gently unless they asked
+// for no motion, and puts the keyboard there too. The check chosen stays
+// marked while the page moves, and after: the last cards cannot scroll to
+// the top of the window, and the bar marked the one above them instead.
+function reportGo(frame, entry) {
+  reportCurrent(frame, entry);
+  frame.jumping = true;
+  clearTimeout(frame.jumpTimer);
+  const settle = () => {
+    clearTimeout(frame.jumpTimer);
+    frame.jumpTimer = setTimeout(() => {
+      frame.jumping = false;
+      window.removeEventListener("scroll", settle);
+    }, 150);
+  };
+  window.addEventListener("scroll", settle, { passive: true });
+  settle();
+  const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  entry.section.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
+  entry.section.focus({ preventScroll: true });
+}
+
+// reportNavSays puts what a check's row on the board says on its item in
+// the bar: still running, its verdict, or that it did not run.
+function reportNavSays(entry) {
+  if (!entry.navState) return;
+  entry.navState.textContent = entry.state.textContent;
+  entry.navState.className = entry.state.className.replace("stamp stamp-small", "report-nav-state");
 }
 
 // reportFacts sets a list of labelled values as cells, each label over its
@@ -2701,7 +2725,7 @@ async function reportRun(frame, entry, run) {
     entry.body.appendChild(failure(err.message || "The check did not complete.", hint));
     entry.state.textContent = "not run";
     entry.state.className = "stamp stamp-small stamp-pending";
-    reportTabSays(entry);
+    reportNavSays(entry);
     entry.mark.textContent = "not run";
     entry.count.textContent = "did not run";
     entry.done = true;
@@ -2723,10 +2747,7 @@ function reportShow(frame, entry, data) {
     entry.mark = stamp;
   }
   entry.data = data;
-  // Its colour changes with the verdict; whether its tab is open does not.
-  const away = entry.section.classList.contains("report-check-away");
   entry.section.className = "report-check " + verdictClass("report-check", verdict);
-  entry.section.classList.toggle("report-check-away", away);
   clear(entry.top);
   entry.top.appendChild(sum);
   clear(entry.body);
@@ -2748,7 +2769,7 @@ function reportShow(frame, entry, data) {
 
   entry.state.textContent = data.verdict ? verdict : "not graded";
   entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);
-  reportTabSays(entry);
+  reportNavSays(entry);
   if (data.policy) entry.policy.textContent = data.policy;
 
   // A check that reached nothing broke no rule, and saying only that reads
@@ -3528,24 +3549,36 @@ function tickBox() {
 
 const consoleHost = document.getElementById("console-host");
 
-// The button says how many checks it will run, and the line beside it on
-// which name, as the form stands now. While a run is on, the button says so
-// instead, and this leaves it alone.
+// The button says how many checks it will run, and the line beside it which
+// ones and on which name, as the form stands now. While a run is on, the
+// button says so instead, and this leaves it alone.
 function consoleRunSays() {
   if (!consoleButton || consoleButton.disabled) return;
-  const count = selectedChecks().length;
+  const boxes = Array.from(document.querySelectorAll("input[name='check']")).filter(box => box.checked && CHECKS[box.value]);
+  const count = boxes.length;
   consoleButton.textContent = count === 1 ? "Run 1 check" : count === 0 ? "Choose a check" : "Run " + count + " checks";
   const line = document.getElementById("console-run-says");
   if (!line) return;
   clear(line);
   const name = consoleTarget && consoleTarget.value;
+  if (count === 0) {
+    line.textContent = "Tick at least one check above.";
+    return;
+  }
   if (!name) {
     line.textContent = "Each check reports on its own, one after another.";
     return;
   }
-  line.appendChild(document.createTextNode("On "));
+  const labels = boxes.map(box => {
+    const label = box.closest("label");
+    const named = label && label.querySelector(".check-name");
+    return named ? named.textContent.trim() : box.value;
+  });
+  const listed = labels.length === 1 ? labels[0] : labels.slice(0, -1).join(", ") + " and " + labels[labels.length - 1];
+  line.appendChild(el("strong", null, listed));
+  line.appendChild(document.createTextNode(" on "));
   line.appendChild(el("strong", null, name));
-  line.appendChild(document.createTextNode(", one after another."));
+  line.appendChild(document.createTextNode(count === 1 ? "." : ", one after another."));
 }
 
 if (consoleForm) {
