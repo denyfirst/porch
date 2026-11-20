@@ -157,7 +157,14 @@ func TestAServiceThatCannotBeReachedSaysSo(t *testing.T) {
 // unreachable.
 func TestAnAnswerTooLateSaysSo(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Held until the client hangs up, and then no answer at all. A
+		// handler that returns here writes a 200 with an empty body, and a
+		// client that has sent its close_notify but not yet closed the socket
+		// can read it: Go's transport takes a reply that races its own
+		// cancellation. On 2026-11-20 CI read that reply as RIPEstat's answer
+		// in the wrong form.
 		<-r.Context().Done()
+		panic(http.ErrAbortHandler)
 	}))
 	t.Cleanup(srv.Close)
 	pool := x509.NewCertPool()
