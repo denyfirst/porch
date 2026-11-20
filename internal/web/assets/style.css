@@ -46,6 +46,20 @@
   --ink-faint:   #5c606a;
   --rule:        #d9d9df;
 
+  /* The workspace's grounds, from the darkest to the lightest step in the
+     dark scheme: the rail, a field, a raised control. And a second line,
+     for the edge of a field or a button, which a hairline between rows
+     would be too faint for. */
+  --side:        #fbfbfc;
+  --input:       #ffffff;
+  --raised:      #f0f0f4;
+  --line-strong: #cfd0d8;
+  /* Porch's violet as a wash behind something chosen. */
+  --accent-soft: rgba(107, 63, 196, 0.10);
+  /* The shadow under a card that stands on its own: the sign-in card, the
+     menu a phone opens. */
+  --lift:        0 12px 32px -16px rgba(22, 23, 27, 0.22);
+
   /* Links. The accent, deepened for a light page. */
   --link:        #5f35b5;
 
@@ -138,13 +152,19 @@
    its mark and half its text in pale ink on white. */
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper:      #101114;
-    --paper-sunk: #18191d;
-    --card:       #17181d;
-    --ink:        #f0f0f2;
-    --ink-soft:   #b4b5be;
+    --paper:      #0d0e12;
+    --paper-sunk: #15161c;
+    --card:       #16171d;
+    --ink:        #eeeff2;
+    --ink-soft:   #b4b7c2;
     --ink-faint:  #999ba6;
-    --rule:       #2c2d33;
+    --rule:       #262833;
+    --side:       #111217;
+    --input:      #0f1015;
+    --raised:     #1a1b21;
+    --line-strong: #363944;
+    --accent-soft: rgba(139, 108, 246, 0.16);
+    --lift:       0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.6);
     --link:       #b9a2ff;
     --brand:      #ed4552;
     --tool:       #b9a2ff;
@@ -170,13 +190,19 @@
 /* And the switch, when it said dark on a light system. On screen only too. */
 @media screen {
   :root[data-theme="dark"] {
-    --paper:      #101114;
-    --paper-sunk: #18191d;
-    --card:       #17181d;
-    --ink:        #f0f0f2;
-    --ink-soft:   #b4b5be;
+    --paper:      #0d0e12;
+    --paper-sunk: #15161c;
+    --card:       #16171d;
+    --ink:        #eeeff2;
+    --ink-soft:   #b4b7c2;
     --ink-faint:  #999ba6;
-    --rule:       #2c2d33;
+    --rule:       #262833;
+    --side:       #111217;
+    --input:      #0f1015;
+    --raised:     #1a1b21;
+    --line-strong: #363944;
+    --accent-soft: rgba(139, 108, 246, 0.16);
+    --lift:       0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.6);
     --link:       #b9a2ff;
     --brand:      #ed4552;
     --tool:       #b9a2ff;
@@ -1265,9 +1291,12 @@ code.flag { white-space: nowrap; }
   box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
+/* The tally's column is held to a width its keys can wrap in: left to size
+   itself, the keys took one long line and squeezed the domain beside them
+   until it broke mid-word (seen at the workspace's 960 pixels, 2026-11-20). */
 .report-cover {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
   gap: 1.4rem 2.6rem;
   align-items: end;
   margin-top: 2rem;
@@ -5272,11 +5301,18 @@ main > .band:last-child { border-bottom: 0; }
 /* ── The workspace ─────────────────────────────────────────────────────
    An installation somebody runs: a rail of what can be done here beside the
    page. The demonstration keeps the site's masthead; none of this applies
-   there, because its body carries no .workspace class. */
+   there, because its body carries no .workspace class.
+
+   Redrawn on 2026-11-20 from a mockup the operator approved: dark first, one
+   accent, a 248-pixel rail in three groups with the way out at its foot and
+   no bar across the top, a page at most 960 pixels wide, cards with a
+   14-pixel radius, fields 40 pixels tall, and labels in sentence case
+   rather than spaced capitals, which read as shouting at a form's size.
+   Every gap is one of 4, 8, 12, 16, 24, 32 and 48 pixels. */
 
 .workspace {
   display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
+  grid-template-columns: 15.5rem minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -5287,79 +5323,93 @@ main > .band:last-child { border-bottom: 0; }
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 1.6rem 1rem;
-  background: var(--paper-sunk);
+  height: 100dvh;
+  padding: 1.25rem 0.75rem 1rem;
+  overflow-y: auto;
+  background: var(--side);
   border-right: 1px solid var(--rule);
 }
+
+.rail-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* The button that opens a folded rail: a phone's alone. */
+.rail-menu { display: none; }
 
 /* The tag sits on the wordmark's middle, not its baseline: boxed, a
    baseline put it above the letters' centre (live test 2026-10-20). */
 .rail-identity {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
-  margin: 0 0.6rem 2.2rem;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.25rem 0.625rem 0.5rem;
 }
 
-.rail-identity .wordmark { font-size: 1.7rem; }
+.rail-identity .wordmark { font-size: 1.375rem; }
 
 .rail-tag {
-  padding: 0.2rem 0.4rem;
-  font-size: 0.62rem;
+  padding: 0.125rem 0.4375rem;
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--tool);
-  border: 1px solid color-mix(in srgb, var(--tool) 40%, var(--rule));
-  border-radius: 3px;
+  line-height: 1.4;
+  color: var(--ink-faint);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
   white-space: nowrap;
 }
 
+.rail-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
 .rail-caption {
-  margin: 0 0.75rem 0.6rem;
-  font-size: 0.66rem;
+  margin: 1.125rem 0.625rem 0.375rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-faint);
 }
 
 .rail-nav {
   display: grid;
-  gap: 0.25rem;
-  margin-bottom: 1.8rem;
+  gap: 0.125rem;
 }
 
 .rail-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-height: 42px;
-  padding: 0.55rem 0.75rem;
-  font-size: 0.9rem;
+  gap: 0.625rem;
+  min-height: 2.25rem;
+  padding: 0 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--ink-soft);
   text-decoration: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: 8px;
 }
 
-.rail-item:hover { color: var(--ink); background: var(--paper); }
+.rail-item:hover { color: var(--ink); background: color-mix(in srgb, var(--raised) 65%, transparent); }
 
 .rail-item[aria-current="page"] {
   color: var(--ink);
-  background: color-mix(in srgb, var(--tool) 10%, var(--paper));
-  border-color: color-mix(in srgb, var(--tool) 35%, var(--rule));
+  background: var(--raised);
 }
 
 /* The rail's marks are drawn here, one stroke weight and one cap for all
-   six, rather than borrowed from whatever symbols the reader's fonts hold:
+   seven, rather than borrowed from whatever symbols the reader's fonts hold:
    the typeface has none, and the borrowed ones differed by system — one of
    them turned into a coloured emoji on some. */
 .rail-glyph {
   flex: none;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.125rem;
+  height: 1.125rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -5370,13 +5420,55 @@ main > .band:last-child { border-bottom: 0; }
 
 .rail-item[aria-current="page"] .rail-glyph { color: var(--tool); }
 
+/* Docs leaves the installation for GitHub, and says so with a small arrow
+   at the end of its row. */
+.rail-out {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-left: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--ink-faint);
+}
+
+/* The way out and the colour switch, at the rail's foot: they are about the
+   session and the screen, not about any one page. */
 .rail-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-top: auto;
-  padding: 1.2rem 0.75rem 0;
+  padding: 0.875rem 0.25rem 0;
   border-top: 1px solid var(--rule);
 }
 
-.rail-foot .theme-toggle { margin: 0; }
+.rail-foot .theme-toggle {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  border-color: var(--line-strong);
+  border-radius: 8px;
+}
+
+.rail-signout {
+  margin-left: auto;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rail-signout:hover { color: var(--ink); border-color: var(--ink-faint); }
 
 .workspace-main {
   display: flex;
@@ -5384,362 +5476,360 @@ main > .band:last-child { border-bottom: 0; }
   min-width: 0;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  min-height: 3.6rem;
-  padding: 0 2rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.topbar-path {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--ink-faint);
-}
-
-.topbar-path strong { font-weight: 500; color: var(--ink); }
-.topbar-slash { margin: 0 0.35rem; }
-
 .workspace main {
   width: 100%;
-  max-width: 72rem;
+  max-width: 67rem;
   margin: 0;
-  padding: 2rem 2rem 3rem;
+  padding: 3rem 3.5rem 4.5rem;
   flex: 1;
 }
 
 .workspace .colophon {
   max-width: none;
   margin: 0;
-  padding: 1rem 2rem;
+  padding: 1rem 3.5rem;
 }
 
 .work-heading {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 1.5rem;
-  margin-bottom: 1.6rem;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .work-heading h1 {
-  margin: 0 0 0.4rem;
-  font-size: 1.75rem;
-  letter-spacing: -0.02em;
+  margin: 0;
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
 }
 
 .work-heading p {
-  margin: 0;
+  margin: 0.375rem 0 0;
+  font-size: 0.9375rem;
   color: var(--ink-soft);
 }
 
 .work-help {
-  margin: 1.2rem 0 0;
+  margin: 1.25rem 0 0;
   max-width: var(--measure);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: var(--ink-soft);
 }
 
+/* A card: one thing to read or to do, set apart from the page. */
 .panel {
-  padding: 1.4rem 1.5rem;
-  background: var(--paper-sunk);
+  padding: 1.375rem 1.5rem;
+  background: var(--card);
   border: 1px solid var(--rule);
-  border-radius: calc(var(--radius) + 2px);
+  border-radius: 14px;
 }
 
-.panel p { margin: 0 0 0.8rem; }
+.panel p { margin: 0 0 0.75rem; }
 .panel p:last-child { margin-bottom: 0; }
 
 .work-code {
   margin: 0;
-  padding: 0.8rem 1rem;
+  padding: 0.75rem 1rem;
   overflow-x: auto;
-  background: var(--paper);
+  background: var(--input);
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-radius: 8px;
   font-family: var(--mono);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
 }
 
-/* New check: one card, two steps. */
+/* A heading between the parts of one workspace page. */
+.work-section {
+  margin: 2rem 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.work-heading + .work-section { margin-top: 0; }
+
+/* Fields and buttons: one height and one radius for every form here, and a
+   label in sentence case above each field. The demonstration's forms keep
+   their own. */
+.workspace .field-label {
+  margin-bottom: 0.4375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.workspace .field {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  background: var(--input);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.workspace .field:focus {
+  outline: none;
+  border-color: var(--tool);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+
+.code-field {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.workspace .submit {
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
+}
+
+.workspace .update-check {
+  min-height: 2.25rem;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.workspace .update-check:hover:not(:disabled),
+.workspace .update-check:focus-visible {
+  background: var(--raised);
+  border-color: var(--ink-faint);
+}
+
+.workspace .update-check:disabled { color: var(--ink-faint); }
+
+/* A button drawn as a mark alone, named for a screen reader: Copy. */
+.icon-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--ink-soft);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.icon-button:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.icon-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button .copied-glyph,
+.icon-button[data-state="done"] .copy-glyph { display: none; }
+.icon-button[data-state="done"] .copied-glyph { display: block; }
+.icon-button[data-state="done"] { color: var(--tool); border-color: var(--tool); }
+
+/* New check: two cards, the domain and the checks, and the button under
+   them. */
 .composer {
-  background: var(--paper-sunk);
-  border: 1px solid var(--rule);
-  border-radius: calc(var(--radius) + 2px);
-  overflow: hidden;
+  display: grid;
+  gap: 1.5rem;
 }
 
 .composer-part {
+  min-width: 0;
   margin: 0;
-  padding: 1.4rem 1.5rem;
-  border: 0;
+  padding: 1.375rem 1.5rem 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
 }
-
-.composer-part + .composer-part { border-top: 1px solid var(--rule); }
 
 .composer-step {
   display: block;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.75rem;
   padding: 0;
-  font-size: 0.72rem;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.composer-part > legend.composer-step {
+  float: left;
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  width: 100%;
+  margin: 0 0 1rem;
+}
+
+/* Whatever follows the legend starts under it, the first part shown
+   included: with the domain cards hidden the next part rode up beside the
+   floated legend. */
+.composer-part > legend.composer-step ~ * { clear: both; }
+
+.composer-num {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--ink-faint);
 }
 
 /*
-  The composer's two text fields are one column.
+  The composer's text fields are one column.
 
   The domain field was held to 28rem and the selector field below it to the
   measure, so the two inputs in one form ended on different lines, and the
   selector field kept the page's sunk background where the domain field had
-  the paper one. Both now end at the measure and sit on the same ground.
+  the paper one. Both now end at the same width and sit on the same ground.
 */
 .composer-field {
   width: 100%;
   max-width: var(--measure);
   font-size: 1.1rem;
-  background: var(--paper);
+  background: var(--input);
 }
 
-.composer .field { background: var(--paper); }
+.composer .field { background: var(--input); }
+.composer .checks { margin: 0; }
 
 .composer-scope {
   display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  margin: 0.9rem 0 0;
-  font-size: 0.86rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.8125rem;
   color: var(--ink-soft);
 }
 
+.composer-scope strong { color: var(--ink); }
+
 .scope-dot {
   flex: none;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.4375rem;
+  height: 0.4375rem;
   border-radius: 50%;
   background: var(--weak);
 }
 
-.scope-dot-on { background: var(--strong); }
-
-.check-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
-}
-
-.composer .check {
-  margin: 0;
-  background: var(--paper);
-}
-
-.composer-run {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1.1rem;
-}
-
-.composer-run p {
-  margin: 0;
-  font-size: 0.86rem;
-  color: var(--ink-soft);
-}
-
-.report-empty {
-  margin-top: 1.5rem;
-  padding: 2rem;
-  text-align: center;
-  color: var(--ink-soft);
-  border: 1px dashed var(--rule);
-  border-radius: calc(var(--radius) + 2px);
-}
-
-.report-empty p { margin: 0; font-size: 0.9rem; }
-
-.report-empty-title {
-  margin-bottom: 0.4rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.report-empty .report-empty-title { margin-bottom: 0.4rem; }
-
-.console-results:not([hidden]) + .report-empty { display: none; }
+.scope-dot-on { background: var(--tool); }
 
 /*
-  The domain a check is about, chosen from the ones added under Domains.
-
-  The cards are the check cards below them, so one form reads as one form; the
-  last card is a door to Domains rather than a choice, drawn dashed as a place
-  a card would go. The host is typed in front of the domain, which is drawn
-  after the field as the part that is not typed.
+  The checks and the domains are cards with a mark that says chosen: a box
+  ticked for a check, any number of them, and a ring filled for the one
+  domain. The control is still the form's own input, out of sight and in
+  reach of the keyboard; the mark is drawn after it, so it follows the
+  input's state without a script and without :has.
 */
-.ask-form .domain-part { margin: 0; padding: 0; border: 0; min-width: 0; }
-
-/* A fieldset is as wide as its widest content unless told otherwise, and the
-   composer clips: on a phone the cards and the host field ran past its edge
-   and were cut off rather than wrapping. */
-fieldset.composer-part { min-width: 0; }
-
-.domain-grid .check-says { font-size: 0.82rem; color: var(--ink-faint); }
-.check-grid .domain-add { border-style: dashed; }
-.domain-add .check-name { color: var(--link); }
-.domain-grid-long { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
-.domain-select { width: 100%; font-size: 1.05rem; background: var(--paper); }
-
-.host-row { margin-top: 1.1rem; max-width: var(--measure); }
-.host-field { display: flex; align-items: stretch; }
-.host-field .field {
-  flex: 1 1 0;
-  width: 0;
-  min-width: 0;
-  font-size: 1.05rem;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.host-suffix {
-  display: flex;
-  align-items: center;
-  max-width: 60%;
-  padding: 0 0.9rem;
-  overflow: hidden;
-  font-size: 1rem;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--ink-soft);
-  background: var(--paper-sunk);
-  border: 1px solid var(--rule);
-  border-left: 0;
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
-
-.domain-empty {
+.check-grid {
   display: grid;
-  gap: 0.6rem;
-  justify-items: start;
-  padding: 1.6rem;
-  background: var(--paper);
-  border: 1px dashed var(--rule);
-  border-radius: var(--radius);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.25rem), 1fr));
+  gap: 0.625rem;
 }
-
-.domain-empty p { margin: 0; max-width: 34rem; font-size: 0.92rem; line-height: 1.55; color: var(--ink-soft); }
-.domain-empty .report-empty-title { font-size: 1rem; font-weight: 600; color: var(--ink); }
-.domain-go { display: inline-flex; align-items: center; margin-top: 0.4rem; text-decoration: none; }
-.names-run { margin-top: 1rem; }
-
-/* What the script hides stays hidden: each of these draws itself as a grid or
-   a row, which would otherwise outrank the attribute. */
-.domain-grid[hidden], .domain-empty[hidden], .domain-status[hidden], [data-needs-domain][hidden] { display: none; }
-
-@media (max-width: 60rem) {
-  .domain-grid-long { grid-template-columns: 1fr; }
-}
-
-/* Domains. */
-.domain-form .field-row { max-width: 36rem; }
-.domain-record { margin-top: 1rem; }
-.domain-state { font-weight: 600; }
-
-.workspace .state-grid { margin: 0; }
-
-@media (max-width: 60rem) {
-  .check-grid { grid-template-columns: 1fr; }
-}
-
-/* A phone: the rail becomes a bar of four across the top. */
-@media (max-width: 46rem) {
-  .workspace { display: block; }
-  .rail {
-    position: static;
-    height: auto;
-    padding: 1rem 1rem 0.5rem;
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
-  }
-  .rail-identity { margin: 0 0 0.9rem; }
-  .rail-caption { display: none; }
-  .rail-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-bottom: 0.5rem;
-  }
-  .rail-nav + .rail-caption + .rail-nav { grid-template-columns: 1fr; }
-  .rail-item {
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.25rem;
-    min-height: 3.4rem;
-    padding: 0.4rem 0.2rem;
-    font-size: 0.72rem;
-    text-align: center;
-  }
-  .rail-foot { margin: 0; padding: 0.6rem 0 0.4rem; border: 0; }
-  .topbar { padding: 0 1rem; min-height: 2.8rem; }
-  .workspace main { padding: 1.2rem 1rem 2rem; }
-  .work-heading { flex-direction: column; gap: 0.8rem; }
-  .composer-part { padding: 1.1rem 1rem; }
-  .composer-run { flex-direction: column; align-items: stretch; }
-  .workspace .colophon { padding: 1rem; }
-}
-
-/* The checks in the composer are cards: the box and the name on one line,
-   what the check reads under them, its rule set at the foot. */
-.composer .checks { margin: 0; }
-
-.composer-part > legend.composer-step {
-  float: left;
-  width: 100%;
-}
-
-.composer-part > legend.composer-step + * { clear: both; }
 
 .check-grid .check {
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto 1fr auto;
+  position: relative;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
   align-items: start;
-  gap: 0.35rem 0.6rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  color: var(--ink);
+  background: var(--input);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
 }
 
-.check-grid .check:last-child { border-bottom: 1px solid var(--rule); }
+.check-grid .check:last-child { border-bottom: 1px solid var(--line-strong); }
+.check-grid .check:hover { border-color: var(--ink-faint); }
 
-.check-grid .check input { margin: 0.2rem 0 0; }
+.check-grid .check > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.check-box {
+  grid-row: 1 / span 3;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.125rem;
+  color: #ffffff;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.check-box svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  visibility: hidden;
+}
+
+.check > input:checked + .check-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.check > input:checked + .check-box svg { visibility: visible; }
+.check > input:focus-visible + .check-box { outline: 2px solid var(--tool); outline-offset: 2px; }
+
+.check-grid .check:has(> input:checked) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--tool) 55%, var(--line-strong));
+}
 
 .check-grid .check-name {
   font-family: var(--sans);
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
 .check-grid .check-says,
 .check-grid .check-policy { grid-column: 2; }
 
-.check-grid .check-says { font-size: 0.88rem; line-height: 1.5; }
-
-.check-grid .check:has(input:checked) {
-  border-color: color-mix(in srgb, var(--tool) 45%, var(--rule));
-}
+.check-grid .check-says { font-size: 0.8125rem; line-height: 1.5; }
+.check-grid .check-policy { margin-top: 0.25rem; }
 
 /*
-  One row in the list is a door rather than a box.
+  One card in the list is a door rather than a box.
 
   The name inventory is on the list because that is where somebody looks, and
   it is not a check: it asks about a whole domain rather than one host, it
   grades nothing, and it takes an address range this form has no field for. A
   box here ran two thirds of it and reported the rest as never asked, with
-  nothing on the page to do about that, so the row opens the page that runs all
-  of it instead.
-
-  It keeps the card it would have had, minus the column the checkbox sat in,
-  so the list still reads as one list.
+  nothing on the page to do about that, so the card opens the page that runs
+  all of it instead. Dashed, as a card that leads elsewhere is.
 */
 .check-grid .check-elsewhere,
 .checks .check-elsewhere {
@@ -5747,7 +5837,12 @@ fieldset.composer-part { min-width: 0; }
   color: inherit;
 }
 
-.check-grid .check-elsewhere { grid-template-columns: 1fr; }
+.check-grid .check-elsewhere {
+  grid-template-columns: 1fr;
+  background: transparent;
+  border-style: dashed;
+}
+
 .check-grid .check-elsewhere .check-says,
 .check-grid .check-elsewhere .check-policy { grid-column: 1; }
 
@@ -5755,75 +5850,316 @@ fieldset.composer-part { min-width: 0; }
 
 .check-grid .check-elsewhere:hover,
 .checks .check-elsewhere:hover {
-  border-color: color-mix(in srgb, var(--tool) 45%, var(--rule));
+  border-color: color-mix(in srgb, var(--tool) 45%, var(--line-strong));
 }
 
-/* A phone: four across and nothing else. The documents are in the footer,
-   the colour switch sits beside the name, and a button repeating a rail item
-   is left out. */
-@media (max-width: 46rem) {
-  .rail { position: relative; }
-  .rail-identity { padding-right: 4.5rem; }
-  .rail-nav + .rail-caption + .rail-nav { display: none; }
-  .rail-foot {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    padding: 0;
-  }
-  .work-heading > .button { display: none; }
+/* The domains: the one chosen carries a filled ring in its corner. */
+.domain-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); }
+.domain-grid .check { grid-template-columns: minmax(0, 1fr); padding-right: 2.75rem; }
+.domain-grid .check-name,
+.domain-grid .check-says { grid-column: 1; overflow-wrap: anywhere; }
+
+.domain-grid .check-box {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  border-radius: 50%;
 }
 
-/* Signing in: the one page with no rail, a card in the middle. */
-.workspace-signin { display: block; }
+.domain-grid .check-box svg { width: 0.6875rem; height: 0.6875rem; }
+.domain-grid .check-says { font-size: 0.8125rem; color: var(--ink-faint); }
+.check-grid .domain-add { padding-right: 1rem; }
+.domain-add .check-name { color: var(--link); }
+.domain-grid-long { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+.domain-select { width: 100%; }
 
-.workspace-signin main {
-  max-width: 31rem;
-  margin: 0 auto;
-  padding-top: 12vh;
+/* A host typed in front of the chosen domain, which is drawn after the field
+   as the part that is not typed: one box, as one name. */
+.ask-form .domain-part { margin: 0; padding: 0; border: 0; min-width: 0; }
+
+.host-row {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 32.5rem;
+  margin-top: 1.25rem;
 }
 
-.signin-mark {
-  margin: 0 0 1.4rem;
-  text-align: center;
+.host-row .field-label { margin: 0; }
+.host-row[hidden] { display: none; }
+
+.host-field {
+  display: flex;
+  align-items: stretch;
+  min-height: 2.75rem;
+  overflow: hidden;
+  background: var(--input);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
 }
 
-.signin-head {
+.host-field:focus-within {
+  border-color: var(--tool);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.workspace .host-field .field {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 0.25rem 0 0.875rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.host-field .field:focus-visible { outline: none; }
+
+.host-suffix {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.4rem;
+  max-width: 60%;
+  padding: 0 0.875rem 0 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-faint);
 }
 
-.signin-head h1 { margin: 0; }
+.composer .field-group {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 32.5rem;
+  margin-top: 1.25rem;
+}
 
-.signin-first {
-  margin-top: 1.4rem;
-  font-size: 0.88rem;
+.composer .field-group .field-label,
+.composer .field-group .field-help { margin: 0; }
+.composer .field-row { max-width: none; }
+.composer .field-help { font-size: 0.8125rem; color: var(--ink-faint); }
+
+.composer-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.workspace .composer-run .submit {
+  min-height: 3rem;
+  padding: 0.5rem 1.75rem;
+  font-size: 0.9375rem;
+  border-radius: 10px;
+}
+
+.composer-run p {
+  margin: 0;
+  font-size: 0.875rem;
   color: var(--ink-soft);
 }
 
-.signin-first p { margin: 0 0 0.6rem; }
-.signin-first .work-code { font-size: 0.78rem; }
+.composer-run strong { color: var(--ink); }
 
-.signin-mark .wordmark { font-size: 2rem; }
-
-.signin-form,
-.password-form {
-  display: grid;
-  gap: 0.6rem;
+.report-empty {
+  margin-top: 1.5rem;
+  padding: 2rem;
+  text-align: center;
+  color: var(--ink-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
 }
 
-.signin-form h1 { font-size: 1.4rem; }
-.signin-form .field,
-.password-form .field { width: 100%; background: var(--paper); }
-.signin-form .submit { margin-top: 0.4rem; }
+.report-empty p { margin: 0; font-size: 0.875rem; }
+
+.report-empty-title {
+  margin-bottom: 0.375rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.report-empty .report-empty-title { margin-bottom: 0.375rem; }
+
+.console-results:not([hidden]) + .report-empty { display: none; }
+
+.domain-empty {
+  display: grid;
+  gap: 0.625rem;
+  justify-items: start;
+  padding: 1.5rem;
+  background: var(--input);
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+}
+
+.domain-empty p { margin: 0; max-width: 34rem; font-size: 0.875rem; line-height: 1.55; color: var(--ink-soft); }
+.domain-empty .report-empty-title { font-size: 1rem; font-weight: 600; color: var(--ink); }
+.domain-go { display: inline-flex; align-items: center; margin-top: 0.375rem; text-decoration: none; }
+.names-run { margin-top: 1rem; }
+
+/* What the script hides stays hidden: each of these draws itself as a grid or
+   a row, which would otherwise outrank the attribute. */
+.domain-grid[hidden], .domain-empty[hidden], .domain-status[hidden], [data-needs-domain][hidden] { display: none; }
+
+/* Domains. */
+.domain-form .field-row { max-width: 36rem; }
+.domain-record { margin-top: 1rem; }
+.domain-state { font-weight: 600; }
+
+/* What a page says about this installation, a row each: what it is in the
+   faint ink on the left, what is true of it on the right, and a hairline
+   between rows, as Security's rows are. */
+.workspace .state-grid {
+  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+  gap: 0;
+  margin: -0.5rem 0;
+  font-size: 0.875rem;
+}
+
+.workspace .state-grid dt,
+.workspace .state-grid dd { padding: 0.75rem 0; }
+
+.workspace .state-grid dt {
+  padding-right: 1.5rem;
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.workspace .state-grid dt:not(:first-of-type),
+.workspace .state-grid dt:not(:first-of-type) + dd { border-top: 1px solid var(--rule); }
+
+.workspace .state-policy {
+  margin: 0 0.375rem 0.375rem 0;
+  padding: 0.125rem 0.5rem;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+@media (max-width: 46rem) {
+  .workspace .state-grid { grid-template-columns: 1fr; }
+  .workspace .state-grid dt { padding-bottom: 0.25rem; }
+  .workspace .state-grid dd { padding-top: 0; }
+  .workspace .state-grid dt:not(:first-of-type) + dd { border-top: 0; }
+}
+
+@media (max-width: 60rem) {
+  .domain-grid-long { grid-template-columns: 1fr; }
+}
+
+/* Signing in, setting up and confirming it's you: the pages with no rail,
+   a card in the middle. */
+.workspace-signin { display: block; }
+
+.workspace-signin main {
+  max-width: 28.25rem;
+  margin: 0 auto;
+  padding: 10vh 1rem 2rem;
+}
+
+.signin-mark {
+  margin: 0 0 2rem;
+  text-align: center;
+}
+
+.signin-mark .wordmark { font-size: 1.875rem; }
+
+.signin-form {
+  display: grid;
+  gap: 1.25rem;
+  padding: 2rem;
+  box-shadow: var(--lift);
+}
+
+.panel.signin-form p { margin: 0; }
+
+.signin-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.signin-head > div { display: grid; gap: 0.25rem; }
+
+.signin-head h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.signin-sub { font-size: 0.875rem; color: var(--ink-soft); }
+
+.signin-field {
+  display: grid;
+  gap: 0.4375rem;
+}
+
+.signin-field .field-label { margin: 0; }
+.workspace-signin .field { width: 100%; min-height: 2.75rem; font-size: 1rem; }
+
+.workspace-signin .submit {
+  min-height: 2.75rem;
+  font-size: 0.9375rem;
+  border-radius: 10px;
+}
+
+.signin-back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.signin-back:hover { color: var(--ink); }
+
+.signin-back svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.signin-note {
+  padding-top: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule);
+}
+
+/* Where the setup code is: one command, under the card. */
+.signin-first {
+  display: grid;
+  gap: 0.625rem;
+  margin-top: 2rem;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.signin-first p { margin: 0; }
+.signin-first p:first-child { font-weight: 600; }
+.signin-first code { font-family: var(--mono); }
 
 .signin-status {
   min-height: 1.3em;
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   color: var(--ink-soft);
 }
 
@@ -5847,82 +6183,99 @@ fieldset.composer-part { min-width: 0; }
 */
 .panel p:not(:has(~ :not([hidden]))) { margin-bottom: 0; }
 
-.password-form {
-  max-width: 30rem;
-  margin-top: 1.2rem;
+/*
+  A code from the app, drawn as six boxes over the one field it is typed
+  into. The field stays the control: it takes the typing, a paste and a
+  password manager's fill, and it is what a screen reader reads. session.js
+  draws the boxes and says which is next; without it the field is a field.
+  A recovery code has letters, and is typed into the same field drawn as one.
+*/
+.digits { position: relative; }
+
+.digits-drawn:not([data-mode="text"]) {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 3.25rem));
+  gap: 0.5rem;
 }
 
-.password-form .section-title { margin: 0 0 0.4rem; }
-.password-form .submit { justify-self: start; margin-top: 0.4rem; }
-
-.rail-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.topbar-signout {
-  margin-left: auto;
-  padding: 0.35rem 0.7rem;
-  font: inherit;
-  font-size: 0.82rem;
-  color: var(--ink-soft);
+.workspace .digits-drawn:not([data-mode="text"]) > .field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  color: transparent;
+  caret-color: transparent;
   background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.digits-drawn:not([data-mode="text"]) > .field::selection { background: transparent; }
+.digits-drawn:not([data-mode="text"]) > .field:focus-visible { outline: none; }
+
+.digit {
+  display: grid;
+  place-items: center;
+  height: 3.25rem;
+  font-family: var(--mono);
+  font-size: 1.375rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--input);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+
+.digit[data-now] {
+  border-color: var(--tool);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.digits[data-mode="text"] .digit { display: none; }
+
+/* Switches the code field between the app's digits and a recovery code: a
+   line of text, not a second button beside the one that signs in. */
+.signin-switch {
+  justify-self: start;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--link);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
   cursor: pointer;
 }
 
-.topbar-signout:hover { color: var(--ink); border-color: var(--ink-faint); }
-
-/* A heading between the parts of one workspace page. */
-.work-section {
-  margin: 2rem 0 0.8rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.work-heading + .work-section { margin-top: 0; }
-
-.password-form { margin-top: 0; }
-
-/*
-  Sign-in, first on This installation: the second factor and the password,
-  side by side where there is room and one above the other on a phone.
-
-  The second factor's state is said in a word in a frame, in Porch's colour
-  when it is on and in the faint ink when it is off. Not in a verdict's
-  colour: red, amber and green say how a host fared, and this is a setting.
-*/
-.signin-panels {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-  gap: 1rem;
-  align-items: start;
-}
-
-.signin-panels > * { min-width: 0; }
-.signin-panels .password-form { max-width: none; }
-
-/* Security: the two panels one under the other, at a width a form reads
-   well at, two-step sign-in first. */
+/* Security: two cards, two-step sign-in and then the password. Each says
+   its state in its head, and each thing it holds is a row with what it is
+   on the left and what can be done with it on the right. */
 .security-panels {
   display: grid;
-  gap: 1.2rem;
-  max-width: 44rem;
+  gap: 1.5rem;
+  max-width: 55rem;
 }
 
 .security-panels > * { min-width: 0; }
-.security-panels .password-form { max-width: none; }
 
-.factor { display: grid; gap: 0.8rem; }
+.settings.panel { padding: 0; overflow: hidden; }
+.panel.settings p { margin: 0; }
 
-.factor-head {
+.settings-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: 1rem;
+  padding: 1.375rem 1.5rem;
 }
+
+.settings-head > div,
+.settings-split > div:first-child { display: grid; align-content: start; gap: 0.25rem; }
 
 .factor-title {
   margin: 0;
@@ -5931,52 +6284,115 @@ fieldset.composer-part { min-width: 0; }
   color: var(--ink);
 }
 
+.settings-lead { font-size: 0.875rem; color: var(--ink-soft); }
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.settings-text {
+  display: grid;
+  flex: 1 1 15rem;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.settings-name { font-weight: 500; color: var(--ink); }
+.settings-note { font-size: 0.8125rem; color: var(--ink-faint); }
+.settings-button { flex: none; }
+.settings-status:not(:empty) { padding: 0 1.5rem 1.125rem; }
+
+.panel.settings-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.5rem 2.5rem;
+  padding: 1.375rem 1.5rem 1.5rem;
+}
+
+.settings-split .settings-lead { max-width: 19rem; }
+
+.password-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 25rem;
+  margin: 0;
+}
+
+.password-form .submit { justify-self: start; }
+
+/*
+  The second factor's state, said in a word in a pill: in Porch's colour when
+  it is on and in the faint ink when it is off. Not in a verdict's colour:
+  red, amber and green say how a host fared, and this is a setting.
+*/
 .factor-state {
+  display: inline-flex;
   flex: none;
-  padding: 0.15rem 0.6rem;
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 1.625rem;
+  padding: 0 0.625rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
   color: var(--ink-faint);
-  border: 1px dashed var(--rule);
+  background: var(--raised);
   border-radius: 999px;
 }
 
-.factor-state[data-state="on"] {
-  color: var(--tool);
-  border: 1px solid color-mix(in srgb, var(--tool) 55%, var(--rule));
-  background: color-mix(in srgb, var(--tool) 8%, transparent);
+.factor-state::before {
+  content: "";
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-.panel .factor-lead,
-.panel .factor-left { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+.factor-state[data-state="unknown"]::before { display: none; }
 
-.panel .factor-warning {
+.factor-state[data-state="on"] {
+  color: var(--tool);
+  background: var(--accent-soft);
+}
+
+/* Said above the cards, where it is seen first: a wrong code was sent with
+   the right password. */
+.factor-warning {
   margin: 0;
-  padding: 0.6rem 0.8rem;
-  font-size: 0.88rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
   color: var(--ink);
-  background: var(--card);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--weak);
-  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--weak) 10%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--weak) 35%, var(--rule));
+  border-radius: 12px;
 }
 
 .factor-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.625rem;
+  margin-top: 0.75rem;
 }
 
-.factor-setup { display: grid; gap: 1rem; }
-.factor-on { display: grid; gap: 0.8rem; }
+/* Setting it up: the code to scan on the left, the two steps beside it. */
+.factor-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 13.5rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem 2.5rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
 
 .factor-steps {
   display: grid;
-  gap: 1.1rem;
+  gap: 1.75rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -5984,44 +6400,55 @@ fieldset.composer-part { min-width: 0; }
 }
 
 .factor-steps > li {
-  display: grid;
-  gap: 0.5rem;
-  padding-left: 2rem;
   position: relative;
+  display: grid;
+  gap: 0.375rem;
+  padding-left: 2.75rem;
   counter-increment: factor-step;
 }
 
 .factor-steps > li::before {
   content: counter(factor-step);
   position: absolute;
-  left: 0;
   top: 0;
-  width: 1.4rem;
-  height: 1.4rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.4rem;
-  text-align: center;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--ink-soft);
-  border: 1px solid var(--rule);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
 }
 
-.factor-step-title { font-size: 0.92rem; font-weight: 600; color: var(--ink); }
+.factor-step-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+  color: var(--ink);
+}
 
+.factor-step-note { font-size: 0.875rem; color: var(--ink-soft); }
+
+/* Square, whatever the column's width: the code is drawn to fill it. */
 .factor-qr-frame {
   display: block;
-  width: min(100%, 13rem);
-  padding: 0.4rem;
+  width: 100%;
+  max-width: 13.5rem;
+  aspect-ratio: 1;
+  padding: 0.5rem;
   background: var(--qr-paper);
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-radius: 12px;
 }
 
 .factor-qr {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   shape-rendering: crispEdges;
 }
 
@@ -6029,87 +6456,205 @@ fieldset.composer-part { min-width: 0; }
 .factor-qr-ink { fill: var(--qr-ink); }
 
 .factor-secret-line {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+
+.factor-secret-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem 0.6rem;
-  font-size: 0.85rem;
-  color: var(--ink-soft);
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .factor-secret {
+  min-width: 0;
+  padding: 0.375rem 0.625rem;
   font-family: var(--mono);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
   color: var(--ink);
+  background: var(--input);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
   overflow-wrap: anywhere;
 }
 
-.factor .field { width: 100%; background: var(--paper); }
+.factor .digits { margin-top: 0.5rem; max-width: 22rem; }
 
-.factor-code-field {
-  max-width: 10rem;
-  font-family: var(--mono);
-  font-size: 1.15rem;
-  letter-spacing: 0.25em;
+/* The recovery codes, shown once. */
+.factor-codes {
+  display: grid;
+  gap: 1rem;
+  padding: 1.375rem 1.5rem;
+  border-top: 1px solid var(--rule);
 }
 
-.factor-codes { display: grid; gap: 0.8rem; }
-.panel .factor-codes-lead { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+.factor-codes-lead { max-width: 40rem; font-size: 0.875rem; color: var(--ink-soft); }
+.factor-codes .factor-actions { margin-top: 0; }
 
 .factor-code-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
-  gap: 0.4rem 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 0.5rem 1.5rem;
   margin: 0;
-  padding: 0.8rem 1rem;
+  padding: 1rem 1.25rem;
   list-style: none;
-  background: var(--card);
+  background: var(--input);
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-radius: 10px;
 }
 
 .factor-code-list code {
+  white-space: nowrap;
   font-family: var(--mono);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
-.factor-step {
+.signin-code {
   display: grid;
-  gap: 0.6rem;
-  margin-top: 0.8rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--rule);
-}
-
-.factor-step .factor-actions { margin-top: 0.3rem; }
-
-.signin-code,
-.password-code {
-  display: grid;
-  gap: 0.6rem;
+  gap: 0.4375rem;
 }
 
 /* A part laid out as a grid or a row is still hidden when it is: the rules
    above set display, and would otherwise win over the attribute. */
 .signin-code[hidden],
-.password-code[hidden],
+.signin-field[hidden],
+.factor-warning[hidden],
 .factor [hidden] { display: none; }
 
-/* Switches the code field between the app's digits and a recovery code: a
-   line of text, not a second button beside the one that signs in. */
-.signin-switch {
-  justify-self: start;
-  padding: 0;
+/* A phone: the rail folds into a bar along the top, with the mark and a
+   button that opens the rest over the page. */
+@media (max-width: 46rem) {
+  .workspace { display: block; }
+  .rail {
+    position: sticky;
+    z-index: 20;
+    height: auto;
+    padding: 0.375rem 0.5rem;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .rail-identity { padding: 0 0.5rem; }
+  .rail-folds .rail-menu {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    color: var(--ink-soft);
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .rail-menu svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+  }
+  .rail-folds .rail-panel { display: none; }
+  .rail-folds.rail-open .rail-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: flex;
+    max-height: calc(100dvh - 3.75rem);
+    padding: 0.25rem 0.75rem 1rem;
+    overflow-y: auto;
+    background: var(--side);
+    border-bottom: 1px solid var(--rule);
+    box-shadow: var(--lift);
+  }
+  .rail-item { min-height: 2.75rem; font-size: 0.9375rem; }
+  .rail-foot { margin-top: 1rem; }
+  .workspace main { padding: 1.5rem 1rem 2.5rem; }
+  .workspace .colophon { padding: 1rem; }
+  .work-heading h1 { font-size: 1.375rem; }
+  .composer-part { padding: 1.125rem 1rem 1.25rem; }
+  .composer-run { flex-direction: column; align-items: stretch; }
+  .settings-head, .settings-row, .settings-split, .factor-setup, .factor-codes { padding-right: 1rem; padding-left: 1rem; }
+  .settings-status:not(:empty) { padding: 0 1rem 1rem; }
+  .factor-setup { grid-template-columns: 1fr; }
+  .workspace .field { min-height: 2.75rem; font-size: 1rem; }
+  .workspace-signin main { padding-top: 2.5rem; }
+  .signin-form { padding: 1.5rem; }
+}
+
+/*
+  A report of more than one check: a tab each, under the findings, and one
+  check's evidence at a time. The tab says what the board's row says, in the
+  same words and colours: running, the verdict, not run. Porch's violet marks
+  the open tab, never a verdict's colour. On paper every check is printed.
+*/
+.report-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1.5rem 0 1rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rule);
+}
+
+.report-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.625rem;
+  margin-bottom: -1px;
+  padding: 0 0.875rem;
   font: inherit;
-  font-size: 0.85rem;
-  color: var(--link);
-  background: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  background: transparent;
   border: 0;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
+}
+
+.report-tab-name { color: inherit; }
+.report-tab:hover { color: var(--ink); }
+.report-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--tool); }
+.report-tab:focus-visible { outline-offset: -2px; }
+
+.report-tab-state {
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+.report-tab-state::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.report-tab-state.stamp-pending::before {
+  background: transparent;
+  border: 1px dashed currentColor;
+}
+
+@media screen {
+  .report-check-away { display: none; }
 }
 
 /* History: the list, and a report opened under it. */
@@ -6125,14 +6670,16 @@ fieldset.composer-part { min-width: 0; }
 
 .history-open,
 .history-delete {
+  min-height: 2rem;
   margin-left: 0.4rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.25rem 0.75rem;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--ink-soft);
   background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -6159,33 +6706,43 @@ fieldset.composer-part { min-width: 0; }
 .workspace-signin .colophon-row { justify-content: center; }
 
 /* The command wraps rather than running out of sight under the card's edge,
-   at any width: with sudo and 2>&1 it is wider than the card. What Copy
+   at any width: with cd, sudo and 2>&1 it is wider than the card. What Copy
    writes is the text, so a wrapped line is still one command. A quoted
-   string stays on one line, so "password is" is not read as two words. */
+   string stays on one line, so "setup code" is not read as two words. */
 .signin-first .work-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .signin-first .work-code .sh-str { white-space: nowrap; }
 
 /*
-  A command with its Copy inside the box, as an icon in the top corner: a
-  button below the box read as one more step (reported 2026-11-18). The text
-  keeps clear of the corner, so the icon never covers a character.
+  A command with its Copy inside the box, as an icon on its right, centred
+  on the box whether the command takes one line or two: a button below the
+  box read as one more step (reported 2026-11-18), and one pinned to the top
+  corner sat off-centre on a single line. The text keeps clear of it, so the
+  icon never covers a character.
 */
-.command-box { position: relative; margin-bottom: 0.7rem; }
-.command-box .work-code { margin: 0; padding-right: 3rem; }
+.command-box { position: relative; }
+
+.command-box .work-code {
+  margin: 0;
+  padding: 0.875rem 3.25rem 0.875rem 1rem;
+  line-height: 1.7;
+  background: var(--card);
+  border-radius: 10px;
+}
 
 .command-box-copy {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
+  top: 50%;
+  right: 0.5rem;
   display: grid;
   place-items: center;
   width: 2rem;
   height: 2rem;
   padding: 0;
-  color: var(--ink-faint);
-  background: var(--card);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  color: var(--ink-soft);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  transform: translateY(-50%);
   cursor: pointer;
 }
 
@@ -6347,7 +6904,7 @@ fieldset.composer-part { min-width: 0; }
     and .report-actions were both in this list and neither exists, which is a
     rule that does nothing and reads as one that does.
   */
-  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .topbar,
+  .rail, .masthead, .masthead-nav, .theme-toggle, .work-heading, .report-tabs,
   .summary-actions, .composer, .checks, .colophon-links, .update-banner,
   .ask > h1, .ask-form {
     display: none !important;

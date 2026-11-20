@@ -50,33 +50,42 @@ func TestAnInstallationIsAWorkspaceOfFourParts(t *testing.T) {
 		if !strings.Contains(rail, `href="`+path+`" aria-current="page">`) {
 			t.Errorf("%s: the rail does not mark this page as current", path)
 		}
-		if !strings.Contains(rail, "<strong>"+name+"</strong>") {
-			t.Errorf("%s: the top bar does not name the page %q", path, name)
-		}
 		if !strings.Contains(body, "<h1>"+name+"</h1>") {
 			t.Errorf("%s: the page is not headed %q", path, name)
 		}
 	}
 }
 
-// A document is in the workspace's reference section, named by its own
-// title without the maker.
-func TestADocumentIsNamedInTheTopBarWithoutTheMaker(t *testing.T) {
+// The rail is three groups, each named: what is done here, how the
+// installation is set, and the documents, which leave it for GitHub and say
+// so. The way out and the colour switch are at its foot.
+func TestTheRailIsThreeNamedGroups(t *testing.T) {
 	if demo.Enabled {
-		t.Skip("the demonstration has no top bar")
+		t.Skip("the demonstration has no rail")
 	}
-	for path, want := range map[string]string{
-		"/privacy": "Privacy",
-		"/tls":     "Transport check",
+	body := get(t, "/privacy").Body.String()
+	rail, _, _ := strings.Cut(body, "</aside>")
+	_, rail, _ = strings.Cut(rail, "<body")
+	workspace := strings.Index(rail, `<p class="rail-caption" id="rail-workspace">Workspace</p>`)
+	settings := strings.Index(rail, `<p class="rail-caption" id="rail-settings">Settings</p>`)
+	reference := strings.Index(rail, `<p class="rail-caption" id="rail-reference">Reference</p>`)
+	if workspace < 0 || settings < workspace || reference < settings {
+		t.Fatal("the rail is not Workspace, Settings and Reference, in that order")
+	}
+	for _, part := range []struct{ href, group string }{
+		{`href="/history"`, rail[workspace:settings]},
+		{`href="/security"`, rail[settings:reference]},
+		{`href="/installation"`, rail[settings:reference]},
+		{`href="https://github.com/denyfirst/porch/tree/main/docs"`, rail[reference:]},
 	} {
-		body := get(t, path).Body.String()
-		rail, _, _ := strings.Cut(body, "<main>")
-		_, rail, _ = strings.Cut(rail, "<body")
-		if !strings.Contains(rail, "<span>Reference</span>") || !strings.Contains(rail, "<strong>"+want+"</strong>") {
-			t.Errorf("%s: the top bar does not read Reference / %s", path, want)
+		if !strings.Contains(part.group, part.href) {
+			t.Errorf("%s is not in its group", part.href)
 		}
-		if strings.Contains(strings.ToLower(regexp.MustCompile(`href="[^"]*"`).ReplaceAllString(rail, "")), "denyfirst") {
-			t.Errorf("%s: the rail or top bar names the maker", path)
-		}
+	}
+	if !strings.Contains(rail[reference:], `<svg class="rail-out"`) {
+		t.Error("Docs does not say it leaves the installation")
+	}
+	if strings.Contains(strings.ToLower(regexp.MustCompile(`href="[^"]*"`).ReplaceAllString(rail, "")), "denyfirst") {
+		t.Error("the rail names the maker")
 	}
 }

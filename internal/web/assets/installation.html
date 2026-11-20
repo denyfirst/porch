@@ -1,7 +1,9 @@
 <section class="workspace-page">
 
   <!--
-    How this installation was started, one line each.
+    Whether it is current first, since that is the part that changes and the
+    part an operator comes here to act on; then how it was started, one line
+    each.
 
     An operator reading a report needs to know which of these were true when
     it was produced. A report that says nothing about mail because the check
@@ -15,52 +17,6 @@
       <h1>This installation</h1>
       <p>What it may check, what it reads, and what it keeps, from how it was started.</p>
     </div>
-  </div>
-
-  <h2 class="work-section">How it runs</h2>
-  <div class="panel">
-    <dl class="state-grid">
-      <dt>Scope</dt>
-      <dd>
-        Only domains it has been shown control of, with a DNS
-        record derived from this installation's secret.
-      </dd>
-
-      <dt>Pages</dt>
-      <dd>
-        Read where control was proven; only a few facts are
-        kept.
-      </dd>
-
-      <dt>Results</dt>
-      <dd>
-        Kept whole and encrypted, to open again or delete under
-        <a href="/history">History</a>.
-      </dd>
-
-      <dt>Rule sets</dt>
-      <dd>
-        {{range .Checks}}<span class="state-policy">{{.Policy}}</span>{{end}}
-      </dd>
-
-      <dt>Access</dt>
-      <dd>
-        Behind a password, always, and a code from an authenticator app once
-        two-step sign-in is on, under <a href="/security">Security</a>. What
-        is kept is encrypted under a key the password seals; a forgotten
-        password cannot be recovered.
-      </dd>
-
-      <dt>Sent to us</dt>
-      <dd>Nothing. This copy reports to no one.</dd>
-
-      <dt>Asked of GitHub</dt>
-      <dd>
-        The latest release's signed list, only when you press Check now below
-        or turn on the daily check. Nothing about this installation or its
-        scans goes with it.
-      </dd>
-    </dl>
   </div>
 
   <!--
@@ -114,6 +70,52 @@
         before they change anything, and once the new version runs they
         remove what they downloaded and the image it replaced.
         <a href="https://github.com/denyfirst/porch/blob/main/docs/self-host.md#upgrading">The same by hand</a>.
+      </dd>
+    </dl>
+  </div>
+
+  <h2 class="work-section">How it runs</h2>
+  <div class="panel">
+    <dl class="state-grid">
+      <dt>Scope</dt>
+      <dd>
+        Only domains it has been shown control of, with a DNS
+        record derived from this installation's secret.
+      </dd>
+
+      <dt>Pages</dt>
+      <dd>
+        Read where control was proven; only a few facts are
+        kept.
+      </dd>
+
+      <dt>Results</dt>
+      <dd>
+        Kept whole and encrypted, to open again or delete under
+        <a href="/history">History</a>.
+      </dd>
+
+      <dt>Rule sets</dt>
+      <dd>
+        {{range .Checks}}<span class="state-policy">{{.Policy}}</span>{{end}}
+      </dd>
+
+      <dt>Access</dt>
+      <dd>
+        Behind a password, always, and a code from an authenticator app once
+        two-step sign-in is on, under <a href="/security">Security</a>. What
+        is kept is encrypted under a key the password seals; a forgotten
+        password cannot be recovered.
+      </dd>
+
+      <dt>Sent to us</dt>
+      <dd>Nothing. This copy reports to no one.</dd>
+
+      <dt>Asked of GitHub</dt>
+      <dd>
+        The latest release's signed list, only when you press Check now above
+        or turn on the daily check. Nothing about this installation or its
+        scans goes with it.
       </dd>
     </dl>
   </div>

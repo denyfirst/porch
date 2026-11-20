@@ -6,18 +6,24 @@
     Nothing about the installation is on it: not its scope, not its domains,
     not what it keeps. The password is sent as JSON from session.js, so no
     form on another site can post it, and the answer is a cookie a script
-    cannot read.
+    cannot read. The first password is chosen on the setup page, which an
+    installation without one shows instead of this.
   -->
   <p class="signin-mark"><span class="wordmark">porch<span class="wordmark-porch-stop">.</span></span></p>
 
   <form class="panel signin-form" id="signin-form" autocomplete="on">
     <div class="signin-head">
-      <h1>Sign in</h1>
+      <div>
+        <h1>Sign in</h1>
+        <p class="signin-sub">to this installation</p>
+      </div>
       <span class="rail-tag">Self-host</span>
     </div>
-    <label class="field-label" for="signin-password">Password</label>
-    <input class="field" type="password" id="signin-password" name="password"
-      autocomplete="current-password" required autofocus>
+    <div class="signin-field">
+      <label class="field-label" for="signin-password">Password</label>
+      <input class="field" type="password" id="signin-password" name="password"
+        autocomplete="current-password" required autofocus>
+    </div>
     <!--
       The code, shown only once the installation says it asks for one, which
       it says before it reads the password. Digits from the app, or a
@@ -26,31 +32,14 @@
     -->
     <div class="signin-code" id="signin-code-row" hidden>
       <label class="field-label" for="signin-code" id="signin-code-label">Code from your authenticator app</label>
-      <input class="field" type="text" id="signin-code" name="code" inputmode="numeric"
-        autocomplete="one-time-code" maxlength="40" spellcheck="false" autocapitalize="off">
+      <div class="digits">
+        <input class="field code-field" type="text" id="signin-code" name="code" inputmode="numeric"
+          autocomplete="one-time-code" maxlength="40" spellcheck="false" autocapitalize="off">
+      </div>
       <button class="signin-switch" type="button" id="signin-recovery">Use a recovery code</button>
     </div>
     <button class="submit" type="submit" id="signin-submit">Sign in</button>
     <p class="signin-status" id="signin-status" role="status"></p>
   </form>
-
-  <!--
-    Where the first password is. It is printed once, in the log, and written
-    nowhere else, so the page says the one command that finds it rather than
-    a paragraph about logs. porchd writes it to standard error, which Docker
-    keeps apart, so the command joins the two before grep reads them: without
-    2>&1 grep sees nothing and the whole log goes past it to the screen.
-  -->
-  <div class="signin-first">
-    <p>First sign-in? The password is in the log. On the server, in the porch folder:</p>
-    <div class="command-box">
-      <pre class="work-code shell"><code id="signin-command"><span class="sh-cmd">sudo</span> <span class="sh-cmd">docker</span> compose logs porch <span class="sh-op">2&gt;&amp;1</span> <span class="sh-op">|</span> <span class="sh-cmd">grep</span> <span class="sh-flag">-A2</span> <span class="sh-str">"password is"</span></code></pre>
-      <button class="command-box-copy" type="button" data-copy="signin-command" aria-label="Copy the command" title="Copy">
-        <svg class="copy-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>
-        <svg class="copied-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-      </button>
-    </div>
-    <p>Change it after signing in, under Security.</p>
-  </div>
 
 </section>

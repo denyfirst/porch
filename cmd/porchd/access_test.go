@@ -8,51 +8,49 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/denyfirst/porch/internal/access"
 	"github.com/denyfirst/porch/internal/vault"
 )
 
-// A missing access file is created with a new password, which is said once
-// and written nowhere; an existing one is left alone, because replacing it
-// would make everything kept under its key unreadable.
-func TestAMissingAccessFileIsCreatedAndItsPasswordSaidOnce(t *testing.T) {
+// A missing access file waits for its first password: a setup code is said
+// once and written nowhere, and nothing is created until the operator
+// chooses the password with it. An existing file is left alone, because
+// replacing it would make everything kept under its key unreadable.
+func TestAMissingAccessFileWaitsForASetupCodeSaidOnce(t *testing.T) {
 	var said bytes.Buffer
 	previous := secretOut
 	secretOut = &said
 	t.Cleanup(func() { secretOut = previous })
 
 	path := filepath.Join(t.TempDir(), "access")
-	if err := createAccess(path); err != nil {
+	until := time.Date(2026, 11, 20, 9, 45, 0, 0, time.UTC)
+	code, err := prepareAccess(path, until)
+	if err != nil {
 		t.Fatal(err)
 	}
-	password := regexp.MustCompile(`(?m)^    ([a-z2-7-]{38})$`).FindStringSubmatch(said.String())
-	if password == nil {
-		t.Fatalf("the new password was not said: %q", said.String())
+	shown := regexp.MustCompile(`(?m)^    ([a-z2-7]{4}(-[a-z2-7]{4}){3})$`).FindStringSubmatch(said.String())
+	if shown == nil || shown[1] != code {
+		t.Fatalf("the setup code was not said as returned: %q", said.String())
 	}
-	if _, err := access.Unlock(path, password[1]); err != nil {
-		t.Errorf("the password that was said does not open the file: %v", err)
+	if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 0 {
+		t.Errorf("waiting for setup wrote %d files; the code is said, not saved", len(entries))
 	}
-	// Nothing else was written beside it: the password is said, not saved.
-	if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 1 {
-		t.Errorf("creating the access file wrote %d files, want one", len(entries))
-	}
-	body, _ := os.ReadFile(path)
-	if bytes.Contains(body, []byte(password[1])) {
-		t.Error("the password was written into the access file")
-	}
-	if !strings.Contains(said.String(), "change it") || !strings.Contains(said.String(), "can no longer be read") {
-		t.Errorf("the announcement does not say to change it, or what losing it costs: %q", said.String())
+	for _, want := range []string{"works once", "until\n09:45 UTC", "restart porchd for a new one", "cannot be recovered"} {
+		if !strings.Contains(said.String(), want) {
+			t.Errorf("the announcement does not say %q: %q", want, said.String())
+		}
 	}
 
-	said.Reset()
-	if err := createAccess(path); err != nil {
+	if err := access.Create(path, "a long chosen password"); err != nil {
 		t.Fatal(err)
 	}
-	if said.Len() != 0 {
-		t.Errorf("an existing access file was announced as new: %q", said.String())
+	said.Reset()
+	if code, err := prepareAccess(path, until); err != nil || code != "" || said.Len() != 0 {
+		t.Errorf("an existing access file waits for setup: %q, %v, %q", code, err, said.String())
 	}
-	if _, err := access.Unlock(path, password[1]); err != nil {
+	if _, err := access.Unlock(path, "a long chosen password"); err != nil {
 		t.Error("starting again replaced the access file")
 	}
 }
@@ -89,16 +87,16 @@ func TestTheGateIsInFrontOfEverything(t *testing.T) {
 	}
 }
 
-// The command the sign-in page gives finds the password: it names the compose
-// service, and greps for words the log line carries, and the password is on
-// one of the two lines after them.
-func TestTheSignInPageCommandFindsThePassword(t *testing.T) {
+// The command the setup page gives finds the setup code: it names the
+// folder and the compose service, and greps for words the log line carries,
+// and the code is on one of the two lines after them.
+func TestTheSetupPageCommandFindsTheCode(t *testing.T) {
 	// Read as text: the command is coloured with spans, and what matters is
 	// what a person copies.
-	page := html.UnescapeString(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(repoFile(t, "internal/web/assets/login.html"), ""))
-	const command = `sudo docker compose logs porch 2>&1 | grep -A2 "password is"`
+	page := html.UnescapeString(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(repoFile(t, "internal/web/assets/setup.html"), ""))
+	const command = `cd ~/porch && sudo docker compose logs porch 2>&1 | grep -A2 "setup code"`
 	if !strings.Contains(page, command) {
-		t.Fatalf("the sign-in page no longer gives %q", command)
+		t.Fatalf("the setup page no longer gives %q", command)
 	}
 	if !regexp.MustCompile(`(?m)^  porch:$`).MatchString(repoFile(t, "docker-compose.yml")) {
 		t.Error("the compose file has no service called porch for the command to name")
@@ -108,21 +106,21 @@ func TestTheSignInPageCommandFindsThePassword(t *testing.T) {
 	previous := secretOut
 	secretOut = &said
 	t.Cleanup(func() { secretOut = previous })
-	if err := createAccess(filepath.Join(t.TempDir(), "access")); err != nil {
+	if _, err := prepareAccess(filepath.Join(t.TempDir(), "access"), time.Now().Add(access.SetupLife)); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(said.String(), "\n")
 	for i, line := range lines {
-		if !strings.Contains(line, "password is") {
+		if !strings.Contains(line, "setup code") {
 			continue
 		}
 		for _, after := range lines[i+1 : min(i+3, len(lines))] {
-			if regexp.MustCompile(`^    [a-z2-7-]{38}$`).MatchString(after) {
+			if regexp.MustCompile(`^    [a-z2-7]{4}(-[a-z2-7]{4}){3}$`).MatchString(after) {
 				return
 			}
 		}
 	}
-	t.Errorf("grep -A2 \"password is\" would not show the password in: %q", said.String())
+	t.Errorf("grep -A2 \"setup code\" would not show the code in: %q", said.String())
 }
 
 // The update check exists only behind a password and never on the
@@ -167,6 +165,9 @@ func TestTheHistoryExistsOnlyBehindThePassword(t *testing.T) {
 	src := repoFile(t, "cmd/porchd/main.go")
 	const block = "\tif *accessFile != \"\" {\n" +
 		"\t\tgate = access.NewGate(*accessFile, web.PublicPaths())\n" +
+		"\t\tif setupCode != \"\" {\n" +
+		"\t\t\tgate.AwaitSetup(setupCode, setupUntil)\n" +
+		"\t\t}\n" +
 		"\t\thistory := &vault.Vault{Dir: filepath.Join(filepath.Dir(*accessFile), \"history\"), Key: gate.Key}\n" +
 		"\t\tapi.KeepReports(history)\n" +
 		"\t\troot.Handle(\"/api/v1/history\", history.Handler())\n" +
@@ -202,13 +203,17 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "access")
-	unlock := func() []byte {
+	// setUp starts as porchd does and chooses the password as the setup page
+	// would, and returns the key it seals.
+	setUp := func() []byte {
 		t.Helper()
-		password := regexp.MustCompile(`(?m)^    ([a-z2-7-]{38})$`).FindStringSubmatch(said.String())
-		if password == nil {
-			t.Fatalf("no password was said: %q", said.String())
+		if _, err := prepareAccess(path, time.Now().Add(access.SetupLife)); err != nil {
+			t.Fatal(err)
 		}
-		key, err := access.Unlock(path, password[1])
+		if err := access.Create(path, "a long chosen password"); err != nil {
+			t.Fatal(err)
+		}
+		key, err := access.Unlock(path, "a long chosen password")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -220,13 +225,10 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 			&vault.Domains{Path: filepath.Join(at, "domains.sealed"), Key: k}
 	}
 
-	if err := createAccess(path); err != nil {
-		t.Fatal(err)
-	}
+	oldKey := setUp()
 	if strings.Contains(said.String(), "moved") {
 		t.Errorf("a first password said something was moved: %q", said.String())
 	}
-	oldKey := unlock()
 	history, domains := stores(dir, oldKey)
 	if err := history.Keep("tls", "old.example", "strong", "p", []byte(`{}`)); err != nil {
 		t.Fatal(err)
@@ -240,10 +242,7 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 		t.Fatal(err)
 	}
 	said.Reset()
-	if err := createAccess(path); err != nil {
-		t.Fatal(err)
-	}
-	history, domains = stores(dir, unlock())
+	history, domains = stores(dir, setUp())
 	if added, err := domains.Add("new.example"); err != nil || !added {
 		t.Fatalf("the new key cannot add a domain: %v", err)
 	}
@@ -274,9 +273,7 @@ func TestANewPasswordMovesWhatTheOldOneKeptAside(t *testing.T) {
 		t.Fatal(err)
 	}
 	said.Reset()
-	if err := createAccess(path); err != nil {
-		t.Fatal(err)
-	}
+	setUp()
 	if !strings.Contains(said.String(), retired[1]+"-2") {
 		t.Errorf("a second reset did not get a folder of its own: %q", said.String())
 	}
@@ -322,5 +319,27 @@ func TestThePagesAreToldWhatThisInstallationAsks(t *testing.T) {
 		if !strings.Contains(src, want) {
 			t.Errorf("main.go does not hand the pages %q", want)
 		}
+	}
+}
+
+// A folder the access file cannot be written to is said when porchd starts,
+// not after somebody has typed a password into the setup page.
+func TestAnUnwritableFolderIsSaidAtStart(t *testing.T) {
+	var said bytes.Buffer
+	previous := secretOut
+	secretOut = &said
+	t.Cleanup(func() { secretOut = previous })
+
+	missing := filepath.Join(t.TempDir(), "porch-data", "access")
+	code, err := prepareAccess(missing, time.Now().Add(access.SetupLife))
+	if err == nil || code != "" || said.Len() != 0 {
+		t.Fatalf("a missing folder: code %q, error %v, said %q", code, err, said.String())
+	}
+	if !strings.Contains(err.Error(), "cannot be written to") {
+		t.Errorf("the error does not say what is wrong: %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(filepath.Dir(missing)))
+	if len(entries) != 0 {
+		t.Errorf("checking the folder left %d files behind", len(entries))
 	}
 }

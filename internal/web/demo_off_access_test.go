@@ -3,6 +3,7 @@
 package web
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -45,14 +46,21 @@ func guardedAs(t *testing.T, path string) string {
 	return get(t, path).Body.String()
 }
 
-// Every page offers a way out, and loads the one script that signs out: every
-// installation has a password, since porchd does not start without one.
+// Every page offers a way out, at the foot of the rail, and loads the one
+// script that signs out: every installation has a password, since porchd
+// does not start without one. There is no bar across the top for it to sit
+// in (redrawn 2026-11-20).
 func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
 	paths := []string{"/", "/domains", "/history", "/security", "/installation", "/privacy", "/terms"}
 	for _, path := range paths {
 		page := guardedAs(t, path)
-		if !strings.Contains(page, `<button class="topbar-signout" id="sign-out" type="button">Sign out</button>`) {
-			t.Errorf("%s: behind a password, no way to sign out", path)
+		foot := strings.Index(page, `<div class="rail-foot">`)
+		out := strings.Index(page, `<button class="rail-signout" id="sign-out" type="button">Sign out</button>`)
+		if foot < 0 || out < foot || out > strings.Index(page, "</aside>") {
+			t.Errorf("%s: behind a password, no way to sign out at the rail's foot", path)
+		}
+		if strings.Contains(page, `class="topbar"`) {
+			t.Errorf("%s: still draws a bar across the top", path)
 		}
 		if !strings.Contains(page, `<script src="/session.js"></script>`) {
 			t.Errorf("%s: behind a password, the script that signs out is not loaded", path)
@@ -64,7 +72,7 @@ func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
 // no links into what is behind the gate.
 func TestTheSignInPageShowsNothingBehindTheGate(t *testing.T) {
 	page := guardedAs(t, "/login")
-	for _, never := range []string{`<aside class="rail">`, `class="topbar"`, "shown control of", `href="/domains"`, `href="/history"`, `href="/docs"`, `src="/app.js"`} {
+	for _, never := range []string{`<aside class="rail">`, `class="topbar"`, "shown control of", `href="/domains"`, `href="/history"`, `href="/docs"`, `src="/app.js"`, "command-box", "docker compose logs"} {
 		if strings.Contains(page, never) {
 			t.Errorf("the sign-in page carries %q", never)
 		}
@@ -74,26 +82,97 @@ func TestTheSignInPageShowsNothingBehindTheGate(t *testing.T) {
 			t.Errorf("the sign-in page lacks %q", want)
 		}
 	}
+}
+
+// The first visit is the setup page: the code from the log and the password
+// chosen with it, and the one command that finds the code. Nothing about
+// the installation is on it, as on the sign-in page.
+//
+// It replaced a password the installation made itself and printed to the
+// log, which stayed there, working, until somebody changed it (2026-11-20).
+func TestTheSetupPageAsksForTheCodeAndThePassword(t *testing.T) {
+	page := guardedAs(t, "/setup")
+	for _, never := range []string{`<aside class="rail">`, "shown control of", `href="/domains"`, `href="/history"`, `src="/app.js"`, `id="sign-out"`} {
+		if strings.Contains(page, never) {
+			t.Errorf("the setup page carries %q", never)
+		}
+	}
+	for _, want := range []string{
+		`<form class="panel signin-form" id="setup-form" autocomplete="off">`,
+		`id="setup-code"`,
+		`id="setup-password" name="password" required minlength="12"`,
+		`autocomplete="new-password"`,
+		`<script src="/session.js"></script>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the setup page lacks %q", want)
+		}
+	}
 
 	// The one command on it is copied as it reads, by session.js: app.js is
 	// behind the gate, so the Copy the other pages use is not here. The
 	// Copy is an icon inside the command's box, named for a screen reader,
 	// not a button under it that read as one more step (reported 2026-11-18).
 	box := strings.Index(page, `<div class="command-box">`)
-	command := strings.Index(page, `<code id="signin-command">`)
-	button := strings.Index(page, `<button class="command-box-copy" type="button" data-copy="signin-command" aria-label="Copy the command"`)
+	command := strings.Index(page, `<code id="setup-command">`)
+	button := strings.Index(page, `<button class="command-box-copy" type="button" data-copy="setup-command" aria-label="Copy the command"`)
 	if box < 0 || command < box || button < command {
-		t.Error("the sign-in page's command has no Copy inside its box")
-	}
-	if strings.Contains(page, `data-copy="signin-command">Copy</button>`) {
-		t.Error("the sign-in page still has a Copy button under the command")
+		t.Error("the setup page's command has no Copy inside its box")
 	}
 	src, err := assets.ReadFile("assets/session.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), `document.querySelector(".signin-first [data-copy]")`) || !strings.Contains(string(src), "navigator.clipboard.writeText(source.textContent)") {
-		t.Error("session.js does not copy the sign-in page's command")
+	js := string(src)
+	for _, want := range []string{
+		`document.querySelector(".signin-first [data-copy]")`,
+		"copyIcon(copy, source.textContent, source)",
+		`send("POST", "/api/v1/setup", { code: code.value.trim(), password: password.value })`,
+		`window.location.assign("/security")`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("session.js no longer contains %q", want)
+		}
+	}
+}
+
+// Confirming it's you is a page behind the gate, drawn as the sign-in card
+// is: a code where the second factor is on, the password where it is not,
+// and the warning that five wrong answers end the session.
+func TestTheConfirmPageAsksForACodeOrThePassword(t *testing.T) {
+	if !slices.Contains(PublicPaths(), "/setup") || slices.Contains(PublicPaths(), "/confirm") {
+		t.Error("the confirm page is public, or the setup page is not")
+	}
+	page := guardedAs(t, "/confirm")
+	for _, want := range []string{
+		`<form class="panel signin-form" id="confirm-form" autocomplete="off">`,
+		`id="confirm-code-row" hidden`,
+		`id="confirm-password-row" hidden`,
+		`autocomplete="one-time-code"`,
+		`<a class="signin-back" href="/security">`,
+		"Five wrong answers end this session",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the confirm page lacks %q", want)
+		}
+	}
+	if strings.Contains(page, `<aside class="rail">`) {
+		t.Error("the confirm page draws the rail")
+	}
+	src, err := assets.ReadFile("assets/session.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(src)
+	for _, want := range []string{
+		`send("POST", "/api/v1/session/confirm", body)`,
+		`if (code !== "confirm_required") return false;`,
+		`window.location.assign("/confirm");`,
+		`} else if (refusal === "signed_out" || refusal === "sign_in") {`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("session.js no longer contains %q", want)
+		}
 	}
 }
 
@@ -102,7 +181,7 @@ func TestTheSignInPageShowsNothingBehindTheGate(t *testing.T) {
 func TestOnlyTheSignInPageAndWhatItNeedsArePublic(t *testing.T) {
 	got := PublicPaths()
 	sort.Strings(got)
-	want := []string{"/apple-touch-icon.png", "/favicon.ico", "/icon-porch.svg", "/login", "/schibsted-grotesk.woff2", "/session.js", "/style.css", "/theme.js"}
+	want := []string{"/apple-touch-icon.png", "/favicon.ico", "/icon-porch.svg", "/login", "/schibsted-grotesk.woff2", "/session.js", "/setup", "/style.css", "/theme.js"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("public paths are %v, want %v", got, want)
 	}
@@ -132,11 +211,18 @@ func TestThePagesSayWhetherAPasswordIsInFront(t *testing.T) {
 
 	security := flatten(guardedAs(t, "/security"))
 	factor := strings.Index(security, `<h2 class="factor-title" id="factor-title">Two-step sign-in</h2>`)
-	password := strings.Index(security, `<h2 class="factor-title">Password</h2>`)
+	password := strings.Index(security, `<h2 class="factor-title" id="password-title">Password</h2>`)
 	if !strings.Contains(security, "<h1>Security</h1>") || factor < 0 || password < factor {
 		t.Error("the security page does not head two-step sign-in and then the password")
 	}
-	for _, want := range []string{`id="factor-state"`, `id="factor-start"`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-form"`, `id="password-code-row"`} {
+	// A change is confirmed on a page of its own, not by a password and a
+	// code typed again beside each button.
+	for _, never := range []string{`id="password-code-row"`, `id="factor-step"`, `id="factor-password"`} {
+		if strings.Contains(security, never) {
+			t.Errorf("the security page still asks again in place: %q", never)
+		}
+	}
+	for _, want := range []string{`id="factor-state"`, `id="factor-start"`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-form"`, `id="factor-new-codes"`, `id="factor-turn-off"`} {
 		if !strings.Contains(security, want) {
 			t.Errorf("the security page lacks %q", want)
 		}
@@ -191,7 +277,7 @@ func TestTheSessionScriptDrawsTheSecondFactor(t *testing.T) {
 	for _, want := range []string{
 		`ask("GET", "/api/v1/factor")`,
 		`ask("POST", "/api/v1/factor/setup")`,
-		`ask("POST", "/api/v1/factor/on"`,
+		`ask("POST", "/api/v1/factor/on", { code: setupCode.value.trim() })`,
 		`"/api/v1/factor/off" : "/api/v1/factor/recovery"`,
 		`document.createElementNS(svg, "path")`,
 		`text.textContent = c;`,
