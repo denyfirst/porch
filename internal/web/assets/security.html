@@ -28,20 +28,23 @@
     <p class="factor-warning" id="factor-warning" role="alert" hidden></p>
 
     <section class="panel settings factor" id="factor" aria-labelledby="factor-title">
+      <!--
+        On and off with one switch, which says its state in a word beside it
+        as well as in its position. Turning it on opens the setup below and
+        is not on until a code from the app is confirmed; turning it off asks
+        first. Either needs a session signed in, or confirmed, in the last ten
+        minutes.
+      -->
       <div class="settings-head">
         <div>
           <h2 class="factor-title" id="factor-title">Two-step sign-in</h2>
-          <p class="settings-lead">A code from an authenticator app is asked for with the password.</p>
+          <p class="settings-lead" id="factor-lead">A code from an authenticator app is asked for with the password.</p>
         </div>
-        <span class="factor-state" id="factor-state" data-state="unknown">Asking…</span>
-      </div>
-
-      <div class="settings-row" id="factor-off" hidden>
-        <div class="settings-text">
-          <p class="settings-name">Authenticator app</p>
-          <p class="settings-note">Not set up. Sign-in asks for the password alone.</p>
-        </div>
-        <button class="submit settings-button" type="button" id="factor-start">Turn on</button>
+        <label class="update-toggle factor-toggle">
+          <span class="factor-state" id="factor-state" data-state="unknown">Asking…</span>
+          <input type="checkbox" role="switch" id="factor-switch" aria-labelledby="factor-title" aria-describedby="factor-lead" disabled>
+          <span class="update-switch" aria-hidden="true"></span>
+        </label>
       </div>
 
       <form class="factor-setup" id="factor-setup" autocomplete="off" hidden>
@@ -87,23 +90,10 @@
       <div class="factor-on" id="factor-on" hidden>
         <div class="settings-row">
           <div class="settings-text">
-            <p class="settings-name">Authenticator app</p>
-            <p class="settings-note">Listed in the app as denyfirst · porch.</p>
-          </div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-text">
             <p class="settings-name">Recovery codes</p>
             <p class="settings-note" id="factor-left"></p>
           </div>
           <button class="update-check settings-button" type="button" id="factor-new-codes">Generate new codes</button>
-        </div>
-        <div class="settings-row">
-          <div class="settings-text">
-            <p class="settings-name">Turn off two-step sign-in</p>
-            <p class="settings-note">Sign-in will ask for the password alone.</p>
-          </div>
-          <button class="update-check settings-button factor-off-button" type="button" id="factor-turn-off">Turn off</button>
         </div>
       </div>
 
