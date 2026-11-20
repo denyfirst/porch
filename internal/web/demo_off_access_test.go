@@ -55,7 +55,10 @@ func TestEveryPageBehindAPasswordOffersAWayOut(t *testing.T) {
 	for _, path := range paths {
 		page := guardedAs(t, path)
 		foot := strings.Index(page, `<div class="rail-foot">`)
-		out := strings.Index(page, `<button class="rail-signout" id="sign-out" type="button">Sign out</button>`)
+		out := strings.Index(page, `<button class="rail-signout" id="sign-out" type="button">`)
+		if !strings.Contains(page, `<span class="rail-label">Sign out</span></button>`) {
+			t.Errorf("%s: the way out has no label a narrowed rail can hide", path)
+		}
 		if foot < 0 || out < foot || out > strings.Index(page, "</aside>") {
 			t.Errorf("%s: behind a password, no way to sign out at the rail's foot", path)
 		}
@@ -466,7 +469,7 @@ func TestTheSessionScriptRecoversAndSignsOutOnlyOnSuccess(t *testing.T) {
 	if strings.Count(out, `window.location.assign("/login")`) != 1 {
 		t.Error("signing out moves to the sign-in page by another path")
 	}
-	if !strings.Contains(out, `signOut.textContent = "Not signed out. Try again";`) {
+	if !strings.Contains(out, `signOutLabel.textContent = "Not signed out. Try again";`) {
 		t.Error("a failed sign-out is not said")
 	}
 }

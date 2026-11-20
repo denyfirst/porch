@@ -143,6 +143,10 @@
   --measure: 38rem;
   --page: 78rem;
 
+  /* The inside edge of a report's cards: generous on a wide page of the
+     site, the workspace's 24 pixels inside an installation. */
+  --card-pad: clamp(1.1rem, 3vw, 1.9rem);
+
   color-scheme: light;
 }
 
@@ -1300,7 +1304,7 @@ code.flag { white-space: nowrap; }
   gap: 1.4rem 2.6rem;
   align-items: end;
   margin-top: 2rem;
-  padding: clamp(1.2rem, 3vw, 1.9rem) clamp(1.1rem, 3vw, 1.9rem) 0.6rem;
+  padding: var(--card-pad) var(--card-pad) 0.6rem;
 }
 
 .report-lead { min-width: 0; }
@@ -1467,7 +1471,7 @@ a.report-row-title:hover { color: var(--link); }
 
 /* Findings: one list, insecure first, each stamped with its severity and a
    rail in its colour down the row's edge. */
-.report-findings { padding: 0 clamp(1.1rem, 3vw, 1.9rem); }
+.report-findings { padding: 0 var(--card-pad); }
 
 .report-heading {
   display: flex;
@@ -1562,7 +1566,7 @@ a.report-row-title:hover { color: var(--link); }
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  padding: 0.95rem clamp(1.1rem, 3vw, 1.9rem) 0.85rem;
+  padding: 0.95rem var(--card-pad) 0.85rem;
   background: var(--card);
   border-bottom: 1px solid var(--rule);
   border-radius: 14px 14px 0 0;
@@ -1722,7 +1726,7 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
 
 .report-check-top,
 .report-body,
-.report-check-foot { padding-inline: clamp(1.1rem, 3vw, 1.9rem); }
+.report-check-foot { padding-inline: var(--card-pad); }
 
 /* What the verdict is on and what it rests on, under the head. The summary's
    row lost its stamp to the head, so it holds the name alone. */
@@ -5310,7 +5314,15 @@ main > .band:last-child { border-bottom: 0; }
    rather than spaced capitals, which read as shouting at a form's size.
    Every gap is one of 4, 8, 12, 16, 24, 32 and 48 pixels. */
 
+/*
+  One width for every page of the workspace, and one left edge: the page's
+  cards, its report and its footer all start and end on the same two lines.
+  They ended in four places (reported 2026-11-20): Security narrower than
+  the rest, documents lower, the footer's links at the window's edge.
+*/
 .workspace {
+  --content: 60rem;
+  --card-pad: 1.5rem;
   display: grid;
   grid-template-columns: 15.5rem minmax(0, 1fr);
   min-height: 100vh;
@@ -5339,14 +5351,45 @@ main > .band:last-child { border-bottom: 0; }
 /* The button that opens a folded rail: a phone's alone. */
 .rail-menu { display: none; }
 
+/* The button that narrows the rail to its marks: a wide screen's alone. */
+.rail-fold {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--ink-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rail-fold:hover { color: var(--ink); background: var(--raised); }
+.rail-fold[hidden] { display: none; }
+
+.rail-fold svg,
+.rail-signout svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Wide, sign-out is a word; narrowed, the mark beside it. */
+.rail-signout svg { display: none; }
+
 /* The tag sits on the wordmark's middle, not its baseline: boxed, a
    baseline put it above the letters' centre (live test 2026-10-20). */
 .rail-identity {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.625rem;
   margin: 0;
   padding: 0.25rem 0.625rem 0.5rem;
 }
@@ -5470,6 +5513,43 @@ main > .band:last-child { border-bottom: 0; }
 
 .rail-signout:hover { color: var(--ink); border-color: var(--ink-faint); }
 
+/*
+  Narrowed: the rail is its marks alone, 72 pixels wide, each with its name
+  where the pointer rests and in the page for a screen reader; the groups are
+  told apart by a hairline, and the page takes the room. A wide screen's
+  choice: a phone folds its rail into a bar instead.
+*/
+@media (min-width: 46.0625rem) {
+  .workspace { transition: grid-template-columns 0.2s ease; }
+  :root[data-rail="narrow"] .workspace { --content: 73rem; grid-template-columns: 4.5rem minmax(0, 1fr); }
+  :root[data-rail="narrow"] .rail-identity { display: none; }
+  :root[data-rail="narrow"] .rail-bar { justify-content: center; padding-bottom: 0.5rem; }
+  :root[data-rail="narrow"] .rail-caption {
+    height: 1px;
+    margin: 0.75rem 0.5rem;
+    overflow: hidden;
+    color: transparent;
+    background: var(--rule);
+  }
+  :root[data-rail="narrow"] .rail-item { justify-content: center; gap: 0; padding: 0; }
+  :root[data-rail="narrow"] .rail-label,
+  :root[data-rail="narrow"] .rail-out {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :root[data-rail="narrow"] .rail-foot { flex-direction: column; padding: 0.875rem 0 0; }
+  :root[data-rail="narrow"] .rail-signout { display: grid; place-items: center; width: 2.25rem; margin: 0; padding: 0; }
+  :root[data-rail="narrow"] .rail-signout svg { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace { transition: none; }
+}
+
 .workspace-main {
   display: flex;
   flex-direction: column;
@@ -5478,7 +5558,7 @@ main > .band:last-child { border-bottom: 0; }
 
 .workspace main {
   width: 100%;
-  max-width: 67rem;
+  max-width: calc(var(--content) + 7rem);
   margin: 0;
   padding: 3rem 3.5rem 4.5rem;
   flex: 1;
@@ -5487,8 +5567,11 @@ main > .band:last-child { border-bottom: 0; }
 .workspace .colophon {
   max-width: none;
   margin: 0;
-  padding: 1rem 3.5rem;
+  padding: 1.25rem 3.5rem;
 }
+
+.workspace .colophon-row { max-width: var(--content); }
+.workspace-signin .colophon-row { max-width: none; }
 
 .work-heading {
   display: flex;
@@ -5522,7 +5605,7 @@ main > .band:last-child { border-bottom: 0; }
 
 /* A card: one thing to read or to do, set apart from the page. */
 .panel {
-  padding: 1.375rem 1.5rem;
+  padding: 1.5rem;
   background: var(--card);
   border: 1px solid var(--rule);
   border-radius: 14px;
@@ -5657,7 +5740,7 @@ main > .band:last-child { border-bottom: 0; }
 .composer-part {
   min-width: 0;
   margin: 0;
-  padding: 1.375rem 1.5rem 1.5rem;
+  padding: 1.5rem;
   background: var(--card);
   border: 1px solid var(--rule);
   border-radius: 14px;
@@ -5742,7 +5825,7 @@ main > .band:last-child { border-bottom: 0; }
 .check-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.25rem), 1fr));
-  gap: 0.625rem;
+  gap: 0.75rem;
 }
 
 .check-grid .check {
@@ -6016,6 +6099,43 @@ main > .band:last-child { border-bottom: 0; }
    a row, which would otherwise outrank the attribute. */
 .domain-grid[hidden], .domain-empty[hidden], .domain-status[hidden], [data-needs-domain][hidden] { display: none; }
 
+/* Names: its form is a card, as New check's are. */
+.workspace .ask-work .ask-form {
+  margin: 0;
+  padding: var(--card-pad);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+}
+
+/* New check spans the content's width, narrowed rail or not: held to 64rem
+   and centred, it moved right of every other page when the rail narrowed. */
+.workspace .console { max-width: none; margin: 0; }
+
+/* A single check's page starts where every other page does, headed as they
+   are, rather than under the demonstration's display heading. */
+.workspace .ask { padding-top: 0; }
+.workspace .ask > h1 {
+  margin: 0 0 1.5rem;
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+/* A document read inside the workspace starts where every other page does,
+   headed as they are: it had its own room above it and a heading half again
+   as large. */
+.workspace .prose { padding: 0; }
+.workspace .prose h1 {
+  margin: 0 0 0.375rem;
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.workspace .prose .lede { margin-bottom: 1.5rem; font-size: 0.9375rem; }
+
 /* Domains. */
 .domain-form .field-row { max-width: 36rem; }
 .panel.domain-form .work-help { margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--ink-faint); }
@@ -6288,7 +6408,6 @@ main > .band:last-child { border-bottom: 0; }
 .security-panels {
   display: grid;
   gap: 1.5rem;
-  max-width: 55rem;
 }
 
 .security-panels > * { min-width: 0; }
@@ -6301,7 +6420,7 @@ main > .band:last-child { border-bottom: 0; }
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.375rem 1.5rem;
+  padding: 1.25rem 1.5rem;
 }
 
 .settings-head > div,
@@ -6340,8 +6459,8 @@ main > .band:last-child { border-bottom: 0; }
 .panel.settings-split {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-  gap: 1.5rem 2.5rem;
-  padding: 1.375rem 1.5rem 1.5rem;
+  gap: 1.5rem 3rem;
+  padding: 1.5rem;
 }
 
 .settings-split .settings-lead { max-width: 19rem; }
@@ -6519,7 +6638,7 @@ main > .band:last-child { border-bottom: 0; }
 .factor-codes {
   display: grid;
   gap: 1rem;
-  padding: 1.375rem 1.5rem;
+  padding: 1.5rem;
   border-top: 1px solid var(--rule);
 }
 
@@ -6576,6 +6695,9 @@ main > .band:last-child { border-bottom: 0; }
     border-bottom: 1px solid var(--rule);
   }
   .rail-identity { padding: 0 0.5rem; }
+  .rail-fold { display: none; }
+  .workspace { --card-pad: 1rem; }
+  .workspace .colophon-row { max-width: none; }
   .rail-folds .rail-menu {
     display: grid;
     flex: none;
@@ -6721,6 +6843,13 @@ main > .band:last-child { border-bottom: 0; }
   background: transparent;
   border: 1px dashed currentColor;
 }
+
+/* The state in its verdict's colour, the word and the dot, as on the
+   board's rows; the item itself stays Porch's, since it is a way to go
+   somewhere and not a verdict. */
+.report-nav-state.stamp-strong   { color: var(--strong); }
+.report-nav-state.stamp-weak     { color: var(--weak); }
+.report-nav-state.stamp-insecure { color: var(--insecure); }
 
 /* Under the bar the cards' heads stay where they are, and a jump to a card
    lands it below the bar rather than under it. */
