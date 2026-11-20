@@ -76,7 +76,7 @@ func TestTheDomainIsChosenNotTyped(t *testing.T) {
 	if !strings.Contains(console, `<input type="hidden" id="console-target" name="target">`) {
 		t.Error("New check still takes a typed domain")
 	}
-	if !strings.Contains(console, `<legend class="composer-step">01 / Domain</legend>`) || !strings.Contains(console, `id="console-host"`) {
+	if !strings.Contains(console, `<legend class="composer-step"><span class="composer-num">01</span>Domain</legend>`) || !strings.Contains(console, `id="console-host"`) {
 		t.Error("New check does not offer a host under the chosen domain")
 	}
 	for _, needs := range []string{`<fieldset class="composer-part checks" data-needs-domain>`, `<div class="report-empty" id="report-empty" data-needs-domain>`} {

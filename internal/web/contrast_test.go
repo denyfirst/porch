@@ -124,11 +124,12 @@ func TestEveryColourTextIsSetInIsLegible(t *testing.T) {
 		t.Fatalf("only %d text colours were found in the stylesheet, which is too few to be right", len(used))
 	}
 
-	// The surfaces anything can be printed on: the paper, the sunk paper, and
-	// the card a report is drawn on. None is picked per rule here: a colour
-	// that is legible on one and not another is a colour waiting for the day
-	// somebody moves the element.
-	surfaces := []string{"paper", "paper-sunk", "card"}
+	// The surfaces anything can be printed on: the paper, the sunk paper, the
+	// card a report is drawn on, and the workspace's rail, fields and raised
+	// controls. None is picked per rule here: a colour that is legible on one
+	// and not another is a colour waiting for the day somebody moves the
+	// element.
+	surfaces := []string{"paper", "paper-sunk", "card", "side", "input", "raised"}
 
 	for _, scheme := range []string{"light", "dark"} {
 		tokens := tables[scheme]
@@ -187,7 +188,7 @@ func TestTheRuleColourIsNeverUsedForText(t *testing.T) {
 	sheet := stylesheet(t)
 
 	for _, m := range textColourPattern.FindAllStringSubmatch(sheet, -1) {
-		if m[1] == "rule" || m[1] == "edge" {
+		if m[1] == "rule" || m[1] == "edge" || m[1] == "line-strong" {
 			t.Errorf("text is set in --%s, which is a line colour and is below the readable threshold", m[1])
 		}
 	}

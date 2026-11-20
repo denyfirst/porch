@@ -31,12 +31,12 @@ services:
     # record. A service that scans anything is refused beyond loopback, and
     # inside a container every address is beyond loopback.
     #
-    # A password is in front of it. The first start prints one to the log,
-    # once — read it with "sudo docker compose logs porch" — and writes only a sealed key
-    # to /data/access. Docker keeps that log, so sign in and change it under
-    # This installation straight away. What
-    # is kept is encrypted under that key, so a lost password is lost history:
-    # delete /data/access and restart for a new one.
+    # A password is in front of it, chosen on the first page you open with a
+    # setup code the first start prints to the log, once — read it with
+    # sudo docker compose logs porch 2>&1 | grep -A2 "setup code" — which works
+    # once, for fifteen minutes. Only a sealed key is written, to /data/access.
+    # What is kept is encrypted under that key, so a lost password is lost
+    # history: move /data/access aside and restart for a new setup code.
     command:
       - "-listen"
       - "0.0.0.0:8080"

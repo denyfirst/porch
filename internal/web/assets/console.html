@@ -13,9 +13,8 @@
   <div class="work-heading">
     <div>
       <h1>New check</h1>
-      <p>Check a name this installation may reach, with the checks you choose.</p>
+      <p>Choose one of your domains and what to read on it. Every check is on until you untick it.</p>
     </div>
-    <a class="button button-secondary" href="/domains">Domains</a>
   </div>
 
   <!--
@@ -67,7 +66,7 @@
       the form sends.
     -->
     <fieldset class="composer-part">
-      <legend class="composer-step">01 / Domain</legend>
+      <legend class="composer-step"><span class="composer-num">01</span>Domain</legend>
       <div class="check-grid domain-grid" id="domain-choices">
         <a class="check check-elsewhere domain-add" href="/domains">
           <span class="check-name">+ Add a domain</span>
@@ -121,7 +120,7 @@
       never asked.
     -->
     <fieldset class="composer-part checks" data-needs-domain>
-      <legend class="composer-step">02 / Checks</legend>
+      <legend class="composer-step"><span class="composer-num">02</span>Checks</legend>
       <div class="check-grid">
         {{range .Checks}}
         {{if .Page}}
@@ -133,6 +132,7 @@
         {{else}}
         <label class="check">
           <input type="checkbox" name="check" value="{{.ID}}" checked>
+          <span class="check-box" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
           <span class="check-name">{{.Label}}</span>
           <span class="check-says">{{.Says}}</span>
           <span class="check-policy">{{.Policy}}</span>
@@ -177,12 +177,17 @@
           <a href="https://github.com/denyfirst/porch/blob/main/docs/checks.md#mail">How selectors are used.</a>
         </p>
       </div>
-
-      <div class="composer-run">
-        <p>Each check reports on its own, one after another.</p>
-        <button class="submit" type="submit" id="console-submit">Run the checks</button>
-      </div>
     </fieldset>
+
+    <!--
+      The button counts what it will run, and the line beside it names the
+      host it runs on, as the form now stands: both are drawn by app.js from
+      the boxes and the host field, and say "the checks" without it.
+    -->
+    <div class="composer-run" data-needs-domain>
+      <button class="submit" type="submit" id="console-submit">Run the checks</button>
+      <p id="console-run-says">Each check reports on its own, one after another.</p>
+    </div>
   </form>
 
   <div class="console-results" id="console-results" hidden></div>

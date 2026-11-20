@@ -1010,7 +1010,7 @@ web application with an SSRF in it, so where a service listens says nothing
 about who calls it. There is no plain store beside the sealed one. The
 demonstration is public by design and keeps nothing to seal.
 
-*Enforced in:* `internal/access`, `internal/vault`, `cmd/porchd.createAccess`,
+*Enforced in:* `internal/access`, `internal/vault`, `cmd/porchd.prepareAccess`,
 `cmd/porchd.retireSealed`, `cmd/porchd.run`, `cmd/porchd.passwordRequired`,
 `cmd/porchd.removedFlags`, `internal/httpapi.Server.operatorOnly`,
 `internal/web.Configure`, `internal/web.PublicPaths`
@@ -1024,7 +1024,13 @@ demonstration is public by design and keeps nothing to seal.
 `TestOnlyThePasswordOpensTheKey`, `TestThePasswordAndTheKeyAreNotOnDisk`,
 `TestAnAlteredFileDoesNotOpen`, `TestAnAccessFileIsNeverReplacedByCreate`,
 `TestChangingThePasswordKeepsTheKey`, `TestTheWorkFactorIsOWASPs`,
-`TestAMissingAccessFileIsCreatedAndItsPasswordSaidOnce`,
+`TestAMissingAccessFileWaitsForASetupCodeSaidOnce`,
+`TestTheSetupCodeSetsTheFirstPasswordOnce`, `TestASetupCodeExpires`,
+`TestAnInstallationWithAPasswordIsNotSetUpAgain`,
+`TestAnUnwritableFolderIsSaidAtStart`,
+`TestTheSetupPageAsksForTheCodeAndThePassword`,
+`TestTheConfirmPageAsksForACodeOrThePassword`,
+`TestConfirmingMakesASessionFreshAndFiveWrongAnswersEndIt`,
 `TestTheGateIsInFrontOfEverything`,
 `TestTheSignInPageShowsNothingBehindTheGate`,
 `TestOnlyTheSignInPageAndWhatItNeedsArePublic`,

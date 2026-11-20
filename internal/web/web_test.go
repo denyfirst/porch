@@ -59,11 +59,13 @@ func TestEveryPageCarriesTheSameShell(t *testing.T) {
 	for path := range pages {
 		body := get(t, path).Body.String()
 
-		// The site's masthead on the demonstration; the workspace's rail and top
-		// bar on an installation, which is a tool and not a site.
+		// The site's masthead on the demonstration; the workspace's rail on
+		// an installation, which is a tool and not a site. There is no bar
+		// across the top: the rail says where you are, and the page's
+		// heading what it is (redrawn 2026-11-20).
 		shell := []string{`class="masthead"`}
 		if !demo.Enabled {
-			shell = []string{`<aside class="rail">`, `<header class="topbar">`, `<body class="workspace">`}
+			shell = []string{`<aside class="rail">`, `<body class="workspace">`}
 		}
 		// The footer's links are each site's own; the footer test checks them.
 		for _, required := range append(shell,

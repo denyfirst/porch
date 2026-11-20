@@ -17,8 +17,8 @@
 //     stops. A stolen disk, or a backup of it, holds only the sealed key and
 //     data encrypted under it.
 //   - A forgotten password cannot be recovered, by anyone. That is what the
-//     encryption is for. Deleting the access file and restarting sets a new
-//     password and a new key, and what was kept under the old one is
+//     encryption is for. Deleting the access file and restarting asks for a
+//     new password, under a new key, and what was kept under the old one is
 //     unreadable from then on.
 //
 // Everything here is the standard library: crypto/pbkdf2, crypto/aes,
@@ -31,13 +31,11 @@ import (
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // Iterations is the PBKDF2 work factor: OWASP's figure for PBKDF2-SHA256.
@@ -78,23 +76,6 @@ type sealed struct {
 	Salt       []byte `json:"salt"`
 	Nonce      []byte `json:"nonce"`
 	Key        []byte `json:"key"`
-}
-
-// GeneratePassword returns a password with 130 bits from the system's random
-// source, in lowercase groups a person can read out: xxxxx-xxxxx-...
-func GeneratePassword() (string, error) {
-	raw := make([]byte, 20)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("a password could not be generated: %w", err)
-	}
-	text := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
-	var groups []string
-	for len(text) > 0 {
-		n := min(5, len(text))
-		groups = append(groups, text[:n])
-		text = text[n:]
-	}
-	return strings.Join(groups, "-"), nil
 }
 
 // Create writes a new access file sealing a new data key under password. It

@@ -18,7 +18,7 @@ func TestTheInstallationsPagesLineUp(t *testing.T) {
 	css := asset(t, "assets/style.css")
 	for want, why := range map[string]string{
 		".composer-field {\n  width: 100%;\n  max-width: var(--measure);": "the domain field ends short of the selector field under it",
-		".composer .field { background: var(--paper); }":                  "the composer's fields sit on different grounds",
+		".composer .field { background: var(--input); }":                  "the composer's fields sit on different grounds",
 		"code.flag { white-space: nowrap; }":                              "a flag may break at its leading hyphen",
 		".signin-status:empty { position: absolute; }":                    "an empty status line holds room under the sign-in button",
 		".panel p:not(:has(~ :not([hidden]))) { margin-bottom: 0; }":      "a panel's last shown paragraph keeps its margin when a hidden element follows",

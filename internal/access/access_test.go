@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -154,24 +153,6 @@ func TestChangingThePasswordKeepsTheKey(t *testing.T) {
 	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".access-*"))
 	if len(leftovers) != 0 {
 		t.Errorf("a change left temporary files behind: %v", leftovers)
-	}
-}
-
-// A generated password is long, random and readable aloud.
-func TestAGeneratedPasswordIsLongAndReadable(t *testing.T) {
-	a, err := GeneratePassword()
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, _ := GeneratePassword()
-	if a == b {
-		t.Error("two generated passwords are the same")
-	}
-	if !regexp.MustCompile(`^[a-z2-7]{5}(-[a-z2-7]{5}){5}(-[a-z2-7]{2})$`).MatchString(a) {
-		t.Errorf("a generated password is not groups of the base32 alphabet: %q", a)
-	}
-	if err := checkLength(a); err != nil {
-		t.Errorf("a generated password is refused: %v", err)
 	}
 }
 
