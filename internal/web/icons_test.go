@@ -25,8 +25,8 @@ func TestTheRailsMarksAreDrawn(t *testing.T) {
 	if strings.ContainsAny(markup, "▦◎⁙◷⚙≡") {
 		t.Error("the rail still marks an entry with a character the reader's fonts draw")
 	}
-	if n := strings.Count(markup, `<svg class="rail-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">`); n != 7 {
-		t.Errorf("the rail draws %d marks, and it has seven entries", n)
+	if n := strings.Count(markup, `<svg class="rail-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">`); n != 8 {
+		t.Errorf("the rail draws %d marks, and it has eight entries", n)
 	}
 	if rule := cssRule(t, stylesheet(t), ".rail-glyph"); !strings.Contains(rule, "stroke: currentColor") || !strings.Contains(rule, "fill: none") {
 		t.Errorf("the rail's marks do not take their colour from the entry:\n%s", rule)

@@ -353,11 +353,19 @@ There is one password, for whoever runs the installation.
 
 ### Two-step sign-in
 
-Under **Security**, **Turn on** shows a code to scan
-with an authenticator app (Aegis, 2FAS, KeePassXC and the like, any app for
-RFC 6238 codes). Confirm it with a code the app shows; ten recovery codes are
-shown once. From then on a sign-in asks for the password
-and a code from the app, or one of the recovery codes.
+Under **Security**, turning on the **Two-step sign-in** switch shows a code to
+scan with an authenticator app (Aegis, 2FAS, KeePassXC and the like, any app
+for RFC 6238 codes). Confirm it with a code the app shows; ten recovery codes
+are shown once. From then on a sign-in asks for the password
+and a code from the app, or one of the recovery codes. Turning the switch off
+asks first, then removes the key and the codes.
+
+The entry appears in the app as `denyfirst · porch`, and nothing in it names
+the server. No picture is sent with it: apps that show a logo choose one from
+their own list by the issuer's name, and a logo fetched from an address would
+tell that address the installation exists. An entry added before 0.35.1 was
+listed under the issuer `Porch`, and some apps drew another company's logo
+beside it; turning the switch off and on again lists it under `denyfirst`.
 
 - **What it protects.** A password that is guessed, phished, reused or read
   over someone's shoulder no longer signs in by itself. That matters most for

@@ -171,6 +171,37 @@ func TestNothingIsLostOffTheEdgeOnPaper(t *testing.T) {
 			t.Errorf("on paper %s is not given a share of the sheet", want)
 		}
 	}
+
+	// And no edge is shaded as though the sheet scrolled. Every rule that
+	// shades a scrolling container is undone by name in the last print block,
+	// which nothing after it can override: on 2026-11-20 a rule for the
+	// report's own containers, more particular than the one undone here,
+	// printed a bar down both sides of every cipher table.
+	last := sheet[strings.LastIndex(sheet, "@media print {"):]
+	undone := map[string]bool{}
+	rule := regexp.MustCompile(`(?m)^\s*([^{}@\n]*\.table-scroll[^{}\n]*)\{([^}]*)\}`)
+	for _, m := range rule.FindAllStringSubmatch(last, -1) {
+		if strings.Contains(m[2], "background: none") {
+			for _, sel := range strings.Split(m[1], ",") {
+				undone[strings.TrimSpace(sel)] = true
+			}
+		}
+	}
+	shaded := 0
+	for _, m := range rule.FindAllStringSubmatch(sheet, -1) {
+		if !strings.Contains(m[2], "background") || strings.Contains(m[2], "background: none") {
+			continue
+		}
+		for _, sel := range strings.Split(m[1], ",") {
+			shaded++
+			if sel = strings.TrimSpace(sel); !undone[sel] {
+				t.Errorf("%s shades its edges, and the last print block does not undo it, so paper prints the shading", sel)
+			}
+		}
+	}
+	if shaded < 2 {
+		t.Fatalf("found %d shaded containers, expected the general one and the report's; read this test against style.css", shaded)
+	}
 }
 
 // The stylesheet is a stylesheet, not a note about how to edit one.

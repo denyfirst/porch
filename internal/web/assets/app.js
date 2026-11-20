@@ -453,7 +453,7 @@ function reportFilename(data) {
   // The TLS report names a host and port; the web report names a bare host.
   // One filename builder, because a reader saving one of each should get two
   // files named the same way.
-  const target = String((data && (data.target || data.host)) || "report").toLowerCase();
+  const target = String((data && (data.target || data.host || data.domain)) || "report").toLowerCase();
   const safe = target
     .replace(/[^a-z0-9.-]+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "")
@@ -489,15 +489,9 @@ function summary(data) {
     meta.push("measured " + producedAt(data.producedAt));
   }
   if (meta.length) left.appendChild(el("p", "summary-meta", meta.join("  ·  ")));
-  // Not on the demonstration: a report there is about our own domain, and a
-  // visitor has no use for a copy of it. A copy of your own is where a
-  // download matters, because nothing is kept for you.
-  if (!DEMO_SITE) {
-    const actions = el("p", "summary-actions");
-    actions.appendChild(downloadLink(data));
-    actions.appendChild(printButton());
-    left.appendChild(actions);
-  }
+  // How to take the report away is said once, under the whole report, by
+  // reportKeep: under every check it was said four times on one page
+  // (reported 2026-11-20).
 
   head.appendChild(left);
 
@@ -1104,10 +1098,12 @@ const NOTE_SECTIONS = [
     kind: "unsettled",
     title: "Not established for this host",
     box: "notes-section notes-limits",
-    // Open. What a scan could not establish is the half of a report a reader
-    // has to see to know what the rest is worth (R4), and it is short: a
-    // sentence for each thing, not the reasoning that folds above.
-    open: true,
+    // Folded, as everything a report folds is (asked for on 2026-11-20).
+    // What a scan could not establish is the half of a report a reader has
+    // to see to know what the rest is worth (R4), so it is never out of
+    // sight: its count is on the summary of the fold, the coverage line says
+    // how much was reached, and the cover counts it as "not established".
+    open: false,
     one: "1 limit",
     many: (n) => n + " limits",
   },
@@ -1154,9 +1150,10 @@ function notes(list, verdict, methodPage) {
     // an unstyled class is exactly what it exists to catch. The three sections
     // differ by their words and by which of them opens, not by their colour.
     const box = el("details", section.box);
-    // An ungraded verdict means something was not reached, so the reasons are
-    // opened rather than left behind a summary.
-    box.open = section.open || verdict === "ungraded";
+    // Folded, with the count on its summary; an ungraded report says why on
+    // its face, under the verdict (reportShow), so nothing has to be opened
+    // to learn that.
+    box.open = section.open;
 
     const head = el("summary", "notes-head");
     head.appendChild(el("span", "notes-title", section.title));
@@ -2114,7 +2111,7 @@ function domainOnly(target) {
   return at < 0 ? target : target.slice(at + 1);
 }
 
-async function check(target, spec, extra) {
+async function check(target, spec, extra, signal) {
   spec = spec || CHECK;
   target = domainOnly(target);
   // Addressed under the check it runs, like the page it is called from.
@@ -2132,6 +2129,9 @@ async function check(target, spec, extra) {
     // of anything the page links to afterwards.
     referrerPolicy: "no-referrer",
     cache: "no-store",
+    // A run stopped on New check stops here: the request is dropped, and the
+    // service, which reads the same context, stops the scan behind it.
+    signal: signal,
   });
 
   // A session that ended while the page was open: the gate says so, and the
@@ -2478,7 +2478,7 @@ function reportFrame(container, target, names, chosen, opts) {
   const cover = el("header", "report-cover");
   frame.cover = cover;
   const lead = el("div", "report-lead");
-  lead.appendChild(el("p", "report-eyebrow", "Porch report"));
+  lead.appendChild(el("p", "report-eyebrow", opts.last ? "Your last check" : "Porch report"));
   lead.appendChild(el("h2", "report-domain", target));
   lead.appendChild(el("p", "report-meta", opts.when
     ? "Kept " + opts.when
@@ -2620,8 +2620,45 @@ function reportFrame(container, target, names, chosen, opts) {
 
   if (nav) reportCurrent(frame, frame.entries[0]);
 
+  // How to take the whole report away, once, under it. Not on the
+  // demonstration: a report there is about our own domain, and a visitor has
+  // no use for a copy of it. A copy of your own is where a download
+  // matters.
+  if (!DEMO_SITE) {
+    frame.keep = el("div", "report-keep");
+    frame.keep.hidden = true;
+    container.appendChild(frame.keep);
+  }
+  frame.target = target;
+
   reportTally(frame);
   return frame;
+}
+
+// reportKeep offers the report as it stands: one file of JSON with every
+// check that answered, and the browser's own print dialogue, which is where a
+// PDF comes from. A report of one check is saved as that check's report, as
+// it always was; of several, as one object that names each.
+function reportKeep(frame) {
+  if (!frame.keep) return;
+  const answered = frame.entries.filter((e) => e.data);
+  clear(frame.keep);
+  frame.keep.hidden = answered.length === 0;
+  if (!answered.length) return;
+  const data = answered.length === 1 && frame.entries.length === 1
+    ? answered[0].data
+    : {
+        domain: frame.target,
+        checks: Object.fromEntries(answered.map((e) => [e.name, e.data])),
+      };
+  const say = el("div", "report-keep-say");
+  say.appendChild(el("p", "report-keep-title", "Keep this report"));
+  say.appendChild(el("p", "report-keep-note", "Made in this browser from what is on the page: nothing is asked again, and nothing is sent."));
+  frame.keep.appendChild(say);
+  const actions = el("div", "report-keep-actions");
+  actions.appendChild(downloadLink(data));
+  actions.appendChild(printButton());
+  frame.keep.appendChild(actions);
 }
 
 // reportCurrent marks the check whose card is being read, in the bar.
@@ -2716,6 +2753,10 @@ async function reportRun(frame, entry, run) {
   try {
     reportShow(frame, entry, await run());
   } catch (err) {
+    if (err && err.name === "AbortError") {
+      reportStopped(frame, entry);
+      return;
+    }
     const hint = err.status === 429
       ? "Wait a moment before trying again. Each host has its own budget, whoever asks."
       : err.status === 503
@@ -2731,6 +2772,20 @@ async function reportRun(frame, entry, run) {
     entry.done = true;
     reportTally(frame);
   }
+}
+
+// reportStopped says a check was stopped before it answered, or before it
+// began, on its card, its row and its item in the bar. Nothing of it is kept.
+function reportStopped(frame, entry) {
+  clear(entry.body);
+  entry.body.appendChild(el("p", "working", "Stopped before it finished. Nothing of it was kept."));
+  entry.state.textContent = "stopped";
+  entry.state.className = "stamp stamp-small stamp-pending";
+  reportNavSays(entry);
+  entry.mark.textContent = "stopped";
+  entry.count.textContent = "stopped";
+  entry.done = true;
+  reportTally(frame);
 }
 
 // reportShow draws one check's report into its section.
@@ -2770,6 +2825,7 @@ function reportShow(frame, entry, data) {
   entry.state.textContent = data.verdict ? verdict : "not graded";
   entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);
   reportNavSays(entry);
+  reportKeep(frame);
   if (data.policy) entry.policy.textContent = data.policy;
 
   // A check that reached nothing broke no rule, and saying only that reads
@@ -3625,9 +3681,29 @@ async function proven(target) {
   return waitForProof(target, answer);
 }
 
+// The run on New check, while one is on: what stops it, and the parts of
+// the form that wait for it. A second run cannot start under the first, and
+// another domain cannot be chosen while one is being checked (asked for on
+// 2026-11-20); the button that started it is the one that stops it.
+let consoleRun = null;
+
+function consoleLock(on) {
+  for (const part of consoleForm.querySelectorAll("fieldset.composer-part")) part.disabled = on;
+  consoleForm.classList.toggle("composer-running", on);
+  consoleButton.classList.toggle("submit-stop", on);
+}
+
 if (consoleForm) {
   consoleForm.addEventListener("submit", async event => {
     event.preventDefault();
+
+    // Pressed while a run is on, the button stops it: the check being made
+    // is dropped, and the ones after it are not begun.
+    if (consoleRun) {
+      consoleRun.abort();
+      consoleButton.textContent = "Stopping";
+      return;
+    }
 
     const target = consoleTarget.value.trim();
     if (!target) {
@@ -3649,29 +3725,101 @@ if (consoleForm) {
       return;
     }
 
-    consoleButton.disabled = true;
-    const label = consoleButton.textContent;
-    consoleButton.textContent = "Checking";
+    const run = new AbortController();
+    consoleRun = run;
+    consoleLock(true);
+    consoleButton.textContent = "Stop";
+    consoleButton.setAttribute("aria-label", "Stop the checks");
 
     clear(consoleResults);
     consoleResults.hidden = false;
 
     try {
       if (!(await proven(target))) return;
+      if (run.signal.aborted) return;
 
       // Awaited one at a time on purpose. See the note above.
       const frame = reportFrame(consoleResults, target, CHECK_ORDER, chosen);
-      for (const entry of frame.entries) {
-        await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name)));
-        await reportSince(entry, target);
+      const says = document.getElementById("console-run-says");
+      for (const [i, entry] of frame.entries.entries()) {
+        if (run.signal.aborted) {
+          reportStopped(frame, entry);
+          continue;
+        }
+        if (says) {
+          clear(says);
+          says.appendChild(document.createTextNode("Checking "));
+          says.appendChild(el("strong", null, entry.spec.label));
+          says.appendChild(document.createTextNode(" on "));
+          says.appendChild(el("strong", null, target));
+          says.appendChild(document.createTextNode(", " + (i + 1) + " of " + frame.entries.length + "."));
+        }
+        await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name), run.signal));
+        if (!run.signal.aborted) await reportSince(entry, target);
       }
     } finally {
+      consoleRun = null;
+      consoleLock(false);
+      consoleButton.removeAttribute("aria-label");
       consoleButton.disabled = false;
-      consoleButton.textContent = label;
       consoleRunSays();
     }
   });
 }
+
+/*
+  The last check, on New check, read back from History.
+
+  A check run here is kept whole under History, encrypted under the key the
+  password seals, and that is where New check finds it when it is opened
+  again: moving to another page and back no longer loses it (asked for on
+  2026-11-20). Nothing is kept in the browser for it. The page asks this
+  installation, behind the password, as History does, so it is there for as
+  long as History keeps it, and gone with it.
+
+  The last run is the newest report and the ones kept just before it for the
+  same name, one per check. A run started meanwhile wins: nothing is drawn
+  over it.
+*/
+async function consoleLast() {
+  if (DEMO_SITE || !consoleForm || !consoleResults) return;
+  const idle = () => !consoleRun && consoleResults.hidden;
+  let list;
+  try {
+    list = await historyRequest("GET", "/api/v1/history");
+  } catch {
+    return;
+  }
+  const kept = ((list && list.entries) || [])
+    .filter((e) => e && typeof e.id === "string" && CHECKS[e.check] && typeof e.target === "string")
+    .sort((a, b) => (a.date === b.date ? b.seq - a.seq : (b.date > a.date ? 1 : -1)));
+  if (!kept.length) return;
+  const target = kept[0].target;
+  const run = [];
+  for (const e of kept) {
+    if (e.target !== target || run.some((r) => r.check === e.check)) break;
+    run.push(e);
+  }
+  const records = [];
+  for (const e of run) {
+    if (!idle()) return;
+    try {
+      const record = await historyRequest("GET", "/api/v1/history/" + encodeURIComponent(e.id));
+      if (record && record.report && typeof record.report === "object") records.push(record);
+    } catch {
+      // One that cannot be read is left out; the rest are still the run.
+    }
+  }
+  if (!records.length || !idle()) return;
+  const checks = CHECK_ORDER.filter((name) => records.some((r) => r.check === name));
+  const frame = reportFrame(consoleResults, target, CHECK_ORDER, checks, { when: records[0].date, last: true });
+  for (const entry of frame.entries) {
+    const record = records.find((r) => r.check === entry.name);
+    if (record) reportShow(frame, entry, record.report);
+  }
+}
+
+if (consoleForm) consoleLast();
 
 /*
   What changed since the report kept before this one, under a check that has

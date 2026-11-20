@@ -33,7 +33,7 @@ func TestTheConsoleAsksForProofBeforeItRuns(t *testing.T) {
 		t.Error("the script does not ask /api/v1/verify")
 	}
 	proof := strings.Index(src, "if (!(await proven(target))) return;")
-	run := strings.Index(src, "await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name)));")
+	run := strings.Index(src, "await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name), run.signal));")
 	if proof < 0 || run < 0 || proof > run {
 		t.Error("the checks can run before proof is asked for")
 	}

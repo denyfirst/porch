@@ -8,84 +8,39 @@ import (
 	"github.com/denyfirst/porch/internal/policy"
 )
 
-// The limits of a scan open by default in one case and only one.
+// Everything a report folds starts folded, the limits included (asked for on
+// 2026-11-20: "all of them closed; whoever wants to, reads them").
 //
-// A report that graded nothing has nothing else on the page: no findings, no
-// cipher table, no certificate. There the limits are not a footnote, they are
-// the finding, and folding them would leave a reader looking at an empty
-// report with no explanation of why it is empty.
-//
-// Every other verdict has a page full of content, and the limits sit beside it
-// as the caveat they are. That includes an insecure verdict, which was once
-// treated as a second exception on no stated grounds — the comment in the
-// script justified the ungraded case and was silent about the other. A default
-// that opens on bad news trains a reader to close the block without reading
-// it, which produces the same silence the block exists to prevent, by a longer
-// route.
-//
-// The count is in the summary line either way, so nothing is hidden by
-// folding. This is a shape check, because the page is assembled in the
-// browser.
-func TestLimitsOpenOnlyWhenTheyAreTheWholeReport(t *testing.T) {
+// The limits opened for an ungraded report, and before that opened always,
+// on the ground that what a scan could not establish is the half of a report
+// that says what the rest is worth (R4). Folded, it is still never out of
+// sight: the summary of the fold carries the count, the coverage line under
+// the verdict says how much was reached, the cover counts every limit as
+// "not established", and an ungraded report says on its face, in words, that
+// nothing could be graded and why. What folds is the list, not the fact.
+func TestEveryFoldStartsFoldedAndSaysWhatItHolds(t *testing.T) {
 	script, err := assets.ReadFile("assets/app.js")
 	if err != nil {
 		t.Fatalf("reading the script: %v", err)
 	}
 	source := string(script)
 
-	// Read inside the renderer rather than across the file. The summary now
-	// tests the verdict too, to decide whether to print what a weak or
-	// insecure one means, and a check over the whole source read that as this
-	// block opening for insecure again.
 	body := source
 	if i := strings.Index(body, "function notes(list, verdict, methodPage)"); i >= 0 {
 		body = body[i:]
-		// To the end of the renderer and no further: the report's tally,
-		// later in the file, counts insecure findings, and that is not this
-		// block opening for them.
 		if end := strings.Index(body, "\n}\n"); end >= 0 {
 			body = body[:end]
 		}
 	} else {
 		t.Fatal("the script has no notes renderer")
 	}
-
-	if !strings.Contains(body, `verdict === "ungraded"`) {
-		t.Error("the limits block does not open for an ungraded report, where they are the whole story")
+	if !strings.Contains(body, "box.open = section.open;") || strings.Contains(body, `verdict === "ungraded"`) {
+		t.Error("a fold opens itself for some verdict")
 	}
-
-	if strings.Contains(body, `verdict === "insecure"`) {
-		t.Error("the limits block still opens for an insecure verdict, which has a page of findings beside it")
+	if !strings.Contains(body, `chosen.length === 1 ? section.one : section.many(chosen.length)`) {
+		t.Error("a fold's summary no longer says how much it holds")
 	}
-
-	// The count has to stay visible whether the block is open or shut, or
-	// folding the detail becomes hiding it.
-	for _, required := range []string{`"1 limit"`, `" limits"`} {
-		if !strings.Contains(source, required) {
-			t.Errorf("the summary line does not carry the count %s", required)
-		}
-	}
-
-	// Both fold, and what makes that safe is what is in them.
-	//
-	// Observed opened by default at first, on the reasoning that a reader who
-	// never opens it never sees a post-quantum exchange that passed. Read on
-	// the live site, the block ran to five paragraphs and stood between the
-	// verdict and the evidence — and every fact in it was already on the face
-	// of the report: the key exchange line, the revocation row, the issuance
-	// row, the certificate's names and timestamps. What folds is the
-	// reasoning, which is the same on every report.
-	//
-	// What holds, above the tables, is what now carries the affirmative
-	// voice, and it is six phrases rather than five paragraphs.
-	//
-	// The counts stay in the summaries either way, so folding is not hiding.
-	//
-	// What could not be established opens, since 2026-10-11. It is the half
-	// of a report that says what the rest is worth (R4), and it is short; a
-	// reader asked to see it without opening anything.
-	opens := map[string]bool{"observed": false, "unsettled": true}
-	for kind, want := range opens {
+	for _, kind := range []string{"observed", "unsettled"} {
 		i := strings.Index(source, `kind: "`+kind+`"`)
 		if i < 0 {
 			t.Errorf("the script has no %q section", kind)
@@ -95,9 +50,13 @@ func TestLimitsOpenOnlyWhenTheyAreTheWholeReport(t *testing.T) {
 		if end := strings.Index(section, "},"); end >= 0 {
 			section = section[:end]
 		}
-		if got := strings.Contains(section, "open: true"); got != want {
-			t.Errorf("the %q section opens by default = %v, want %v", kind, got, want)
+		if !strings.Contains(section, "open: false") {
+			t.Errorf("the %q section opens by default", kind)
 		}
+	}
+	// And an ungraded report says so on its face, without a fold opened.
+	if !strings.Contains(functionBody(t, source, "reportShow"), "Nothing was measured, so nothing could be graded.") {
+		t.Error("an ungraded report no longer says on its face why it is ungraded")
 	}
 }
 
