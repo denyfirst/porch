@@ -104,7 +104,7 @@ the compose file is the only thing a server has to check.
    ```sh
    mkdir -p porch-data && sudo chown 65534:65534 porch-data
    sudo docker compose up -d
-   sudo docker compose logs porch 2>&1 | grep -A2 "password is"
+   sudo docker compose logs porch 2>&1 | grep -A2 "setup code"
    ```
 
    The pull from `ghcr.io` is anonymous unless root on this machine ran
@@ -112,11 +112,13 @@ the compose file is the only thing a server has to check.
    `sudo docker logout ghcr.io` first if that matters.
 
    The first start writes the verification secret to `porch-data/secret`.
-   Keep it: every domain's record is derived from it. It also prints the
-   installation's password once, in the log. Docker keeps that log until the
-   container is recreated, so change the password straight away.
+   Keep it: every domain's record is derived from it. It also prints a
+   **setup code** once, in the log. No password exists yet: you choose it
+   with the code on the first page you open. The code works once, for
+   fifteen minutes; restart the service for a new one. Docker keeps the log,
+   but a code that was used or has expired opens nothing.
 
-   The password is on standard error, which Docker keeps apart from standard
+   The code is on standard error, which Docker keeps apart from standard
    output: without `2>&1`, `grep` sees nothing and the whole log goes past it
    to the screen. If the last line prints nothing, the service is still
    starting; run it again a moment later.
@@ -140,9 +142,11 @@ the compose file is the only thing a server has to check.
    sudo sshd -t && sudo systemctl reload ssh
    ```
 
-5. Sign in with the password from the log and change it under **Security**,
-   where two-step sign-in is turned on as well. Every page and the API are
-   behind it.
+5. The first page is **Set up porch**. Enter the setup code and choose the
+   password, at least twelve characters; you are signed in, on **Security**,
+   where two-step sign-in is turned on. Every page and the API are behind the
+   password. Until it is chosen, every address shows the setup page and
+   nothing else, and only somebody who can read the server's log has the code.
 
 6. Add a domain under **Domains**. The page shows a TXT record,
    `_porch-challenge.<domain>`, to publish at your DNS provider. Once it is
@@ -338,9 +342,10 @@ There is one password, for whoever runs the installation.
 - **Domains** are kept in `porch-data/domains.sealed`: the names and the date
   each was added. Whether each is proven is asked again every time.
 - **A lost password cannot be recovered**, by anyone. Move
-  `porch-data/access` aside and restart: a new password is printed, and the
-  old history and domain list are moved to `porch-data/retired-<date>/`, never
-  deleted. They open only with the old access file and its password.
+  `porch-data/access` aside and restart: a new setup code is printed, and the
+  old history, domain list and second factor are moved to
+  `porch-data/retired-<date>/`, never deleted. They open only with the old
+  access file and its password.
 - **A session** is a cookie no script can read and no other site can send. It
   ends on sign-out, after twelve hours, or on restart; changing the password
   ends every other session. Guesses are slowed per address. A password sent in
@@ -350,8 +355,8 @@ There is one password, for whoever runs the installation.
 
 Under **Security**, **Turn on** shows a code to scan
 with an authenticator app (Aegis, 2FAS, KeePassXC and the like, any app for
-RFC 6238 codes). Confirm it with a code the app shows and the password; ten
-recovery codes are shown once. From then on a sign-in asks for the password
+RFC 6238 codes). Confirm it with a code the app shows; ten recovery codes are
+shown once. From then on a sign-in asks for the password
 and a code from the app, or one of the recovery codes.
 
 - **What it protects.** A password that is guessed, phished, reused or read
@@ -373,9 +378,13 @@ and a code from the app, or one of the recovery codes.
   the page does not say which was right. How many wrong codes came with the
   right password is shown under Security after the next sign-in: if
   they were not yours, the password has leaked, so change it.
-- **Changing it.** Turning it off, making new recovery codes and changing the
-  password each ask for the password and a code, and turning it on or off
-  ends every other session.
+- **Changing it.** Turning it on or off, making new recovery codes and
+  changing the password need a session signed in, or confirmed, in the last
+  ten minutes. Past that, **Confirm it's you** asks for a code from the app
+  or a recovery code (the password, while two-step sign-in is off), and the
+  next ten minutes need nothing more. Five wrong answers end the session.
+  Changing the password also asks for the current one. Turning two-step
+  sign-in on or off, and changing the password, end every other session.
 - **A lost phone.** Sign in with a recovery code, then turn it off and on
   again with the new phone. With no recovery code left, on the server, in the
   installation's directory:

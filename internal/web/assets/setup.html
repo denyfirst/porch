@@ -1,0 +1,60 @@
+<section class="signin">
+
+  <!--
+    The first visit: what an installation with no password shows on every
+    address until one is chosen.
+
+    The setup code is printed once in the server's log when porchd starts,
+    works once, for fifteen minutes, and is held only as a hash in memory.
+    Only somebody who can read that log has it, so reaching this page first
+    is not enough to take the installation. Nothing about the installation is
+    on the page, as on the sign-in page.
+
+    porchd writes the code to standard error, which Docker keeps apart, so
+    the command joins the two before grep reads them: without 2>&1 grep sees
+    nothing and the whole log goes past it to the screen.
+  -->
+  <p class="signin-mark"><span class="wordmark">porch<span class="wordmark-porch-stop">.</span></span></p>
+
+  <form class="panel signin-form" id="setup-form" autocomplete="off">
+    <div class="signin-head">
+      <div>
+        <h1>Set up porch</h1>
+        <p class="signin-sub">Choose the password that signs in to this installation.</p>
+      </div>
+      <span class="rail-tag">Self-host</span>
+    </div>
+    <div class="signin-field">
+      <label class="field-label" for="setup-code">Setup code</label>
+      <input class="field code-field" type="text" id="setup-code" name="code" required autofocus
+        autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="40"
+        aria-describedby="setup-code-help">
+      <p class="field-hint" id="setup-code-help">Printed once in the server's log. It works once, within 15 minutes of starting.</p>
+    </div>
+    <div class="signin-field">
+      <label class="field-label" for="setup-password">New password</label>
+      <input class="field" type="password" id="setup-password" name="password" required minlength="12"
+        autocomplete="new-password" aria-describedby="setup-password-help">
+      <p class="field-hint" id="setup-password-help">At least 12 characters. A lost password cannot be recovered.</p>
+    </div>
+    <div class="signin-field">
+      <label class="field-label" for="setup-again">Confirm password</label>
+      <input class="field" type="password" id="setup-again" required minlength="12" autocomplete="new-password">
+    </div>
+    <button class="submit" type="submit" id="setup-submit">Create password</button>
+    <p class="signin-status" id="setup-status" role="status"></p>
+  </form>
+
+  <div class="signin-first">
+    <p>Where is the setup code? On the server:</p>
+    <div class="command-box">
+      <pre class="work-code shell"><code id="setup-command"><span class="sh-cmd">cd</span> ~/porch <span class="sh-op">&amp;&amp;</span> <span class="sh-cmd">sudo</span> <span class="sh-cmd">docker</span> compose logs porch <span class="sh-op">2&gt;&amp;1</span> <span class="sh-op">|</span> <span class="sh-cmd">grep</span> <span class="sh-flag">-A2</span> <span class="sh-str">"setup code"</span></code></pre>
+      <button class="command-box-copy" type="button" data-copy="setup-command" aria-label="Copy the command" title="Copy">
+        <svg class="copy-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>
+        <svg class="copied-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      </button>
+    </div>
+    <p>Installed somewhere other than <code>~/porch</code>? Change into that folder first. An expired code? Restart porch and a new one is printed.</p>
+  </div>
+
+</section>

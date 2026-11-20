@@ -148,7 +148,7 @@ func (f *factorClock) turnOn(t *testing.T, session *http.Cookie) (string, []stri
 			t.Fatal("the code to scan is not a square of modules")
 		}
 	}
-	body, _ := json.Marshal(passwordRequest{Password: testPassword, Code: f.code(t, seed)})
+	body, _ := json.Marshal(passwordRequest{Code: f.code(t, seed)})
 	w = f.send(http.MethodPost, "/api/v1/factor/on", string(body), session)
 	var got recoveryAnswer
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil {
@@ -157,9 +157,9 @@ func (f *factorClock) turnOn(t *testing.T, session *http.Cookie) (string, []stri
 	return seed, got.Recovery
 }
 
-// Turning it on takes the password and a code from what was scanned, writes
-// nothing readable, gives ten recovery codes once, and ends every other
-// session.
+// Turning it on takes a fresh session and a code from what was scanned,
+// writes nothing readable, gives ten recovery codes once, and ends every
+// other session.
 func TestTurningTheSecondFactorOn(t *testing.T) {
 	f := newFactorClock(t)
 	session, _ := f.signIn(t, testPassword, "")
@@ -168,23 +168,20 @@ func TestTurningTheSecondFactorOn(t *testing.T) {
 		t.Fatal("could not sign in")
 	}
 
-	if w := f.send(http.MethodPost, "/api/v1/factor/on", `{"password":"`+testPassword+`","code":"123456"}`, session); errorCode(t, w) != "setup_expired" {
+	if w := f.send(http.MethodPost, "/api/v1/factor/on", `{"code":"123456"}`, session); errorCode(t, w) != "setup_expired" {
 		t.Errorf("turned on with nothing shown to scan: %d %s", w.Code, w.Body)
 	}
 	w := f.send(http.MethodPost, "/api/v1/factor/setup", "", session)
 	var setup factorSetup
 	_ = json.Unmarshal(w.Body.Bytes(), &setup)
 	seed := strings.ReplaceAll(setup.Secret, " ", "")
-	if w := f.send(http.MethodPost, "/api/v1/factor/on", `{"password":"`+testPassword+`","code":"000000"}`, session); errorCode(t, w) != "wrong_code" {
+	if w := f.send(http.MethodPost, "/api/v1/factor/on", `{"code":"000000"}`, session); errorCode(t, w) != "wrong_code" {
 		t.Errorf("a wrong code turned it on: %d %s", w.Code, w.Body)
-	}
-	if w := f.send(http.MethodPost, "/api/v1/factor/on", `{"password":"not it at all","code":"`+f.code(t, seed)+`"}`, session); errorCode(t, w) != "wrong_password" {
-		t.Errorf("a wrong password turned it on: %d %s", w.Code, w.Body)
 	}
 	if on, _ := factorOn(f.g.path); on {
 		t.Fatal("a failed attempt wrote the second factor")
 	}
-	body, _ := json.Marshal(passwordRequest{Password: testPassword, Code: f.code(t, seed)})
+	body, _ := json.Marshal(passwordRequest{Code: f.code(t, seed)})
 	w = f.send(http.MethodPost, "/api/v1/factor/on", string(body), session)
 	var got recoveryAnswer
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil {
@@ -300,43 +297,28 @@ func TestWrongCodesWaitForTheWholeInstallation(t *testing.T) {
 }
 
 // Changing the password, turning the factor off and making new recovery
-// codes each want the password and a code. Off removes the file and ends
-// other sessions; new codes replace every old one.
+// codes each want a fresh session: past FreshLife they are refused until the
+// session is confirmed with a code. Off removes the file and ends other
+// sessions; new codes replace every old one.
 func TestTheSecondFactorGuardsItsOwnChanges(t *testing.T) {
 	f := newFactorClock(t)
 	session, _ := f.signIn(t, testPassword, "")
 	seed, recovery := f.turnOn(t, session)
-	f.now = f.now.Add(30 * time.Second)
+	f.now = f.now.Add(FreshLife + time.Second)
 
-	if w := f.send(http.MethodPost, "/api/v1/password", `{"password":"`+testPassword+`","next":"another long password"}`, session); errorCode(t, w) != "code_required" {
-		t.Errorf("the password changed without a code: %d %s", w.Code, w.Body)
-	}
-	// A new password too short is refused before the code is spent, so the
-	// same code then changes the password; spaced as some apps show it.
-	code := f.code(t, seed)
-	short, _ := json.Marshal(passwordRequest{Password: testPassword, Next: "short", Code: code})
-	if w := f.send(http.MethodPost, "/api/v1/password", string(short), session); errorCode(t, w) != "weak_password" {
-		t.Errorf("a short new password: %d %s", w.Code, w.Body)
-	}
-	change, _ := json.Marshal(passwordRequest{Password: testPassword, Next: "another long password", Code: code[:3] + " " + code[3:]})
-	if w := f.send(http.MethodPost, "/api/v1/password", string(change), session); w.Code != http.StatusNoContent {
-		t.Fatalf("changing the password with a code: %d %s", w.Code, w.Body)
-	}
-	change, _ = json.Marshal(passwordRequest{Password: "another long password", Next: testPassword, Code: recovery[3]})
-	if w := f.send(http.MethodPost, "/api/v1/password", string(change), session); w.Code != http.StatusNoContent {
-		t.Fatalf("changing it back with a recovery code: %d %s", w.Code, w.Body)
-	}
-	f.now = f.now.Add(30 * time.Second)
-
-	if w := f.send(http.MethodPost, "/api/v1/factor/off", `{"password":"`+testPassword+`"}`, session); errorCode(t, w) != "code_required" {
-		t.Errorf("turned off without a code: %d %s", w.Code, w.Body)
-	}
-	if w := f.send(http.MethodPost, "/api/v1/factor/off", `{"password":"`+testPassword+`","code":"000000"}`, session); errorCode(t, w) != "wrong_credentials" {
-		t.Errorf("turned off with a wrong code: %d %s", w.Code, w.Body)
+	change, _ := json.Marshal(passwordRequest{Password: testPassword, Next: "another long password"})
+	for _, rq := range []struct{ path, body string }{
+		{"/api/v1/password", string(change)},
+		{"/api/v1/factor/off", ""},
+		{"/api/v1/factor/recovery", ""},
+	} {
+		if w := f.send(http.MethodPost, rq.path, rq.body, session); errorCode(t, w) != "confirm_required" {
+			t.Errorf("%s from a session that is not fresh: %d %s", rq.path, w.Code, w.Body)
+		}
 	}
 
-	body, _ := json.Marshal(passwordRequest{Password: testPassword, Code: f.code(t, seed)})
-	w := f.send(http.MethodPost, "/api/v1/factor/recovery", string(body), session)
+	f.confirm(t, session, f.code(t, seed))
+	w := f.send(http.MethodPost, "/api/v1/factor/recovery", "", session)
 	var fresh recoveryAnswer
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &fresh) != nil || len(fresh.Recovery) != recoveryCount {
 		t.Fatalf("new recovery codes: %d %s", w.Code, w.Body)
@@ -344,10 +326,12 @@ func TestTheSecondFactorGuardsItsOwnChanges(t *testing.T) {
 	if c, _ := f.signIn(t, testPassword, recovery[0]); c != nil {
 		t.Error("an old recovery code still opens after new ones were made")
 	}
+	if w := f.send(http.MethodPost, "/api/v1/password", string(change), session); w.Code != http.StatusNoContent {
+		t.Fatalf("changing the password while fresh: %d %s", w.Code, w.Body)
+	}
 
-	other, _ := f.signIn(t, testPassword, fresh.Recovery[0])
-	body, _ = json.Marshal(passwordRequest{Password: testPassword, Code: fresh.Recovery[1]})
-	if w := f.send(http.MethodPost, "/api/v1/factor/off", string(body), session); w.Code != http.StatusNoContent {
+	other, _ := f.signIn(t, "another long password", fresh.Recovery[0])
+	if w := f.send(http.MethodPost, "/api/v1/factor/off", "", session); w.Code != http.StatusNoContent {
 		t.Fatalf("turning off: %d %s", w.Code, w.Body)
 	}
 	if on, _ := factorOn(f.g.path); on {
@@ -356,15 +340,87 @@ func TestTheSecondFactorGuardsItsOwnChanges(t *testing.T) {
 	if w := f.send(http.MethodGet, "/history", "", other); w.Code != http.StatusSeeOther {
 		t.Error("another session outlived turning the second factor off")
 	}
-	if c, w := f.signIn(t, testPassword, ""); c == nil {
+	if c, w := f.signIn(t, "another long password", ""); c == nil {
 		t.Errorf("the password alone does not open once it is off: %d %s", w.Code, w.Body)
+	}
+}
+
+// confirm answers "Confirm it's you" for session with answer, a code or a
+// recovery code where the factor is on, the password where it is off.
+func (f *factorClock) confirm(t *testing.T, session *http.Cookie, answer string) {
+	t.Helper()
+	field := "code"
+	if on, _ := factorOn(f.g.path); !on {
+		field = "password"
+	}
+	w := f.send(http.MethodPost, "/api/v1/session/confirm", `{"`+field+`":"`+answer+`"}`, session)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("confirming: %d %s", w.Code, w.Body)
+	}
+}
+
+// "Confirm it's you" takes the second factor, or the password where there is
+// none, makes the session fresh for FreshLife, and ends the session after
+// five wrong answers.
+func TestConfirmingMakesASessionFreshAndFiveWrongAnswersEndIt(t *testing.T) {
+	f := newFactorClock(t)
+	session, _ := f.signIn(t, testPassword, "")
+
+	// A new sign-in is fresh, for FreshLife.
+	status := func() factorStatus {
+		var st factorStatus
+		_ = json.Unmarshal(f.send(http.MethodGet, "/api/v1/factor", "", session).Body.Bytes(), &st)
+		return st
+	}
+	if !status().Fresh {
+		t.Error("a new sign-in is not fresh")
+	}
+	f.now = f.now.Add(FreshLife + time.Second)
+	if status().Fresh {
+		t.Error("a sign-in older than FreshLife is still fresh")
+	}
+	if w := f.send(http.MethodPost, "/api/v1/factor/setup", "", session); errorCode(t, w) != "confirm_required" {
+		t.Errorf("set up from a session that is not fresh: %d %s", w.Code, w.Body)
+	}
+
+	// With no second factor, the password confirms.
+	if w := f.send(http.MethodPost, "/api/v1/session/confirm", `{"password":"not it at all"}`, session); errorCode(t, w) != "wrong_confirmation" {
+		t.Errorf("a wrong password confirmed: %d %s", w.Code, w.Body)
+	}
+	f.confirm(t, session, testPassword)
+	if !status().Fresh {
+		t.Error("confirming did not make the session fresh")
+	}
+
+	// With it on, the code confirms, and the password does not.
+	seed, _ := f.turnOn(t, session)
+	f.now = f.now.Add(FreshLife + 30*time.Second)
+	if w := f.send(http.MethodPost, "/api/v1/session/confirm", `{"password":"`+testPassword+`"}`, session); errorCode(t, w) != "code_required" {
+		t.Errorf("the password alone confirmed with the second factor on: %d %s", w.Code, w.Body)
+	}
+	f.confirm(t, session, f.code(t, seed))
+	if !status().Fresh {
+		t.Error("a code did not make the session fresh")
+	}
+
+	// Five wrong answers end the session, and say so.
+	f.now = f.now.Add(FreshLife + 30*time.Second)
+	var last *httptest.ResponseRecorder
+	for i := 0; i < confirmMisses; i++ {
+		last = f.send(http.MethodPost, "/api/v1/session/confirm", `{"code":"recovery-code-not-mine"}`, session)
+	}
+	if errorCode(t, last) != "signed_out" {
+		t.Errorf("the fifth wrong answer: %d %s", last.Code, last.Body)
+	}
+	if w := f.send(http.MethodGet, "/history", "", session); w.Code != http.StatusSeeOther {
+		t.Error("the session outlived five wrong answers")
 	}
 }
 
 // The endpoints are for a signed-in session on this installation's pages.
 func TestTheSecondFactorIsOnlyForASignedInSession(t *testing.T) {
 	f := newFactorClock(t)
-	for _, path := range []string{"/api/v1/factor/setup", "/api/v1/factor/on", "/api/v1/factor/off", "/api/v1/factor/recovery"} {
+	for _, path := range []string{"/api/v1/factor/setup", "/api/v1/factor/on", "/api/v1/factor/off", "/api/v1/factor/recovery", "/api/v1/session/confirm"} {
 		if w := f.send(http.MethodPost, path, `{"password":"`+testPassword+`","code":"123456"}`, nil); w.Code != http.StatusUnauthorized {
 			t.Errorf("%s without a session: %d", path, w.Code)
 		}

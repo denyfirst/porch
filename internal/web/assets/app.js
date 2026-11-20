@@ -2516,6 +2516,21 @@ function reportFrame(container, target, names, chosen, opts) {
   findings.appendChild(frame.todo);
   container.appendChild(findings);
 
+  // More than one check chosen: a tab each, under the findings, and one
+  // check's evidence on the page at a time. The cover and the findings above
+  // still speak for all of them, worst first, so a rule broken in one check
+  // is never behind a tab that is not open; the tabs only choose which
+  // evidence is read. On paper every check is printed, tab or not.
+  const tabbed = chosen.length > 1;
+  let tabs = null;
+  if (tabbed) {
+    tabs = el("div", "report-tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Checks in this report");
+    container.appendChild(tabs);
+    container.classList.add("report-tabbed");
+  }
+
   // Every check named keeps its row, chosen or not, so the board keeps its
   // shape and says what was left out; one that was not chosen has no section
   // behind it, because there is nothing to show.
@@ -2564,11 +2579,64 @@ function reportFrame(container, target, names, chosen, opts) {
     section.appendChild(body);
     container.appendChild(section);
 
-    frame.entries.push({ name, spec, row, state, count, policy, section, mark, top, body, done: false, verdict: null, open: 0 });
+    const entry = { name, spec, row, state, count, policy, section, mark, top, body, done: false, verdict: null, open: 0 };
+    if (tabs) {
+      const tab = el("button", "report-tab");
+      tab.type = "button";
+      tab.id = "report-tab-" + name;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", section.id);
+      tab.appendChild(el("span", "report-tab-name", spec.label));
+      entry.tabState = el("span", "report-tab-state stamp-pending", "running");
+      tab.appendChild(entry.tabState);
+      tab.addEventListener("click", () => reportSelect(frame, entry));
+      tabs.appendChild(tab);
+      section.setAttribute("role", "tabpanel");
+      section.setAttribute("aria-labelledby", tab.id);
+      entry.tab = tab;
+      // The board's row leads to its check: the tab is chosen, then the
+      // link goes where it points.
+      title.addEventListener("click", () => reportSelect(frame, entry));
+    }
+    frame.entries.push(entry);
   });
+
+  if (tabs) {
+    tabs.addEventListener("keydown", event => {
+      const at = frame.entries.findIndex(e => e.tab === document.activeElement);
+      if (at < 0) return;
+      const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: frame.entries.length - 1 }[event.key];
+      if (to === undefined) return;
+      event.preventDefault();
+      const next = frame.entries[(to + frame.entries.length) % frame.entries.length];
+      reportSelect(frame, next);
+      next.tab.focus();
+    });
+    reportSelect(frame, frame.entries[0]);
+  }
 
   reportTally(frame);
   return frame;
+}
+
+// reportSelect shows one check's evidence under the tabs, and says which to
+// assistive technology as well as drawing it.
+function reportSelect(frame, chosen) {
+  for (const entry of frame.entries) {
+    if (!entry.tab) continue;
+    const on = entry === chosen;
+    entry.tab.setAttribute("aria-selected", on ? "true" : "false");
+    entry.tab.tabIndex = on ? 0 : -1;
+    entry.section.classList.toggle("report-check-away", !on);
+  }
+}
+
+// reportTabSays puts what a check's row on the board says on its tab: still
+// running, its verdict, or that it did not run.
+function reportTabSays(entry) {
+  if (!entry.tabState) return;
+  entry.tabState.textContent = entry.state.textContent;
+  entry.tabState.className = entry.state.className.replace("stamp stamp-small", "report-tab-state");
 }
 
 // reportFacts sets a list of labelled values as cells, each label over its
@@ -2633,6 +2701,7 @@ async function reportRun(frame, entry, run) {
     entry.body.appendChild(failure(err.message || "The check did not complete.", hint));
     entry.state.textContent = "not run";
     entry.state.className = "stamp stamp-small stamp-pending";
+    reportTabSays(entry);
     entry.mark.textContent = "not run";
     entry.count.textContent = "did not run";
     entry.done = true;
@@ -2654,7 +2723,10 @@ function reportShow(frame, entry, data) {
     entry.mark = stamp;
   }
   entry.data = data;
+  // Its colour changes with the verdict; whether its tab is open does not.
+  const away = entry.section.classList.contains("report-check-away");
   entry.section.className = "report-check " + verdictClass("report-check", verdict);
+  entry.section.classList.toggle("report-check-away", away);
   clear(entry.top);
   entry.top.appendChild(sum);
   clear(entry.body);
@@ -2676,6 +2748,7 @@ function reportShow(frame, entry, data) {
 
   entry.state.textContent = data.verdict ? verdict : "not graded";
   entry.state.className = "stamp stamp-small " + verdictClass("stamp", verdict);
+  reportTabSays(entry);
   if (data.policy) entry.policy.textContent = data.policy;
 
   // A check that reached nothing broke no rule, and saying only that reads
@@ -3411,6 +3484,7 @@ async function loadDomainChoices(changed) {
       box.checked = i === 0;
       box.addEventListener("change", changed);
       card.appendChild(box);
+      card.appendChild(tickBox());
       card.appendChild(el("span", "check-name", domain.name));
       card.appendChild(el("span", "check-says", "Added " + domain.added));
       domainChoices.insertBefore(card, add);
@@ -3436,7 +3510,47 @@ function hostUnder(typed, domain) {
   return host.split(".").every(label => HOST_LABEL.test(label)) ? host + "." + domain : "";
 }
 
+// tickBox is the mark a card carries when it is chosen, drawn as every mark
+// here is. It follows the input before it, which stays the control.
+function tickBox() {
+  const ns = "http://www.w3.org/2000/svg";
+  const box = el("span", "check-box");
+  box.setAttribute("aria-hidden", "true");
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("focusable", "false");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", "M5 12.5l4.5 4.5L19 7.5");
+  svg.appendChild(path);
+  box.appendChild(svg);
+  return box;
+}
+
 const consoleHost = document.getElementById("console-host");
+
+// The button says how many checks it will run, and the line beside it on
+// which name, as the form stands now. While a run is on, the button says so
+// instead, and this leaves it alone.
+function consoleRunSays() {
+  if (!consoleButton || consoleButton.disabled) return;
+  const count = selectedChecks().length;
+  consoleButton.textContent = count === 1 ? "Run 1 check" : count === 0 ? "Choose a check" : "Run " + count + " checks";
+  const line = document.getElementById("console-run-says");
+  if (!line) return;
+  clear(line);
+  const name = consoleTarget && consoleTarget.value;
+  if (!name) {
+    line.textContent = "Each check reports on its own, one after another.";
+    return;
+  }
+  line.appendChild(document.createTextNode("On "));
+  line.appendChild(el("strong", null, name));
+  line.appendChild(document.createTextNode(", one after another."));
+}
+
+if (consoleForm) {
+  for (const box of consoleForm.querySelectorAll("input[name='check']")) box.addEventListener("change", consoleRunSays);
+}
 
 if (consoleForm && domainChoices && consoleHost) {
   const suffix = document.getElementById("host-suffix");
@@ -3447,6 +3561,7 @@ if (consoleForm && domainChoices && consoleHost) {
     suffix.textContent = "." + domain;
     says.textContent = name || "no host: letters, digits and hyphens, such as www or mail";
     consoleTarget.value = name;
+    consoleRunSays();
   };
   consoleHost.addEventListener("input", update);
   loadDomainChoices(() => {
@@ -3520,6 +3635,7 @@ if (consoleForm) {
     } finally {
       consoleButton.disabled = false;
       consoleButton.textContent = label;
+      consoleRunSays();
     }
   });
 }

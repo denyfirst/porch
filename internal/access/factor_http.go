@@ -1,6 +1,7 @@
 package access
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -43,6 +44,9 @@ type factorStatus struct {
 	// WrongBefore is how many wrong codes were sent with the right password
 	// before this sign-in.
 	WrongBefore int `json:"wrong_before"`
+	// Fresh is whether this session may change how the installation is
+	// signed into without confirming first.
+	Fresh bool `json:"fresh"`
 }
 
 type factorSetup struct {
@@ -58,10 +62,14 @@ type recoveryAnswer struct {
 	Recovery []string `json:"recovery"`
 }
 
-// serveFactor answers the second factor's endpoints, for a signed-in
-// session only. Turning it on, turning it off and making new recovery codes
-// each ask for the password, and the last two for a code as well: a session
-// left open is not enough to change how this installation is signed into.
+// confirmRequiredMessage is what a change to signing in says to a session
+// that is not fresh. The page answers it by going to "Confirm it's you".
+const confirmRequiredMessage = "Confirm it's you first: this change needs a sign-in, or a confirmation, from the last ten minutes."
+
+// serveFactor answers the second factor's endpoints, for a signed-in session
+// only. Every change needs the session to be fresh: signed into, or
+// confirmed, within FreshLife. A session left open is enough to read the
+// state and not enough to change it.
 func (g *Gate) serveFactor(w http.ResponseWriter, r *http.Request) {
 	secure(w)
 	c, err := r.Cookie(CookieName)
@@ -75,7 +83,7 @@ func (g *Gate) serveFactor(w http.ResponseWriter, r *http.Request) {
 			refuse(w, http.StatusMethodNotAllowed, "method", "Ask with GET.")
 			return
 		}
-		g.factorStatus(w)
+		g.factorStatus(w, c.Value)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -87,28 +95,32 @@ func (g *Gate) serveFactor(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusForbidden, "cross_site", "Use this installation's own pages.")
 		return
 	}
+	if !g.fresh(c.Value) {
+		refuse(w, http.StatusForbidden, "confirm_required", confirmRequiredMessage)
+		return
+	}
 	if r.URL.Path == "/api/v1/factor/setup" {
 		g.factorSetup(w)
 		return
 	}
 
-	body, ok := readPassword(w, r)
-	if !ok {
-		return
-	}
-	if r.URL.Path == "/api/v1/factor/on" && !sixDigits(appCode(body.Code)) {
-		refuse(w, http.StatusBadRequest, "invalid_code", "Enter the six digits the app shows.")
-		return
-	}
-	if strings.TrimSpace(body.Code) == "" {
-		refuse(w, http.StatusUnauthorized, "code_required", codeRequiredMessage)
-		return
-	}
-	if !g.allow(clientKey(r)) {
-		w.Header().Set("Retry-After", strconv.Itoa(int(attemptInterval/time.Second)))
-		refuse(w, http.StatusTooManyRequests, "rate_limited",
-			"Too many attempts from this address. Wait a minute and try again.")
-		return
+	var body passwordRequest
+	if r.URL.Path == "/api/v1/factor/on" {
+		read, ok := readPassword(w, r)
+		if !ok {
+			return
+		}
+		if !sixDigits(appCode(read.Code)) {
+			refuse(w, http.StatusBadRequest, "invalid_code", "Enter the six digits the app shows.")
+			return
+		}
+		body = read
+		if !g.allow(clientKey(r)) {
+			w.Header().Set("Retry-After", strconv.Itoa(int(attemptInterval/time.Second)))
+			refuse(w, http.StatusTooManyRequests, "rate_limited",
+				"Too many attempts from this address. Wait a minute and try again.")
+			return
+		}
 	}
 	select {
 	case g.derive <- struct{}{}:
@@ -123,6 +135,12 @@ func (g *Gate) serveFactor(w http.ResponseWriter, r *http.Request) {
 		unavailable(w)
 		return
 	}
+	key := g.Key()
+	defer clear(key)
+	if key == nil {
+		unavailable(w)
+		return
+	}
 
 	switch r.URL.Path {
 	case "/api/v1/factor/on":
@@ -130,34 +148,26 @@ func (g *Gate) serveFactor(w http.ResponseWriter, r *http.Request) {
 			refuse(w, http.StatusConflict, "already_on", "The second factor is already on.")
 			return
 		}
-		g.factorTurnOn(w, c.Value, body)
-	case "/api/v1/factor/off", "/api/v1/factor/recovery":
+		g.factorTurnOn(w, c.Value, key, body)
+	case "/api/v1/factor/off":
 		if !on {
 			refuse(w, http.StatusConflict, "already_off", "The second factor is off.")
 			return
 		}
-		key, err := Unlock(g.path, body.Password)
-		var st *factorState
-		if err == nil {
-			st, err = g.confirmFactor(key, body.Code)
-		}
-		defer clear(key)
-		switch {
-		case err == nil:
-		case errors.Is(err, ErrWrongPassword), errors.Is(err, errWrongCredentials):
-			refuse(w, http.StatusUnauthorized, "wrong_credentials", wrongCredentialsMessage)
-			return
-		default:
+		if err := os.Remove(factorPath(g.path)); err != nil {
 			unavailable(w)
 			return
 		}
-		if r.URL.Path == "/api/v1/factor/off" {
-			if err := os.Remove(factorPath(g.path)); err != nil {
-				unavailable(w)
-				return
-			}
-			g.keepOnly(c.Value)
-			w.WriteHeader(http.StatusNoContent)
+		g.keepOnly(c.Value)
+		w.WriteHeader(http.StatusNoContent)
+	case "/api/v1/factor/recovery":
+		if !on {
+			refuse(w, http.StatusConflict, "already_off", "The second factor is off.")
+			return
+		}
+		st, err := loadFactor(g.path, key)
+		if err != nil {
+			unavailable(w)
 			return
 		}
 		codes, digests, err := newRecovery(key)
@@ -171,16 +181,18 @@ func (g *Gate) serveFactor(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		answer(w, recoveryAnswer{Recovery: codes})
+	default:
+		refuse(w, http.StatusNotFound, "not_found", "There is nothing here.")
 	}
 }
 
-func (g *Gate) factorStatus(w http.ResponseWriter) {
+func (g *Gate) factorStatus(w http.ResponseWriter, token string) {
 	on, err := factorOn(g.path)
 	if err != nil {
 		unavailable(w)
 		return
 	}
-	out := factorStatus{On: on}
+	out := factorStatus{On: on, Fresh: g.fresh(token)}
 	if on {
 		key := g.Key()
 		st, err := loadFactor(g.path, key)
@@ -198,7 +210,7 @@ func (g *Gate) factorStatus(w http.ResponseWriter) {
 }
 
 // factorSetup makes a seed to scan and holds it, unconfirmed, for setupLife.
-// Nothing is written until a code from it is confirmed with the password.
+// Nothing is written until a code from it is confirmed.
 func (g *Gate) factorSetup(w http.ResponseWriter) {
 	on, err := factorOn(g.path)
 	if err != nil {
@@ -244,10 +256,10 @@ func (g *Gate) factorSetup(w http.ResponseWriter) {
 	answer(w, factorSetup{Secret: strings.Join(groups, " "), URI: uri, QR: rows})
 }
 
-// factorTurnOn confirms the seed shown with a code from it and the password,
-// writes it sealed, and answers with the recovery codes, once. Every other
-// session ends, so one somebody else held does not outlive the change.
-func (g *Gate) factorTurnOn(w http.ResponseWriter, session string, body passwordRequest) {
+// factorTurnOn confirms the seed shown with a code from it, writes it sealed
+// under key, and answers with the recovery codes, once. Every other session
+// ends, so one somebody else held does not outlive the change.
+func (g *Gate) factorTurnOn(w http.ResponseWriter, session string, key []byte, body passwordRequest) {
 	g.mu.Lock()
 	seed, until := g.setupSeed, g.setupUntil
 	g.mu.Unlock()
@@ -256,17 +268,6 @@ func (g *Gate) factorTurnOn(w http.ResponseWriter, session string, body password
 			"Start again: the code shown to scan is more than ten minutes old, or was never shown.")
 		return
 	}
-	key, err := Unlock(g.path, body.Password)
-	switch {
-	case err == nil:
-	case errors.Is(err, ErrWrongPassword):
-		refuse(w, http.StatusUnauthorized, "wrong_password", "The password is not right.")
-		return
-	default:
-		unavailable(w)
-		return
-	}
-	defer clear(key)
 	counter, ok := codeCounter(seed, appCode(body.Code), g.now(), -1)
 	if !ok {
 		refuse(w, http.StatusBadRequest, "wrong_code",
@@ -288,6 +289,115 @@ func (g *Gate) factorTurnOn(w http.ResponseWriter, session string, body password
 	g.mu.Unlock()
 	g.keepOnly(session)
 	answer(w, recoveryAnswer{Recovery: codes})
+}
+
+// serveConfirm is "Confirm it's you": a signed-in session shows the second
+// factor again, or the password where there is none, and is fresh for
+// FreshLife. Wrong answers count against the session, and confirmMisses of
+// them end it: the person signs in again with the password and the code.
+func (g *Gate) serveConfirm(w http.ResponseWriter, r *http.Request) {
+	secure(w)
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		refuse(w, http.StatusMethodNotAllowed, "method", "Confirm with POST.")
+		return
+	}
+	c, err := r.Cookie(CookieName)
+	if err != nil || !g.SignedIn(r) {
+		refuse(w, http.StatusUnauthorized, "sign_in", "Sign in to use this installation.")
+		return
+	}
+	body, ok := readPassword(w, r)
+	if !ok {
+		return
+	}
+	if !g.allow(clientKey(r)) {
+		w.Header().Set("Retry-After", strconv.Itoa(int(attemptInterval/time.Second)))
+		refuse(w, http.StatusTooManyRequests, "rate_limited",
+			"Too many attempts from this address. Wait a minute and try again.")
+		return
+	}
+	select {
+	case g.derive <- struct{}{}:
+		defer func() { <-g.derive }()
+	case <-time.After(3 * time.Second):
+		w.Header().Set("Retry-After", "2")
+		refuse(w, http.StatusServiceUnavailable, "busy", "Another sign-in is being checked. Try again in a moment.")
+		return
+	}
+	on, err := factorOn(g.path)
+	if err != nil {
+		unavailable(w)
+		return
+	}
+
+	wrong := "That is not this installation's password."
+	if on {
+		wrong = "That is not the code the app shows now, or an unused recovery code."
+		if strings.TrimSpace(body.Code) == "" {
+			refuse(w, http.StatusBadRequest, "code_required", codeRequiredMessage)
+			return
+		}
+		key := g.Key()
+		_, err = g.confirmFactor(key, body.Code)
+		clear(key)
+		if err != nil && !errors.Is(err, errWrongCredentials) {
+			unavailable(w)
+			return
+		}
+	} else {
+		if body.Password == "" {
+			refuse(w, http.StatusBadRequest, "password_required", "Enter this installation's password.")
+			return
+		}
+		var key []byte
+		key, err = Unlock(g.path, body.Password)
+		clear(key)
+		if err != nil && !errors.Is(err, ErrWrongPassword) {
+			unavailable(w)
+			return
+		}
+	}
+	if err != nil {
+		if g.missed(c.Value) {
+			http.SetCookie(w, expired())
+			refuse(w, http.StatusUnauthorized, "signed_out",
+				"Five wrong answers: this session has ended. Sign in again.")
+			return
+		}
+		refuse(w, http.StatusUnauthorized, "wrong_confirmation", wrong)
+		return
+	}
+	g.confirmed(c.Value)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// missed counts a wrong answer against token's session and reports whether
+// that ended it.
+func (g *Gate) missed(token string) bool {
+	id := sha256.Sum256([]byte(token))
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	s, ok := g.sessions[id]
+	if !ok {
+		return true
+	}
+	s.misses++
+	if s.misses >= confirmMisses {
+		delete(g.sessions, id)
+		return true
+	}
+	return false
+}
+
+// confirmed makes token's session fresh again.
+func (g *Gate) confirmed(token string) {
+	id := sha256.Sum256([]byte(token))
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if s, ok := g.sessions[id]; ok {
+		s.fresh, s.misses = g.now().Add(FreshLife), 0
+	}
 }
 
 func answer(w http.ResponseWriter, v any) {

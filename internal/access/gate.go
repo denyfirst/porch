@@ -33,6 +33,17 @@ const CookieName = "__Host-porch_session"
 // hours is a working day with room; the next one starts with the password.
 const SessionLife = 12 * time.Hour
 
+// FreshLife is how long a sign-in, or a confirmation since, counts as fresh.
+// Changing how the installation is signed into needs a fresh session: one
+// left open on a desk is enough to read reports, and not enough to turn the
+// second factor off or set a password its holder chose. Keybash's window.
+const FreshLife = 10 * time.Minute
+
+// confirmMisses wrong answers to "Confirm it's you" end the session. A
+// session somebody else holds then gets this many guesses at a code, not one
+// a minute for twelve hours.
+const confirmMisses = 5
+
 // maxSessions bounds the table. The oldest goes first, so a flood of
 // sign-ins costs the flooder their own sessions and nobody else's for long.
 const maxSessions = 32
@@ -63,7 +74,7 @@ type Gate struct {
 
 	mu       sync.Mutex
 	key      []byte
-	sessions map[[32]byte]time.Time
+	sessions map[[32]byte]*session
 	attempts map[string]*bucket
 
 	// sweeper drops idle addresses on time while there are any, even when
@@ -84,6 +95,20 @@ type Gate struct {
 	wrongBefore int
 	setupSeed   string
 	setupUntil  time.Time
+
+	// The first visit's setup code, as a hash, until it is spent or a
+	// restart prints a new one.
+	setupCode      [32]byte
+	setupCodeUntil time.Time
+	setupWaiting   bool
+}
+
+// session is one sign-in: when it ends, until when it counts as fresh, and
+// how many wrong answers it has given to "Confirm it's you".
+type session struct {
+	until  time.Time
+	fresh  time.Time
+	misses int
 }
 
 type bucket struct {
@@ -98,7 +123,7 @@ func NewGate(path string, public []string) *Gate {
 		path:     path,
 		public:   map[string]bool{},
 		now:      time.Now,
-		sessions: map[[32]byte]time.Time{},
+		sessions: map[[32]byte]*session{},
 		attempts: map[string]*bucket{},
 		derive:   make(chan struct{}, 1),
 	}
@@ -144,16 +169,36 @@ func (g *Gate) Wrap(next http.Handler) http.Handler {
 		case "/api/v1/password":
 			g.servePassword(w, r)
 			return
+		case "/api/v1/setup":
+			g.serveSetup(w, r)
+			return
+		case "/api/v1/session/confirm":
+			g.serveConfirm(w, r)
+			return
 		case "/api/v1/factor", "/api/v1/factor/setup", "/api/v1/factor/on",
 			"/api/v1/factor/off", "/api/v1/factor/recovery":
 			g.serveFactor(w, r)
+			return
+		}
+		page := (r.Method == http.MethodGet || r.Method == http.MethodHead) && !strings.HasPrefix(r.URL.Path, "/api/")
+		// Until the first password is set, every page is the setup page,
+		// the sign-in page included; after, the setup page is the sign-in
+		// page. Neither says anything else about the installation.
+		if pending := g.SetupPending(); page && (pending && (r.URL.Path == "/login" || !g.public[r.URL.Path]) ||
+			!pending && r.URL.Path == "/setup") {
+			w.Header().Set("Cache-Control", "no-store")
+			to := "/login"
+			if pending {
+				to = "/setup"
+			}
+			http.Redirect(w, r, to, http.StatusSeeOther)
 			return
 		}
 		if g.public[r.URL.Path] || g.SignedIn(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && !strings.HasPrefix(r.URL.Path, "/api/") {
+		if page {
 			w.Header().Set("Cache-Control", "no-store")
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
@@ -196,6 +241,11 @@ func (g *Gate) serveSession(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if g.SetupPending() {
+		refuse(w, http.StatusConflict, "setup_required",
+			"This installation has no password yet. Choose one with the setup code on the setup page.")
+		return
+	}
 	// Asked before the password is derived or an attempt is spent, so the
 	// answer says only that a code is needed, and nothing of the password.
 	if !g.codeGiven(w, body.Code) {
@@ -230,10 +280,17 @@ func (g *Gate) serveSession(w http.ResponseWriter, r *http.Request) {
 			"The password could not be checked. The operator should look at the installation's log.")
 		return
 	}
-	// Secure always, not only over TLS. A browser treats http://localhost as a
-	// secure origin, so the SSH tunnel the guide uses works; what stops working
-	// is signing in over plain HTTP to any other address, which is a password
-	// sent in the clear and exactly what should not work.
+	setSession(w, token)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setSession hands the browser its session.
+//
+// Secure always, not only over TLS. A browser treats http://localhost as a
+// secure origin, so the SSH tunnel the guide uses works; what stops working
+// is signing in over plain HTTP to any other address, which is a password
+// sent in the clear and exactly what should not work.
+func setSession(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    token,
@@ -243,7 +300,6 @@ func (g *Gate) serveSession(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 	})
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // servePassword changes the password, for somebody already signed in who
@@ -265,6 +321,12 @@ func (g *Gate) servePassword(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A session left open is not enough to set a password its holder chose:
+	// it has to have been signed into, or confirmed, in the last minutes.
+	if !g.fresh(c.Value) {
+		refuse(w, http.StatusForbidden, "confirm_required", confirmRequiredMessage)
+		return
+	}
 	if !g.allow(clientKey(r)) {
 		w.Header().Set("Retry-After", strconv.Itoa(int(attemptInterval/time.Second)))
 		refuse(w, http.StatusTooManyRequests, "rate_limited",
@@ -278,43 +340,6 @@ func (g *Gate) servePassword(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "2")
 		refuse(w, http.StatusServiceUnavailable, "busy", "Another sign-in is being checked. Try again in a moment.")
 		return
-	}
-	// With the second factor on, the code is asked as well: a session left
-	// open is not enough to set a password its holder chose.
-	on, err := factorOn(g.path)
-	if err != nil {
-		refuse(w, http.StatusInternalServerError, "unavailable",
-			"The new password could not be saved. The operator should look at the installation's log.")
-		return
-	}
-	if on {
-		if strings.TrimSpace(body.Code) == "" {
-			refuse(w, http.StatusUnauthorized, "code_required", codeRequiredMessage)
-			return
-		}
-		// A new password too short is refused before the code is spent:
-		// a code is accepted once, and one used on a refused change would
-		// have to be waited out for the next.
-		if errors.Is(checkLength(body.Next), ErrWeakPassword) {
-			refuse(w, http.StatusBadRequest, "weak_password",
-				"A new password has to be at least "+strconv.Itoa(MinPassword)+" characters.")
-			return
-		}
-		key, err := Unlock(g.path, body.Password)
-		if err == nil {
-			_, err = g.confirmFactor(key, body.Code)
-			clear(key)
-		}
-		switch {
-		case err == nil:
-		case errors.Is(err, ErrWrongPassword), errors.Is(err, errWrongCredentials):
-			refuse(w, http.StatusUnauthorized, "wrong_credentials", wrongCredentialsMessage)
-			return
-		default:
-			refuse(w, http.StatusInternalServerError, "unavailable",
-				"The new password could not be saved. The operator should look at the installation's log.")
-			return
-		}
 	}
 	switch err := Change(g.path, body.Password, body.Next); {
 	case err == nil:
@@ -369,7 +394,12 @@ func (g *Gate) signIn(password, code string) (string, error) {
 		g.wrongBefore, g.wrongCodes = g.wrongCodes, 0
 		g.mu.Unlock()
 	}
+	return g.openSession(key)
+}
 
+// openSession opens a session for somebody who has just shown the password,
+// and holds the data key from then on. A new session is fresh.
+func (g *Gate) openSession(key []byte) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -382,22 +412,22 @@ func (g *Gate) signIn(password, code string) (string, error) {
 		g.key = key
 	}
 	now := g.now()
-	for id, until := range g.sessions {
-		if !now.Before(until) {
+	for id, s := range g.sessions {
+		if !now.Before(s.until) {
 			delete(g.sessions, id)
 		}
 	}
 	for len(g.sessions) >= maxSessions {
 		var oldest [32]byte
 		var first time.Time
-		for id, until := range g.sessions {
-			if first.IsZero() || until.Before(first) {
-				oldest, first = id, until
+		for id, s := range g.sessions {
+			if first.IsZero() || s.until.Before(first) {
+				oldest, first = id, s.until
 			}
 		}
 		delete(g.sessions, oldest)
 	}
-	g.sessions[sha256.Sum256([]byte(token))] = now.Add(SessionLife)
+	g.sessions[sha256.Sum256([]byte(token))] = &session{until: now.Add(SessionLife), fresh: now.Add(FreshLife)}
 	return token, nil
 }
 
@@ -410,15 +440,27 @@ func (g *Gate) valid(token string) bool {
 	id := sha256.Sum256([]byte(token))
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	until, ok := g.sessions[id]
+	s, ok := g.sessions[id]
 	if !ok {
 		return false
 	}
-	if !g.now().Before(until) {
+	if !g.now().Before(s.until) {
 		delete(g.sessions, id)
 		return false
 	}
 	return true
+}
+
+// fresh reports whether token's session was signed into, or confirmed,
+// within FreshLife.
+func (g *Gate) fresh(token string) bool {
+	if !g.valid(token) {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	s, ok := g.sessions[sha256.Sum256([]byte(token))]
+	return ok && g.now().Before(s.fresh)
 }
 
 func (g *Gate) forget(token string) {

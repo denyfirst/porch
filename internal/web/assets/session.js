@@ -1,6 +1,7 @@
 /*
-  Signing in, signing out, changing the password and the second factor, and
-  the Copy beside the sign-in page's one command. Nothing else.
+  Signing in and out, the first visit's setup, confirming it's you, changing
+  the password and the second factor, the Copy beside the setup page's one
+  command, and the rail's fold on a phone. Nothing else.
 
   A file of its own because the pages that need it are every page behind a
   password, and most of them load no other script: History in particular
@@ -85,8 +86,95 @@
     }
     if (response.ok && data) return { data };
     if (response.ok) return { data: {} };
-    if (data && data.error && typeof data.error.message === "string") return { problem: data.error.message };
-    return { problem: "The installation did not answer as expected." };
+    const code = data && data.error && typeof data.error.code === "string" ? data.error.code : "";
+    if (data && data.error && typeof data.error.message === "string") return { problem: data.error.message, code };
+    return { problem: "The installation did not answer as expected.", code };
+  }
+
+  // A change to how the installation is signed into needs a session signed
+  // in, or confirmed, in the last ten minutes. Past that the installation
+  // says so, and the page that asks again is opened; it comes back here.
+  function confirmFirst(code) {
+    if (code !== "confirm_required") return false;
+    window.location.assign("/confirm");
+    return true;
+  }
+
+  // Six boxes drawn over the one field a code from the app is typed into.
+  // The field is still what is typed into, pasted into and filled by a
+  // password manager, and what a screen reader reads; the boxes only show
+  // it, a digit each, and where the next one goes. A recovery code has
+  // letters and is typed into the same field, drawn as a field.
+  function digitBoxes(field) {
+    const holder = field && field.parentElement;
+    if (!holder || !holder.classList.contains("digits")) return null;
+    const boxes = [];
+    for (let i = 0; i < 6; i++) {
+      const box = document.createElement("span");
+      box.className = "digit";
+      box.setAttribute("aria-hidden", "true");
+      holder.appendChild(box);
+      boxes.push(box);
+    }
+    function draw() {
+      if (holder.dataset.mode === "text") return;
+      // Some apps show the code as "123 456", and copy it that way.
+      const digits = field.value.replace(/\D/g, "").slice(0, 6);
+      if (field.value !== digits) field.value = digits;
+      const now = document.activeElement === field ? Math.min(digits.length, 5) : -1;
+      boxes.forEach((box, i) => {
+        box.textContent = digits[i] || "";
+        if (i === now) box.dataset.now = "";
+        else delete box.dataset.now;
+      });
+    }
+    field.addEventListener("input", draw);
+    field.addEventListener("focus", draw);
+    field.addEventListener("blur", draw);
+    holder.dataset.mode = "digits";
+    field.maxLength = 7;
+    holder.classList.add("digits-drawn");
+    draw();
+    return {
+      // Switches between the app's digits and a recovery code.
+      text(on) {
+        holder.dataset.mode = on ? "text" : "digits";
+        field.inputMode = on ? "text" : "numeric";
+        field.maxLength = on ? 40 : 7;
+        field.value = "";
+        draw();
+      },
+      clear() {
+        field.value = "";
+        draw();
+      },
+    };
+  }
+
+  // A Copy drawn as an icon: what happened is said in its label and its
+  // title, and drawn as a tick while it is true. Where the clipboard is
+  // refused the text is selected instead, for the reader to copy.
+  async function copyIcon(button, text, shown) {
+    let said = "Copied";
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(shown);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      said = "Selected; copy it with the keyboard";
+    }
+    const label = button.getAttribute("aria-label");
+    button.dataset.state = "done";
+    button.title = said;
+    button.setAttribute("aria-label", said);
+    setTimeout(() => {
+      delete button.dataset.state;
+      button.title = "Copy";
+      button.setAttribute("aria-label", label);
+    }, 1500);
   }
 
   // Copies text, or selects the element showing it where the clipboard is
@@ -107,34 +195,33 @@
     setTimeout(() => { button.textContent = label; }, 1500);
   }
 
-  // The sign-in page's command, copied as it reads. Where the clipboard is
-  // refused the text is selected instead, for the reader to copy.
-  // The button is an icon in the box's corner: what happened is said in its
-  // label and its title, and drawn as a tick while it is true.
+  // The setup page's command, copied as it reads: an icon in the box.
   const copy = document.querySelector(".signin-first [data-copy]");
   if (copy) {
-    copy.addEventListener("click", async () => {
+    copy.addEventListener("click", () => {
       const source = document.getElementById(copy.dataset.copy);
-      if (!source) return;
-      let said = "Copied";
-      try {
-        await navigator.clipboard.writeText(source.textContent);
-      } catch {
-        const range = document.createRange();
-        range.selectNodeContents(source);
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-        said = "Selected; copy it with the keyboard";
+      if (source) copyIcon(copy, source.textContent, source);
+    });
+  }
+
+  // On a phone the rail folds into a bar with a button that opens it. The
+  // fold is added here, so a page whose script did not run draws the rail
+  // open rather than shut.
+  const rail = document.querySelector(".rail");
+  const railMenu = document.getElementById("rail-menu");
+  if (rail && railMenu) {
+    rail.classList.add("rail-folds");
+    const fold = (open) => {
+      railMenu.setAttribute("aria-expanded", String(open));
+      railMenu.setAttribute("aria-label", open ? "Close the menu" : "Menu");
+      rail.classList.toggle("rail-open", open);
+    };
+    railMenu.addEventListener("click", () => fold(railMenu.getAttribute("aria-expanded") !== "true"));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && rail.classList.contains("rail-open")) {
+        fold(false);
+        railMenu.focus();
       }
-      copy.dataset.state = "done";
-      copy.title = said;
-      copy.setAttribute("aria-label", said);
-      setTimeout(() => {
-        delete copy.dataset.state;
-        copy.title = "Copy";
-        copy.setAttribute("aria-label", "Copy the command");
-      }, 1500);
     });
   }
 
@@ -147,11 +234,13 @@
     const recovery = document.getElementById("signin-recovery");
     const button = document.getElementById("signin-submit");
     const status = document.getElementById("signin-status");
+    const boxes = digitBoxes(code);
 
     // A recovery code has letters; a phone shows the keyboard that types it.
     recovery.addEventListener("click", () => {
       const toRecovery = code.inputMode === "numeric";
-      code.inputMode = toRecovery ? "text" : "numeric";
+      if (boxes) boxes.text(toRecovery);
+      else code.inputMode = toRecovery ? "text" : "numeric";
       codeLabel.textContent = toRecovery ? "Recovery code" : "Code from your authenticator app";
       recovery.textContent = toRecovery ? "Use the code from the app" : "Use a recovery code";
       code.value = "";
@@ -180,7 +269,8 @@
         } else {
           status.textContent = problem;
           field.value = "";
-          code.value = "";
+          if (boxes) boxes.clear();
+          else code.value = "";
           field.focus();
           button.disabled = false;
         }
@@ -212,13 +302,14 @@
     });
   }
 
+  // The password, under Security. The current one is asked for whatever
+  // else is true, and a session older than ten minutes is sent to confirm
+  // it's you first.
   const passwordForm = document.getElementById("password-form");
   if (passwordForm) {
     const current = document.getElementById("password-current");
     const next = document.getElementById("password-next");
     const again = document.getElementById("password-again");
-    const codeRow = document.getElementById("password-code-row");
-    const code = document.getElementById("password-code");
     const button = document.getElementById("password-submit");
     const status = document.getElementById("password-status");
     passwordForm.addEventListener("submit", async (event) => {
@@ -229,17 +320,18 @@
       }
       button.disabled = true;
       status.textContent = "Saving…";
-      const body = { password: current.value, next: next.value };
-      if (codeRow && !codeRow.hidden) body.code = code.value.trim();
       let problem = "The installation did not answer as expected.";
       try {
-        problem = await send("POST", "/api/v1/password", body);
+        problem = await send("POST", "/api/v1/password", { password: current.value, next: next.value });
       } finally {
-        status.textContent = problem === null
-          ? "Changed. Every other session has been signed out."
-          : problem;
+        if (problem !== null && confirmFirst(refusal)) {
+          status.textContent = "Confirm it's you first…";
+        } else {
+          status.textContent = problem === null
+            ? "Changed. Every other session has been signed out."
+            : problem;
+        }
         current.value = "";
-        if (code) code.value = "";
         if (problem === null) {
           next.value = "";
           again.value = "";
@@ -249,9 +341,10 @@
     });
   }
 
-  // The second factor, under Security: its state, setting it up
-  // from a code to scan, the recovery codes shown once, and the two changes
-  // that ask for the password and a code again.
+  // The second factor, under Security: its state, setting it up from a code
+  // to scan, the recovery codes shown once, new codes and turning it off.
+  // Each change is sent as it is; one the installation says needs a fresh
+  // confirmation opens the page that asks for it.
   const factor = document.getElementById("factor");
   if (factor) {
     const state = document.getElementById("factor-state");
@@ -263,7 +356,6 @@
     const secret = document.getElementById("factor-secret");
     const secretCopy = document.getElementById("factor-secret-copy");
     const setupCode = document.getElementById("factor-code");
-    const setupPassword = document.getElementById("factor-password");
     const confirm = document.getElementById("factor-confirm");
     const cancel = document.getElementById("factor-cancel");
     const codes = document.getElementById("factor-codes");
@@ -274,14 +366,8 @@
     const left = document.getElementById("factor-left");
     const newCodes = document.getElementById("factor-new-codes");
     const turnOff = document.getElementById("factor-turn-off");
-    const step = document.getElementById("factor-step");
-    const stepPassword = document.getElementById("factor-step-password");
-    const stepCode = document.getElementById("factor-step-code");
-    const stepSubmit = document.getElementById("factor-step-submit");
-    const stepCancel = document.getElementById("factor-step-cancel");
     const status = document.getElementById("factor-status");
-    const passwordCode = document.getElementById("password-code-row");
-    let stepAction = "";
+    const boxes = digitBoxes(setupCode);
     let shownCodes = [];
 
     function show(part) {
@@ -289,13 +375,11 @@
       setup.hidden = part !== "setup";
       codes.hidden = part !== "codes";
       onPart.hidden = part !== "on";
-      if (part !== "on") step.hidden = true;
     }
 
     function setState(on) {
       state.dataset.state = on ? "on" : "off";
       state.textContent = on ? "On" : "Off";
-      if (passwordCode) passwordCode.hidden = !on;
     }
 
     // The modules as one path, with the four-module quiet zone the standard
@@ -320,6 +404,13 @@
       path.setAttribute("class", "factor-qr-ink");
       path.setAttribute("d", d);
       qr.appendChild(path);
+    }
+
+    function forgetSetup() {
+      if (boxes) boxes.clear();
+      else setupCode.value = "";
+      while (qr.firstChild) qr.removeChild(qr.firstChild);
+      secret.textContent = "";
     }
 
     function showCodes(list) {
@@ -348,13 +439,12 @@
       warning.hidden = !(data.on && data.wrong_before > 0);
       if (data.on && data.wrong_before > 0) {
         warning.textContent = data.wrong_before === 1
-          ? "A wrong code was sent with the right password before this sign-in. If that was not you, change the password."
-          : data.wrong_before + " wrong codes were sent with the right password before this sign-in. If that was not you, change the password.";
+          ? "A wrong code was sent with the right password before this sign-in. If that was not you, the password has leaked: change it below."
+          : data.wrong_before + " wrong codes were sent with the right password before this sign-in. If that was not you, the password has leaked: change it below.";
       }
       if (data.on) {
-        left.textContent = data.recovery_left === 1
-          ? "1 recovery code left."
-          : data.recovery_left + " recovery codes left.";
+        left.textContent = (data.recovery_left === 1 ? "1 of 10 unused." : data.recovery_left + " of 10 unused.") +
+          " Each one signs in once, in place of a code.";
         show("on");
       } else {
         show("off");
@@ -370,7 +460,7 @@
       } finally {
         start.disabled = false;
         if (answer.problem) {
-          status.textContent = answer.problem;
+          status.textContent = confirmFirst(answer.code) ? "Confirm it's you first…" : answer.problem;
         } else {
           drawCode(answer.data.qr);
           secret.textContent = answer.data.secret;
@@ -381,13 +471,10 @@
       }
     });
 
-    secretCopy.addEventListener("click", () => copyText(secretCopy, secret.textContent.replace(/ /g, ""), secret));
+    secretCopy.addEventListener("click", () => copyIcon(secretCopy, secret.textContent.replace(/ /g, ""), secret));
 
     cancel.addEventListener("click", () => {
-      setupCode.value = "";
-      setupPassword.value = "";
-      while (qr.firstChild) qr.removeChild(qr.firstChild);
-      secret.textContent = "";
+      forgetSetup();
       status.textContent = "";
       show("off");
     });
@@ -398,16 +485,15 @@
       status.textContent = "Checking…";
       let answer = { problem: "The installation did not answer as expected." };
       try {
-        answer = await ask("POST", "/api/v1/factor/on", { password: setupPassword.value, code: setupCode.value.trim() });
+        answer = await ask("POST", "/api/v1/factor/on", { code: setupCode.value.trim() });
       } finally {
-        setupPassword.value = "";
-        setupCode.value = "";
         confirm.disabled = false;
         if (answer.problem) {
-          status.textContent = answer.problem;
+          if (boxes) boxes.clear();
+          else setupCode.value = "";
+          status.textContent = confirmFirst(answer.code) ? "Confirm it's you first…" : answer.problem;
         } else {
-          while (qr.firstChild) qr.removeChild(qr.firstChild);
-          secret.textContent = "";
+          forgetSetup();
           setState(true);
           status.textContent = "On. Every other session has been signed out.";
           showCodes(answer.data.recovery || []);
@@ -424,40 +510,24 @@
       load();
     });
 
-    function openStep(action) {
-      stepAction = action;
-      stepSubmit.textContent = action === "off" ? "Turn off" : "Make new codes";
-      step.hidden = false;
-      status.textContent = action === "off"
-        ? "Turning it off asks for the password and a code."
-        : "New codes replace every old one, and ask for the password and a code.";
-      stepPassword.focus();
-    }
-
-    newCodes.addEventListener("click", () => openStep("recovery"));
-    turnOff.addEventListener("click", () => openStep("off"));
-    stepCancel.addEventListener("click", () => {
-      step.hidden = true;
-      stepPassword.value = "";
-      stepCode.value = "";
-      status.textContent = "";
-    });
-
-    step.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      stepSubmit.disabled = true;
+    // New codes and turning off are asked about first, on the page: each
+    // undoes something that cannot be had back.
+    async function change(action, button) {
+      const question = action === "off"
+        ? "Turn off two-step sign-in? Signing in will ask for the password alone, and every other session is signed out."
+        : "Make new recovery codes? Every code made before stops working.";
+      if (!window.confirm(question)) return;
+      button.disabled = true;
       status.textContent = "Checking…";
-      const path = stepAction === "off" ? "/api/v1/factor/off" : "/api/v1/factor/recovery";
+      const path = action === "off" ? "/api/v1/factor/off" : "/api/v1/factor/recovery";
       let answer = { problem: "The installation did not answer as expected." };
       try {
-        answer = await ask("POST", path, { password: stepPassword.value, code: stepCode.value.trim() });
+        answer = await ask("POST", path);
       } finally {
-        stepPassword.value = "";
-        stepCode.value = "";
-        stepSubmit.disabled = false;
+        button.disabled = false;
         if (answer.problem) {
-          status.textContent = answer.problem;
-        } else if (stepAction === "off") {
+          status.textContent = confirmFirst(answer.code) ? "Confirm it's you first…" : answer.problem;
+        } else if (action === "off") {
           status.textContent = "Off. Every other session has been signed out.";
           load();
         } else {
@@ -465,8 +535,121 @@
           showCodes(answer.data.recovery || []);
         }
       }
-    });
+    }
+
+    newCodes.addEventListener("click", () => change("recovery", newCodes));
+    turnOff.addEventListener("click", () => change("off", turnOff));
 
     load();
+  }
+
+  // The first visit: the setup code from the log and the password chosen
+  // with it. Once set, the installation has signed in, and Security is
+  // where two-step sign-in is turned on.
+  const setupForm = document.getElementById("setup-form");
+  if (setupForm) {
+    const code = document.getElementById("setup-code");
+    const password = document.getElementById("setup-password");
+    const again = document.getElementById("setup-again");
+    const button = document.getElementById("setup-submit");
+    const status = document.getElementById("setup-status");
+    setupForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (password.value !== again.value) {
+        status.textContent = "The two passwords are not the same.";
+        again.focus();
+        return;
+      }
+      button.disabled = true;
+      status.textContent = "Saving…";
+      let problem = "The installation did not answer as expected.";
+      try {
+        problem = await send("POST", "/api/v1/setup", { code: code.value.trim(), password: password.value });
+      } finally {
+        if (problem === null) {
+          window.location.assign("/security");
+        } else if (refusal === "already_set_up") {
+          window.location.assign("/login");
+        } else {
+          status.textContent = problem;
+          if (refusal === "weak_password") {
+            password.value = "";
+            again.value = "";
+            password.focus();
+          } else {
+            code.value = "";
+            code.focus();
+          }
+          button.disabled = false;
+        }
+      }
+    });
+  }
+
+  // Confirm it's you: a code from the app, or a recovery code, where the
+  // second factor is on, and the password where it is not. Five wrong
+  // answers end the session, and the installation says so.
+  const confirmForm = document.getElementById("confirm-form");
+  if (confirmForm) {
+    const codeRow = document.getElementById("confirm-code-row");
+    const code = document.getElementById("confirm-code");
+    const codeLabel = document.getElementById("confirm-code-label");
+    const recovery = document.getElementById("confirm-recovery");
+    const passwordRow = document.getElementById("confirm-password-row");
+    const password = document.getElementById("confirm-password");
+    const button = document.getElementById("confirm-submit");
+    const status = document.getElementById("confirm-status");
+    const boxes = digitBoxes(code);
+    let withCode = false;
+
+    recovery.addEventListener("click", () => {
+      const toRecovery = code.inputMode === "numeric";
+      if (boxes) boxes.text(toRecovery);
+      else code.inputMode = toRecovery ? "text" : "numeric";
+      codeLabel.textContent = toRecovery ? "Recovery code" : "Code from your authenticator app";
+      recovery.textContent = toRecovery ? "Use the code from the app instead" : "Use a recovery code instead";
+      code.value = "";
+      code.focus();
+    });
+
+    (async () => {
+      const { data, problem } = await ask("GET", "/api/v1/factor");
+      if (problem) {
+        status.textContent = problem;
+        return;
+      }
+      withCode = Boolean(data.on);
+      codeRow.hidden = !withCode;
+      passwordRow.hidden = withCode;
+      code.required = withCode;
+      password.required = !withCode;
+      status.textContent = "";
+      button.disabled = false;
+      (withCode ? code : password).focus();
+    })();
+
+    confirmForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      status.textContent = "Checking…";
+      const body = withCode ? { code: code.value.trim() } : { password: password.value };
+      let problem = "The installation did not answer as expected.";
+      try {
+        problem = await send("POST", "/api/v1/session/confirm", body);
+      } finally {
+        if (problem === null) {
+          window.location.assign("/security");
+        } else if (refusal === "signed_out" || refusal === "sign_in") {
+          window.location.assign("/login");
+        } else {
+          status.textContent = problem;
+          password.value = "";
+          if (boxes) boxes.clear();
+          else code.value = "";
+          (withCode ? code : password).focus();
+          button.disabled = false;
+        }
+      }
+    });
   }
 })();

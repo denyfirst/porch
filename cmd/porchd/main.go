@@ -390,18 +390,22 @@ func run() int {
 		}
 	}
 
-	// The access file, the same way: a path that names no file gets one, with a
-	// password printed once. Never on the demonstration, which is public by
-	// design and keeps nothing to protect.
+	// The access file: a path that names no file waits for its first
+	// password, set on the setup page with a code printed once. Never on the
+	// demonstration, which is public by design and keeps nothing to protect.
+	var setupCode string
+	setupUntil := time.Now().Add(access.SetupLife)
 	if *accessFile != "" {
 		if demo.Enabled {
 			fmt.Fprintln(os.Stderr, "-access-file is not available on the demonstration, which is public and keeps nothing")
 			return 2
 		}
-		if err := createAccess(*accessFile); err != nil {
+		code, err := prepareAccess(*accessFile, setupUntil)
+		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
+		setupCode = code
 	}
 
 	scope, err := verificationScope(*verifySecretFile, *resolver)
@@ -620,6 +624,9 @@ func run() int {
 	var gate *access.Gate
 	if *accessFile != "" {
 		gate = access.NewGate(*accessFile, web.PublicPaths())
+		if setupCode != "" {
+			gate.AwaitSetup(setupCode, setupUntil)
+		}
 		history := &vault.Vault{Dir: filepath.Join(filepath.Dir(*accessFile), "history"), Key: gate.Key}
 		api.KeepReports(history)
 		root.Handle("/api/v1/history", history.Handler())
@@ -1347,39 +1354,62 @@ func removedFlags(args []string) error {
 	return nil
 }
 
-// createAccess writes an access file with a new password if nothing is at
-// path, and says the password once. An existing file is left alone: replacing
-// it would make everything kept under its key unreadable, which is a decision
-// made by deleting it, not a side effect of starting.
-func createAccess(path string) error {
+// prepareAccess readies the first visit when nothing is at path, and returns
+// the setup code it said once; an existing file is left alone and nothing is
+// said. Replacing a file would make everything kept under its key
+// unreadable, which is a decision made by deleting it, not a side effect of
+// starting.
+//
+// No password is made here. The operator chooses it on the setup page with
+// the code, which works once until until: a log read later holds nothing
+// that opens the installation (access.SetupLife).
+func prepareAccess(path string, until time.Time) (string, error) {
 	if _, err := os.Stat(path); err == nil {
-		return nil
+		return "", nil
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("the access file could not be read: %w", err)
+		return "", fmt.Errorf("the access file could not be read: %w", err)
 	}
-	password, err := access.GeneratePassword()
-	if err != nil {
-		return err
+	// The password is chosen later, on the setup page, and the file it is
+	// written to has to be possible now: a folder that is missing or not
+	// writable is said at start, where the operator is looking, and not
+	// after they have typed a password into a page that cannot keep it.
+	if err := writableFolder(filepath.Dir(path)); err != nil {
+		return "", err
 	}
 	// Before the new key exists, what the old one sealed goes aside, or the
 	// new key meets it and cannot open it (audit 2026-09-18, D03 and D09).
 	retired, err := retireSealed(filepath.Dir(path), time.Now().UTC().Format("2006-01-02"))
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := access.Create(path, password); err != nil {
-		return err
+	code, err := access.NewSetupCode()
+	if err != nil {
+		return "", fmt.Errorf("a setup code could not be made: %w", err)
 	}
-	fmt.Fprintf(secretOut, "porchd: this installation's password is\n\n    %s\n\n"+
-		"Sign in with it and change it. It is shown once and written nowhere. If it is\n"+
-		"lost, move %s aside and restart for a new one; what was kept under the\n"+
-		"old one can no longer be read with the new one.\n", password, path)
+	fmt.Fprintf(secretOut, "porchd: this installation's setup code is\n\n    %s\n\n"+
+		"Open the installation and choose its password with it. It works once, until\n"+
+		"%s UTC; restart porchd for a new one. It is shown once and written nowhere.\n"+
+		"A lost password cannot be recovered: what is kept under it can no longer be\n"+
+		"read without it.\n", code, until.UTC().Format("15:04"))
 	if retired != "" {
 		fmt.Fprintf(secretOut, "\nWhat the earlier password kept was moved, not deleted, to\n\n    %s\n\n"+
 			"It opens only with the earlier access file and its password. Delete the\n"+
 			"folder once you are sure nobody needs it.\n", retired)
 	}
-	return nil
+	return code, nil
+}
+
+// writableFolder says whether a file can be made in dir, by making one and
+// removing it.
+func writableFolder(dir string) error {
+	f, err := os.CreateTemp(dir, ".porch-write-check-*")
+	if err != nil {
+		return fmt.Errorf("the folder the access file goes in, %s, cannot be written to: %w; "+
+			"create it and give it to the user porchd runs as, as docs/self-host.md shows", dir, err)
+	}
+	name := f.Name()
+	_ = f.Close()
+	return os.Remove(name)
 }
 
 // sealed names what an installation keeps under its data key, beside the

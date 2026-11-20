@@ -716,6 +716,8 @@ func Configure(in Installation) {
 	}
 	renderWorkspace(in)
 	rendered["/login"] = renderSignIn()
+	rendered["/setup"] = renderAlone("Set up — "+ToolName, "Choose this installation's password.", "assets/setup.html")
+	rendered["/confirm"] = renderAlone("Confirm it's you — "+ToolName, "Confirm a change to how this installation is signed into.", "assets/confirm.html")
 }
 
 // signedIn is true once an installation is configured, since every one has a
@@ -724,22 +726,30 @@ func Configure(in Installation) {
 var signedIn bool
 
 // PublicPaths are what anybody may reach on an installation behind a
-// password: the sign-in page and what it draws and runs with.
+// password: the sign-in page, the setup page an installation with no
+// password yet shows instead, and what they draw and run with. The gate
+// sends each to the other when it is not the one that applies.
 func PublicPaths() []string {
-	return []string{"/login", "/style.css", "/theme.js", "/session.js", "/icon-porch.svg", "/favicon.ico", "/apple-touch-icon.png", FontPath}
+	return []string{"/login", "/setup", "/style.css", "/theme.js", "/session.js", "/icon-porch.svg", "/favicon.ico", "/apple-touch-icon.png", FontPath}
 }
 
 // renderSignIn is the one page an installation behind a password shows to
 // somebody who has not signed in.
 func renderSignIn() []byte {
+	return renderAlone("Sign in — "+ToolName, "Sign in to this installation.", "assets/login.html")
+}
+
+// renderAlone renders a page drawn as a card on its own, with no rail: the
+// sign-in page, the setup page and the page that confirms it's you.
+func renderAlone(title, description, fragment string) []byte {
 	body, err := render(&page{
-		Title:       "Sign in — " + ToolName,
-		Description: "Sign in to this installation.",
-		Fragment:    "assets/login.html",
+		Title:       title,
+		Description: description,
+		Fragment:    fragment,
 		Section:     "login",
 	})
 	if err != nil {
-		panic("rendering the sign-in page: " + err.Error())
+		panic("rendering " + fragment + ": " + err.Error())
 	}
 	return body
 }

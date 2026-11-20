@@ -11,6 +11,10 @@
     off, being set up, on. Its code to scan is drawn from the modules the
     installation sends, always dark on light whatever the theme, because a
     phone's camera reads that and not the inverse.
+
+    Every change here needs a session signed in, or confirmed, in the last ten
+    minutes. Past that the installation answers confirm_required and
+    session.js opens the page that asks for a code, or the password, again.
   -->
   <div class="work-heading">
     <div>
@@ -21,41 +25,53 @@
 
   <div class="security-panels">
 
-    <section class="panel factor" id="factor" aria-labelledby="factor-title">
-      <div class="factor-head">
-        <h2 class="factor-title" id="factor-title">Two-step sign-in</h2>
+    <p class="factor-warning" id="factor-warning" role="alert" hidden></p>
+
+    <section class="panel settings factor" id="factor" aria-labelledby="factor-title">
+      <div class="settings-head">
+        <div>
+          <h2 class="factor-title" id="factor-title">Two-step sign-in</h2>
+          <p class="settings-lead">A code from an authenticator app is asked for with the password.</p>
+        </div>
         <span class="factor-state" id="factor-state" data-state="unknown">Asking…</span>
       </div>
-      <p class="factor-lead">A code from an authenticator app, asked for with the password.</p>
-      <p class="factor-warning" id="factor-warning" role="alert" hidden></p>
 
-      <div class="factor-actions" id="factor-off" hidden>
-        <button class="submit" type="button" id="factor-start">Turn on</button>
+      <div class="settings-row" id="factor-off" hidden>
+        <div class="settings-text">
+          <p class="settings-name">Authenticator app</p>
+          <p class="settings-note">Not set up. Sign-in asks for the password alone.</p>
+        </div>
+        <button class="submit settings-button" type="button" id="factor-start">Turn on</button>
       </div>
 
       <form class="factor-setup" id="factor-setup" autocomplete="off" hidden>
+        <span class="factor-qr-frame"><svg class="factor-qr" id="factor-qr" role="img" aria-label="Code to scan with an authenticator app" xmlns="http://www.w3.org/2000/svg"></svg></span>
         <ol class="factor-steps">
           <li>
-            <span class="factor-step-title">Scan this with an authenticator app</span>
-            <span class="factor-qr-frame"><svg class="factor-qr" id="factor-qr" role="img" aria-label="Code to scan with an authenticator app" xmlns="http://www.w3.org/2000/svg"></svg></span>
-            <span class="factor-secret-line">Or enter the key by hand:
-              <code class="factor-secret" id="factor-secret"></code>
-              <button class="history-open" type="button" id="factor-secret-copy">Copy</button></span>
+            <span class="factor-step-title">Scan the code with an authenticator app</span>
+            <span class="factor-step-note">Any app for 6-digit codes. It is listed as denyfirst · porch.</span>
+            <span class="factor-secret-line">Can't scan it? Enter this key:
+              <span class="factor-secret-row">
+                <code class="factor-secret" id="factor-secret"></code>
+                <button class="icon-button" type="button" id="factor-secret-copy" aria-label="Copy the key" title="Copy">
+                  <svg class="copy-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>
+                  <svg class="copied-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+                </button>
+              </span></span>
           </li>
           <li>
-            <label class="factor-step-title" for="factor-code">Enter the code it shows</label>
-            <input class="field factor-code-field" type="text" id="factor-code" inputmode="numeric"
-              autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
-          </li>
-          <li>
-            <label class="factor-step-title" for="factor-password">And this installation's password</label>
-            <input class="field" type="password" id="factor-password" autocomplete="current-password" required>
+            <label class="factor-step-title" for="factor-code">Enter the 6-digit code it shows</label>
+            <span class="factor-step-note">This proves the app and this installation agree. Nothing is kept until it does.</span>
+            <div class="digits">
+              <input class="field code-field" type="text" id="factor-code" inputmode="numeric"
+                autocomplete="one-time-code" maxlength="7" spellcheck="false" required>
+            </div>
+            <div class="factor-actions">
+              <button class="submit" type="submit" id="factor-confirm">Turn on</button>
+              <button class="update-check" type="button" id="factor-cancel">Cancel</button>
+            </div>
           </li>
         </ol>
-        <div class="factor-actions">
-          <button class="submit" type="submit" id="factor-confirm">Turn on</button>
-          <button class="update-check" type="button" id="factor-cancel">Cancel</button>
-        </div>
       </form>
 
       <div class="factor-codes" id="factor-codes" hidden>
@@ -63,55 +79,65 @@
           from the app. Keep them where the phone is not; they are not shown again.</p>
         <ol class="factor-code-list" id="factor-code-list"></ol>
         <div class="factor-actions">
-          <button class="update-check" type="button" id="factor-codes-copy">Copy all</button>
           <button class="submit" type="button" id="factor-codes-done">I have kept them</button>
+          <button class="update-check" type="button" id="factor-codes-copy">Copy all</button>
         </div>
       </div>
 
       <div class="factor-on" id="factor-on" hidden>
-        <p class="factor-left" id="factor-left"></p>
-        <div class="factor-actions">
-          <button class="update-check" type="button" id="factor-new-codes">New recovery codes</button>
-          <button class="update-check factor-off-button" type="button" id="factor-turn-off">Turn off</button>
-        </div>
-        <form class="factor-step" id="factor-step" autocomplete="off" hidden>
-          <label class="field-label" for="factor-step-password">Password</label>
-          <input class="field" type="password" id="factor-step-password" autocomplete="current-password" required>
-          <label class="field-label" for="factor-step-code">Code from the app, or a recovery code</label>
-          <input class="field" type="text" id="factor-step-code" autocomplete="one-time-code"
-            maxlength="40" spellcheck="false" autocapitalize="off" required>
-          <div class="factor-actions">
-            <button class="submit" type="submit" id="factor-step-submit">Confirm</button>
-            <button class="update-check" type="button" id="factor-step-cancel">Cancel</button>
+        <div class="settings-row">
+          <div class="settings-text">
+            <p class="settings-name">Authenticator app</p>
+            <p class="settings-note">Listed in the app as denyfirst · porch.</p>
           </div>
-        </form>
+        </div>
+        <div class="settings-row">
+          <div class="settings-text">
+            <p class="settings-name">Recovery codes</p>
+            <p class="settings-note" id="factor-left"></p>
+          </div>
+          <button class="update-check settings-button" type="button" id="factor-new-codes">Generate new codes</button>
+        </div>
+        <div class="settings-row">
+          <div class="settings-text">
+            <p class="settings-name">Turn off two-step sign-in</p>
+            <p class="settings-note">Sign-in will ask for the password alone.</p>
+          </div>
+          <button class="update-check settings-button factor-off-button" type="button" id="factor-turn-off">Turn off</button>
+        </div>
       </div>
 
-      <p class="signin-status" id="factor-status" role="status"></p>
+      <p class="signin-status settings-status" id="factor-status" role="status"></p>
     </section>
 
     <!--
       Changing the password keeps the key what is kept is encrypted with, so
       nothing becomes unreadable, and ends every other session, so a password
-      changed because it leaked stops working wherever it leaked to. With
-      the second factor on, a code is asked as well.
+      changed because it leaked stops working wherever it leaked to.
     -->
-    <form class="panel password-form" id="password-form" autocomplete="on">
-      <h2 class="factor-title">Password</h2>
-      <label class="field-label" for="password-current">Current password</label>
-      <input class="field" type="password" id="password-current" autocomplete="current-password" required>
-      <label class="field-label" for="password-next">New password, at least 12 characters</label>
-      <input class="field" type="password" id="password-next" autocomplete="new-password" minlength="12" required>
-      <label class="field-label" for="password-again">The new password again</label>
-      <input class="field" type="password" id="password-again" autocomplete="new-password" minlength="12" required>
-      <div class="password-code" id="password-code-row" hidden>
-        <label class="field-label" for="password-code">Code from the app, or a recovery code</label>
-        <input class="field" type="text" id="password-code" autocomplete="one-time-code"
-          maxlength="40" spellcheck="false" autocapitalize="off">
+    <section class="panel settings settings-split" aria-labelledby="password-title">
+      <div>
+        <h2 class="factor-title" id="password-title">Password</h2>
+        <p class="settings-lead">Changing it keeps everything this installation has kept readable, and signs out every other session.</p>
       </div>
-      <button class="submit" type="submit" id="password-submit">Change the password</button>
-      <p class="signin-status" id="password-status" role="status"></p>
-    </form>
+      <form class="password-form" id="password-form" autocomplete="on">
+        <div class="signin-field">
+          <label class="field-label" for="password-current">Current password</label>
+          <input class="field" type="password" id="password-current" autocomplete="current-password" required>
+        </div>
+        <div class="signin-field">
+          <label class="field-label" for="password-next">New password</label>
+          <input class="field" type="password" id="password-next" autocomplete="new-password" minlength="12" required aria-describedby="password-next-help">
+          <p class="field-hint" id="password-next-help">At least 12 characters.</p>
+        </div>
+        <div class="signin-field">
+          <label class="field-label" for="password-again">Confirm new password</label>
+          <input class="field" type="password" id="password-again" autocomplete="new-password" minlength="12" required>
+        </div>
+        <button class="submit" type="submit" id="password-submit">Change password</button>
+        <p class="signin-status" id="password-status" role="status"></p>
+      </form>
+    </section>
 
   </div>
 
