@@ -1,12 +1,14 @@
 /*
-  The colour scheme switch, and nothing else.
+  The colour scheme switch, and the width of an installation's rail.
 
   Loaded in the head of every page, before anything is drawn, so a reader who
   chose a scheme is never shown the other one first. The page follows the
   system until the switch is used; then it remembers "light" or "dark" in this
   browser's local storage, which is the one thing any page here stores. It is
   never sent anywhere: the server does not read it and nothing in it names a
-  person or a host.
+  person or a host. An installation's rail can be narrowed to its marks on a
+  wide screen, and that is remembered the same way, as the one word
+  "narrow", under its own key.
 
   No markup is built here and nothing a server sends is read, which is why this
   is a file of its own rather than part of app.js: a page that runs no check
@@ -37,6 +39,19 @@
 
   const initial = stored();
   if (initial) root.dataset.theme = initial;
+
+  // The rail's width, read before anything is drawn for the same reason the
+  // scheme is: a page that drew the wide rail and then narrowed it would
+  // jump under the reader.
+  const RAIL = "rail";
+  function railNarrow() {
+    try {
+      return window.localStorage.getItem(RAIL) === "narrow";
+    } catch {
+      return false;
+    }
+  }
+  if (railNarrow()) root.dataset.rail = "narrow";
 
   /*
     The mark says what pressing it does, not what is showing: a sun to go to
@@ -85,7 +100,39 @@
     button.appendChild(svg);
   }
 
+  // Narrowed, the rail is its marks alone: each says its name where the
+  // pointer rests, and the button says which way it goes.
+  function drawRail(fold) {
+    const narrow = root.dataset.rail === "narrow";
+    const said = narrow ? "Widen the menu" : "Narrow the menu";
+    fold.setAttribute("aria-label", said);
+    fold.title = said;
+    for (const item of document.querySelectorAll(".rail-item, .rail-signout")) {
+      const label = item.querySelector(".rail-label");
+      if (narrow && label) item.title = label.textContent.trim();
+      else item.removeAttribute("title");
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    const fold = document.getElementById("rail-fold");
+    if (fold) {
+      fold.hidden = false;
+      drawRail(fold);
+      fold.addEventListener("click", () => {
+        const narrow = root.dataset.rail !== "narrow";
+        if (narrow) root.dataset.rail = "narrow";
+        else delete root.dataset.rail;
+        try {
+          if (narrow) window.localStorage.setItem(RAIL, "narrow");
+          else window.localStorage.removeItem(RAIL);
+        } catch {
+          // Not remembered, and still narrowed for this page.
+        }
+        drawRail(fold);
+      });
+    }
+
     const button = document.getElementById("theme-toggle");
     if (!button) return;
     button.hidden = false;

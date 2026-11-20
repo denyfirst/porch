@@ -309,9 +309,11 @@
   // would look the same as success.
   const signOut = document.getElementById("sign-out");
   if (signOut) {
+    // The words are a label beside a mark, which a narrowed rail shows alone.
+    const signOutLabel = signOut.querySelector(".rail-label") || signOut;
     signOut.addEventListener("click", async () => {
       signOut.disabled = true;
-      signOut.textContent = "Signing out…";
+      signOutLabel.textContent = "Signing out…";
       let problem = "The installation did not answer as expected.";
       try {
         problem = await send("DELETE", "/api/v1/session");
@@ -319,7 +321,7 @@
         if (problem === null) {
           window.location.assign("/login");
         } else {
-          signOut.textContent = "Not signed out. Try again";
+          signOutLabel.textContent = "Not signed out. Try again";
           signOut.title = problem;
           signOut.disabled = false;
         }
