@@ -221,7 +221,7 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 	// belong to the document.
 	hidden := []string{
 		".rail", ".theme-toggle", ".work-heading",
-		".summary-actions", ".composer", ".checks", ".colophon-links",
+		".report-keep", ".composer", ".checks", ".colophon-links",
 		".ask > h1", ".ask-form",
 	}
 

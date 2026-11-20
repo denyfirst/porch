@@ -225,7 +225,13 @@ func TestThePagesSayWhetherAPasswordIsInFront(t *testing.T) {
 			t.Errorf("the security page still asks again in place: %q", never)
 		}
 	}
-	for _, want := range []string{`id="factor-state"`, `id="factor-start"`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-form"`, `id="factor-new-codes"`, `id="factor-turn-off"`} {
+	// On and off is one switch, which says its state in a word as well.
+	for _, never := range []string{`id="factor-start"`, `id="factor-turn-off"`, "Listed in the app as"} {
+		if strings.Contains(security, never) {
+			t.Errorf("the security page still carries %q, which the switch replaced", never)
+		}
+	}
+	for _, want := range []string{`id="factor-state"`, `<input type="checkbox" role="switch" id="factor-switch" aria-labelledby="factor-title" aria-describedby="factor-lead" disabled>`, `id="factor-qr"`, `id="factor-code-list"`, `id="password-form"`, `id="factor-new-codes"`} {
 		if !strings.Contains(security, want) {
 			t.Errorf("the security page lacks %q", want)
 		}

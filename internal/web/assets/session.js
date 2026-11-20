@@ -368,16 +368,16 @@
     });
   }
 
-  // The second factor, under Security: its state, setting it up from a code
-  // to scan, the recovery codes shown once, new codes and turning it off.
+  // The second factor, under Security: one switch for on and off, setting
+  // it up from a code to scan, the recovery codes shown once, and new codes.
   // Each change is sent as it is; one the installation says needs a fresh
-  // confirmation opens the page that asks for it.
+  // confirmation opens the page that asks for it, and the switch goes back.
   const factor = document.getElementById("factor");
   if (factor) {
     const state = document.getElementById("factor-state");
+    const lead = document.getElementById("factor-lead");
+    const toggle = document.getElementById("factor-switch");
     const warning = document.getElementById("factor-warning");
-    const offPart = document.getElementById("factor-off");
-    const start = document.getElementById("factor-start");
     const setup = document.getElementById("factor-setup");
     const qr = document.getElementById("factor-qr");
     const secret = document.getElementById("factor-secret");
@@ -392,21 +392,23 @@
     const onPart = document.getElementById("factor-on");
     const left = document.getElementById("factor-left");
     const newCodes = document.getElementById("factor-new-codes");
-    const turnOff = document.getElementById("factor-turn-off");
     const status = document.getElementById("factor-status");
     const boxes = digitBoxes(setupCode);
+    const LEAD_OFF = "A code from an authenticator app is asked for with the password.";
+    const LEAD_ON = "On. The code comes from the entry denyfirst · porch in your authenticator app.";
     let shownCodes = [];
 
     function show(part) {
-      offPart.hidden = part !== "off";
       setup.hidden = part !== "setup";
       codes.hidden = part !== "codes";
       onPart.hidden = part !== "on";
     }
 
-    function setState(on) {
+    function setState(on, word) {
+      toggle.checked = on;
       state.dataset.state = on ? "on" : "off";
-      state.textContent = on ? "On" : "Off";
+      state.textContent = word || (on ? "On" : "Off");
+      lead.textContent = on ? LEAD_ON : LEAD_OFF;
     }
 
     // The modules as one path, with the four-module quiet zone the standard
@@ -463,6 +465,7 @@
         return;
       }
       setState(data.on);
+      toggle.disabled = false;
       warning.hidden = !(data.on && data.wrong_before > 0);
       if (data.on && data.wrong_before > 0) {
         warning.textContent = data.wrong_before === 1
@@ -478,32 +481,53 @@
       }
     }
 
-    start.addEventListener("click", async () => {
-      start.disabled = true;
+    // Turning it on asks for a code to scan and draws the setup; it is not
+    // on until a code from the app is confirmed there.
+    async function begin() {
+      toggle.disabled = true;
       status.textContent = "Making a code to scan…";
       let answer = { problem: "The installation did not answer as expected." };
       try {
         answer = await ask("POST", "/api/v1/factor/setup");
       } finally {
-        start.disabled = false;
+        toggle.disabled = false;
         if (answer.problem) {
+          setState(false);
           status.textContent = confirmFirst(answer.code) ? "Confirm it's you first…" : answer.problem;
         } else {
           drawCode(answer.data.qr);
           secret.textContent = answer.data.secret;
           status.textContent = "";
+          setState(true, "Setting up");
+          lead.textContent = LEAD_OFF;
           show("setup");
           setupCode.focus();
         }
+      }
+    }
+
+    function stopSetup() {
+      forgetSetup();
+      status.textContent = "";
+      setState(false);
+      show("off");
+    }
+
+    toggle.addEventListener("change", () => {
+      if (toggle.checked) {
+        begin();
+      } else if (!setup.hidden) {
+        stopSetup();
+      } else {
+        change("off", toggle);
       }
     });
 
     secretCopy.addEventListener("click", () => copyIcon(secretCopy, secret.textContent.replace(/ /g, ""), secret));
 
     cancel.addEventListener("click", () => {
-      forgetSetup();
-      status.textContent = "";
-      show("off");
+      stopSetup();
+      toggle.focus();
     });
 
     setup.addEventListener("submit", async (event) => {
@@ -538,21 +562,26 @@
     });
 
     // New codes and turning off are asked about first, on the page: each
-    // undoes something that cannot be had back.
-    async function change(action, button) {
+    // undoes something that cannot be had back. A refusal puts the switch
+    // back where it was.
+    async function change(action, control) {
       const question = action === "off"
         ? "Turn off two-step sign-in? Signing in will ask for the password alone, and every other session is signed out."
         : "Make new recovery codes? Every code made before stops working.";
-      if (!window.confirm(question)) return;
-      button.disabled = true;
+      if (!window.confirm(question)) {
+        if (action === "off") setState(true);
+        return;
+      }
+      control.disabled = true;
       status.textContent = "Checking…";
       const path = action === "off" ? "/api/v1/factor/off" : "/api/v1/factor/recovery";
       let answer = { problem: "The installation did not answer as expected." };
       try {
         answer = await ask("POST", path);
       } finally {
-        button.disabled = false;
+        control.disabled = false;
         if (answer.problem) {
+          if (action === "off") setState(true);
           status.textContent = confirmFirst(answer.code) ? "Confirm it's you first…" : answer.problem;
         } else if (action === "off") {
           status.textContent = "Off. Every other session has been signed out.";
@@ -565,7 +594,6 @@
     }
 
     newCodes.addEventListener("click", () => change("recovery", newCodes));
-    turnOff.addEventListener("click", () => change("off", turnOff));
 
     load();
   }

@@ -27,7 +27,7 @@ func TestThePageSendsOnlyTheDomainOfAnAddress(t *testing.T) {
 		t.Error("domainOnly does not cut at the last @")
 	}
 
-	start := strings.Index(src, "async function check(target, spec, extra) {")
+	start := strings.Index(src, "async function check(target, spec, extra, signal) {")
 	if start < 0 {
 		t.Fatal("the page has no check()")
 	}

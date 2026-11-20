@@ -27,13 +27,13 @@ func TestTheDemonstrationOffersNoDownloadAndNoCounter(t *testing.T) {
 	src := string(body)
 	for _, want := range []string{
 		`const DEMO_SITE = document.body.dataset.site === "demo";`,
-		// The download and the print button together, behind one condition: a
-		// report on the demonstration is about this project's own domain, and a
-		// visitor has no use for a copy of it.
+		// The download and the print button together, once, under the whole
+		// report, behind one condition: a report on the demonstration is about
+		// this project's own domain, and a visitor has no use for a copy of it.
 		"  if (!DEMO_SITE) {\n" +
-			"    const actions = el(\"p\", \"summary-actions\");\n" +
-			"    actions.appendChild(downloadLink(data));\n" +
-			"    actions.appendChild(printButton());",
+			"    frame.keep = el(\"div\", \"report-keep\");",
+		"  actions.appendChild(downloadLink(data));\n" +
+			"  actions.appendChild(printButton());",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("app.js no longer contains %q", want)
