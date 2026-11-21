@@ -3689,11 +3689,32 @@ let consoleRun = null;
 
 function consoleLock(on) {
   for (const part of consoleForm.querySelectorAll("fieldset.composer-part")) part.disabled = on;
+  // A disabled fieldset disables its controls and not its links, so Add a
+  // domain and the Names card still led away mid-run (reported 2026-11-21).
+  // They are taken out of the tab order, said to be unavailable, and their
+  // clicks are refused below while the run is on.
+  for (const link of consoleForm.querySelectorAll(COMPOSER_LINKS)) {
+    if (on) {
+      link.setAttribute("aria-disabled", "true");
+      link.setAttribute("tabindex", "-1");
+    } else {
+      link.removeAttribute("aria-disabled");
+      link.removeAttribute("tabindex");
+    }
+  }
   consoleForm.classList.toggle("composer-running", on);
   consoleButton.classList.toggle("submit-stop", on);
 }
 
+const COMPOSER_LINKS = "fieldset.composer-part a[href]";
+
 if (consoleForm) {
+  // Caught before the link sees it, the keyboard's Enter included, which
+  // arrives as a click.
+  consoleForm.addEventListener("click", (event) => {
+    if (consoleRun && event.target.closest(COMPOSER_LINKS)) event.preventDefault();
+  }, true);
+
   consoleForm.addEventListener("submit", async event => {
     event.preventDefault();
 
@@ -3738,6 +3759,11 @@ if (consoleForm) {
       if (!(await proven(target))) return;
       if (run.signal.aborted) return;
 
+      // This run replaces the session's last one from its start, so a page
+      // opened mid-run shows what this run has found so far and nothing older.
+      const before = await historyNewest();
+      await sessionLast([]);
+
       // Awaited one at a time on purpose. See the note above.
       const frame = reportFrame(consoleResults, target, CHECK_ORDER, chosen);
       const says = document.getElementById("console-run-says");
@@ -3756,6 +3782,7 @@ if (consoleForm) {
         }
         await reportRun(frame, entry, () => check(target, entry.spec, selectorsAsked(entry.name), run.signal));
         if (!run.signal.aborted) await reportSince(entry, target);
+        if (entry.data) await consoleRemember(frame, target, before);
       }
     } finally {
       consoleRun = null;
@@ -3768,53 +3795,98 @@ if (consoleForm) {
 }
 
 /*
-  The last check, on New check, read back from History.
+  The last run on New check, for as long as this sign-in lasts.
 
-  A check run here is kept whole under History, encrypted under the key the
-  password seals, and that is where New check finds it when it is opened
-  again: moving to another page and back no longer loses it (asked for on
-  2026-11-20). Nothing is kept in the browser for it. The page asks this
-  installation, behind the password, as History does, so it is there for as
-  long as History keeps it, and gone with it.
-
-  The last run is the newest report and the ones kept just before it for the
-  same name, one per check. A run started meanwhile wins: nothing is drawn
-  over it.
+  Moving to another page and back kept nothing, and a run takes minutes; but
+  the run of an earlier sign-in is History's to show, not New check's (asked
+  for on 2026-11-21). So the names of the reports a run kept are put on the
+  session, which holds them in the installation's memory and drops them with
+  the session: on sign-out, when it runs out, and on restart. The reports
+  themselves are read from History, behind the password, as History reads
+  them; one deleted there is gone here too. Nothing is kept in the browser.
 */
-async function consoleLast() {
-  if (DEMO_SITE || !consoleForm || !consoleResults) return;
-  const idle = () => !consoleRun && consoleResults.hidden;
+
+// sessionLast puts the names of this run's reports on the session; an empty
+// list clears it.
+async function sessionLast(ids) {
+  if (DEMO_SITE) return;
+  try {
+    await fetch("/api/v1/session/last", {
+      method: "PUT",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: ids }),
+    });
+  } catch {
+    // Not kept for the session: the run is still in History.
+  }
+}
+
+// historyNewest is the highest number History has given a report, so the
+// reports a run adds can be told from the ones before it; null where History
+// cannot be read, and then nothing is put on the session.
+async function historyNewest() {
+  if (DEMO_SITE) return null;
+  try {
+    const list = await historyRequest("GET", "/api/v1/history");
+    return ((list && list.entries) || []).reduce((n, e) => Math.max(n, Number(e && e.seq) || 0), 0);
+  } catch {
+    return null;
+  }
+}
+
+// consoleRemember names, on the session, the report each answered check of
+// this run kept: the newest one since the run began, for this target and
+// that check.
+async function consoleRemember(frame, target, before) {
+  if (DEMO_SITE || before === null) return;
+  const answered = frame.entries.filter((e) => e.data).map((e) => e.name);
   let list;
   try {
     list = await historyRequest("GET", "/api/v1/history");
   } catch {
     return;
   }
-  const kept = ((list && list.entries) || [])
-    .filter((e) => e && typeof e.id === "string" && CHECKS[e.check] && typeof e.target === "string")
-    .sort((a, b) => (a.date === b.date ? b.seq - a.seq : (b.date > a.date ? 1 : -1)));
-  if (!kept.length) return;
-  const target = kept[0].target;
-  const run = [];
-  for (const e of kept) {
-    if (e.target !== target || run.some((r) => r.check === e.check)) break;
-    run.push(e);
+  const added = ((list && list.entries) || [])
+    .filter((e) => e && typeof e.id === "string" && Number(e.seq) > before &&
+      answered.includes(e.check) && String(e.target).toLowerCase() === target.toLowerCase())
+    .sort((a, b) => b.seq - a.seq);
+  const ids = [];
+  for (const name of answered) {
+    const kept = added.find((e) => e.check === name);
+    if (kept) ids.push(kept.id);
   }
+  await sessionLast(ids);
+}
+
+async function consoleLast() {
+  if (DEMO_SITE || !consoleForm || !consoleResults) return;
+  const idle = () => !consoleRun && consoleResults.hidden;
+  let last;
+  try {
+    last = await historyRequest("GET", "/api/v1/session/last");
+  } catch {
+    return;
+  }
+  const ids = ((last && last.ids) || []).filter((id) => typeof id === "string");
   const records = [];
-  for (const e of run) {
+  for (const id of ids) {
     if (!idle()) return;
     try {
-      const record = await historyRequest("GET", "/api/v1/history/" + encodeURIComponent(e.id));
-      if (record && record.report && typeof record.report === "object") records.push(record);
+      const record = await historyRequest("GET", "/api/v1/history/" + encodeURIComponent(id));
+      if (record && record.report && typeof record.report === "object" && CHECKS[record.check]) records.push(record);
     } catch {
-      // One that cannot be read is left out; the rest are still the run.
+      // Deleted under History, or unreadable: left out, and the rest drawn.
     }
   }
   if (!records.length || !idle()) return;
-  const checks = CHECK_ORDER.filter((name) => records.some((r) => r.check === name));
-  const frame = reportFrame(consoleResults, target, CHECK_ORDER, checks, { when: records[0].date, last: true });
+  const target = records[0].target;
+  const run = records.filter((r) => r.target === target);
+  const checks = CHECK_ORDER.filter((name) => run.some((r) => r.check === name));
+  const frame = reportFrame(consoleResults, target, CHECK_ORDER, checks, { when: run[0].date, last: true });
   for (const entry of frame.entries) {
-    const record = records.find((r) => r.check === entry.name);
+    const record = run.find((r) => r.check === entry.name);
     if (record) reportShow(frame, entry, record.report);
   }
 }

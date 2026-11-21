@@ -109,6 +109,9 @@ type session struct {
 	until  time.Time
 	fresh  time.Time
 	misses int
+	// last names the reports of the last run on New check in this session,
+	// and nothing else: see last.go.
+	last []string
 }
 
 type bucket struct {
@@ -174,6 +177,9 @@ func (g *Gate) Wrap(next http.Handler) http.Handler {
 			return
 		case "/api/v1/session/confirm":
 			g.serveConfirm(w, r)
+			return
+		case "/api/v1/session/last":
+			g.serveLastRun(w, r)
 			return
 		case "/api/v1/factor", "/api/v1/factor/setup", "/api/v1/factor/on",
 			"/api/v1/factor/off", "/api/v1/factor/recovery":
