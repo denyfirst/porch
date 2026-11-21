@@ -350,6 +350,10 @@ There is one password, for whoever runs the installation.
   ends on sign-out, after twelve hours, or on restart; changing the password
   ends every other session. Guesses are slowed per address. A password sent in
   plain HTTP to anything but `localhost` is refused before it is read.
+- **The last run on New check** is shown again when you come back to the page,
+  for as long as the session lasts. The session holds, in memory, the names of
+  the History reports that run kept, and nothing of what they say; signing in
+  again starts with an empty page, and earlier runs are under History.
 
 ### Two-step sign-in
 
