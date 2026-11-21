@@ -6955,6 +6955,11 @@ main > .band:last-child { border-bottom: 0; }
   border-color: var(--ink-faint);
 }
 
+/* The links in the form wait with it: no hover to answer, and the faint ink
+   of everything else that waits. */
+.composer-part:disabled .check-elsewhere[aria-disabled="true"]:hover { border-color: var(--rule); }
+.composer-part:disabled a[aria-disabled="true"]:not(.check) { color: var(--ink-faint); cursor: not-allowed; }
+
 /* A chosen card keeps its stronger edge, so what the run is doing stays
    readable, and loses the accent's wash, which says "press me". */
 .composer-part:disabled .check-grid .check:has(> input:checked) {
