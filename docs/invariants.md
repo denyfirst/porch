@@ -1856,7 +1856,7 @@ than a script block). An installation somebody runs says none of it.
 *Guarded by:* `TestEveryColourTextIsSetInIsLegible`,
 `TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`,
 `TestPorchsColourIsNeverAVerdictsColour`,
-`TestTheBrandRedIsTheWordmarksAndTheOrganisations`,
+`TestTheBrandRedIsTheWordmarksAlone`,
 `TestNoPageHereIsMarkedAsTheOrganisations`
 
 ### W6 — A state is said in words and in colour, never by fading

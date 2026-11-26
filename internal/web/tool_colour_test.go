@@ -88,17 +88,17 @@ func TestPorchsColourIsNeverAVerdictsColour(t *testing.T) {
 	}
 }
 
-// The brand red is the wordmark's, and the accent of the organisation's own
-// pages, and nothing else's.
+// The brand red is the wordmark's and nothing else's.
 //
 // Any other rule reaching for --brand would put the red back on a control on
 // Porch's pages, which is what the test above exists to stop and cannot see,
-// because it reads tokens and not the rules that use them.
-func TestTheBrandRedIsTheWordmarksAndTheOrganisations(t *testing.T) {
+// because it reads tokens and not the rules that use them. Until v0.37.0 the
+// organisation's pages kept the red for their links and buttons as well,
+// through tokens of their own; they are denyfirst/site's now, and so is that.
+func TestTheBrandRedIsTheWordmarksAlone(t *testing.T) {
 	sheet := stylesheet(t)
 	allowed := map[string]bool{
-		".wordmark-deny, .wordmark-stop":  true,
-		`body[data-owner="organisation"]`: true,
+		".wordmark-deny, .wordmark-stop": true,
 	}
 	rule := regexp.MustCompile(`(?m)^([^{}\n/][^{}\n]*?)\s*\{([^}]*)\}`)
 	found := map[string]bool{}
@@ -117,26 +117,19 @@ func TestTheBrandRedIsTheWordmarksAndTheOrganisations(t *testing.T) {
 			t.Errorf("%s no longer takes the brand red", selector)
 		}
 	}
-
-	override := cssRule(t, sheet, `body[data-owner="organisation"]`)
-	for _, want := range []string{"--tool:", "--link:", "--accent:", "--accent-hover:"} {
-		if !strings.Contains(override, want) {
-			t.Errorf("the organisation's pages do not set %s, so Porch's violet leaks onto them", want)
+	for _, gone := range []string{"--brand-link", "--brand-accent", `data-owner="organisation"`} {
+		if strings.Contains(sheet, gone) {
+			t.Errorf("the stylesheet still carries %s, which only the organisation's pages used", gone)
 		}
 	}
 
-	// What the organisation's pages are drawn in is legible too. The contrast
-	// test reads only the colours rules set text in directly, and these reach
-	// the page through the override.
+	// A button's white label is legible on Porch's accent, in both schemes.
+	// The contrast test reads only the colours rules set text in directly,
+	// and these reach a button through the token.
 	tables := schemes(t, sheet)
 	for _, scheme := range []string{"light", "dark"} {
 		tokens := tables[scheme]
-		for _, surface := range []string{"paper", "paper-sunk"} {
-			if got := contrast(tokens["brand-link"], tokens[surface]); got < readableContrast {
-				t.Errorf("%s: --brand-link on --%s is %.2f:1, below %.1f:1", scheme, surface, got, readableContrast)
-			}
-		}
-		for _, face := range []string{"accent", "accent-hover", "brand-accent", "brand-accent-hover"} {
+		for _, face := range []string{"accent", "accent-hover"} {
 			if got := contrast("#ffffff", tokens[face]); got < readableContrast {
 				t.Errorf("%s: a button's white label on --%s is %.2f:1, below %.1f:1", scheme, face, got, readableContrast)
 			}
