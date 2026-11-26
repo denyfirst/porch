@@ -141,7 +141,7 @@ func TestThePorchHelpLeadsToTheSteps(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("the Porch page is the demonstration's")
 	}
-	page := get(t, "/porch").Body.String()
+	page := get(t, "/").Body.String()
 	_, help, _ := strings.Cut(page, `id="porch-help"`)
 	help, _, _ = strings.Cut(help, "</p>")
 	if !strings.Contains(help, `<a href="#start">run Porch yourself</a>`) || !strings.Contains(page, `id="start"`) {

@@ -11,6 +11,7 @@ import (
 
 const (
 	organisationHost = "denyfirst.dev"
+	mailPolicyHost   = "mta-sts.denyfirst.dev"
 	porchHost        = "porch.denyfirst.dev"
 )
 
@@ -48,15 +49,18 @@ func getOn(t *testing.T, method, host, target string) *httptest.ResponseRecorder
 	return w
 }
 
-// The organisation and Porch each answer at their own name, and each sends
-// what is the other's there.
+// Porch answers at its own name, and the organisation's names are not
+// answered here at all.
 //
-// Since 2026-10-05 the demonstration is two names on one binary: denyfirst.dev
-// is the organisation's front page, its undertakings and its contacts, and
-// porch.denyfirst.dev is Porch, API included. Every address that worked before
-// still works — the other name answers it with a permanent redirect — because
-// reports, notices and user agents already printed carry the old ones.
-func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
+// From 2026-10-05 the demonstration was three names on one binary, each
+// sending what was the other's there with a permanent redirect. Since v0.37.0
+// denyfirst.dev and mta-sts.denyfirst.dev are denyfirst/site's, at an address
+// of their own. A request for either that still reaches this program is told
+// 421, Misdirected Request, rather than redirected: a client holding this
+// address for that name would follow a redirect back here. The contacts
+// Porch's name served until then lead to denyfirst.dev, because reports and
+// pages already printed carry those addresses.
+func TestPorchAnswersAtItsOwnNameAndNotAtTheOrganisations(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("an installation is one name, its operator's")
 	}
@@ -65,43 +69,38 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 		status               int
 		location             string // empty: answered here
 	}{
-		// The organisation's own.
-		{"GET", organisationHost, "/", 200, ""},
-		{"GET", organisationHost, "/privacy", 200, ""},
-		{"GET", organisationHost, "/organisation", 301, SiteURL + "/privacy"},
-		{"GET", organisationHost, SecurityTxtPath, 200, ""},
-		{"GET", organisationHost, PGPKeyPath, 200, ""},
-		{"GET", organisationHost, "/style.css", 200, ""},
-		// The machine's health, which a deploy check asks either name for.
-		{"GET", organisationHost, "/healthz", 200, ""},
-		{"GET", porchHost, "/healthz", 200, ""},
-
-		// Porch's, asked of the organisation, keeping path and query.
-		{"GET", organisationHost, "/tls", 301, PorchURL + "/tls"},
-		{"GET", organisationHost, "/tls/method?from=report", 301, PorchURL + "/tls/method?from=report"},
-		{"HEAD", organisationHost, "/terms", 301, PorchURL + "/terms"},
-		{"GET", organisationHost, "/undertakings", 301, PorchURL + "/undertakings"},
-		{"GET", organisationHost, "/porch", 301, PorchURL + "/"},
-		{"GET", organisationHost, "/no-such-page", 301, PorchURL + "/no-such-page"},
-		// A call to the API keeps its method and body.
-		{"POST", organisationHost, "/api/v1/scan", 308, PorchURL + "/api/v1/scan"},
-
 		// Porch's own.
+		{"GET", porchHost, "/", 200, ""},
 		{"GET", porchHost, "/tls", 200, ""},
 		{"GET", porchHost, "/privacy", 200, ""},
 		{"GET", porchHost, "/undertakings", 301, "/privacy#promises"},
 		{"GET", porchHost, "/style.css", 200, ""},
+		{"GET", porchHost, "/healthz", 200, ""},
 		{"POST", porchHost, "/api/v1/scan", 200, ""},
+		{"GET", porchHost, "/porch", 301, "/"},
 
-		// The organisation's, asked of Porch.
-		{"GET", porchHost, "/organisation", 301, SiteURL + "/privacy"},
+		// The organisation's contacts, at the addresses Porch's name served
+		// them at, lead to denyfirst.dev.
 		{"GET", porchHost, SecurityTxtPath, 301, SiteURL + SecurityTxtPath},
+		{"GET", porchHost, "/security.txt", 301, SiteURL + SecurityTxtPath},
 		{"GET", porchHost, PGPKeyPath, 301, SiteURL + PGPKeyPath},
-		{"GET", porchHost, "/porch", 301, PorchURL + "/"},
+		// And the organisation's pages are not here under any address.
+		{"GET", porchHost, "/organisation", 404, ""},
+		{"GET", porchHost, "/og-denyfirst.png", 404, ""},
+		{"GET", porchHost, "/icon-denyfirst.svg", 404, ""},
+
+		// The organisation's names, whatever is asked of them.
+		{"GET", organisationHost, "/", 421, ""},
+		{"GET", organisationHost, "/tls", 421, ""},
+		{"GET", organisationHost, SecurityTxtPath, 421, ""},
+		{"GET", organisationHost, "/healthz", 421, ""},
+		{"POST", organisationHost, "/api/v1/scan", 421, ""},
+		{"GET", mailPolicyHost, "/.well-known/mta-sts.txt", 421, ""},
 
 		// A name is a name however a browser writes it.
-		{"GET", "PORCH.denyfirst.dev.", "/organisation", 301, SiteURL + "/privacy"},
-		{"GET", "denyfirst.dev:443", "/tls", 301, PorchURL + "/tls"},
+		{"GET", "PORCH.denyfirst.dev.", "/tls", 200, ""},
+		{"GET", "DenyFirst.dev.", "/", 421, ""},
+		{"GET", "denyfirst.dev:443", "/tls", 421, ""},
 	} {
 		w := getOn(t, tc.method, tc.host, tc.target)
 		where := tc.method + " " + tc.host + tc.target
@@ -115,36 +114,35 @@ func TestTheOrganisationAndPorchEachAnswerAtTheirOwnName(t *testing.T) {
 
 	// And Porch's name opens on Porch.
 	front := getOn(t, "GET", porchHost, "/").Body.String()
-	if !strings.Contains(front, `<title>`+pages[porchRoot].Title+`</title>`) {
+	if !strings.Contains(front, `<title>`+pages["/"].Title+`</title>`) || !strings.Contains(front, `id="porch-form"`) {
 		t.Error("porch.denyfirst.dev/ is not Porch's page")
-	}
-	if !strings.Contains(getOn(t, "GET", organisationHost, "/").Body.String(), `<title>`+pages["/"].Title+`</title>`) {
-		t.Error("denyfirst.dev/ is not the organisation's front page")
 	}
 }
 
-// A redirect cannot be steered off this site.
-//
-// The target is one of two fixed addresses with the request's path after it,
-// so a path that looks like another host is a path on Porch's, and nothing a
-// request carries becomes a header line.
-func TestTheRedirectsStayOnThisSite(t *testing.T) {
+// A request for one of the organisation's names is refused without sending
+// the visitor anywhere and without repeating anything it carried: the path is
+// the request's, and nothing of it becomes a header line or a word on the
+// page (I3).
+func TestTheOrganisationsNamesAreRefusedWithoutAnEcho(t *testing.T) {
 	if !demo.Enabled {
-		t.Skip("an installation redirects nothing between names")
+		t.Skip("an installation refuses no name here")
 	}
 	for _, target := range []string{
 		"//evil.example/x",
 		"/%2F%2Fevil.example",
 		"/x?next=https://evil.example",
 		"/%0d%0aSet-Cookie:%20a=b",
+		"/<script>alert(1)</script>",
 	} {
 		w := getOn(t, "GET", organisationHost, target)
-		location := w.Header().Get("Location")
-		if !strings.HasPrefix(location, PorchURL+"/") {
-			t.Errorf("GET %s: sent to %q, which is not on %s", target, location, PorchURL)
+		if w.Code != http.StatusMisdirectedRequest {
+			t.Errorf("GET %s: %d, want 421", target, w.Code)
 		}
-		if strings.ContainsAny(location, "\r\n") || w.Header().Get("Set-Cookie") != "" {
-			t.Errorf("GET %s: a header line was written from the path: %q", target, location)
+		if w.Header().Get("Location") != "" || w.Header().Get("Set-Cookie") != "" {
+			t.Errorf("GET %s: a header was written from the request: %v", target, w.Header())
+		}
+		if body := w.Body.String(); strings.Contains(body, "evil") || strings.Contains(body, "script") || strings.Contains(body, "Set-Cookie") {
+			t.Errorf("GET %s: the refusal repeats the request: %q", target, body)
 		}
 	}
 }

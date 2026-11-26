@@ -81,7 +81,7 @@ func TestTheDemonstrationOffersTheInventoryAsADoor(t *testing.T) {
 		t.Errorf("the inventory row carries %q where it should say it grades nothing", names.Policy)
 	}
 
-	page := get(t, "/porch").Body.String()
+	page := get(t, "/").Body.String()
 	if !strings.Contains(page, `href="`+names.Page+`"`) {
 		t.Errorf("the demonstration draws no way to reach %s", names.Page)
 	}

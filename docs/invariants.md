@@ -813,11 +813,15 @@ name, never derived from anything the site said, and nothing they hold kept.
 
 ### N14 — The organisation promises once, and a product may only promise more narrowly
 
-*Guarded by:* `TestTheOrganisationsPrivacyPageCarriesEveryPromise`,
-`TestPorchsPrivacyPageCarriesItsPromises`,
-`TestNoProductRedefinesWhatTheOrganisationUndertakes`,
+The organisation's undertakings are written once, in denyfirst/site since
+v0.37.0, and shown at denyfirst.dev/privacy. Porch's pages link to them and
+carry only Porch's own, each named for Porch so that none can be taken for
+one of the organisation's; the test there that keeps every product's name
+out of the organisation's list is the other half of this.
+
+*Guarded by:* `TestPorchsPrivacyPageCarriesItsPromises`,
+`TestEachProductsUndertakingsAreNamedForIt`,
 `TestEveryUndertakingCanBeCheckedAndIsNamed`,
-`TestTheOrganisationNamesNoProduct`,
 `TestTheUndertakingsAreNotCopiedIntoAnyPage`,
 `TestThePrivacyPageSaysWhichSourcesAreAsked`,
 `TestThePagesAreToldWhatThisInstallationAsks`
@@ -1811,26 +1815,24 @@ signature's validity is dns.signature-expired's and is not counted twice.
 ### W2a — Only the demonstration says where it is, and it says what it is
 
 What it says to a search engine, a link preview or an assistant is what its
-pages say to a person: the llms.txt of each name, the card a preview shows and
-the schema.org microdata on the two front pages repeat the pages' own words,
-claim nothing nobody gave (no rating, no review), and run nothing (microdata
-rather than a script block). An installation somebody runs says none of it.
+pages say to a person: the llms.txt, the card a preview shows and the
+schema.org microdata on Porch's page repeat the pages' own words, claim
+nothing nobody gave (no rating, no review), and run nothing (microdata rather
+than a script block). An installation somebody runs says none of it.
 
 *Enforced in:* `internal/web.render`, `internal/web.buildPlain`,
 `internal/web.buildLLMs`, `internal/web.socialCards`,
-`internal/web/assets/layout.html`, `internal/web/assets/home.html`,
-`internal/web/assets/porch.html`
+`internal/web/assets/layout.html`, `internal/web/assets/porch.html`
 
 *Guarded by:* `TestACrawlerIsToldWhatThisDeploymentIs`,
 `TestEveryPageSaysWhichAddressItIs`,
 `TestTheDemonstrationTitlesNameTheToolAndTheMaker`,
 `TestPrivacyPageAnswersEveryUrgentQuestion`,
 `TestASelfHostedCopySaysWhatItDoes`,
-`TestEachNameTellsAnAssistantWhatItIs`,
+`TestTheDemonstrationTellsAnAssistantWhatItIs`,
 `TestPorchsLLMsTxtNamesTheReleaseOnlyWhenItHasOne`,
-`TestWhatTheOrganisationsLLMsTxtStatesIsSo`,
-`TestEachPageShowsItsNamesCard`,
-`TestTheFrontPagesSayWhoAndWhatTheyAre`
+`TestEachPageShowsPorchsCard`,
+`TestPorchsPageSaysWhatItIsAndWhoMadeIt`
 
 ### W3 — A table with the same columns is drawn with the same columns
 
@@ -1854,8 +1856,8 @@ rather than a script block). An installation somebody runs says none of it.
 *Guarded by:* `TestEveryColourTextIsSetInIsLegible`,
 `TestTheRuleColourIsNeverUsedForText`, `TestTheContrastArithmeticIsRight`,
 `TestPorchsColourIsNeverAVerdictsColour`,
-`TestTheBrandRedIsTheWordmarksAndTheOrganisations`,
-`TestOnlyTheOrganisationsPagesKeepTheRed`
+`TestTheBrandRedIsTheWordmarksAlone`,
+`TestNoPageHereIsMarkedAsTheOrganisations`
 
 ### W6 — A state is said in words and in colour, never by fading
 
@@ -1886,32 +1888,27 @@ rather than a script block). An installation somebody runs says none of it.
 `TestBothScanPathsAreServedAndNeitherRedirects`,
 `TestNeitherScanPathAnswersAGet`, `TestOldPathsRedirect`
 
-### W8a — The organisation and Porch each answer at their own name
+### W8a — Porch answers at its own name, and the organisation's are not answered here
 
-*Enforced in:* `internal/web/hosts.go`, `internal/web.render`,
-`internal/web.buildPlain`, `internal/web/assets/layout.html`, `cmd/porchd.run`
+The demonstration answers to porch.denyfirst.dev. denyfirst.dev and
+mta-sts.denyfirst.dev, which it also answered to from 2026-10-05, are
+denyfirst/site's since v0.37.0, at an address of their own, with the
+organisation's pages, its contacts and the mail policy for its domain. A
+request for either that still reaches this program is answered 421 and
+repeats nothing it carried; the addresses Porch's name served the contacts
+at lead to denyfirst.dev. An installation is one name, its operator's.
 
-*Guarded by:* `TestTheOrganisationAndPorchEachAnswerAtTheirOwnName`,
-`TestTheRedirectsStayOnThisSite`, `TestAnyOtherNameIsServedEverything`,
+*Enforced in:* `internal/web/hosts.go`, `internal/web.contactsMoved`,
+`internal/web.render`, `internal/web.buildPlain`,
+`internal/web/assets/layout.html`, `cmd/porchd.run`
+
+*Guarded by:* `TestPorchAnswersAtItsOwnNameAndNotAtTheOrganisations`,
+`TestTheOrganisationsNamesAreRefusedWithoutAnEcho`,
+`TestAnyOtherNameIsServedEverything`,
 `TestEveryPageIsAnsweredAtTheAddressItStates`,
 `TestACrawlerIsToldWhatThisDeploymentIs`, `TestEveryPageSaysWhichAddressItIs`,
 `TestEveryAddressThisProjectSendsOutResolves`,
 `TestTheGateIsInFrontOfEverything`
-
-### W8b — Mail to the organisation is covered by a policy our own check accepts
-
-The demonstration's third name, mta-sts.denyfirst.dev, answers the MTA-STS
-policy for mail to denyfirst.dev and nothing else: no page, no API, no
-redirect. The policy names the domain's exchangers and is one Porch's own mail
-check reads as valid, fetched over TLS the way a sender fetches it. An
-installation serves no policy.
-
-*Enforced in:* `internal/web/mailpolicy.go`, `internal/web/hosts.go`
-
-*Guarded by:* `TestOurMailPolicyIsOneOurOwnCheckAccepts`,
-`TestThePolicyNameAnswersThePolicyAndNothingElse`,
-`TestThePolicyIsServedOnlyAtItsOwnName`,
-`TestThePolicyIsWrittenAsTheRFCWritesIt`
 
 ### W9 — A report fits the screen it is read on
 
@@ -1925,15 +1922,19 @@ installation serves no policy.
 
 ### D1 — A reporter can find a way to reach us, and the way is current
 
-*Enforced in:* `internal/web`, the route table and `assets/security.txt`
+security.txt and the key a report is encrypted to are served at denyfirst.dev
+by denyfirst/site since v0.37.0, whose tests hold the file's fields, its
+expiry, where it sends a reporter and the key's fingerprint. Here, the
+demonstration sends the addresses it served them at there, an installation
+publishes no contact of ours, and the fingerprint SECURITY.md publishes is
+the one Porch's page shows.
 
-*Guarded by:* `TestSecurityTxtIsServedAtTheWellKnownPath`,
-`TestAnInstallationPublishesNoContactOfOurs`,
-`TestLegacySecurityTxtPathRedirects`, `TestSecurityTxtHasTheRequiredFields`,
-`TestSecurityTxtExpiryIsMovedByAPerson`,
-`TestSecurityTxtDoesNotSendExclusionRequestsToSecurity`,
-`TestFingerprintAgreesAcrossSources`, `TestTheServedKeyIsTheKeyWePublish`,
-`TestTheServedPacketIsAPublicKeyPacket`
+*Enforced in:* `internal/web.contactsMoved`, `SECURITY.md`,
+`internal/web/assets/porch.html`
+
+*Guarded by:* `TestAnInstallationPublishesNoContactOfOurs`,
+`TestTheDemonstrationSendsOurContactsToDenyfirstDev`,
+`TestFingerprintAgreesAcrossSources`
 
 ### R9a2 — What an issuer says it checked is reported and not graded
 

@@ -12,8 +12,8 @@ import (
 //
 // An installation somebody runs is porch: the header says porch and the footer
 // says it is by denyfirst, because two names on the first screen of a tool is
-// one too many. The demonstration is the denyfirst site, and carries the
-// wordmark.
+// one too many. The demonstration is Porch's site by denyfirst: Porch's
+// wordmark at the top and the maker's at the foot.
 func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 	for path := range pages {
 		body := get(t, path).Body.String()
@@ -31,22 +31,11 @@ func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 		}
 
 		if demo.Enabled {
-			// The organisation's pages carry its wordmark; Porch's carry
-			// Porch's at the top and the maker's at the foot.
-			if pages[path].Organisation {
-				if !strings.Contains(head, `<span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>`) {
-					t.Errorf("%s: the organisation's header does not carry its wordmark:\n%s", path, head)
-				}
-				if !strings.Contains(foot, `<span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span>`) {
-					t.Errorf("%s: the organisation's footer does not carry its mark", path)
-				}
-				continue
-			}
 			if !strings.Contains(head, `porch<span class="wordmark-porch-stop">.</span></a>`) || strings.Contains(head, "wordmark-deny") {
 				t.Errorf("%s: Porch's header does not carry Porch's wordmark alone:\n%s", path, head)
 			}
-			// The same footer as the organisation's, the mark above the line,
-			// so the two sites end alike; here the mark is a link home.
+			// The same footer as denyfirst.dev's, the mark above the line, so
+			// the two sites end alike; here the mark is a link to the maker.
 			if !strings.Contains(foot, `<p class="colophon-mark"><a class="colophon-brand" href="`+SiteURL+`/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a></p>`) ||
 				!strings.Contains(foot, `<p class="colophon-line">Cites everything. Records nothing.</p>`) {
 				t.Errorf("%s: Porch's footer does not end as the organisation's does, with the maker's mark", path)
@@ -70,16 +59,11 @@ func TestTheHeaderNamesTheToolAndTheFooterTheMaker(t *testing.T) {
 // Both marks are drawn the same wherever they appear.
 //
 // The maker's name in Porch's footer is a link home, and a browser underlines
-// a link: under a wordmark the line reads as part of the mark. Porch's mark on
-// the front page sits on the organisation's page, where the accent is the
-// brand red, so its stop names Porch's violet rather than the page's accent.
+// a link: under a wordmark the line reads as part of the mark.
 func TestEachMarkIsDrawnAsItsHeaderDrawsIt(t *testing.T) {
 	sheet := stylesheet(t)
 	if rule := cssRule(t, sheet, "a.colophon-brand"); !strings.Contains(rule, "text-decoration: none") {
 		t.Errorf("the maker's name in the footer is underlined:\n%s", rule)
-	}
-	if rule := cssRule(t, sheet, ".product-feature-name .wordmark-porch-stop"); !strings.Contains(rule, "var(--porch-") {
-		t.Errorf("Porch's mark on the front page takes the page's accent, not Porch's violet:\n%s", rule)
 	}
 }
 

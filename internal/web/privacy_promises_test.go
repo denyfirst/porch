@@ -5,54 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/denyfirst/porch/internal/demo"
 	"github.com/denyfirst/porch/internal/promises"
 )
 
-// denyfirst.dev/privacy carries every one of the organisation's promises,
-// and every way of checking one, and none of a product's.
-//
-// Rendered rather than read from the template, because what matters is what a
-// visitor is given.
-func TestTheOrganisationsPrivacyPageCarriesEveryPromise(t *testing.T) {
-	if !demo.Enabled {
-		t.Skip("an installation is Porch alone, and links to denyfirst.dev/privacy")
-	}
-	page := getOn(t, "GET", organisationHost, "/privacy").Body.String()
-	carriesList(t, "denyfirst.dev/privacy", page, promises.Organisation)
-
-	says := escapedIn(page)
-	for _, product := range promises.Products {
-		if !strings.Contains(page, product.Name) || !says(product.What) {
-			t.Errorf("the page does not introduce %s", product.Name)
-		}
-		for _, p := range product.Adds {
-			if says(p.Says) || strings.Contains(page, `id="`+p.ID+`"`) {
-				t.Errorf("the organisation's page carries %s's %s, which is that product's word and on its own page", product.Name, p.ID)
-			}
-		}
-	}
-	if !strings.Contains(page, `href="`+PorchURL+`/privacy#promises"`) {
-		t.Error("the organisation's page does not lead to Porch's own promises")
-	}
-	for _, fact := range []string{"No cookies", "no analytics", "Hetzner Online GmbH"} {
-		if !strings.Contains(page, fact) {
-			t.Errorf("the organisation's page does not say %q about this site", fact)
-		}
-	}
-}
-
 // Porch's privacy page carries Porch's promises, on both builds, and links to
-// the organisation's rather than repeating them.
+// the organisation's rather than repeating them. The organisation's are
+// denyfirst/site's since v0.37.0, written there and nowhere here, so the page
+// cannot repeat them; it says where they are.
 func TestPorchsPrivacyPageCarriesItsPromises(t *testing.T) {
 	for name, page := range map[string]string{"served": string(rendered["/privacy"]), "demonstration": demoPrivacy(t)} {
 		carriesList(t, name+" /privacy", page, promises.Porch.Adds)
-		says := escapedIn(page)
-		for _, p := range promises.Organisation {
-			if says(p.Says) {
-				t.Errorf("the %s privacy page repeats the organisation's %s", name, p.ID)
-			}
-		}
 		if !strings.Contains(page, `href="https://denyfirst.dev/privacy"`) {
 			t.Errorf("the %s privacy page does not lead to the organisation's promises", name)
 		}

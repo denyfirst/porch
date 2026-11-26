@@ -211,6 +211,6 @@ comm -23 /tmp/cited /tmp/defined     # must be empty
 | `internal/sshsig` | checks an SSH signature as `ssh-keygen -Y verify` does, for one key type, one hash and one key |
 | `internal/updates` | says whether a newer signed release exists, when the operator asks or daily if they chose it; installs nothing |
 | `internal/web` | the pages |
-| `internal/promises` | what denyfirst undertakes, and what each product adds (N14) |
+| `internal/promises` | what each product adds to what denyfirst undertakes, which denyfirst/site carries (N14) |
 | `docs/invariants.md` | every guard above, where it is enforced, and its tests |
 | `docs/scope.md` | who may scan what, and where that is decided |

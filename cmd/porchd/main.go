@@ -673,10 +673,11 @@ func run() int {
 	})
 	root.Handle("/", web.Handler())
 
-	// On the demonstration, a request for one of its two names that belongs
-	// to the other is sent there — the API with the pages, so that nothing of
-	// Porch's answers from the organisation's address. An installation is one
-	// name and passes straight through. See web.Hosts.
+	// On the demonstration, a request for one of the organisation's names,
+	// which denyfirst/site answers since v0.37.0, is refused here — the API
+	// with the pages, so that nothing of Porch's answers to the organisation's
+	// names. An installation is one name and passes straight through. See
+	// web.Hosts.
 	var handler http.Handler = web.Hosts(root)
 
 	// The gate goes in front of everything, pages and API alike, so a route

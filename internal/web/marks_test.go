@@ -29,8 +29,10 @@ func TestTheWordmarkEndsInTheBrandColour(t *testing.T) {
 	if strings.Contains(markup, `<span class="wordmark-deny">deny</span>first.`) {
 		t.Error("the full stop is still plain text, so no rule can colour it")
 	}
-	if n := strings.Count(markup, `first<span class="wordmark-stop">.</span>`); n != 4 {
-		t.Errorf("the stop is marked up %d times, and the name appears four times in this file", n)
+	// Twice since v0.37.0, in the two footers: the demonstration's, where the
+	// mark leads to denyfirst.dev, and an installation's "by denyfirst".
+	if n := strings.Count(markup, `first<span class="wordmark-stop">.</span>`); n != 2 {
+		t.Errorf("the stop is marked up %d times, and the name appears twice in this file", n)
 	}
 }
 
@@ -174,7 +176,7 @@ func TestWhatPrintsIsTheReportAndNotTheInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(layout), `{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>`) {
+	if !strings.Contains(string(layout), "\n"+`<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>`+"\n") {
 		t.Error("Porch's pages do not carry the mark a printed report is headed with")
 	}
 

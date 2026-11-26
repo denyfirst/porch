@@ -30,12 +30,12 @@ func TestACrawlerIsToldWhatThisDeploymentIs(t *testing.T) {
 		return
 	}
 
-	// Two names since 2026-10-05, and each offers itself and lists the pages
-	// it serves. Between them every page is listed once, at the address it
-	// states as its own, and each listed address answers without a redirect.
+	// One name since v0.37.0, as before 2026-10-05; denyfirst.dev's crawler
+	// files are denyfirst/site's. It offers itself and lists every page once,
+	// at the address the page states as its own, and each listed address
+	// answers without a redirect.
 	listedAll := 0
 	for _, crawler := range []struct{ host, base string }{
-		{organisationHost, SiteURL},
 		{porchHost, PorchURL},
 	} {
 		robots := getOn(t, "GET", crawler.host, "/robots.txt").Body.String()
@@ -49,7 +49,7 @@ func TestACrawlerIsToldWhatThisDeploymentIs(t *testing.T) {
 		for _, loc := range regexp.MustCompile(`<loc>([^<]+)</loc>`).FindAllStringSubmatch(sitemap.Body.String(), -1) {
 			listedAll++
 			if !strings.HasPrefix(loc[1], crawler.base+"/") {
-				t.Errorf("%s's sitemap lists %s, on the other name", crawler.host, loc[1])
+				t.Errorf("%s's sitemap lists %s, on another name", crawler.host, loc[1])
 				continue
 			}
 			if w := getOn(t, "GET", crawler.host, strings.TrimPrefix(loc[1], crawler.base)); w.Code != 200 {
@@ -58,33 +58,21 @@ func TestACrawlerIsToldWhatThisDeploymentIs(t *testing.T) {
 		}
 	}
 	for path := range rendered {
-		home := porchHost
-		if p := pages[path]; p != nil && p.Organisation {
-			home = organisationHost
-		}
-		if !strings.Contains(getOn(t, "GET", home, "/sitemap.xml").Body.String(), "<loc>"+statedAddress(path)+"</loc>") {
-			t.Errorf("the sitemaps leave out %s", path)
+		if !strings.Contains(getOn(t, "GET", porchHost, "/sitemap.xml").Body.String(), "<loc>"+statedAddress(path)+"</loc>") {
+			t.Errorf("the sitemap leaves out %s", path)
 		}
 	}
 	if listedAll != len(rendered) {
-		t.Errorf("the sitemaps list %d addresses and the site has %d", listedAll, len(rendered))
+		t.Errorf("the sitemap lists %d addresses and the site has %d", listedAll, len(rendered))
 	}
 }
 
 // statedAddress is the address a demonstration page states as its own,
 // written out here rather than taken from canonicalURL, so that a mistake
-// there is not repeated in what checks it: the organisation's two pages on
-// its name, Porch's page at the root of Porch's, and every other on Porch's.
+// there is not repeated in what checks it: every page on Porch's name, at its
+// own path.
 func statedAddress(path string) string {
-	switch path {
-	case "/":
-		return SiteURL + "/"
-	case "/organisation":
-		return SiteURL + "/privacy"
-	case "/porch":
-		return PorchURL + "/"
-	}
-	return PorchURL + path
+	return "https://porch.denyfirst.dev" + path
 }
 
 // Every page on the demonstration says which address it is and repeats its
@@ -133,12 +121,9 @@ func TestTheDemonstrationTitlesNameTheToolAndTheMaker(t *testing.T) {
 			t.Errorf("%s: the description is %d characters: %q", path, len(p.Description), p.Description)
 		}
 	}
-	for _, path := range []string{"/tls", "/web", "/porch", "/privacy"} {
+	for _, path := range []string{"/", "/tls", "/web", "/privacy"} {
 		if !strings.Contains(pages[path].Title, "Porch") {
 			t.Errorf("%s: a page about the tool does not name it: %q", path, pages[path].Title)
 		}
-	}
-	if !strings.Contains(pages["/"].Title, "security and privacy") {
-		t.Errorf("the front page does not say what this is: %q", pages["/"].Title)
 	}
 }

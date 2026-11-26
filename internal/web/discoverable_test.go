@@ -13,12 +13,15 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 )
 
-// Each of the demonstration's names says what it is to a program that asks
-// at /llms.txt, from the table the pages and the sitemap come from: every
-// page its sitemap lists is in it, every address it gives on its own name
-// answers there without a redirect, and each points at the other's. An
+// The demonstration says what it is to a program that asks at /llms.txt, from
+// the table the pages and the sitemap come from: every page its sitemap lists
+// is in it, every address it gives on its own name answers there without a
+// redirect, and it points at denyfirst.dev's, which denyfirst/site serves. An
 // installation somebody runs says nothing, as it asks robots not to index it.
-func TestEachNameTellsAnAssistantWhatItIs(t *testing.T) {
+//
+// Until v0.37.0 both of the demonstration's names answered with one, each
+// pointing at the other's.
+func TestTheDemonstrationTellsAnAssistantWhatItIs(t *testing.T) {
 	if !demo.Enabled {
 		if w := get(t, "/llms.txt"); w.Code != http.StatusNotFound {
 			t.Errorf("an installation somebody runs serves llms.txt: %d", w.Code)
@@ -30,7 +33,6 @@ func TestEachNameTellsAnAssistantWhatItIs(t *testing.T) {
 	for _, name := range []struct {
 		host, base, other, heading string
 	}{
-		{organisationHost, SiteURL, PorchURL, "# denyfirst\n"},
 		{porchHost, PorchURL, SiteURL, "# Porch\n"},
 	} {
 		w := getOn(t, http.MethodGet, name.host, "/llms.txt")
@@ -69,7 +71,7 @@ func TestEachNameTellsAnAssistantWhatItIs(t *testing.T) {
 			}
 		}
 		if !strings.Contains(body, "]("+name.other+"/llms.txt)") {
-			t.Errorf("%s/llms.txt does not point at the other name's", name.host)
+			t.Errorf("%s/llms.txt does not point at denyfirst.dev's", name.host)
 		}
 	}
 
@@ -107,41 +109,11 @@ func TestPorchsLLMsTxtNamesTheReleaseOnlyWhenItHasOne(t *testing.T) {
 	}
 }
 
-// What the organisation's llms.txt states about this site holds on every
-// address either name answers with a page or a crawler file: no cookie, and
-// a policy that lets a browser load nothing from another server.
-func TestWhatTheOrganisationsLLMsTxtStatesIsSo(t *testing.T) {
-	if !demo.Enabled {
-		t.Skip("an installation serves no llms.txt")
-	}
-	body := getOn(t, http.MethodGet, organisationHost, "/llms.txt").Body.String()
-	if !strings.Contains(body, "This site sets no cookie, loads nothing from another server, and carries no tracker.") {
-		t.Fatal("the sentence this test holds to is gone; hold its replacement")
-	}
-	for _, host := range []string{organisationHost, porchHost} {
-		paths := []string{"/robots.txt", "/sitemap.xml", "/llms.txt", "/", "/privacy"}
-		for path := range rendered {
-			paths = append(paths, path)
-		}
-		for _, path := range paths {
-			w := getOn(t, http.MethodGet, host, path)
-			if w.Header().Get("Set-Cookie") != "" {
-				t.Errorf("%s%s sets a cookie", host, path)
-			}
-			for _, directive := range strings.Split(w.Header().Get("Content-Security-Policy"), ";") {
-				if strings.Contains(directive, "http") || strings.Contains(directive, "*") {
-					t.Errorf("%s%s lets a browser load from elsewhere: %s", host, path, directive)
-				}
-			}
-		}
-	}
-}
-
-// Every page on the demonstration shows its name's card in a link preview,
-// at the size the page states, from its own name; the card is a PNG and
-// carries nothing but its picture. An installation shows none and serves
-// none.
-func TestEachPageShowsItsNamesCard(t *testing.T) {
+// Every page on the demonstration shows Porch's card in a link preview, at the
+// size the page states, from Porch's name; the card is a PNG and carries
+// nothing but its picture. An installation shows none and serves none.
+// denyfirst.dev's card is denyfirst/site's since v0.37.0.
+func TestEachPageShowsPorchsCard(t *testing.T) {
 	if !demo.Enabled {
 		for path := range pages {
 			if body := get(t, path).Body.String(); strings.Contains(body, "og:image") || strings.Contains(body, "twitter:card") {
@@ -164,11 +136,8 @@ func TestEachPageShowsItsNamesCard(t *testing.T) {
 		}
 		return m[0][1]
 	}
-	for path, p := range pages {
+	for path := range pages {
 		host, base, card := porchHost, PorchURL, "/og-porch.png"
-		if p.Organisation {
-			host, base, card = organisationHost, SiteURL, "/og-denyfirst.png"
-		}
 		page := get(t, path).Body.String()
 		if got := meta(page, "og:image"); got != base+card {
 			t.Errorf("%s shows %q, not its name's card %q", path, got, base+card)
@@ -215,11 +184,12 @@ func pngChunksBeyondThePicture(file []byte) []string {
 	return extra
 }
 
-// The two front pages say who and what they are to a search engine in
-// schema.org microdata, on what they already show, and in nothing a browser
+// Porch's page says what it is, and who made it, to a search engine in
+// schema.org microdata, on what it already shows, and in nothing a browser
 // runs. Each value is one the page states in its own words too, and nothing
-// is claimed that nobody gave: no rating, no review.
-func TestTheFrontPagesSayWhoAndWhatTheyAre(t *testing.T) {
+// is claimed that nobody gave: no rating, no review. denyfirst.dev's front
+// page says who the organisation is, in denyfirst/site.
+func TestPorchsPageSaysWhatItIsAndWhoMadeIt(t *testing.T) {
 	if !demo.Enabled {
 		t.Skip("an installation somebody runs is not a site to find")
 	}
@@ -229,24 +199,6 @@ func TestTheFrontPagesSayWhoAndWhatTheyAre(t *testing.T) {
 			out = append(out, m[1])
 		}
 		return out
-	}
-
-	home := getOn(t, http.MethodGet, organisationHost, "/").Body.String()
-	if strings.Count(home, `itemtype="https://schema.org/Organization"`) != 1 {
-		t.Error("the front page does not say once that it is an organisation's")
-	}
-	for name, want := range map[string]string{"name": "denyfirst", "url": SiteURL + "/", "sameAs": "https://github.com/denyfirst"} {
-		if got := prop(home, name); len(got) != 1 || got[0] != want {
-			t.Errorf("the organisation's %s is %q, want %q", name, got, want)
-		}
-	}
-	if logo := prop(home, "logo"); len(logo) != 1 || !strings.HasPrefix(logo[0], SiteURL+"/") {
-		t.Errorf("the organisation's logo is %q", logo)
-	} else if w := getOn(t, http.MethodGet, organisationHost, strings.TrimPrefix(logo[0], SiteURL)); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" {
-		t.Errorf("the organisation's logo %s answers %d %s", logo[0], w.Code, w.Header().Get("Content-Type"))
-	}
-	if !strings.Contains(home, `<p class="band-prose" itemprop="description">denyfirst is an independent team`) {
-		t.Error("the organisation is not described by the sentence the page says it in")
 	}
 
 	porch := getOn(t, http.MethodGet, porchHost, "/").Body.String()

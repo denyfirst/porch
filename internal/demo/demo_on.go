@@ -30,6 +30,10 @@ var demoTargets = []string{
 // The list is short because the hosts that demonstrate a weak configuration
 // have to be built and kept broken on purpose, and each of them is a running
 // server somebody has to maintain. They arrive one at a time.
+//
+// denyfirst.dev was "this server" while this program served it. Since v0.37.0
+// it is served by denyfirst/site, on the same machine at an address of its
+// own, and what the page offers is the domain: its site, its mail and its DNS.
 var demoHosts = []Host{
-	{Host: "denyfirst.dev", Shows: "this server"},
+	{Host: "denyfirst.dev", Shows: "our own domain"},
 }

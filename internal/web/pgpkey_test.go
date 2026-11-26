@@ -8,41 +8,17 @@ import (
 	"github.com/denyfirst/porch/internal/demo"
 )
 
-// The key a reporter encrypts to is reachable, and it is a key.
+// The fingerprint is written in three places in this repository and they have
+// to agree: the constant, SECURITY.md, and the card on Porch's page that tells
+// a reporter to compare the two.
 //
-// On the demonstration, which is the one deployment that serves it; an
-// installation serves nothing there, and the embedded file is read instead.
-func TestPGPKeyIsServed(t *testing.T) {
-	if demo.Enabled {
-		if got := get(t, PGPKeyPath).Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
-			t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", got)
-		}
-	}
-
-	body := denyfirstFile(t, PGPKeyPath)
-	for _, required := range []string{
-		"-----BEGIN PGP PUBLIC KEY BLOCK-----",
-		"-----END PGP PUBLIC KEY BLOCK-----",
-	} {
-		if !strings.Contains(body, required) {
-			t.Errorf("the served file does not contain %q", required)
-		}
-	}
-
-	// A private key served by accident is the worst outcome available here,
-	// and it is one copied filename away.
-	if strings.Contains(body, "PRIVATE KEY") {
-		t.Fatal("the served file contains a private key block")
-	}
-}
-
-// The fingerprint is written in three places and they have to agree.
-//
-// A key served from this domain and identified only by this domain proves
+// A key served from a domain and identified only by that domain proves
 // nothing: whoever takes the domain serves their own key beside their own
 // fingerprint, and a reporter encrypts an unpublished vulnerability straight
 // to them. SECURITY.md lives on GitHub, behind a different account and
-// different credentials, which is what makes it worth comparing against.
+// different credentials, which is what makes it worth comparing against. The
+// key itself and security.txt are denyfirst.dev's, served by denyfirst/site,
+// whose tests hold them to the same fingerprint.
 //
 // Two sources that agree because nobody checks are one source written twice.
 // This is the check.
@@ -60,13 +36,21 @@ func TestFingerprintAgreesAcrossSources(t *testing.T) {
 		}
 	}
 
-	securityTxt := denyfirstFile(t, SecurityTxtPath)
-	if !strings.Contains(compact(securityTxt), PGPFingerprint) {
-		t.Errorf("security.txt does not carry the fingerprint %s", PGPFingerprint)
+	// The card is written once, in the page's source, and rendered on the
+	// demonstration only; the source is read so both builds hold it.
+	card, err := assets.ReadFile("assets/porch.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(compact(strings.ReplaceAll(string(card), "&nbsp;", "")), PGPFingerprint) {
+		t.Errorf("Porch's page does not carry the fingerprint %s", PGPFingerprint)
+	}
+	if demo.Enabled && !strings.Contains(compact(strings.ReplaceAll(get(t, "/").Body.String(), "&nbsp;", "")), PGPFingerprint) {
+		t.Errorf("Porch's page as served does not carry the fingerprint %s", PGPFingerprint)
 	}
 
 	// The second source, read from disk because it is not served from here.
-	// A test that only compared this file against itself would pass while the
+	// A test that only compared the page against itself would pass while the
 	// two published fingerprints drifted apart.
 	policy, err := os.ReadFile("../../SECURITY.md")
 	if err != nil {
@@ -74,24 +58,5 @@ func TestFingerprintAgreesAcrossSources(t *testing.T) {
 	}
 	if !strings.Contains(compact(string(policy)), PGPFingerprint) {
 		t.Errorf("SECURITY.md does not carry the fingerprint %s; a reporter has nothing to compare against", PGPFingerprint)
-	}
-}
-
-// security.txt has to point at the key, and at the copy this server actually
-// serves rather than one that used to be somewhere else.
-func TestSecurityTxtPointsAtTheKey(t *testing.T) {
-	fields := securityTxtFields(t)
-
-	encryption := fields["encryption"]
-	if len(encryption) != 1 {
-		t.Fatalf("%d Encryption fields, want exactly 1", len(encryption))
-	}
-
-	url := encryption[0]
-	if !strings.HasPrefix(url, "https://") {
-		t.Errorf("Encryption %q is not https", url)
-	}
-	if !strings.HasSuffix(url, PGPKeyPath) {
-		t.Errorf("Encryption %q does not end at %s, which is where the key is served", url, PGPKeyPath)
 	}
 }
