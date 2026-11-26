@@ -18,9 +18,8 @@
 <meta property="og:title" content="{{.Title}}">
 <meta property="og:description" content="{{.Description}}">
 <meta property="og:url" content="{{.Canonical}}">
-{{if .Organisation}}<meta property="og:image" content="{{.SiteBase}}/og-denyfirst.png">
-<meta property="og:image:alt" content="denyfirst. Security. On your terms.">{{end}}{{if not .Organisation}}<meta property="og:image" content="{{.PorchBase}}/og-porch.png">
-<meta property="og:image:alt" content="porch. Look closer. Know what answers.">{{end}}
+<meta property="og:image" content="{{.PorchBase}}/og-porch.png">
+<meta property="og:image:alt" content="porch. Look closer. Know what answers.">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -28,16 +27,15 @@
 {{end}}
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">
-{{if .Organisation}}<link rel="icon" href="/icon-denyfirst.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/denyfirst-touch.png">{{else}}<link rel="icon" href="/icon-porch.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">{{end}}
+<link rel="icon" href="/icon-porch.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>
 </head>
-<body{{if .Brand}}{{if .Organisation}} data-owner="organisation"{{end}} data-site="demo"{{else}} class="workspace{{if eq .Section "login"}} workspace-signin{{end}}"{{end}}>
-{{if not .Organisation}}<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>
-{{end}}
+<body{{if .Brand}} data-site="demo"{{else}} class="workspace{{if eq .Section "login"}} workspace-signin{{end}}"{{end}}>
+<p class="print-mark">porch<span class="wordmark-porch-stop">.</span><span class="print-date" id="print-date"></span></p>
+
 {{if not .Brand}}
 <!--
   An installation somebody runs is a workspace, not a site: a rail with what
@@ -93,22 +91,10 @@
 <div class="workspace-main">
 {{else}}
 <header class="masthead">
-  {{if .Organisation}}<a class="wordmark" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a>{{else}}<a class="wordmark" href="{{.PorchBase}}/">porch<span class="wordmark-porch-stop">.</span></a>{{end}}
+  <a class="wordmark" href="{{.PorchBase}}/">porch<span class="wordmark-porch-stop">.</span></a>
   <nav class="masthead-nav" aria-label="Main">
-    {{if .Organisation}}<a href="{{.SiteBase}}/">Home</a>
-    <!--
-      Products opens a list on hover or keyboard focus, drawn by the
-      stylesheet alone. Without either — a phone — the link goes to the
-      catalog on the front page, which is the same list.
-    -->
-    <div class="nav-menu">
-      <a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>
-      <ul class="nav-menu-list">
-        <li><a href="{{.PorchBase}}/"><span class="nav-menu-name">Porch</span><span class="nav-menu-note">Infrastructure checks</span></a></li>
-        <li><span class="nav-menu-soon"><span class="nav-menu-name">Rootwell</span><span class="nav-menu-note">Being built</span></span></li>
-      </ul>
-    </div>{{else}}<a href="{{.PorchBase}}/#start">Run it yourself</a>
-    <a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>{{end}}
+    <a href="{{.PorchBase}}/#start">Run it yourself</a>
+    <a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
   </nav>
   <button class="theme-toggle" id="theme-toggle" type="button" hidden>Dark</button>
 </header>
@@ -119,22 +105,20 @@
 </main>
 
 <!--
-  Each site links its own documents: the organisation's pages its
-  undertakings and contacts, Porch's pages Porch's documents.
+  Porch's pages link Porch's documents. The organisation's undertakings and
+  contacts are denyfirst.dev's, which the wordmark leads to.
 -->
 <footer class="colophon">
   <div class="colophon-row">
     <div class="colophon-by">
-      {{if and .Brand .Organisation}}<p class="colophon-mark"><span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span></p>
-      <p class="colophon-line">Cites everything. Records nothing.</p>{{else if .Brand}}<p class="colophon-mark"><a class="colophon-brand" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a></p>
+      {{if .Brand}}<p class="colophon-mark"><a class="colophon-brand" href="{{.SiteBase}}/"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></a></p>
       <p class="colophon-line">Cites everything. Records nothing.</p>{{else}}<p class="colophon-line">by <span class="colophon-brand"><span class="wordmark-deny">deny</span>first<span class="wordmark-stop">.</span></span> Cites everything. Records nothing.</p>{{end}}
     </div>
     {{if ne .Section "login"}}<p class="colophon-links">
-      {{if and .Brand .Organisation}}<a href="{{.SiteBase}}/privacy">Privacy</a>
-      <a href="{{.SiteBase}}/.well-known/security.txt">Security</a>{{else}}<a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
+      <a href="https://github.com/denyfirst/porch/tree/main/docs">Docs</a>
       <a href="{{.PorchBase}}/privacy">Privacy</a>
       <a href="{{.PorchBase}}/terms">Terms</a>{{if .Brand}}
-      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Security</a>{{end}}{{end}}
+      <a href="https://github.com/denyfirst/porch/blob/main/SECURITY.md">Security</a>{{end}}
     </p>{{end}}
   </div>
 </footer>

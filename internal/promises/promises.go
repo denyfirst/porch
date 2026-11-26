@@ -1,9 +1,13 @@
-// Package promises holds what denyfirst undertakes as an organisation, and
-// what each product adds.
+// Package promises holds what each product denyfirst publishes adds to what
+// denyfirst undertakes as an organisation.
 //
-// The organisation's list is about its own conduct and names no product. A
-// product adds narrower undertakings of its own and never rewords the
-// organisation's. Each text is written once, here, and the pages render it.
+// The organisation's list is about its own conduct and names no product. It
+// is denyfirst/site's since v0.37.0, written once there and shown at
+// https://denyfirst.dev/privacy, which Porch's pages link to rather than
+// repeat; a copy kept here as well would be the second place the same
+// undertakings drift apart in. A product adds narrower undertakings of its
+// own and never rewords the organisation's. Each text is written once, here,
+// and the pages render it.
 package promises
 
 // Promise is one undertaking, and how somebody can check it rather than believe
@@ -23,40 +27,6 @@ type Promise struct {
 	// package: an undertaking nobody can check is a request to be trusted, and
 	// a request to be trusted is what this organisation is trying not to make.
 	Checked string
-}
-
-// Organisation is what denyfirst undertakes, whatever you run.
-var Organisation = []Promise{
-	{
-		ID:      "nothing-reaches-us",
-		Says:    "Nothing we publish reports back to us: no telemetry, no crash reports, no licence checks. A tool of ours looks for a newer release only when you ask it to, or turn that on, and then asks the public host the release is on, never us, sending nothing about you.",
-		Checked: "The source is public. It contains no address of ours that a program connects to; the only one it asks about releases is GitHub's, and the request carries no identifier and no version.",
-	},
-	{
-		ID:      "no-register-of-users",
-		Says:    "You need no account with us, and we keep no list of who runs our tools.",
-		Checked: "There is nothing to sign up for. A release is a set of files and a signature.",
-	},
-	{
-		ID:      "nothing-from-third-parties",
-		Says:    "Our pages load nothing from anywhere else: no analytics, no external fonts, no CDN, no tags.",
-		Checked: "Your browser's network panel shows every request going only to the server you are reading.",
-	},
-	{
-		ID:      "checkable-rather-than-believed",
-		Says:    "You can check what we publish instead of trusting it. The source is public, releases are signed, and anyone can rebuild a release to the same bytes.",
-		Checked: "Each product publishes its release steps with its source. A public workflow rebuilds every release and compares the hashes.",
-	},
-	{
-		ID:      "a-product-may-only-promise-less",
-		Says:    "Where we run a service, it says exactly what it keeps. A product may keep less than this list allows, never more, and may not reword these.",
-		Checked: "Each product lists its additions on its own page. The texts are written once in the source, and a test fails if a product rewords one of these.",
-	},
-	{
-		ID:      "faults-have-an-address",
-		Says:    "Security problems can be reported to a published address that says when it expires.",
-		Checked: "https://denyfirst.dev/.well-known/security.txt (RFC 9116) names the contact and the expiry date.",
-	},
 }
 
 // Product is one thing denyfirst publishes, and what it adds to the list above.

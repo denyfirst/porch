@@ -84,28 +84,25 @@ const contentSecurityPolicy = "default-src 'none'; " +
 // address, not ours, and pointing it here would tell a search engine their
 // pages are copies of ours.
 //
-// SiteURL is the organisation's address since 2026-10-05: the front page, the
-// organisation's undertakings, and the contacts RFC 9116 points at. Porch's
-// pages and its API are at PorchURL, a name of their own, so that a second
-// product beside it has one too and neither speaks from the other's address.
-// What is at each is decided by organisationPaths and the Hosts handler.
+// SiteURL is the organisation's address: its front page, its undertakings,
+// and the contacts RFC 9116 points at. It is served by denyfirst/site since
+// 2026-11-26, and this program links to it. PorchURL is the demonstration's
+// own name, where its pages and its API are (hosts.go).
 const (
 	SiteURL  = "https://denyfirst.dev"
 	PorchURL = "https://porch.denyfirst.dev"
 )
 
-// SecurityTxtPath is where RFC 9116 requires the file to be served, and where
-// the demonstration serves ours. An installation serves nothing there; see
-// denyfirstFiles.
-//
-// Exported because the test parses the same file the handler serves, and a
-// second copy of this string is a second thing to keep in step.
+// SecurityTxtPath is where RFC 9116 requires the file to be served. denyfirst.dev
+// serves ours there, and the demonstration sends its own copy of the address
+// to it; an installation serves nothing there (contactsMoved).
 const SecurityTxtPath = "/.well-known/security.txt"
 
-// PGPKeyPath serves the key a reporter encrypts to.
+// PGPKeyPath is where denyfirst.dev serves the key a reporter encrypts to.
 const PGPKeyPath = "/pgp-key.txt"
 
-// PGPFingerprint identifies the key at PGPKeyPath.
+// PGPFingerprint identifies the key at PGPKeyPath, as Porch's page and
+// SECURITY.md state it.
 //
 // A key served from this domain and identified only by this domain proves
 // nothing: whoever takes the domain serves their own key beside their own
@@ -114,8 +111,10 @@ const PGPKeyPath = "/pgp-key.txt"
 // GitHub behind a different account and a different set of credentials. A
 // reporter compares the two; taking one is not taking both.
 //
-// A test fails if the two copies disagree, because two sources that always
-// agree because nobody checks are one source written twice.
+// A test fails if the copies in this repository disagree, because two sources
+// that always agree because nobody checks are one source written twice. The
+// key itself, and security.txt beside it, are denyfirst/site's, whose tests
+// hold them to the same fingerprint.
 const PGPFingerprint = "75B7A18A89715E3775DBCA2EA8D994D1221AA045"
 
 // page is one rendered document.
@@ -155,18 +154,10 @@ type page struct {
 	// from Section where a page gives none.
 	Heading string
 
-	// Brand is true on the demonstration, which is the denyfirst site and
-	// carries its wordmark; an installation somebody runs is porch, by
-	// denyfirst, and says so in the footer. Set by render from the build.
+	// Brand is true on the demonstration, which is denyfirst's and carries
+	// its wordmark in the footer; an installation somebody runs is porch, by
+	// denyfirst, and says so there. Set by render from the build.
 	Brand bool
-
-	// Organisation marks a page that speaks for denyfirst rather than for
-	// Porch: the front page and the organisation's undertakings. On the
-	// demonstration, which is the denyfirst site, it shows no verdict and its
-	// links and buttons keep the brand red; every other page draws them in
-	// Porch's violet, which no verdict uses. An installation is Porch from end
-	// to end, names its maker only in the footer, and ignores it.
-	Organisation bool
 
 	// Path is the address this page is served at, set at startup from the
 	// table, and Canonical is that address on the demonstration's own host.
@@ -177,8 +168,9 @@ type page struct {
 
 	// SiteBase and PorchBase are what the layout puts in front of a link to
 	// the organisation's pages and to Porch's: the two addresses on the
-	// demonstration, where they are different names, and nothing on an
-	// installation, where every page is its own. Set by render.
+	// demonstration, where they are different names served by different
+	// programs, and nothing on an installation, where every page is its own.
+	// Set by render.
 	SiteBase  string
 	PorchBase string
 
@@ -429,32 +421,29 @@ type servedFile struct {
 
 // files are the assets served as they are.
 var files = map[string]servedFile{
-	"/style.css":   {"assets/style.css", "text/css; charset=utf-8"},
-	"/app.js":      {"assets/app.js", "text/javascript; charset=utf-8"},
-	"/explain.js":  {"assets/explain.js", "text/javascript; charset=utf-8"},
-	"/theme.js":    {"assets/theme.js", "text/javascript; charset=utf-8"},
-	"/session.js":  {"assets/session.js", "text/javascript; charset=utf-8"},
-	"/hero.js":     {"assets/hero.js", "text/javascript; charset=utf-8"},
-	"/favicon.svg": {"assets/favicon.svg", "image/svg+xml"},
+	"/style.css":  {"assets/style.css", "text/css; charset=utf-8"},
+	"/app.js":     {"assets/app.js", "text/javascript; charset=utf-8"},
+	"/explain.js": {"assets/explain.js", "text/javascript; charset=utf-8"},
+	"/theme.js":   {"assets/theme.js", "text/javascript; charset=utf-8"},
+	"/session.js": {"assets/session.js", "text/javascript; charset=utf-8"},
 	// Porch's own icon: a p, and the stop in its violet.
 	"/porch-icon.svg": {"assets/porch-icon.svg", "image/svg+xml"},
 
-	// The same marks at the addresses the pages link since 2026-10-07. The
-	// marks changed under the old addresses on 2026-10-06, and a browser that
-	// had kept the earlier icon for an address went on showing it; a new
-	// address is fetched. The old ones still answer, for whoever kept them.
-	"/icon-denyfirst.svg": {"assets/favicon.svg", "image/svg+xml"},
-	"/icon-porch.svg":     {"assets/porch-icon.svg", "image/svg+xml"},
+	// The same mark at the address the pages link since 2026-10-07. The marks
+	// changed under the old addresses on 2026-10-06, and a browser that had
+	// kept the earlier icon for an address went on showing it; a new address
+	// is fetched. The old one still answers, for whoever kept it.
+	//
+	// denyfirst's mark was served here too, at /favicon.svg and
+	// /icon-denyfirst.svg, with an .ico and a touch icon of it, until the
+	// organisation's pages left for denyfirst/site in v0.37.0.
+	"/icon-porch.svg": {"assets/porch-icon.svg", "image/svg+xml"},
 
 	// For what reads no SVG: an .ico of the mark at 16, 32 and 48 pixels, and
-	// a square of it at 180 for a phone's home screen. Browsers ask every name
-	// for /favicon.ico and /apple-touch-icon.png whatever a page links, so
-	// those two addresses are Porch's here and denyfirst's at denyfirst.dev
-	// (organisationIcons).
+	// a square of it at 180 for a phone's home screen. Browsers ask for these
+	// two addresses whatever a page links.
 	"/favicon.ico":          {"assets/porch.ico", "image/x-icon"},
 	"/apple-touch-icon.png": {"assets/porch-touch.png", "image/png"},
-	"/denyfirst.ico":        {"assets/denyfirst.ico", "image/x-icon"},
-	"/denyfirst-touch.png":  {"assets/denyfirst-touch.png", "image/png"},
 	// The one typeface every page is set in, served from here so a reader's
 	// browser asks nobody else for it. Schibsted Grotesk, under the SIL Open
 	// Font License 1.1 (schibsted-grotesk-OFL.txt beside it).
@@ -465,9 +454,11 @@ var files = map[string]servedFile{
 // behind a password, because the sign-in page is set in it too.
 const FontPath = "/schibsted-grotesk.woff2"
 
-// denyfirstFiles are this project's own contacts: where to report a security
-// problem in it, and the key to encrypt the report to. The demonstration
-// serves them, because it is denyfirst.dev. Nothing else does.
+// contactsMoved are this project's own contacts: where to report a security
+// problem in it, and the key to encrypt the report to. denyfirst.dev serves
+// them, from denyfirst/site since 2026-11-26. The demonstration served them
+// itself until v0.37.0, and sends the addresses it served them at there,
+// because reports and pages already shared name them. Nothing else does.
 //
 // Every build served them until 2026-09-28, and on an installation each one
 // was wrong. Its Canonical named denyfirst.dev, so by RFC 9116 the file was
@@ -479,31 +470,28 @@ const FontPath = "/schibsted-grotesk.woff2"
 // installation with our name, which is a way to find installations of this
 // tool that their operators never agreed to. An operator who wants a
 // security.txt publishes their own, naming themselves.
-var denyfirstFiles = map[string]servedFile{
-	SecurityTxtPath: {"assets/security.txt", "text/plain; charset=utf-8"},
-
-	// text/plain rather than application/pgp-keys, so a browser shows it
-	// instead of offering to download a file a reporter then has to find.
-	// gpg reads it either way.
-	PGPKeyPath: {"assets/pgp-key.txt", "text/plain; charset=utf-8"},
+var contactsMoved = map[string]string{
+	SecurityTxtPath: SiteURL + SecurityTxtPath,
+	"/security.txt": SiteURL + SecurityTxtPath,
+	PGPKeyPath:      SiteURL + PGPKeyPath,
 }
 
-// socialCards are the pictures a link preview shows, one for each of the
-// demonstration's names, at 1200 by 630 pixels, which is what the previews
-// that show a large picture ask for. The layout names the one for the page's
-// name in og:image, with that size beside it so a preview need not fetch the
-// picture to lay it out; a test holds the two to each other.
+// socialCards is the picture a link preview shows for the demonstration's
+// pages, at 1200 by 630 pixels, which is what the previews that show a large
+// picture ask for. The layout names it in og:image, with that size beside it
+// so a preview need not fetch the picture to lay it out; a test holds the two
+// to each other.
 //
 // The demonstration's only: an installation says nothing to a link preview,
 // for the reason it states no canonical address.
 //
-// Each is a few lines its name's front page already says, set as a picture,
-// and nothing else. They carry no metadata, which a test checks: a screenshot
-// tool writes its own name, a path or a date into a PNG unless it is told not
-// to, and none of those is anybody's business.
+// It is a few lines the front page already says, set as a picture, and
+// nothing else. It carries no metadata, which a test checks: a screenshot tool
+// writes its own name, a path or a date into a PNG unless it is told not to,
+// and none of those is anybody's business. denyfirst.dev's card is
+// denyfirst/site's.
 var socialCards = map[string]servedFile{
-	"/og-denyfirst.png": {"assets/og-denyfirst.png", "image/png"},
-	"/og-porch.png":     {"assets/og-porch.png", "image/png"},
+	"/og-porch.png": {"assets/og-porch.png", "image/png"},
 }
 
 // rendered holds every page as finished bytes.
@@ -514,40 +502,21 @@ var socialCards = map[string]servedFile{
 var rendered = map[string][]byte{}
 
 func init() {
-	// Our contacts, and the short path to them, on the one deployment that is
-	// ours to answer for.
+	// Our contacts are denyfirst.dev's, on the one deployment that is ours to
+	// answer for, and so is the picture a link preview shows.
 	if demo.Enabled {
-		for path, file := range denyfirstFiles {
-			files[path] = file
+		for path, to := range contactsMoved {
+			moved[path] = to
 		}
-		moved["/security.txt"] = SecurityTxtPath
 		for path, file := range socialCards {
 			files[path] = file
 		}
 	}
 
-	// The denyfirst front page and the Porch page exist on the demonstration
-	// only. An installation somebody runs is the tool at "/" and needs
-	// neither: nobody there needs the product explained to them.
+	// The Porch page exists on the demonstration only. An installation
+	// somebody runs is the tool at "/" and needs no page explaining it:
+	// nobody there needs the product explained to them.
 	if demo.Enabled {
-		pages["/"] = &page{
-			Title:        "denyfirst — independent security and privacy tools",
-			Organisation: true,
-			Description:  "denyfirst builds security and privacy tools that keep your data with you. Porch checks TLS, websites, mail and DNS.",
-			Fragment:     "assets/home.html",
-		}
-		// denyfirst.dev/privacy: the organisation's promises, and this
-		// site's own facts. An installation is Porch alone and links here.
-		pages[orgPrivacy] = &page{
-			Title:        "Privacy — denyfirst",
-			Organisation: true,
-			Description:  "What denyfirst promises for everything it publishes, and how to check each one.",
-			Fragment:     "assets/organisation.html",
-			Data: organisationPage{
-				Organisation: promises.Organisation,
-				Products:     productPages(),
-			},
-		}
 		// The name inventory is here, and it lists this project's own estate.
 		//
 		// Both pages were deleted until 2026-09-27, on the ground that this
@@ -565,7 +534,12 @@ func init() {
 		// thing the deletion was right about (N12).
 		pages["/names"].Data = namesPage{Target: demoDomain(), Demo: true}
 
-		pages["/porch"] = &page{
+		// At "/" since v0.37.0. It was at /porch while one program served
+		// denyfirst.dev's front page at "/" too, and on porch.denyfirst.dev
+		// "/" was this page served under the other's address; /porch answers
+		// with the move, for whoever linked it.
+		moved["/porch"] = "/"
+		pages["/"] = &page{
 			Title:       "Porch — TLS, web, mail and DNS checks — denyfirst",
 			Description: "Porch checks what your servers show the outside world: TLS, website, mail and DNS. Self-hosted. See it run on our own domain.",
 			Fragment:    "assets/porch.html",
@@ -853,39 +827,17 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// porch.denyfirst.dev's front page is Porch's, and its crawler files
-	// list its own pages; see hosts.go.
-	porch := siteOf(r.Host) == porchSite
-	if porch && r.URL.Path == "/" {
-		write(w, r, "text/html; charset=utf-8", rendered[porchRoot])
-		return
-	}
-	if siteOf(r.Host) == organisationSite && r.URL.Path == "/privacy" {
-		write(w, r, "text/html; charset=utf-8", rendered[orgPrivacy])
-		return
-	}
-
 	if body, found := rendered[r.URL.Path]; found {
 		write(w, r, "text/html; charset=utf-8", body)
 		return
 	}
 
-	crawler := plain
-	if porch {
-		crawler = plainPorch
-	}
-	if text, found := crawler[r.URL.Path]; found {
+	if text, found := plain[r.URL.Path]; found {
 		write(w, r, text.contentType, text.body)
 		return
 	}
 
-	path := r.URL.Path
-	if siteOf(r.Host) == organisationSite {
-		if own, found := organisationIcons[path]; found {
-			path = own
-		}
-	}
-	if file, found := files[path]; found {
+	if file, found := files[r.URL.Path]; found {
 		body, err := assets.ReadFile(file.name)
 		if err != nil {
 			// Unreachable unless the table and the embedded tree disagree,
@@ -1066,13 +1018,8 @@ type plainFile struct {
 	body        []byte
 }
 
-// plain holds the files a crawler reads, built at startup beside the pages,
-// and plainPorch the same files for porch.denyfirst.dev, which lists its own
-// pages and names its own sitemap.
-var (
-	plain      = map[string]plainFile{}
-	plainPorch = map[string]plainFile{}
-)
+// plain holds the files a crawler reads, built at startup beside the pages.
+var plain = map[string]plainFile{}
 
 // buildPlain writes robots.txt and, on the demonstration, a sitemap and an
 // llms.txt (llms.go).
@@ -1094,71 +1041,24 @@ func buildPlain() {
 		return
 	}
 
-	// Each name lists the pages it serves, at the address each states as its
-	// own, so nothing in either sitemap is a redirect.
-	var organisation, porch []string
+	// The pages at the address each states as its own, so nothing in the
+	// sitemap is a redirect.
+	var urls []string
 	for path := range rendered {
-		if p := pages[path]; p != nil && p.Organisation {
-			organisation = append(organisation, canonicalURL(path))
-		} else {
-			porch = append(porch, canonicalURL(path))
-		}
+		urls = append(urls, canonicalURL(path))
 	}
-	for _, crawler := range []struct {
-		files map[string]plainFile
-		base  string
-		urls  []string
-	}{
-		{plain, SiteURL, organisation},
-		{plainPorch, PorchURL, porch},
-	} {
-		sort.Strings(crawler.urls)
-		var sitemap strings.Builder
-		sitemap.WriteString(xml.Header)
-		sitemap.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-		for _, u := range crawler.urls {
-			sitemap.WriteString("  <url><loc>" + u + "</loc></url>\n")
-		}
-		sitemap.WriteString("</urlset>\n")
-		crawler.files["/sitemap.xml"] = plainFile{"application/xml; charset=utf-8", []byte(sitemap.String())}
-		crawler.files["/robots.txt"] = plainFile{"text/plain; charset=utf-8",
-			[]byte("User-agent: *\nAllow: /\n\nSitemap: " + crawler.base + "/sitemap.xml\n")}
+	sort.Strings(urls)
+	var sitemap strings.Builder
+	sitemap.WriteString(xml.Header)
+	sitemap.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+	for _, u := range urls {
+		sitemap.WriteString("  <url><loc>" + u + "</loc></url>\n")
 	}
+	sitemap.WriteString("</urlset>\n")
+	plain["/sitemap.xml"] = plainFile{"application/xml; charset=utf-8", []byte(sitemap.String())}
+	plain["/robots.txt"] = plainFile{"text/plain; charset=utf-8",
+		[]byte("User-agent: *\nAllow: /\n\nSitemap: " + PorchURL + "/sitemap.xml\n")}
 	buildLLMs()
-}
-
-// organisationPage is what assets/organisation.html reads.
-//
-// The undertakings are passed in rather than written into the markup, for the
-// reason the Data field exists at all: a second product would otherwise mean
-// the organisation's undertakings written out twice, and the day one copy is
-// improved and the other is not, a reader has two documents from the same
-// people that disagree — worse evidence than one vague document.
-type organisationPage struct {
-	Organisation []promises.Promise
-	Products     []productPage
-}
-
-// productPage is a product as the organisation's page names it: what it is,
-// and where its own undertakings are. The undertakings themselves are not
-// carried, because they are that product's word and its page says them.
-type productPage struct {
-	Name, What, Page string
-}
-
-// productPages is every product in internal/promises with the address of its
-// own page. Porch's is on this site wherever this copy runs. A product this
-// repository does not build has no address here until somebody writes one
-// down, and startup stops rather than link a reader to a guess.
-func productPages() []productPage {
-	var out []productPage
-	for _, p := range promises.Products {
-		if p.Name != promises.Porch.Name {
-			panic("web: " + p.Name + " is in internal/promises with no address for its undertakings")
-		}
-		out = append(out, productPage{Name: p.Name, What: p.What, Page: porchBase() + "/privacy#promises"})
-	}
-	return out
 }
 
 // porchPrivacy is what the demonstration's privacy page reads: Porch's

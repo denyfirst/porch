@@ -40,8 +40,8 @@ func TestTheRailsMarksAreDrawn(t *testing.T) {
 // tab icon is fetched by every browser and by search engines. These were cut
 // from the typeface's outlines and hold a square, a letter and a stop.
 func TestTheTabIconsAreTheMarksAndOnlyShapes(t *testing.T) {
+	// denyfirst's mark is denyfirst/site's since v0.37.0.
 	for _, icon := range []struct{ file, name, stop string }{
-		{"assets/favicon.svg", "denyfirst", "#ed4552"},
 		{"assets/porch-icon.svg", "porch", "#9b7bf0"},
 	} {
 		raw, err := assets.ReadFile(icon.file)
@@ -71,7 +71,7 @@ func TestTheTabIconsAreTheMarksAndOnlyShapes(t *testing.T) {
 // PNG is checked down to its chunks: a text or time chunk in a file every
 // visitor's browser fetches would be something said about whoever made it.
 func TestTheFallbackIconsAreTheMarks(t *testing.T) {
-	for _, name := range []string{"assets/denyfirst.ico", "assets/porch.ico"} {
+	for _, name := range []string{"assets/porch.ico"} {
 		raw, err := assets.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -102,7 +102,7 @@ func TestTheFallbackIconsAreTheMarks(t *testing.T) {
 
 	// A phone puts this on its home screen and rounds the corners itself, so
 	// it is square and has nothing to see through.
-	for _, name := range []string{"assets/denyfirst-touch.png", "assets/porch-touch.png"} {
+	for _, name := range []string{"assets/porch-touch.png"} {
 		raw, err := assets.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -138,17 +138,16 @@ func pngShape(t *testing.T, name string, raw []byte) (width, height, colour int)
 	return width, height, colour
 }
 
-// Pages link the marks at their new addresses, one icon each, and each name
-// answers the addresses a browser asks for unprompted with its own mark.
-func TestEachNameLinksAndServesItsOwnMark(t *testing.T) {
+// Pages link Porch's mark at its new address, one icon each, and Porch's name
+// answers the addresses a browser asks for unprompted with it. denyfirst.dev
+// answers them with denyfirst's, from denyfirst/site.
+func TestEachPageLinksAndIsServedPorchsMark(t *testing.T) {
 	layout, err := assets.ReadFile("assets/layout.html")
 	if err != nil {
 		t.Fatal(err)
 	}
 	head := string(layout)
 	for _, want := range []string{
-		`<link rel="icon" href="/icon-denyfirst.svg" type="image/svg+xml">`,
-		`<link rel="apple-touch-icon" href="/denyfirst-touch.png">`,
 		`<link rel="icon" href="/icon-porch.svg" type="image/svg+xml">`,
 		`<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
 	} {
@@ -156,17 +155,19 @@ func TestEachNameLinksAndServesItsOwnMark(t *testing.T) {
 			t.Errorf("the layout does not link %s", want)
 		}
 	}
-	// One icon per page. Chromium fetches every icon a page links, and the
-	// front page's receipt counts the files a visit loads; what reads no SVG
-	// asks for /favicon.ico unprompted, and is answered there.
-	for _, branch := range strings.Split(head, "{{else}}")[:2] {
-		if n := strings.Count(branch, `<link rel="icon"`); n != 1 {
-			t.Errorf("a page links %d icons, not one", n)
+	// One icon per page. Chromium fetches every icon a page links; what reads
+	// no SVG asks for /favicon.ico unprompted, and is answered there.
+	if n := strings.Count(head, `<link rel="icon"`); n != 1 {
+		t.Errorf("a page links %d icons, not one", n)
+	}
+	for _, gone := range []string{"/icon-denyfirst.svg", "/favicon.svg", "/denyfirst.ico", "/denyfirst-touch.png"} {
+		if _, served := files[gone]; served {
+			t.Errorf("%s, denyfirst's mark, is still served here", gone)
 		}
 	}
-	// The old addresses still answer, and nothing links them: a browser that
-	// kept the earlier mark under one would go on showing it.
-	for _, old := range []string{`href="/favicon.svg"`, `href="/porch-icon.svg"`} {
+	// The old address still answers, and nothing links it: a browser that
+	// kept the earlier mark under it would go on showing it.
+	for _, old := range []string{`href="/porch-icon.svg"`} {
 		if strings.Contains(head, old) {
 			t.Errorf("the layout still links %s", old)
 		}
@@ -176,8 +177,6 @@ func TestEachNameLinksAndServesItsOwnMark(t *testing.T) {
 		return
 	}
 	for _, c := range []struct{ host, path, file string }{
-		{organisationHost, "/favicon.ico", "assets/denyfirst.ico"},
-		{organisationHost, "/apple-touch-icon.png", "assets/denyfirst-touch.png"},
 		{porchHost, "/favicon.ico", "assets/porch.ico"},
 		{porchHost, "/apple-touch-icon.png", "assets/porch-touch.png"},
 	} {
