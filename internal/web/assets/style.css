@@ -3,7 +3,7 @@
   -------------------
   A dark, quiet surface with one accent, and the same page in light for
   whoever prefers it. The accent is Porch's violet; denyfirst's red is the
-  wordmark's, and the accent of the organisation's own pages. The colour scheme follows the system until the reader
+  wordmark's and nothing else's. The colour scheme follows the system until the reader
   picks one with the switch in the header; theme.js remembers that choice and
   nothing else.
 
@@ -78,18 +78,6 @@
   --accent:       #6b3fc4;
   --accent-hover: #5a32a8;
 
-  /* Porch's violet where the organisation's pages show it: Porch's card on
-     the front page. The organisation's override does not touch these. */
-  --porch-accent:       #6b3fc4;
-  --porch-accent-hover: #5a32a8;
-  --porch-link:         #5f35b5;
-
-  /* The organisation's own pages carry no verdict, and keep the brand red for
-     their links and buttons (body[data-owner="organisation"]). */
-  --brand-link:         #a41d2a;
-  --brand-accent:       #b3202e;
-  --brand-accent-hover: #8f1a25;
-
   --strong:      #1f6a44;
   --weak:        #845900;
   --insecure:    #b3202e;
@@ -113,13 +101,6 @@
   --term-flag:   #c9a7ff;
   --term-str:    #a6dc85;
   --term-var:    #f2c97d;
-
-  /* The receipt on the front page is paper in both schemes, as a receipt is,
-     so its colours are drawn on it and nowhere else. */
-  --slip-paper:  #fbf9f4;
-  --slip-ink:    #1d1e22;
-  --slip-faint:  #55565e;
-  --slip-red:    #b3202e;
 
   /* The panel on Porch's page that asks for a vulnerability report. Dark in
      both schemes, as the terminal is, and each text colour is checked against
@@ -174,12 +155,6 @@
     --tool:       #b9a2ff;
     --accent:       #7e57d9;
     --accent-hover: #6c46c8;
-    --porch-accent:       #7e57d9;
-    --porch-accent-hover: #6c46c8;
-    --porch-link:         #b9a2ff;
-    --brand-link:         #f28b94;
-    --brand-accent:       #c72f3d;
-    --brand-accent-hover: #d23443;
     --strong:     #6fbf92;
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
@@ -212,12 +187,6 @@
     --tool:       #b9a2ff;
     --accent:       #7e57d9;
     --accent-hover: #6c46c8;
-    --porch-accent:       #7e57d9;
-    --porch-accent-hover: #6c46c8;
-    --porch-link:         #b9a2ff;
-    --brand-link:         #f28b94;
-    --brand-accent:       #c72f3d;
-    --brand-accent-hover: #d23443;
     --strong:     #6fbf92;
     --weak:       #d9a23c;
     --insecure:   #ff7c86;
@@ -330,17 +299,6 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* The mark a printed report is headed with; the screen has the header. */
 .print-mark { display: none; }
-
-/* denyfirst's own pages on the demonstration — the front page and the
-   organisation — speak for the organisation rather than for Porch, and show no
-   verdict, so their controls keep the brand red. Set by the layout from
-   page.Organisation; an installation is Porch's violet throughout. */
-body[data-owner="organisation"] {
-  --tool:         var(--brand);
-  --link:         var(--brand-link);
-  --accent:       var(--brand-accent);
-  --accent-hover: var(--brand-accent-hover);
-}
 
 .masthead-nav {
   display: flex;
@@ -596,7 +554,6 @@ h1 {
   somebody has to track back across is a line they read twice.
 */
 .field-group .field-help { max-width: var(--measure); }
-
 
 .noscript {
   margin: 1.4rem 0 0;
@@ -2606,11 +2563,12 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   .state-grid dd { margin-bottom: 0.7rem; }
 }
 
-/* ── The front page and the Porch page ──────────────────────────────────
+/* ── The Porch page ──────────────────────────────────────────────────────
 
-   The demonstration's own pages: the denyfirst front page, and Porch shown
-   running. Built from the same tokens as everything else, so the report a
-   visitor gets here is the report they would get from their own copy. */
+   The demonstration's own page: Porch shown running. Built from the same
+   tokens as everything else, so the report a visitor gets here is the report
+   they would get from their own copy. denyfirst's front page, which shared
+   this section until v0.37.0, is denyfirst/site's. */
 
 .eyebrow {
   margin: 0 0 0.9rem;
@@ -2621,33 +2579,7 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   color: var(--ink-faint);
 }
 
-.hero {
-  padding: 4.5rem 0 1rem;
-}
-
-.hero h1 {
-  font-size: clamp(2.8rem, 7vw, 5.4rem);
-  line-height: 1.04;
-  letter-spacing: -0.045em;
-  margin-bottom: 2rem;
-}
-
 .hero-soft { color: var(--ink-faint); }
-
-.hero-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem 2.5rem;
-}
-
-.hero-bottom p {
-  max-width: var(--measure);
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--ink-soft);
-}
 
 .button {
   display: inline-flex;
@@ -2707,10 +2639,7 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
 .band:has(+ .band-tint) { border-bottom: 0; }
 
 .band-head .eyebrow::before,
-.band-split > .eyebrow::before,
-.team-text > .eyebrow::before,
-.release-text > .eyebrow::before,
-.receipt-text > .eyebrow::before {
+.band-split > .eyebrow::before {
   content: "";
   display: inline-block;
   width: 1.5rem;
@@ -2768,264 +2697,7 @@ td.dns-record { font-family: var(--mono); font-size: 0.84rem; overflow-wrap: any
   gap: 1.5rem 2.5rem;
 }
 
-.band-prose {
-  max-width: var(--measure);
-  margin: 1.4rem 0;
-  font-size: 1.02rem;
-  color: var(--ink-soft);
-}
-
-/*
-  The about band: who makes this, drawn as the card a member of the team
-  would wear, with the slot a lanyard goes through. It names nobody and shows
-  no face. What it shows instead is how the team is known: the key that signs
-  every release, and the files that back each other line. The fine diagonal
-  ground is the pattern printed on documents meant to be hard to copy.
-*/
-.team {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
-  gap: 2.5rem 4rem;
-  align-items: center;
-}
-
-.team-card {
-  position: relative;
-  padding: 2.4rem 1.6rem 1.3rem;
-  background:
-    repeating-linear-gradient(135deg,
-      color-mix(in srgb, var(--tool) 7%, transparent) 0 1px, transparent 1px 9px),
-    var(--paper-sunk);
-  border: 1px solid var(--rule);
-  border-top: 4px solid var(--tool);
-  border-radius: 14px;
-  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
-  transform: rotate(-1deg);
-  transition: transform 220ms ease-out;
-}
-
-.team-card:hover { transform: rotate(0deg); }
-
-.team-card::before {
-  content: "";
-  position: absolute;
-  top: 0.85rem;
-  left: 50%;
-  width: 3.2rem;
-  height: 0.55rem;
-  transform: translateX(-50%);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-}
-
-.team-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.1rem;
-}
-
-.team-card-mark {
-  margin: 0;
-  font-size: 1.7rem;
-  font-weight: 750;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: var(--ink);
-}
-
-.team-card-tag {
-  padding: 0.2rem 0.65rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-}
-
-.team-card-rows { margin: 0; }
-
-.team-card-rows > div {
-  display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr);
-  gap: 0.2rem 1rem;
-  padding: 0.65rem 0;
-  border-top: 1px dashed var(--rule);
-}
-
-.team-card-rows dt {
-  padding-top: 0.15rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.team-card-rows dd { margin: 0; font-size: 0.95rem; color: var(--ink); }
-
-.team-card-rows a { color: var(--ink); text-decoration-color: var(--rule); }
-
-.team-card-rows a:hover { text-decoration-color: var(--accent); }
-
-.team-card-rows code {
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  overflow-wrap: anywhere;
-}
-
-.team-card-foot {
-  margin: 0.6rem 0 0;
-  padding-top: 0.9rem;
-  font-size: 0.8rem;
-  text-align: center;
-  color: var(--ink-faint);
-  border-top: 1px solid var(--rule);
-}
-
-@media (max-width: 52rem) {
-  .team { grid-template-columns: 1fr; }
-  .team-card { transform: none; }
-}
-
-/* On a phone the key, the one long line, takes the card's width under its
-   label; the short lines keep their label beside them. */
-@media (max-width: 40rem) {
-  .team-card { padding-inline: 1.2rem; }
-  .team-card-rows > div { grid-template-columns: 6.5rem minmax(0, 1fr); }
-  .team-card-rows > .team-card-key { grid-template-columns: 1fr; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .team-card, .team-card:hover { transition: none; transform: none; }
-}
-
-/*
-  The front page's receipt for the visit. Every line is a fact a reader can
-  see in their own browser, and demo_page_test.go holds each to the response
-  that makes it true. It sits and tilts the other way from the team's card.
-*/
-.receipt {
-  display: grid;
-  grid-template-columns: minmax(0, 23rem) minmax(0, 1fr);
-  grid-template-areas: "slip text";
-  gap: 2.5rem 4rem;
-  align-items: center;
-}
-
-/* The team's card above is on the right, so the receipt is on the left: the
-   two do not stack down one side. The text still comes first in the page,
-   and first on a phone. */
-.receipt-text { grid-area: text; }
-.slip { grid-area: slip; }
-
-.receipt-text .band-prose + .band-prose { margin-top: -0.6rem; }
-
-.slip {
-  --tooth: 9px;
-  padding: 1.7rem 1.4rem 2.4rem;
-  font-family: var(--mono);
-  font-size: 0.82rem;
-  line-height: 1.6;
-  color: var(--slip-ink);
-  background: var(--slip-paper);
-  box-shadow: 0 24px 40px -26px rgb(0 0 0 / 0.55);
-  transform: rotate(1.2deg);
-  transition: transform 220ms ease-out;
-  /* The torn edge at the foot: a row of teeth cut out of the paper. */
-  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--tooth)) 100%;
-  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--tooth)) 100%;
-}
-
-.slip:hover { transform: rotate(0deg); }
-
-.slip-mark {
-  margin: 0;
-  font-family: var(--sans);
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  text-align: center;
-}
-
-.slip-mark .wordmark-deny { color: var(--slip-ink); }
-.slip-mark .wordmark-stop { color: var(--slip-red); }
-
-.slip-head {
-  margin: 0.15rem 0 0;
-  padding-bottom: 0.75rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  text-align: center;
-  border-bottom: 1px dashed var(--slip-faint);
-}
-
-.slip-rows { margin: 0.75rem 0 0; }
-
-.slip-rows > div {
-  display: flex;
-  gap: 0.4rem;
-  align-items: baseline;
-}
-
-.slip-rows dt { white-space: nowrap; }
-
 /* The dotted leader between a line and its figure. */
-.slip-rows > div::before {
-  content: "";
-  order: 1;
-  flex: 1;
-  min-width: 0.8rem;
-  border-bottom: 1px dotted var(--slip-faint);
-  transform: translateY(-0.3rem);
-}
-
-.slip-rows dd {
-  order: 2;
-  margin: 0;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.slip-ruled {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--slip-faint);
-}
-
-.slip-total {
-  margin-top: 0.75rem;
-  padding-top: 0.6rem;
-  border-top: 3px double var(--slip-ink);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.slip-total dd { color: var(--slip-red); }
-
-.slip-foot {
-  margin: 1rem 0 0;
-  font-size: 0.72rem;
-  text-align: center;
-  color: var(--slip-faint);
-}
-
-@media (max-width: 52rem) {
-  .receipt { grid-template-columns: 1fr; grid-template-areas: "text" "slip"; }
-  .slip { transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .slip, .slip:hover { transition: none; transform: none; }
-}
 
 .cards {
   display: grid;
@@ -3073,382 +2745,9 @@ a.card:hover { border-color: var(--link); }
   color: var(--ink-faint);
 }
 
-.badge {
-  align-self: flex-start;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-}
-
-.badge-live {
-  color: var(--link);
-  border-color: var(--accent);
-}
-
-/*
-  The front page's three rules, each beside how a reader checks it.
-
-  A row has the product card's columns, its gap and its inset, so the red edge
-  of each check here falls on the same line as the violet edges of the card's
-  list above it, at every width (demo_page_test.go measures the rules against
-  the card). Changing one without the other breaks that line.
-*/
-.rules {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rules > li {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  column-gap: 2.5rem;
-  row-gap: 1rem;
-  align-items: center;
-  padding: 1.6rem calc(2rem + 1px);
-  border-top: 1px solid var(--rule);
-}
-
-.rules > li:last-child { border-bottom: 1px solid var(--rule); }
-
-.rule-main {
-  display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
-  gap: 1.2rem;
-  align-items: center;
-}
-
-/* The number, drawn in outline so it reads as a mark rather than a heading. */
-.rule-no {
-  font-size: 3rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: transparent;
-  -webkit-text-stroke: 1.5px var(--accent);
-}
-
-.rules h3 {
-  margin: 0 0 0.3rem;
-  font-size: 1.3rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
-.rules p { margin: 0; color: var(--ink-soft); }
-
-.rule-proof {
-  padding: 0.55rem 0.8rem;
-  font-size: 0.92rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--accent);
-  border-radius: 4px;
-}
-
-.rule-proof-label {
-  display: block;
-  margin-bottom: 0.2rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-/*
-  The front page's opening, beside the policy it is served under. The policy
-  is written as a firewall's rules are, deny first and then allow, and each
-  comment is a fact about this response that demo_page_test.go reads against
-  the server. The lines are typed in once; for a reader who asked for less
-  motion they are simply there.
-*/
-.hero-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 2.5rem 3.5rem;
-}
-
-.hero-main h1 { font-size: clamp(2.6rem, 5.4vw, 4.8rem); }
-
-.hero-main .hero-bottom {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1.5rem;
-}
-
-.policy {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  color: var(--term-ink);
-  background: var(--term-bg);
-  border: 1px solid var(--term-rule);
-  border-radius: 12px;
-  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.55);
-}
-
-.policy-bar {
-  display: flex;
-  align-items: center;
-  padding: 0.7rem 0.9rem;
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  color: var(--term-faint);
-  background: var(--term-bar);
-}
-
-/* The dots are one dot and two shadows, so the space after them is the
-   shadows' width plus a gap. */
-.policy-bar .terminal-dots { margin-right: 2.8rem; }
-
-.policy-rules {
-  margin: 0;
-  padding: 0.9rem 1rem 1rem;
-  list-style: none;
-  font-family: var(--mono);
-  font-size: 0.84rem;
-  line-height: 2;
-  counter-reset: policy;
-}
-
-.policy-rules li {
-  display: grid;
-  grid-template-columns: 1.4rem 3.6rem max-content minmax(0, 1fr);
-  align-items: baseline;
-  white-space: nowrap;
-  counter-increment: policy;
-  animation: policy-type 0.5s steps(22, end) both;
-}
-
-.policy-rules li::before { content: counter(policy); color: var(--term-faint); }
-.policy-rules li:nth-child(2) { animation-delay: 0.45s; }
-.policy-rules li:nth-child(3) { animation-delay: 0.9s; }
-.policy-rules li:nth-child(4) { animation-delay: 1.35s; }
-.policy-rules li:nth-child(5) { animation-delay: 1.8s; }
-.policy-rules li:nth-child(6) { animation-delay: 2.25s; }
-
-.policy-deny  { font-weight: 700; color: var(--term-prompt); }
-.policy-allow { font-weight: 700; color: var(--term-str); }
-
-.policy-why {
-  min-width: 0;
-  padding-left: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--term-faint);
-}
-
 /* The cursor after the one thing that is allowed. */
-.policy-rules li:last-child .policy-why::after {
-  content: "";
-  display: inline-block;
-  width: 0.55em;
-  height: 1.05em;
-  margin-left: 0.3rem;
-  vertical-align: -0.15em;
-  background: var(--term-str);
-  animation: policy-blink 1s steps(1) 3s infinite;
-}
-
-.policy figcaption {
-  padding: 0.6rem 1rem;
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  color: var(--term-faint);
-  border-top: 1px solid var(--term-rule);
-}
-
-.policy figcaption a { color: var(--term-ink); }
-
-@keyframes policy-type {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 0 0 0); }
-}
-
-@keyframes policy-blink {
-  50% { background: transparent; }
-}
-
-@media (max-width: 52rem) {
-  .hero-main { grid-template-columns: minmax(0, 1fr); }
-}
-
-@media (max-width: 40rem) {
-  .policy-rules li {
-    grid-template-columns: 1.2rem 3rem minmax(0, 1fr);
-    line-height: 1.6;
-    padding: 0.2rem 0;
-    white-space: normal;
-  }
-  .policy-rules { font-size: 0.8rem; }
-  .policy-why { grid-column: 3; padding-left: 0; }
-}
-
-/*
-  The three rules answer a pointer: the number fills in, a stroke of the
-  accent runs down the edge, and the proof steps forward. Only where there is
-  a pointer that hovers, and never for a reader who asked for less motion.
-*/
-.rule-no {
-  background: linear-gradient(var(--accent), var(--accent)) 0 100% / 100% 0 no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  transition: background-size 350ms ease-out;
-}
-
-.rule-proof { transition: transform 250ms ease-out, box-shadow 250ms ease-out; }
-
-@media (hover: hover) {
-  .rules > li { position: relative; transition: background-color 200ms ease-out; }
-
-  .rules > li::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 3px;
-    background: var(--accent);
-    transform: scaleY(0);
-    transform-origin: top;
-    transition: transform 250ms ease-out;
-  }
-
-  .rules > li:hover { background-color: color-mix(in srgb, var(--accent) 4%, transparent); }
-  .rules > li:hover::before { transform: scaleY(1); }
-  .rules > li:hover .rule-no { background-size: 100% 100%; }
-
-  .rules > li:hover .rule-proof {
-    transform: translateX(-4px);
-    box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 25%, transparent);
-  }
-}
-
-/*
-  How a release reaches you, as the record every release carries: each step,
-  who took it, and the public file that shows it was taken. It is an object
-  beside its text, as the team's card and the receipt are, and on the left,
-  so the objects alternate down the page. They mirror each other as well:
-  the two on the left lean one way and the two on the right the other, so
-  each pair reads as a reflection rather than as two cards tipped alike. The
-  last line is the reader's, and is left open.
-*/
-.release {
-  display: grid;
-  grid-template-columns: minmax(0, 25rem) minmax(0, 1fr);
-  grid-template-areas: "record text";
-  gap: 2.5rem 4rem;
-  align-items: center;
-}
-
-.release-text { grid-area: text; }
-.record { grid-area: record; }
-
-.record {
-  position: relative;
-  padding: 1.6rem 1.5rem 0.6rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
-  transform: rotate(1.2deg);
-  transition: transform 220ms ease-out;
-}
-
-.record:hover { transform: rotate(0deg); }
 
 /* A perforated edge along the top, in the accent. */
-.record::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  border-radius: 14px 14px 0 0;
-  background: repeating-linear-gradient(90deg, var(--accent) 0 14px, transparent 14px 20px);
-}
-
-.record-title {
-  margin: 0;
-  padding-bottom: 0.9rem;
-  font-size: 1.25rem;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  border-bottom: 1px solid var(--rule);
-}
-
-.record-rows { margin: 0; padding: 0; list-style: none; }
-
-.record-rows li {
-  display: grid;
-  grid-template-columns: 1.6rem minmax(0, 1fr);
-  gap: 0.1rem 0.7rem;
-  align-items: baseline;
-  padding: 0.7rem 0;
-  border-bottom: 1px dashed var(--rule);
-}
-
-.record-rows li:last-child { border-bottom: 0; }
-
-.record-rows strong { font-size: 0.98rem; font-weight: 650; }
-
-.record-tick {
-  display: grid;
-  grid-row: 1 / span 2;
-  place-items: center;
-  align-self: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  color: #ffffff;
-  background: var(--accent);
-  border-radius: 4px;
-}
-
-.record-tick svg {
-  width: 0.85rem;
-  height: 0.85rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.record-proof {
-  grid-column: 2;
-  max-width: 16rem;
-  font-size: 0.78rem;
-  color: var(--ink-faint);
-}
-
-.record-proof code { font-family: var(--mono); font-size: 0.74rem; }
-
-.record-who {
-  margin-right: 0.35rem;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.record-you strong { color: var(--link); }
-.record-you .record-proof a { font-size: 0.82rem; font-weight: 600; }
-
-.record-you .record-tick {
-  background: transparent;
-  border: 2px dashed var(--accent);
-  animation: record-waits 1.6s ease-in-out infinite;
-}
-
-@keyframes record-waits {
-  50% { border-color: transparent; }
-}
 
 /* The ticks land one after another as the card comes into view, and all
    four have landed by the time the whole card is on the screen. Only where
@@ -3456,232 +2755,20 @@ a.card:hover { border-color: var(--link); }
    did not ask for less motion; everywhere else they are simply there. */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .record-rows li:not(.record-you) .record-tick {
-      animation: record-stamp linear both;
-      animation-timeline: view();
-      animation-range: entry 20% entry 55%;
-    }
-    .record-rows li:nth-child(2) .record-tick { animation-range: entry 35% entry 70%; }
-    .record-rows li:nth-child(3) .record-tick { animation-range: entry 50% entry 85%; }
-    .record-rows li:nth-child(4) .record-tick { animation-range: entry 65% entry 100%; }
 
-    @keyframes record-stamp {
-      0%, 40% { transform: scale(0.4); background: var(--rule); }
-      75% { transform: scale(1.18); }
-      100% { transform: scale(1); background: var(--accent); }
-    }
+    
   }
-}
-
-/* The stamp on the corner: what the second workflow found. */
-.record-seal {
-  position: absolute;
-  top: -1.6rem;
-  right: -1.3rem;
-  display: grid;
-  place-items: center;
-  width: 6.2rem;
-  height: 6.2rem;
-  margin: 0;
-  font-size: 0.6rem;
-  font-weight: 800;
-  line-height: 1.35;
-  letter-spacing: 0.14em;
-  text-align: center;
-  text-transform: uppercase;
-  color: var(--link);
-  background: var(--paper);
-  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent);
-  transform: rotate(-14deg);
-  pointer-events: none;
-}
-
-.record-seal b { display: block; font-size: 0.9rem; letter-spacing: 0.06em; }
-
-@media (max-width: 52rem) {
-  .release { grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "record"; }
-  .record { transform: none; }
-}
-
-@media (max-width: 40rem) {
-  .record-seal { top: -1.4rem; right: 0.3rem; width: 4.8rem; height: 4.8rem; font-size: 0.5rem; letter-spacing: 0.1em; }
-  .record-seal b { font-size: 0.68rem; letter-spacing: 0.02em; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .policy-rules li,
-  .policy-rules li:last-child .policy-why::after,
-  .record-rows .record-tick { animation: none; }
-  .record, .record:hover { transition: none; transform: none; }
-  .rule-no, .rule-proof, .rules > li, .rules > li::before { transition: none; }
-}
-
-@media print {
-  .policy {
-    --term-bg: #ffffff; --term-bar: #ffffff; --term-rule: #c9ccd4;
-    --term-ink: #16181d; --term-faint: #5c6270; --term-prompt: #16181d; --term-str: #16181d;
-    box-shadow: none;
-  }
-  .record { transform: none; box-shadow: none; }
-}
-
-/*
-  The front page's last word: the sign-up form nearly every site ends on,
-  drawn and stamped. It is a picture, not a form: no field, no button, nothing
-  a reader can fill in or send, and hidden from assistive technology, which
-  would otherwise read out an offer nobody is making. The text beside it says
-  the same thing in words.
-*/
-.farewell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
-  gap: 2.5rem 4rem;
-  align-items: center;
-}
-
-.farewell-text .band-prose { margin-bottom: 0; }
-
-/* The other half of the drawing: the form beside it asks for the reader's
-   address and is denied; this one, in the same shape with solid lines, gives
-   them ours. A link, not a field: nothing is typed and nothing is sent until
-   the reader's own mail program does it. */
-.farewell-ours { margin: 1.8rem 0 0.6rem; font-weight: 650; color: var(--ink); }
-
-a.farewell-field {
-  display: flex;
-  gap: 0.5rem;
-  max-width: 27rem;
-  text-decoration: none;
-}
-
-.farewell-address {
-  flex: 1;
-  min-width: 0;
-  padding: 0.7rem 0.85rem;
-  font-family: var(--mono);
-  font-size: 0.86rem;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  overflow-wrap: anywhere;
-}
-
-.farewell-go {
-  padding: 0.7rem 0.95rem;
-  font-size: 0.86rem;
-  font-weight: 650;
-  color: #ffffff;
-  white-space: nowrap;
-  background: var(--accent);
-  border-radius: 8px;
-}
-
-a.farewell-field:hover .farewell-address { border-color: var(--ink-faint); }
-a.farewell-field:hover .farewell-go { background: var(--accent-hover); }
-
-.farewell-text .farewell-small { margin: 0.6rem 0 0; font-size: 0.8rem; color: var(--ink-faint); }
-
-.sign-up {
-  position: relative;
-  padding: 1.6rem 1.5rem 1.5rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  box-shadow: 0 22px 44px -28px rgb(0 0 0 / 0.6);
-  transform: rotate(-1deg);
-  transition: transform 220ms ease-out;
-}
-
-.sign-up:hover { transform: rotate(0deg); }
-
-.sign-up p { margin: 0; color: var(--ink-faint); }
-
-.sign-up-title { font-size: 1.15rem; font-weight: 750; letter-spacing: -0.02em; }
-.sign-up .sign-up-sub { margin: 0.2rem 0 1rem; font-size: 0.86rem; }
-
-.sign-up-field { display: flex; gap: 0.5rem; }
-
-.sign-up-address,
-.sign-up-go {
-  padding: 0.7rem 0.85rem;
-  font-size: 0.86rem;
-  border: 1px dashed var(--rule);
-  border-radius: 8px;
-}
-
-.sign-up-address {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--mono);
-  text-decoration: line-through;
-  text-decoration-color: var(--accent);
-  background: var(--paper-sunk);
-}
-
-.sign-up-go { font-weight: 650; }
-
-.sign-up .sign-up-small {
-  margin-top: 0.8rem;
-  font-size: 0.72rem;
-  text-decoration: line-through;
-  text-decoration-color: var(--accent);
 }
 
 /* The stamp, the same kind the release record carries, saying the other
    thing. It lands as the card comes into view, where the browser can tie
    that to scrolling and the reader did not ask for less motion. */
-.sign-up .sign-up-stamp {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  padding: 0.45rem 1.1rem;
-  font-size: 1.7rem;
-  font-weight: 850;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--link);
-  background: color-mix(in srgb, var(--paper) 70%, transparent);
-  border: 3px solid currentColor;
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 5px currentColor;
-  transform: translate(-50%, -50%) rotate(-12deg);
-  pointer-events: none;
-}
 
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .sign-up .sign-up-stamp {
-      animation: sign-up-stamped linear both;
-      animation-timeline: view();
-      animation-range: entry 50% cover 40%;
-    }
 
-    @keyframes sign-up-stamped {
-      0%, 55% { transform: translate(-50%, -50%) rotate(-12deg) scale(1.8); color: transparent; background: transparent; box-shadow: none; }
-      85% { transform: translate(-50%, -50%) rotate(-12deg) scale(0.94); }
-      100% { transform: translate(-50%, -50%) rotate(-12deg) scale(1); }
-    }
+    
   }
-}
-
-@media (max-width: 52rem) {
-  .farewell { grid-template-columns: minmax(0, 1fr); }
-  .sign-up { transform: none; }
-}
-
-@media (max-width: 40rem) {
-  .sign-up .sign-up-stamp { font-size: 1.35rem; }
-}
-
-@media (max-width: 22rem) {
-  a.farewell-field { flex-direction: column; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sign-up, .sign-up:hover { transition: none; transform: none; }
 }
 
 .porch-hero {
@@ -3818,7 +2905,6 @@ a.farewell-field:hover .farewell-go { background: var(--accent-hover); }
 @media (max-width: 34rem) {
   .masthead-nav { order: 3; width: 100%; margin-left: 0; }
   .masthead-nav + .theme-toggle { margin-left: auto; }
-  .hero { padding-top: 2.8rem; }
   .check-panel { padding: 1.2rem; }
 }
 
@@ -3891,61 +2977,6 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
   cookies, No trackers, Open source" until 2026-10-08, beside a policy that
   says each of them, so it now says something the page does not say twice.
 */
-.hero-index {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1.8rem;
-  margin: 3rem 0 0;
-  padding-top: 1rem;
-  border-top: 1px solid var(--rule);
-}
-
-.hero-index::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 0;
-  width: 4rem;
-  height: 2px;
-  background: var(--tool);
-}
-
-.hero-index-label {
-  margin-right: auto;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.hero-index a {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  padding: 0.15rem 0;
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: color 150ms ease-out, border-color 150ms ease-out;
-}
-
-.hero-index a span {
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  font-weight: 500;
-  color: var(--link);
-}
-
-.hero-index a:hover { color: var(--ink); border-bottom-color: var(--accent); }
-
-@media (max-width: 40rem) {
-  .hero-index-label { flex-basis: 100%; }
-}
 
 .card-top {
   display: flex;
@@ -3968,98 +2999,8 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 
 .cards-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-/* The front page's products: Porch, the one available, as a wide card in its
-   own violet; what is coming in a quiet row beneath it. */
-.product-feature {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 1.5rem 2.5rem;
-  align-items: center;
-  padding: 2rem;
-  color: var(--ink);
-  text-decoration: none;
-  background: var(--paper-sunk);
-  border: 1px solid var(--porch-accent);
-  border-radius: calc(var(--radius) + 2px);
-  transition: transform 180ms ease-out;
-}
-
-.product-feature:hover { transform: translateY(-3px); }
-
-.product-feature .badge-live {
-  color: var(--porch-link);
-  border-color: var(--porch-accent);
-}
-
 /* The card's name is Porch's mark, as its own header draws it. Its stop is
    Porch's violet here too, where the page's own accent is the brand red. */
-.product-feature-name {
-  margin: 1rem 0 0;
-  font-size: 2.6rem;
-  font-weight: 750;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-}
-
-.product-feature-name .wordmark-porch-stop { color: var(--porch-link); }
-
-.product-feature p {
-  margin: 0.6rem 0 1.4rem;
-  max-width: 34rem;
-  font-size: 1.02rem;
-  color: var(--ink-soft);
-}
-
-.product-feature .button {
-  background: var(--porch-accent);
-  border-color: var(--porch-accent);
-  color: #ffffff;
-}
-
-.product-feature:hover .button {
-  background: var(--porch-accent-hover);
-  border-color: var(--porch-accent-hover);
-}
-
-.product-checks {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.product-checks li {
-  padding: 0.55rem 0.8rem;
-  font-size: 0.92rem;
-  color: var(--ink-soft);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--porch-accent);
-  border-radius: 4px;
-}
-
-.product-soon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 1rem;
-  margin-top: 1rem;
-  padding: 1rem 1.2rem;
-  border: 1px dashed var(--rule);
-  border-radius: calc(var(--radius) + 2px);
-}
-
-.product-soon h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
-.product-soon p { margin: 0; font-size: 0.92rem; color: var(--ink-soft); }
-
-@media (max-width: 52rem) {
-  .product-feature { grid-template-columns: 1fr; padding: 1.5rem; }
-  .product-feature-name { font-size: 2.2rem; }
-  .rules > li { grid-template-columns: 1fr; padding: 1.4rem calc(1.5rem + 1px); }
-  .rule-main { grid-template-columns: 3.2rem minmax(0, 1fr); gap: 0.9rem; align-items: start; }
-  .rule-no { font-size: 2.3rem; }
-}
 
 .check-panel-top {
   display: flex;
@@ -4106,7 +3047,6 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 
 .colophon-row .colophon-links { margin: 0; }
 
-
 @media (prefers-reduced-motion: reduce) {
   .card-link,
   .arrow-ne::after,
@@ -4134,83 +3074,6 @@ a:hover.arrow-down::after    { transform: translateY(2px) rotate(135deg); }
 
 /* The last section needs no rule of its own: the footer draws one. */
 main > .band:last-child { border-bottom: 0; }
-
-
-/* The Products menu. Opens on hover and on keyboard focus, and needs no
-   script; the list sits under its button with a small bridge so the pointer
-   can travel to it. */
-.nav-menu { position: relative; }
-
-/* The menu's caret, drawn like the arrows: a corner turned to point down. */
-.nav-menu-button::after {
-  content: "";
-  display: inline-block;
-  width: 0.36em;
-  height: 0.36em;
-  margin-left: 0.45em;
-  border-right: 0.12em solid currentColor;
-  border-bottom: 0.12em solid currentColor;
-  transform: translateY(-0.2em) rotate(45deg);
-}
-
-/* Opens towards the page rather than past its edge: the menu is the last
-   entry in the bar but one, and anchored by its left it ran off the right of
-   the window and gave the whole page a sideways scroll while it was open. */
-.nav-menu-list {
-  display: none;
-  position: absolute;
-  top: 100%;
-  right: -1rem;
-  z-index: 10;
-  min-width: 16rem;
-  margin: 0;
-  padding: 0.5rem;
-  list-style: none;
-  background: var(--paper-sunk);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
-}
-
-.nav-menu-list::before {
-  content: "";
-  position: absolute;
-  top: -0.8rem;
-  left: 0;
-  right: 0;
-  height: 0.8rem;
-}
-
-.nav-menu:hover .nav-menu-list,
-.nav-menu:focus-within .nav-menu-list { display: block; margin-top: 0.6rem; }
-
-.nav-menu-list a,
-.nav-menu-soon {
-  display: grid;
-  gap: 0.1rem;
-  padding: 0.55rem 0.7rem;
-  border-radius: calc(var(--radius) - 2px);
-  text-decoration: none;
-}
-
-.nav-menu-list a:hover,
-.nav-menu-list a:focus-visible { background: var(--paper); }
-
-.nav-menu-name {
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.nav-menu-note {
-  font-size: 0.78rem;
-  color: var(--ink-faint);
-}
-
-.nav-menu-soon .nav-menu-name { color: var(--ink-soft); }
-
-@media (hover: none) {
-  .nav-menu:hover .nav-menu-list { display: none; }
-}
 
 /* The footer's left side: the mark, as the header draws it and a size down,
    and one line beside it. Both sentences sit on that line, so the footer is a
@@ -5193,7 +4056,6 @@ main > .band:last-child { border-bottom: 0; }
   .cards-four { grid-template-columns: 1fr; }
 }
 
-
 /*
   The footer's row sits in the middle of its band: the same space above and
   below, the mark and the links on one centre line, and no paragraph margin
@@ -5201,88 +4063,6 @@ main > .band:last-child { border-bottom: 0; }
 */
 .colophon-row { align-items: center; }
 .colophon .colophon-row p { margin: 0; }
-
-/*
-  The lens on the front page.
-
-  A layer under the opening's text, masked to a circle around the pointer: a
-  barely-there wash of the brand colour, a grid of points, and a few words,
-  all far quieter than anything a reader is meant to read. Closed, the circle
-  has no radius, so nothing is drawn; hero.js opens it while a pointer is
-  over the opening. The radius is a registered property so that it can ease
-  open and shut; a browser without @property opens it at once.
-
-  A second mask fades the whole layer out towards every edge of the opening,
-  so the circle dissolves as it nears one instead of being cut by it. The
-  first version was bright enough to catch the eye and stopped at the edge in
-  a hard line.
-*/
-@property --lens-r {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-
-.hero {
-  position: relative;
-  isolation: isolate;
-}
-
-.hero-lens {
-  --lens-x: 70%;
-  --lens-y: 40%;
-  position: absolute;
-  inset: 0 0 3rem;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-  background-image:
-    radial-gradient(circle 16rem at var(--lens-x) var(--lens-y),
-      color-mix(in srgb, var(--tool) 5%, transparent), transparent 75%),
-    radial-gradient(circle, color-mix(in srgb, var(--ink-faint) 22%, transparent) 1px, transparent 1.6px);
-  background-size: 100% 100%, 24px 24px;
-  -webkit-mask-image:
-    radial-gradient(circle var(--lens-r) at var(--lens-x) var(--lens-y), #000 0%, rgb(0 0 0 / 0.4) 45%, transparent 100%),
-    linear-gradient(to right, transparent, #000 18%, #000 82%, transparent),
-    linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
-  -webkit-mask-composite: source-in;
-  mask-image:
-    radial-gradient(circle var(--lens-r) at var(--lens-x) var(--lens-y), #000 0%, rgb(0 0 0 / 0.4) 45%, transparent 100%),
-    linear-gradient(to right, transparent, #000 18%, #000 82%, transparent),
-    linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
-  mask-composite: intersect;
-  transition: --lens-r 0.6s ease;
-}
-
-.hero-lit .hero-lens { --lens-r: 15rem; }
-
-.hero-lens span {
-  position: absolute;
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  letter-spacing: 0.14em;
-  color: color-mix(in srgb, var(--ink-faint) 45%, transparent);
-  white-space: nowrap;
-}
-
-.hero-lens .lens-big {
-  font-family: var(--sans);
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  color: color-mix(in srgb, var(--ink-faint) 28%, transparent);
-}
-
-/* Around the policy beside the opening, which would hide them: above it,
-   below it, and in the gap between it and the text. */
-.lens-1 { top: 52%; left: 45%; }
-.lens-2 { top: 89%; left: 62%; }
-.lens-3 { top: 30%; left: 46%; }
-.lens-4 { top: 1%; left: 56%; }
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-lens { transition: none; }
-}
 
 /*
   On a phone the footer's row wraps, and left-aligned it left the links in a
