@@ -28,13 +28,11 @@ func TestTheProjectsPagesStayAtTheRootAndTheChecksDoNot(t *testing.T) {
 		"/privacy": true,
 		"/terms":   true,
 	}
-	// The demonstration is the denyfirst site: its front page and the page for
-	// the product are the project's own, at the root, and a self-hosted build
-	// has neither.
+	// The demonstration's front page is the page for the product, at the
+	// root, and a self-hosted build has none: its root is the tool. The
+	// organisation's pages are denyfirst/site's since v0.37.0.
 	if demo.Enabled {
 		project["/"] = true
-		project["/porch"] = true
-		project[orgPrivacy] = true
 	}
 
 	// The question this test was written to ask ahead of time. There are three
@@ -188,9 +186,11 @@ func TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt(t *testing.T) {
 	// that is asserted rather than assumed.
 	//
 	// On the demonstration it stood in for /tls until there was a front page
-	// to put there, and now there is: the denyfirst site, answered directly.
-	// On an installation somebody runs themselves the root is the tool,
-	// because nobody there needs persuading that scanning is safe.
+	// to put there, and now there is: Porch's page, answered directly, and
+	// at /porch until v0.37.0, when denyfirst.dev's front page left for a
+	// program of its own. On an installation somebody runs themselves the
+	// root is the tool, because nobody there needs persuading that scanning
+	// is safe.
 	w := get(t, "/")
 
 	if !demo.Enabled {
@@ -208,8 +208,11 @@ func TestTheRootIsAPageOnEveryBuildAndNothingStandsInForIt(t *testing.T) {
 		t.Errorf("GET / on the demonstration returned %d to %q, want the front page",
 			w.Code, w.Header().Get("Location"))
 	}
-	if !strings.Contains(w.Body.String(), `href="`+PorchURL+`/"`) {
-		t.Error("the front page does not lead to the product")
+	if !strings.Contains(w.Body.String(), `id="porch-form"`) {
+		t.Error("the front page is not Porch's page")
+	}
+	if p := get(t, "/porch"); p.Code != http.StatusMovedPermanently || p.Header().Get("Location") != "/" {
+		t.Errorf("GET /porch returned %d to %q, want its move to the root", p.Code, p.Header().Get("Location"))
 	}
 }
 
@@ -372,9 +375,8 @@ func TestEachScanPageDeclaresItsCheck(t *testing.T) {
 	}
 }
 
-// Each site's footer links its own documents: the organisation's pages its
-// undertakings and contacts, every other page Porch's documents. No footer
-// offers one check's limits.
+// Every footer links Porch's documents; the organisation's are denyfirst.dev's,
+// which the wordmark leads to. No footer offers one check's limits.
 func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 	for path, body := range rendered {
 		_, foot, ok := strings.Cut(string(body), `<footer class="colophon">`)
@@ -392,9 +394,6 @@ func TestEachFooterLinksItsOwnSitesDocuments(t *testing.T) {
 			// Porch's pages say who made them, with a link home, and where to
 			// report a vulnerability in Porch: its security policy.
 			want = SiteURL + "/ " + want + " https://github.com/denyfirst/porch/blob/main/SECURITY.md"
-		}
-		if p, ok := pages[path]; ok && demo.Enabled && p.Organisation {
-			want = SiteURL + "/privacy " + SiteURL + SecurityTxtPath
 		}
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s: the footer links %v, want %s", path, got, want)

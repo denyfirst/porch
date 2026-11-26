@@ -5,17 +5,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/denyfirst/porch/internal/demo"
 )
 
 // Porch's documentation is on GitHub, and every page of Porch's leads there
 // from its header and its footer.
 func TestEveryPageLeadsToTheDocs(t *testing.T) {
-	for path, p := range pages {
-		if demo.Enabled && p.Organisation {
-			continue
-		}
+	for path := range pages {
 		body := get(t, path).Body.String()
 		_, foot, _ := strings.Cut(body, `<footer class="colophon">`)
 		if !strings.Contains(foot, `href="`+DocsURL+`">Docs</a>`) {
@@ -80,53 +75,6 @@ func TestHoverMotionRespectsReducedMotion(t *testing.T) {
 		if !strings.Contains(all, want) {
 			t.Errorf("the reduced-motion rules do not include %q", want)
 		}
-	}
-}
-
-// The demonstration's header lists products under one entry, so the bar does
-// not grow with the catalog, and the list works without a script.
-func TestProductsAreAMenuNotABar(t *testing.T) {
-	src, err := assets.ReadFile("assets/layout.html")
-	if err != nil {
-		t.Fatal(err)
-	}
-	layout := string(src)
-	// The demonstration's header is the masthead; an installation's rail comes
-	// first in the file and is not it.
-	_, brand, _ := strings.Cut(layout, `<header class="masthead">`)
-	brand, _, _ = strings.Cut(brand, "</header>")
-	// The navigation, without the wordmark, which on Porch's pages is Porch's
-	// own link home.
-	_, brand, _ = strings.Cut(brand, `<nav class="masthead-nav"`)
-
-	// The source, so the links are as the template writes them: Porch's page
-	// is the root of Porch's own name since 2026-10-05.
-	if strings.Count(brand, `href="{{.PorchBase}}/"`) != 1 || !strings.Contains(brand, `<ul class="nav-menu-list">`) {
-		t.Error("Porch is not listed under the Products menu")
-	}
-	bar := regexp.MustCompile(`(?s)<ul class="nav-menu-list">.*?</ul>`).ReplaceAllString(brand, "")
-	if strings.Contains(bar, `href="{{.PorchBase}}/"`) {
-		t.Error("a product sits in the bar itself")
-	}
-	for _, want := range []string{`href="{{.SiteBase}}/">Home</a>`, `<a class="nav-menu-button" href="{{.SiteBase}}/#products">Products</a>`, `href="` + DocsURL + `">Docs</a>`} {
-		if !strings.Contains(brand, want) {
-			t.Errorf("the demonstration's header lacks %s", want)
-		}
-	}
-
-	sheet := stylesheet(t)
-	for _, want := range []string{".nav-menu:hover .nav-menu-list", ".nav-menu:focus-within .nav-menu-list", ".nav-menu-list::before"} {
-		if !strings.Contains(sheet, want) {
-			t.Errorf("the menu does not open with %s", want)
-		}
-	}
-	if !strings.Contains(cssRule(t, sheet, ".nav-menu-list"), "display: none") {
-		t.Error("the menu is open before anybody asks for it")
-	}
-	// It opens towards the page. Anchored by its left edge it ran 67 pixels
-	// past the right of a 1280-pixel window and scrolled the page sideways.
-	if list := cssRule(t, sheet, ".nav-menu-list"); !strings.Contains(list, "right: -1rem;") || strings.Contains(list, "left:") {
-		t.Errorf("the menu is not anchored by its right edge:\n%s", list)
 	}
 }
 

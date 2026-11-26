@@ -20,7 +20,7 @@ import (
 // character so that a quote inside a comment, or an apostrophe inside a
 // double-quoted sentence, is what it is rather than a literal being opened.
 func TestNoStringLiteralInAScriptIsLeftOpen(t *testing.T) {
-	for _, name := range []string{"assets/app.js", "assets/session.js", "assets/theme.js", "assets/hero.js"} {
+	for _, name := range []string{"assets/app.js", "assets/session.js", "assets/theme.js"} {
 		inBlock := false
 		for i, line := range strings.Split(asset(t, name), "\n") {
 			open, block := unterminated(line, inBlock)

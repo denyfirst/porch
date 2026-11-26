@@ -39,66 +39,29 @@ func TestEveryUndertakingCanBeCheckedAndIsNamed(t *testing.T) {
 		}
 	}
 
-	if len(Organisation) == 0 {
-		t.Error("the organisation undertakes nothing, which cannot be what was meant")
-	}
 	if len(Products) == 0 {
 		t.Error("no product is listed")
 	}
 }
 
-// A product adds restrictions and never restates one of the organisation's.
+// A product's undertakings are named for it, so that none can be taken for
+// one of the organisation's.
 //
-// This is the whole mechanism of the split. A product may undertake to keep
-// less than the organisation requires; it may not undertake more, and it may
-// not reword one of these in its own words — because an addition that redefined
-// an organisation undertaking is how a weaker promise arrives wearing a
-// stronger promise's name, and a reader comparing the two pages would find them
-// agreeing on the identifier and disagreeing on the meaning.
-func TestNoProductRedefinesWhatTheOrganisationUndertakes(t *testing.T) {
-	organisation := map[string]bool{}
-	for _, p := range Organisation {
-		organisation[p.ID] = true
-	}
-
+// A product may undertake to keep less than the organisation requires; it may
+// not undertake more, and it may not reword one of the organisation's in its
+// own words, because an addition that redefined an organisation undertaking is
+// how a weaker promise arrives wearing a stronger promise's name. The
+// organisation's list is denyfirst/site's since v0.37.0, and its test there
+// keeps every product's name out of it; this keeps the product's name in front
+// of each of its own, so the two can never share an identifier.
+func TestEachProductsUndertakingsAreNamedForIt(t *testing.T) {
 	for _, product := range Products {
 		if product.Name == "" || product.What == "" {
 			t.Errorf("a product is listed without a name or without saying what it is: %+v", product)
 		}
 		for _, p := range product.Adds {
-			if organisation[p.ID] {
-				t.Errorf("%s restates the organisation's %s in its own words", product.Name, p.ID)
-			}
-			// And an addition is recognisable as belonging to its product, so
-			// that nothing in a product list reads as though the organisation
-			// had said it.
 			if !strings.HasPrefix(p.ID, strings.ToLower(product.Name)+"-") {
 				t.Errorf("%s adds %s, which is not named for the product it belongs to", product.Name, p.ID)
-			}
-		}
-	}
-}
-
-// The organisation's list names no product, and nothing only one product has.
-//
-// It is shown by every product and every installation of one, and it is what a
-// second product inherits unchanged. A sentence in it about a file in this
-// repository, or about how Porch is built, is a promise the next product either
-// breaks or is bent to keep — which is what it held until 2026-10-05, when
-// "no dependency is fetched to build it" was the organisation's word and a
-// choice about Porch. And nothing in it may point at "this site": an
-// installation is not denyfirst's site, and said so about a file it does not
-// serve.
-func TestTheOrganisationNamesNoProduct(t *testing.T) {
-	forbidden := []string{"go.mod", "go.sum", "docs/", "internal/", "cmd/", ".go ", "this site", "on this page"}
-	for _, product := range Products {
-		forbidden = append(forbidden, strings.ToLower(product.Name))
-	}
-	for _, p := range Organisation {
-		text := strings.ToLower(p.Says + " " + p.Checked)
-		for _, word := range forbidden {
-			if strings.Contains(text, word) {
-				t.Errorf("the organisation's %s mentions %q, which only one product or one site has", p.ID, word)
 			}
 		}
 	}
@@ -186,10 +149,10 @@ func all() []struct {
 	where    string
 	promises []Promise
 } {
-	out := []struct {
+	var out []struct {
 		where    string
 		promises []Promise
-	}{{"the organisation", Organisation}}
+	}
 	for _, p := range Products {
 		out = append(out, struct {
 			where    string

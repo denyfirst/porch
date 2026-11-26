@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/denyfirst/porch/internal/demo"
 )
 
 // The colours a reader can tell apart, in CIE76 ΔE, below which two colours
@@ -146,16 +144,13 @@ func TestTheBrandRedIsTheWordmarksAndTheOrganisations(t *testing.T) {
 	}
 }
 
-// Which pages are the organisation's is said by the page, and only on the
-// demonstration. An installation is Porch from end to end.
-func TestOnlyTheOrganisationsPagesKeepTheRed(t *testing.T) {
-	const mark = `data-owner="organisation"`
+// No page here is the organisation's. denyfirst.dev's pages, which kept the
+// brand red for their controls, are denyfirst/site's since v0.37.0, and every
+// page this program serves is Porch's, on every build.
+func TestNoPageHereIsMarkedAsTheOrganisations(t *testing.T) {
 	for path := range pages {
-		body := get(t, path).Body.String()
-		owned := strings.Contains(body, mark)
-		want := demo.Enabled && (path == "/" || path == "/organisation")
-		if owned != want {
-			t.Errorf("%s: marked as the organisation's = %v, want %v", path, owned, want)
+		if strings.Contains(get(t, path).Body.String(), `data-owner="organisation"`) {
+			t.Errorf("%s is marked as the organisation's", path)
 		}
 	}
 }
